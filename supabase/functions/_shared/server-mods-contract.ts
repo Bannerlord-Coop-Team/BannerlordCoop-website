@@ -77,12 +77,17 @@ const RESERVED_IDS = new Set(["native", "sandboxcore", "sandbox", "storymode", "
 /** Where a mod's code runs: `server` on the server and in players' games, `players` only in players' games. */
 export type ModRunsOn = "server" | "players";
 const RUNS_ON_VALUES: ReadonlySet<unknown> = new Set<ModRunsOn>(["server", "players"]);
+/** Why the owner cannot change `runsOn`, as C3 defines it today; the parser also keeps a later, unknown reason. */
+export type ModRunsOnLockReason = "core-module" | "server-provided" | "runner-unsupported" | "submodule-invalid";
+/** A lock reason's shape: a newer control plane may add reasons, which the website shows with generic copy. */
+const LOCK_REASON = /^[a-z][a-z-]{0,47}$/u;
 // Wire names of the players-only fields (contract C3). Control planes that predate players-only mods send
-// neither, so each shape accepts them as an optional group; a rename changes these lines and the types below.
-// Remove the "neither" case (and make the fields required) once the control plane's runs-on writer gate is on
+// none of them, so each shape accepts them as an optional group; a rename changes these lines and the types below.
+// Remove the "none" case (and make the fields required) once the control plane's runs-on writer gate is on
 // in production and a rollback below it is ruled out; a tracking issue is opened with the pull request.
 const ENTRY_KEYS = ["id", "name", "version", "enabled", "pinned", "required", "sizeBytes", "sha256", "dependsOn", "issues"] as const;
-const ENTRY_RUNS_ON_KEYS = ["runsOn", "runsOnLocked"] as const;
+const ENTRY_RUNS_ON_KEYS = ["runsOn", "runsOnDefault", "runsOnLocked"] as const;
+const ENTRY_LOCK_REASON_KEY = "runsOnLockReason";
 const ORDER_KEYS = ["id", "enabled"] as const;
 const ORDER_RUNS_ON_KEY = "runsOn";
 
@@ -100,8 +105,12 @@ export type ModEntry = {
     issues: string[];
     /** Absent from control planes that predate players-only mods; then the website offers no choice. */
     runsOn?: ModRunsOn;
-    /** True when the owner cannot change `runsOn` (Bannerlord.Harmony, which the server provides). */
+    /** What a new upload of this id gets; the website warns when the owner picks players on a `server` default. */
+    runsOnDefault?: ModRunsOn;
+    /** True when the owner cannot change `runsOn`. */
     runsOnLocked?: boolean;
+    /** Present exactly when locked: a `ModRunsOnLockReason`, or a newer reason this website does not know. */
+    runsOnLockReason?: string;
 };
 /** `{ revision, restartRequired, mods }`, returned by list and every synchronous mutation. */
 export type ModsState = { revision: string; restartRequired: boolean; mods: ModEntry[] };
@@ -332,8 +341,8 @@ export function isModIssue(value: unknown): value is string {
 /** Validates one API mod entry and its optional runs-on pair; pinned and required are exclusive and image modules carry no digest. */
 function parseModEntry(value: unknown): ModEntry {
     if (!isRecord(value)) throw new Error("Invalid mod entry");
-    const reportsRunsOn = ENTRY_RUNS_ON_KEYS.some((key) => Object.hasOwn(value, key));
-    exact(value, reportsRunsOn ? [...ENTRY_KEYS, ...ENTRY_RUNS_ON_KEYS] : ENTRY_KEYS);
+    const reportsRunsOn = [...ENTRY_RUNS_ON_KEYS, ENTRY_LOCK_REASON_KEY].some((key) => Object.hasOwn(value, key));
+    exact(value, runsOnEntryKeys(reportsRunsOn, value.runsOnLocked === true));
     if (!isModId(value.id) || !(isModName(value.name) || isModId(value.name))) throw new Error("Invalid mod identity");
     if (value.version !== "" && !isModVersion(value.version)) throw new Error("Invalid mod version");
     if (typeof value.enabled !== "boolean" || typeof value.pinned !== "boolean" || typeof value.required !== "boolean" || (value.pinned && value.required)) {
@@ -350,10 +359,19 @@ function parseModEntry(value: unknown): ModEntry {
     return reportsRunsOn ? { ...entry, ...parseRunsOnFields(value) } : entry;
 }
 
-/** Validates the players-only pair of an entry that reports it: a known `runsOn` and a boolean lock. */
-function parseRunsOnFields(value: Record<string, unknown>): Required<Pick<ModEntry, "runsOn" | "runsOnLocked">> {
-    if (!isModRunsOn(value.runsOn) || typeof value.runsOnLocked !== "boolean") throw new Error("Invalid mod runs-on");
-    return { runsOn: value.runsOn, runsOnLocked: value.runsOnLocked };
+/** Returns the keys an entry must have: none of the runs-on set, or all of it with the lock reason exactly when locked. */
+function runsOnEntryKeys(reportsRunsOn: boolean, locked: boolean): readonly string[] {
+    if (!reportsRunsOn) return ENTRY_KEYS;
+    return locked ? [...ENTRY_KEYS, ...ENTRY_RUNS_ON_KEYS, ENTRY_LOCK_REASON_KEY] : [...ENTRY_KEYS, ...ENTRY_RUNS_ON_KEYS];
+}
+
+/** Validates the runs-on set of an entry that reports it: known values, a boolean lock and, when locked, a reason. */
+function parseRunsOnFields(value: Record<string, unknown>): Pick<ModEntry, "runsOn" | "runsOnDefault" | "runsOnLocked" | "runsOnLockReason"> {
+    if (!isModRunsOn(value.runsOn) || !isModRunsOn(value.runsOnDefault) || typeof value.runsOnLocked !== "boolean") throw new Error("Invalid mod runs-on");
+    const fields = { runsOn: value.runsOn, runsOnDefault: value.runsOnDefault, runsOnLocked: value.runsOnLocked };
+    if (!value.runsOnLocked) return fields;
+    if (typeof value.runsOnLockReason !== "string" || !LOCK_REASON.test(value.runsOnLockReason)) throw new Error("Invalid mod runs-on lock reason");
+    return { ...fields, runsOnLockReason: value.runsOnLockReason };
 }
 
 /** Whether a value names where a mod's code runs. */

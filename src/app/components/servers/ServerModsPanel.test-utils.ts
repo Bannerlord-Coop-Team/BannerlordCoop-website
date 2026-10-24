@@ -8,13 +8,13 @@ import { ServerModsError, findServerMod, isOwnerMod, type ServerMod, type Server
 /** C3 section 3: uploads with these ids (case-insensitive) default to players-only; Harmony is also locked. */
 const CP_PLAYERS_DEFAULT_IDS: ReadonlySet<string> = new Set(["bannerlord.harmony", "itemqualityindicator", "bannerlord.familytree", "familyappearanceeditor"]);
 const CP_HARMONY_ID = "bannerlord.harmony";
-/** C3 F17: these issues forbid switching a mod to the server. */
-const CP_SERVER_BLOCKING_ISSUE_PREFIXES = ["submodule-class-missing:", "submodule-dll-missing:"];
+/** C3 F17: the issue a `submodule-invalid` lock names when the owner tries the server anyway. */
+const CP_F17_ISSUE_PREFIXES = ["submodule-class-missing:", "submodule-dll-missing:", "submodule-dll-unreadable:"];
 
-/** Builds an image module entry; `runsOn` adds the locked server pair a players-only control plane reports. */
+/** Builds an image module entry; `runsOn` adds the locked core-module fields a players-only control plane reports. */
 function imageModule(id: string, kind: "pinned" | "required", runsOn: boolean): ServerMod {
     const entry: ServerMod = { id, name: id, version: "", enabled: true, pinned: kind === "pinned", required: kind === "required", sizeBytes: 0, sha256: null, dependsOn: [], issues: [] };
-    return runsOn ? { ...entry, runsOn: "server", runsOnLocked: true } : entry;
+    return runsOn ? { ...entry, runsOn: "server", runsOnDefault: "server", runsOnLocked: true, runsOnLockReason: "core-module" } : entry;
 }
 
 /** Builds an owner mod entry with optional overrides. */
@@ -34,22 +34,23 @@ function revisionOf(generation: number): string {
     return generation.toString(16).padStart(64, "0");
 }
 
-/** Applies a requested `runsOn` as C3 section 2 says: image modules and Harmony refuse a change, an unsupported runner refuses any, F17 mods refuse the server. */
+/** Applies a requested `runsOn` as C3 section 2 says, by the entry's lock reason: core and server-provided refuse, an old runner refuses any change, F17 names its issue. */
 function applyRunsOn(mod: ServerMod, entry: ServerModOrderEntry): ServerMod {
     if (entry.runsOn === undefined || entry.runsOn === mod.runsOn) return mod;
     if (mod.runsOn === undefined) throw new ServerModsError("invalid_request");
-    if (mod.pinned || mod.required || mod.id.toLowerCase() === CP_HARMONY_ID) throw new ServerModsError("mod_order_invalid", false, mod.id);
-    if (mod.runsOnLocked) throw new ServerModsError("runner_unsupported");
-    const blocking = entry.runsOn === "server" ? mod.issues.find(issue => CP_SERVER_BLOCKING_ISSUE_PREFIXES.some(prefix => issue.startsWith(prefix))) : undefined;
-    if (blocking !== undefined) throw new ServerModsError("mod_order_invalid", false, mod.id, blocking);
-    return { ...mod, runsOn: entry.runsOn };
+    if (!mod.runsOnLocked) return { ...mod, runsOn: entry.runsOn };
+    if (mod.runsOnLockReason === "runner-unsupported") throw new ServerModsError("runner_unsupported");
+    const f17 = mod.runsOnLockReason === "submodule-invalid" ? mod.issues.find(issue => CP_F17_ISSUE_PREFIXES.some(prefix => issue.startsWith(prefix))) : undefined;
+    throw new ServerModsError("mod_order_invalid", false, mod.id, f17 ?? null);
 }
 
-/** Returns a new upload's runs-on pair as C3 section 3 defaults it, or nothing when the list does not report runs-on. */
+/** Returns a new upload's runs-on fields as C3 section 3 defaults them, or nothing when the list does not report runs-on. */
 function uploadRunsOn(id: string, reportsRunsOn: boolean): Partial<ServerMod> {
     if (!reportsRunsOn) return {};
     const folded = id.toLowerCase();
-    return { runsOn: CP_PLAYERS_DEFAULT_IDS.has(folded) ? "players" : "server", runsOnLocked: folded === CP_HARMONY_ID };
+    const runsOnDefault = CP_PLAYERS_DEFAULT_IDS.has(folded) ? "players" : "server";
+    const lock = folded === CP_HARMONY_ID ? { runsOnLocked: true, runsOnLockReason: "server-provided" } : { runsOnLocked: false };
+    return { runsOn: runsOnDefault, runsOnDefault, ...lock };
 }
 
 export type MockServerModCatalog = ServerModCatalog & { readonly state: ServerModsState };

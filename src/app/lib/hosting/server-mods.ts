@@ -10,13 +10,9 @@ export type ServerModsState = ModsState;
 export type ServerModOrderEntry = ModOrderEntry;
 export type ServerModRunsOn = ModRunsOn;
 
-/** Mods that only change players' interface or visuals, so players-only is their default (contract C3); compared folded.
- * A copy of the control plane's `CURATED_PLAYERS_IDS` (`src/hosting/mods/mod-runs-on.ts` there); change both together. */
-const CURATED_PLAYERS_ONLY_MOD_IDS: ReadonlySet<string> = new Set(["itemqualityindicator", "bannerlord.familytree", "familyappearanceeditor"]);
-/** The server provides Harmony, so this owner mod always runs players-only. */
-const HARMONY_MOD_ID = "bannerlord.harmony";
-/** Issue kinds (`kind:<name>`) of a mod installed players-only because a SubModule's class or DLL is missing, so it cannot run on the server. */
-const SERVER_CODE_UNAVAILABLE_ISSUE_KINDS = ["submodule-class-missing:", "submodule-dll-missing:"];
+// Runs-on policy (defaults, locks and their reasons) comes from the control plane's entries (contract C3); the
+// website keeps no list of mod ids and infers no lock reason.
+
 /** Shown by the runs-on line instead: on a players-only mod no server code is the intended state. */
 const NO_SERVER_SUBMODULE_ISSUE = "no-server-submodule";
 
@@ -91,29 +87,14 @@ export function canChooseServerModRunsOn(mod: ServerMod): boolean {
     return isOwnerMod(mod) && mod.runsOn !== undefined && mod.runsOnLocked === false;
 }
 
-/** Whether an issue says a SubModule's class or DLL is missing, so the mod's code cannot run on the server. */
-export function isServerCodeUnavailableIssue(issue: string): boolean {
-    return SERVER_CODE_UNAVAILABLE_ISSUE_KINDS.some(kind => issue.startsWith(kind));
-}
-
-/** Whether the server can run this mod's code; a mod whose SubModule class or DLL is missing must stay players-only. */
-export function canRunServerModOnServer(mod: ServerMod): boolean {
-    return !mod.issues.some(isServerCodeUnavailableIssue);
-}
-
-/** Sets where an owner mod runs; locked mods, mods without the field and an impossible server choice stay unchanged. */
+/** Sets where an owner mod runs; locked mods and mods without the field stay unchanged. */
 export function setServerModRunsOn(mods: readonly ServerMod[], id: string, runsOn: ServerModRunsOn): ServerMod[] {
-    return mods.map(mod => mod.id !== id || !canChooseServerModRunsOn(mod) || (runsOn === "server" && !canRunServerModOnServer(mod)) ? mod : { ...mod, runsOn });
+    return mods.map(mod => mod.id !== id || !canChooseServerModRunsOn(mod) ? mod : { ...mod, runsOn });
 }
 
-/** Whether the server provides this mod and keeps it players-only (Bannerlord.Harmony on a runner with players-only support). */
-export function isServerProvidedMod(mod: ServerMod): boolean {
-    return mod.id.toLowerCase() === HARMONY_MOD_ID && mod.runsOn === "players";
-}
-
-/** Whether the owner's players-only choice warrants a warning: the mod could run on the server and is not a curated client-side mod. */
-export function isUncuratedPlayersOnlyMod(mod: ServerMod): boolean {
-    return mod.runsOn === "players" && canChooseServerModRunsOn(mod) && canRunServerModOnServer(mod) && !CURATED_PLAYERS_ONLY_MOD_IDS.has(mod.id.toLowerCase());
+/** Whether the owner's players-only choice warrants a warning: the control plane's default for this mod is the server. */
+export function isPlayersOnlyAgainstDefault(mod: ServerMod): boolean {
+    return mod.runsOn === "players" && mod.runsOnDefault === "server" && canChooseServerModRunsOn(mod);
 }
 
 /** Returns the notes worth showing; a players-only mod's lack of server code is already said by its runs-on line. */

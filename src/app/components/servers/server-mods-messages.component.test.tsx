@@ -52,6 +52,7 @@ it.each([
     ["dedicated-server-tag-removed", "dedicated-server tags were removed"],
     ["submodule-class-missing:FamilyAppearanceEditor.SubModule", "names a SubModule class (FamilyAppearanceEditor.SubModule) that its DLL doesn't contain"],
     ["submodule-dll-missing:Missing.dll", "names a DLL (Missing.dll) that isn't in the mod"],
+    ["submodule-dll-unreadable:Native.Interop.dll", "DLL Native.Interop.dll couldn't be read as a .NET assembly"],
 ])("explains the installed-mod note %s", (issue, text) => {
     expect(describeModIssue(issue, t)).toContain(text);
     expect(describeModIssue(issue, t)).not.toContain("Note:");
@@ -66,8 +67,9 @@ it("blames a refused save on its runs-on change only when the control plane's is
     const changed = [{ id: "Fae", runsOn: "server" } as ServerMod];
     const missing = "submodule-class-missing:Fae.SubModule";
     expect(modsErrorMessage(new ServerModsError("runner_unsupported"), t, changed)).toContain("doesn't support players-only mods yet");
-    expect(modsErrorMessage(new ServerModsError("mod_order_invalid", false, "fae", missing), t, changed)).toContain("Fae can't run on the server");
-    expect(modsErrorMessage(new ServerModsError("mod_order_invalid", false, "Fae", "submodule-dll-missing:Fae.dll"), t, changed)).toContain("Fae can't run on the server");
+    expect(modsErrorMessage(new ServerModsError("mod_order_invalid", false, "fae", missing), t, changed))
+        .toBe("Fae can't run on the server. This mod names a SubModule class (Fae.SubModule) that its DLL doesn't contain, so its code can only run in players' games. Upload a fixed build to run it on the server.");
+    expect(modsErrorMessage(new ServerModsError("mod_order_invalid", false, "Fae", "submodule-dll-unreadable:Fae.dll"), t, changed)).toContain("Fae can't run on the server. This mod's DLL Fae.dll couldn't be read");
     // The same save may also break a dependency order for the same mod; without the issue that is the reason shown.
     expect(modsErrorMessage(new ServerModsError("mod_order_invalid", false, "Fae"), t, changed)).toBe("This order breaks a load rule for Fae. Check that its dependencies are enabled and load before it.");
     expect(modsErrorMessage(new ServerModsError("mod_order_invalid", false, "Other", missing), t, changed)).toContain("load rule for Other");

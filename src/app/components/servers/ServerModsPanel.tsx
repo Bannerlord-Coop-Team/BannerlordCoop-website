@@ -6,15 +6,15 @@ import { FlaskConical, Lock, Menu, RefreshCw, Trash2, Upload } from "lucide-reac
 import { useTranslations } from "@/app/lib/localization/client";
 import { buildModArchive, ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
 import {
-    canChooseServerModRunsOn, canRunServerModOnServer, changedServerModRunsOn, enabledOwnerModCount, findServerMod, isOwnerMod, isServerProvidedMod,
-    isUncuratedPlayersOnlyMod, moveServerMod, sameServerModOrder, serverModLoadOrder, serverModsPlayersNeed, ServerModsError, setServerModRunsOn,
+    canChooseServerModRunsOn, changedServerModRunsOn, enabledOwnerModCount, findServerMod, isOwnerMod, isPlayersOnlyAgainstDefault,
+    moveServerMod, sameServerModOrder, serverModLoadOrder, serverModsPlayersNeed, ServerModsError, setServerModRunsOn,
     toggleServerMod, visibleServerModIssues,
     type ServerMod, type ServerModArchive, type ServerModCatalog, type ServerModRunsOn, type ServerModsState, type ServerModUploadProgress,
 } from "@/app/lib/hosting/server-mods";
 import { createBrowserServerModCatalog } from "@/app/lib/hosting/server-mods-transport";
 import { MOD_MAXIMUM_ENABLED_OWNER_MODS } from "../../../../supabase/functions/_shared/server-mods-contract";
 import { useServerWorkspaceSectionShown } from "./ServerManagementWorkspace";
-import { archiveProblemMessage, describeModIssue, modsErrorMessage } from "./server-mods-messages";
+import { archiveProblemMessage, describeModIssue, lockedRunsOnMessage, modsErrorMessage } from "./server-mods-messages";
 import { fileButtonClass } from "./server-file-styles";
 
 const iconButtonClass = "inline-flex size-10 shrink-0 items-center justify-center rounded-md text-foreground-muted hover:bg-white/[0.05] hover:text-foreground focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
@@ -249,9 +249,9 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         void persist();
     }
 
-    /** Sets where an owner mod runs and saves it; making a mod outside the curated list players-only asks first. */
+    /** Sets where an owner mod runs and saves it; making a mod whose default is the server players-only asks first. */
     function chooseRunsOn(mod: ServerMod, runsOn: ServerModRunsOn) {
-        if (isUncuratedPlayersOnlyMod({ ...mod, runsOn }) && !window.confirm(t("mods.runsOn.confirmPlayersOnly", { name: mod.name }))) return;
+        if (isPlayersOnlyAgainstDefault({ ...mod, runsOn }) && !window.confirm(t("mods.runsOn.confirmPlayersOnly", { name: mod.name }))) return;
         updateDraft(setServerModRunsOn(draftRef.current, mod.id, runsOn));
         void persist();
     }
@@ -368,27 +368,19 @@ function ModRow({ mod, index, idPrefix, editable, canDelete, dragging, onDragSta
 function ModRunsOnChoice({ mod, id, editable, onChange }: { mod: ServerMod; id: string; editable: boolean; onChange: (runsOn: ServerModRunsOn) => void }) {
     const { t } = useTranslations("managed-server");
     if (!canChooseServerModRunsOn(mod)) {
-        return <p className="mt-1 flex items-center gap-1.5 text-xs text-foreground-muted"><Lock className="size-3 shrink-0" aria-hidden="true" />{t(lockedRunsOnKey(mod))}</p>;
+        return <p className="mt-1 flex items-center gap-1.5 text-xs text-foreground-muted"><Lock className="size-3 shrink-0" aria-hidden="true" />{lockedRunsOnMessage(mod, t)}</p>;
     }
-    const serverAllowed = canRunServerModOnServer(mod);
     return <div className="mt-1 text-xs">
         <span className="flex flex-wrap items-center gap-2">
             <label htmlFor={id} className="text-foreground-muted">{t("mods.runsOn.label")}</label>
             <select id={id} value={mod.runsOn} disabled={!editable} onChange={event => onChange(event.currentTarget.value as ServerModRunsOn)}
                 className="rounded-sm border border-white/15 bg-background px-1.5 py-0.5 text-xs text-foreground focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-50">
-                <option value="server" disabled={!serverAllowed}>{t("mods.runsOn.server")}</option>
+                <option value="server">{t("mods.runsOn.server")}</option>
                 <option value="players">{t("mods.runsOn.players")}</option>
             </select>
         </span>
-        {isUncuratedPlayersOnlyMod(mod) && <p className="mt-1 text-amber-200">{t("mods.runsOn.uncuratedWarning")}</p>}
+        {isPlayersOnlyAgainstDefault(mod) && <p className="mt-1 text-amber-200">{t("mods.runsOn.playersOnlyWarning")}</p>}
     </div>;
-}
-
-/** Picks the copy for a runs-on value the owner cannot change. */
-function lockedRunsOnKey(mod: ServerMod): string {
-    if (isServerProvidedMod(mod)) return "mods.runsOn.serverProvided";
-    if (mod.runsOn === "players") return "mods.runsOn.fixedPlayers";
-    return "mods.runsOn.fixedServer";
 }
 
 /** Lists the mods every player must install, at their exact versions, from the saved list. */

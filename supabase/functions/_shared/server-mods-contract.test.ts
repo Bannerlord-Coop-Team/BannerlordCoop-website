@@ -29,6 +29,11 @@ function entry(overrides: Record<string, unknown> = {}) {
         sizeBytes: 1_234, sha256: "b".repeat(64), dependsOn: ["Native"], issues: ["stripped:0Harmony.dll"], ...overrides };
 }
 
+/** Returns an entry's runs-on fields that are present. */
+function pick(mod: Record<string, unknown>) {
+    return Object.fromEntries(["runsOn", "runsOnDefault", "runsOnLocked", "runsOnLockReason"].filter((key) => Object.hasOwn(mod, key)).map((key) => [key, mod[key]]));
+}
+
 /** Builds a minimal valid mod list. */
 function state(mods: unknown[] = [entry()]) {
     return { revision: REVISION, restartRequired: false, mods: [
@@ -86,20 +91,26 @@ test("validates mod lists strictly", () => {
     assert.doesNotThrow(() => parseModsState(state([entry({ issues: ["image-module-not-loaded:StoryMode", "future-issue"] })])));
 });
 
-test("accepts entries with or without the players-only pair, but never half of it", () => {
-    assert.equal(parseModsState(state()).mods[1].runsOn, undefined);
-    assert.equal(Object.hasOwn(parseModsState(state()).mods[1], "runsOnLocked"), false);
-    const players = parseModsState(state([entry({ runsOn: "players", runsOnLocked: false })])).mods[1];
-    assert.deepEqual([players.runsOn, players.runsOnLocked], ["players", false]);
-    const harmony = parseModsState(state([entry({ id: "Bannerlord.Harmony", runsOn: "players", runsOnLocked: true })])).mods[1];
-    assert.deepEqual([harmony.runsOn, harmony.runsOnLocked], ["players", true]);
-    for (const invalid of [{ runsOn: "server" }, { runsOnLocked: false }, { runsOn: "both", runsOnLocked: false }, { runsOn: "server", runsOnLocked: "no" },
-        { runsOn: null, runsOnLocked: false }, { runsOn: "server", runsOnLocked: false, runsOnReason: "x" }]) {
+test("accepts entries with the whole runs-on set or none of it, the lock reason exactly when locked", () => {
+    const parsed = parseModsState(state()).mods[1];
+    for (const key of ["runsOn", "runsOnDefault", "runsOnLocked", "runsOnLockReason"]) assert.equal(Object.hasOwn(parsed, key), false, key);
+    const open = { runsOn: "players", runsOnDefault: "server", runsOnLocked: false };
+    assert.deepEqual(pick(parseModsState(state([entry(open)])).mods[1]), open);
+    const harmony = { runsOn: "players", runsOnDefault: "players", runsOnLocked: true, runsOnLockReason: "server-provided" };
+    assert.deepEqual(pick(parseModsState(state([entry({ id: "Bannerlord.Harmony", ...harmony })])).mods[1]), harmony);
+    // A reason a newer control plane adds is kept, so the website can show it as locked rather than reject the list.
+    assert.equal(parseModsState(state([entry({ ...harmony, runsOnLockReason: "future-reason" })])).mods[1].runsOnLockReason, "future-reason");
+    for (const invalid of [{ runsOn: "server" }, { runsOnLocked: false }, { runsOn: "server", runsOnLocked: false }, { runsOnDefault: "server" },
+        { ...open, runsOn: "both" }, { ...open, runsOnDefault: null }, { ...open, runsOnLocked: "no" }, { ...open, runsOnLockReason: "core-module" },
+        { ...harmony, runsOnLockReason: undefined }, { runsOn: "players", runsOnDefault: "players", runsOnLocked: true }, { ...harmony, runsOnLockReason: "Bad Reason" },
+        { ...harmony, runsOnLockReason: 1 }, { ...open, runsOnReason: "x" }, { runsOnLockReason: "core-module" }]) {
         assert.throws(() => parseModsState(state([entry(invalid)])), Error, JSON.stringify(invalid));
     }
     assert.doesNotThrow(() => parseModsState(state([entry({ issues: ["no-server-submodule", "no-render-tag-removed", "headless-server-unsupported", "dedicated-server-tag-removed"] })])));
-    assert.doesNotThrow(() => parseModsState(state([entry({ runsOn: "players", runsOnLocked: false, issues: ["submodule-class-missing:FamilyAppearanceEditor.SubModule+Inner"] })])));
-    assert.doesNotThrow(() => parseModsState(state([entry({ runsOn: "players", runsOnLocked: false, issues: ["submodule-dll-missing:My Mod.Core.dll"] })])));
+    const f17 = { runsOn: "players", runsOnDefault: "server", runsOnLocked: true, runsOnLockReason: "submodule-invalid" };
+    for (const issue of ["submodule-class-missing:FamilyAppearanceEditor.SubModule+Inner", "submodule-dll-missing:My Mod.Core.dll", "submodule-dll-unreadable:Native.Interop.dll"]) {
+        assert.doesNotThrow(() => parseModsState(state([entry({ ...f17, issues: [issue] })])), issue);
+    }
 });
 
 test("accepts a load-order entry's runsOn only when it is a known value", () => {

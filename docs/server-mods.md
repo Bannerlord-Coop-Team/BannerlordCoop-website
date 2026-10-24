@@ -45,7 +45,8 @@ the website's side of it.
 - Each mod shows its notes (stripped assemblies, missing or misordered
   dependencies, removed dedicated-server or no-render tags, a mod known not to run
   headless, no code that runs on the server, a SubModule class or DLL the mod does
-  not contain). The reorder handles carry a screen-reader-only arrow-key hint.
+  not contain or cannot read). The reorder handles carry a screen-reader-only
+  arrow-key hint.
 - **Runs on** (control-plane contract C3, mod runtime v1). When the list reports
   `runsOn`, each owner mod shows where its code runs: **Server and players**, or
   **Players only**, where the module stays in the server's launch list (so Coop's
@@ -53,21 +54,27 @@ the website's side of it.
   is separate from the enabled switch, saves like a toggle, and the save names
   `runsOn` only for the mods whose value changed, so an unchanged list sends what
   it always did.
-  - Bannerlord.Harmony is locked to players only ("the server provides Harmony").
-  - ItemQualityIndicator, Bannerlord.FamilyTree and FamilyAppearanceEditor default
-    to players only. Choosing players only for any other mod asks for confirmation
-    and keeps a warning on its row: the server won't run its code, so a gameplay
-    mod can make players' games disagree with the server or stop them joining.
-  - A mod installed players only because a SubModule's class or DLL is missing
-    (`submodule-class-missing:<Class>`, `submodule-dll-missing:<File>`) cannot be
-    switched to the server; the option is disabled and the note says why. A refused
-    switch says the same only when the control plane's refusal names that issue
-    (` Issue: <issue>.` after the module); otherwise, such as a dependency order the
-    same save broke, the ordinary load-rule message is shown.
-  - When the server's runner lacks players-only support, the control plane reports
-    every mod locked; the row shows the value it applies and that the server needs
-    a runner update first. A change refused with `runner_unsupported` says so and
-    reloads the list, so those locks appear at once.
+  - The control plane owns the policy; the website keeps no list of mod ids. Each
+    entry reports its `runsOnDefault` (what a new upload of that id gets) and, when
+    the owner cannot change it, `runsOnLocked` with a `runsOnLockReason`.
+  - Choosing players only for a mod whose `runsOnDefault` is `server` asks for
+    confirmation and keeps a warning on its row: the server won't run its code, so
+    a gameplay mod can make players' games disagree with the server or stop them
+    joining. A mod that defaults to players only (today ItemQualityIndicator,
+    Bannerlord.FamilyTree and FamilyAppearanceEditor) gets no warning.
+  - A locked mod shows its value and the reason, without a choice:
+    `server-provided` ("the server provides Harmony"), `submodule-invalid` (its
+    server code is missing or unreadable; the note names the
+    `submodule-class-missing:<Class>`, `submodule-dll-missing:<File>` or
+    `submodule-dll-unreadable:<File>` issue), `runner-unsupported` (the server needs
+    a runner update first) and `core-module` (core modules and Coop, which show no
+    runs-on line). A reason the website does not know is shown as locked with
+    generic copy rather than failing the list.
+  - A refused switch to the server explains the control plane's issue only when
+    the refusal names one (` Issue: <issue>.` after the module); otherwise, such as
+    a dependency order the same save broke, the ordinary load-rule message is shown.
+  - A change refused with `runner_unsupported` says so and reloads the list, so the
+    runner-update locks appear at once.
   - A list without `runsOn` (a control plane that predates it) shows no choice. This
     fallback goes once the control plane's writer gate is on for good (see Rollout).
 - **Mods players need**, below the list, names every enabled owner mod with its Id
@@ -221,11 +228,12 @@ the control plane turns on its runs-on writer gate:
 
 If only the Next app is updated, the Edge Function rejects every list that carries
 `runsOn` and the Mods tab fails with `invalid_response` for every owner. Both accept
-entries with or without the `runsOn`/`runsOnLocked` pair (one without the other is
+entries with all of `runsOn`, `runsOnDefault` and `runsOnLocked` (plus
+`runsOnLockReason` exactly when locked) or with none of them (anything in between is
 malformed), the new notes, the F17 issues, typed refusals that end in
 ` Issue: <issue>.`, and `mod_assembly_conflict`.
 
-The "without the pair" case exists only for a control plane below the writer gate.
+The "none of them" case exists only for a control plane below the writer gate.
 Remove it, and make the fields required, once the gate is on in production and a
 rollback below it is ruled out; a tracking issue is opened with the pull request.
 

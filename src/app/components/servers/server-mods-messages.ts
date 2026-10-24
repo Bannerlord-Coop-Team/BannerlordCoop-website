@@ -1,6 +1,6 @@
 import type { Translator } from "@/app/lib/localization/types";
 import type { ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
-import { isServerCodeUnavailableIssue, type ServerMod, type ServerModsError } from "@/app/lib/hosting/server-mods";
+import type { ServerMod, ServerModsError } from "@/app/lib/hosting/server-mods";
 import type { ModLoadFailure } from "@/app/lib/hosting/my-servers-server";
 
 // Owner-facing copy for the Mods tab: installed-mod notes, API refusals and folder problems, each from a
@@ -47,6 +47,7 @@ const ISSUE_KEYS: Readonly<Record<string, string>> = {
     "image-module-not-loaded": "mods.issue.imageModuleNotLoaded",
     "submodule-class-missing": "mods.issue.submoduleClassMissing",
     "submodule-dll-missing": "mods.issue.submoduleDllMissing",
+    "submodule-dll-unreadable": "mods.issue.submoduleDllUnreadable",
 };
 
 /** Describes one installed-mod note (`kind` or `kind:value`) in owner language. */
@@ -83,11 +84,23 @@ export function modsErrorMessage(error: ServerModsError, t: Translate, changedRu
 function runsOnRefusalMessage(error: ServerModsError, changedRunsOn: readonly ServerMod[], t: Translate): string | null {
     if (changedRunsOn.length === 0) return null;
     if (error.code === "runner_unsupported") return t("mods.runsOn.runnerUnsupported");
-    // Only the control plane's named issue tells a missing SubModule apart from, say, a dependency order the same save broke.
-    if (error.code !== "mod_order_invalid" || error.detail === null || !isServerCodeUnavailableIssue(error.detail)) return null;
+    // The control plane names an issue only when the switch itself was refused; a dependency order the same save broke names none.
+    if (error.code !== "mod_order_invalid" || error.detail === null) return null;
     const named = error.modId?.toLowerCase();
     const refused = changedRunsOn.find(mod => mod.runsOn === "server" && mod.id.toLowerCase() === named);
-    return refused === undefined ? null : t("mods.runsOn.serverRefused", { id: refused.id });
+    return refused === undefined ? null : t("mods.runsOn.serverRefused", { id: refused.id, reason: describeModIssue(error.detail, t) });
+}
+
+/** Explains a runs-on value the owner cannot change from the control plane's lock reason; an unknown reason gets generic copy. */
+export function lockedRunsOnMessage(mod: ServerMod, t: Translate): string {
+    const players = mod.runsOn === "players";
+    switch (mod.runsOnLockReason) {
+        case "core-module": return t("mods.runsOn.lockedCore");
+        case "server-provided": return t(players ? "mods.runsOn.serverProvided" : "mods.runsOn.fixedServer");
+        case "runner-unsupported": return t(players ? "mods.runsOn.fixedPlayers" : "mods.runsOn.fixedServer");
+        case "submodule-invalid": return t("mods.runsOn.lockedSubmodule");
+        default: return t("mods.runsOn.lockedOther", { value: t(players ? "mods.runsOn.players" : "mods.runsOn.server") });
+    }
 }
 
 /** Explains why a picked folder cannot be uploaded. */
