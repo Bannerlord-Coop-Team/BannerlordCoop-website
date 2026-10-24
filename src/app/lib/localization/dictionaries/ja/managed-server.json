@@ -978,7 +978,7 @@
   "mods.archive.invalidPath": "{path}はアップロードできません。パスが長すぎるか、階層が深すぎるか、使用できない文字が含まれています。",
   "mods.archive.duplicatePath": "{path}は、大文字・小文字やアクセントの違いだけで別のファイルと重複しています。",
   "mods.archive.compressionRatio": "フォルダーの圧縮率が100:1を超えているため、サーバーが受け付けません。",
-  "controls.modLoadFailedMissingAssembly": "Mod {modId}には{assembly}が必要です。依存Modをアップロードするか、「Mods」でこのModを無効にしてから再起動してください。",
+  "controls.modLoadFailedMissingAssembly": "Mod {modId} を読み込めませんでした。アセンブリ {assembly} が見つかりません。このModと依存するModを無効にしてから、もう一度起動してください。",
   "controls.modLoadFailedMissingDll": "Mod {modId}のSubModule.xmlに記載されたDLLがありません。binフォルダーを含む完全なModをアップロードするか、「Mods」で無効にしてから再起動してください。",
   "controls.modLoadFailed": "Mod {modId}を読み込めませんでした。このサーバーバージョンと依存関係に対応するバージョンをアップロードするか、「Mods」で無効にしてから再起動してください。",
   "controls.modLoadFailedHarmony": "Mod {modId}はサーバーが提供するHarmony（0Harmony.dll）を読み込めませんでした。ホスティング側の問題のため、Bannerlord.Harmonyを再アップロードしても解決しません。サポートに連絡するか、「Mods」でこのModと依存するModを無効にしてから再起動してください。",

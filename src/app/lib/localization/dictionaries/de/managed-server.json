@@ -979,7 +979,7 @@
   "mods.archive.invalidPath": "{path} kann nicht hochgeladen werden: Der Pfad ist zu lang, zu tief verschachtelt oder enthält nicht unterstützte Zeichen.",
   "mods.archive.duplicatePath": "{path} unterscheidet sich von einer anderen Datei nur durch Groß-/Kleinschreibung oder Akzente.",
   "mods.archive.compressionRatio": "Der Ordner lässt sich stärker als 100:1 komprimieren; das lehnt der Server ab.",
-  "controls.modLoadFailedMissingAssembly": "Mod {modId} benötigt {assembly}. Lade die Abhängigkeit hoch oder deaktiviere diesen Mod unter Mods. Starte dann erneut.",
+  "controls.modLoadFailedMissingAssembly": "Mod {modId} konnte nicht geladen werden: Die Assembly {assembly} fehlt. Deaktiviere sie und alle Mods, die davon abhängen, und starte dann erneut.",
   "controls.modLoadFailedMissingDll": "Mod {modId} fehlt eine in SubModule.xml aufgeführte DLL. Lade den vollständigen Mod samt bin-Ordner hoch oder deaktiviere ihn unter Mods. Starte dann erneut.",
   "controls.modLoadFailed": "Mod {modId} konnte nicht geladen werden. Lade eine mit dieser Serverversion und ihren Abhängigkeiten kompatible Version hoch oder deaktiviere ihn unter Mods. Starte dann erneut.",
   "controls.modLoadFailedHarmony": "Mod {modId} konnte das vom Server bereitgestellte Harmony (0Harmony.dll) nicht laden. Dies ist ein Hostingproblem; ein erneuter Upload von Bannerlord.Harmony hilft nicht. Kontaktiere den Support oder deaktiviere diesen Mod und davon abhängige Mods unter Mods, bevor du erneut startest.",
