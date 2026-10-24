@@ -12,6 +12,7 @@ Keys:
 - `category.<lowercase_underscore_id>`: labels for the existing category URL identifiers.
 - `command.<immutable-command-id>.summary`: translated command descriptions for display/search.
 - `command.<immutable-command-id>.argument.<immutable-argument-name>`: argument explanatory prose.
+- `hostingOffer.*`: the managed-hosting offer beside the directory. `{amount}` is the locale-formatted USD price and `{tier}` the Patreon tier name; Patreon tier names (Veteran, Elite, Noble) stay untranslated.
 
 Do not translate command names/identifiers, executable usage, argument names, category query values, code slots, or source metadata. Command names come directly from the catalog in English, matching the server; there are no command-name dictionary keys. Descriptions and argument explanations remain translated.
 

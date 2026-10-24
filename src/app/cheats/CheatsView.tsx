@@ -1,6 +1,8 @@
 "use client";
 
 import { CheatsDirectory, type CheatCommand } from "@/app/cheats/CheatsDirectory";
+import { HostingOffer } from "@/app/cheats/HostingOffer";
+import { rememberHostingOfferHidden } from "@/app/cheats/hostingOfferCookie";
 import { cheatsLabelClass } from "@/app/cheats/locale";
 import { useTranslations } from "@/app/lib/localization/client";
 import type { CheatsQuery } from "@/app/cheats/query";
@@ -10,18 +12,30 @@ import {
     Monitor,
     Server,
 } from "lucide-react";
+import { useState } from "react";
 
 /** Renders localized cheats content without maintaining a second language preference. */
 export function CheatsView({
     commands,
     initialQuery,
+    showHostingOffer,
 }: {
     commands: readonly CheatCommand[];
     initialQuery: CheatsQuery;
+    /** Server-resolved from the dismissal cookie, so the first client render matches. */
+    showHostingOffer: boolean;
 }) {
     const { t, rich, number, locale } = useTranslations("cheats");
     const serverCount = commands.filter((command) => command.side === "server").length;
     const clientCount = commands.filter((command) => command.side === "client").length;
+    const [hostingOfferVisible, setHostingOfferVisible] = useState(showHostingOffer);
+
+    /** Hides both offer placements and keeps keyboard focus on the directory search. */
+    function hideHostingOffer() {
+        rememberHostingOfferHidden();
+        setHostingOfferVisible(false);
+        document.getElementById("cheat-search")?.focus({ preventScroll: true });
+    }
 
     return (
         <main className="min-h-svh bg-background" lang={locale}>
@@ -67,6 +81,12 @@ export function CheatsView({
                     </p>
                 </div>
 
+                {hostingOfferVisible && (
+                    <div className="mt-8 xl:hidden">
+                        <HostingOffer layout="inline" onHide={hideHostingOffer} />
+                    </div>
+                )}
+
                 <section className="mt-12 min-w-0 overflow-x-clip" aria-labelledby="cheat-directory-heading">
                     <div className="mb-5">
                         <p className={`${cheatsLabelClass("eyebrow")} text-[0.65rem]`}>
@@ -79,6 +99,7 @@ export function CheatsView({
                     <CheatsDirectory
                         commands={commands}
                         initialQuery={initialQuery}
+                        aside={hostingOfferVisible ? <HostingOffer layout="rail" onHide={hideHostingOffer} /> : undefined}
                     />
                 </section>
             </div>

@@ -18,7 +18,7 @@ import {
     type CheatSideFilter,
 } from "@/app/cheats/query";
 import { Check, Copy, Link2, Search, Star, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 
 export type CheatCommand = {
     command: string;
@@ -124,9 +124,12 @@ function shareUrl(path: string) {
 export function CheatsDirectory({
     commands,
     initialQuery,
+    aside,
 }: {
     commands: readonly CheatCommand[];
     initialQuery: CheatsQuery;
+    /** Optional third column beside the command list, shown from xl up. */
+    aside?: ReactNode;
 }) {
     const translator = useTranslations("cheats");
     const { t, rich, number, locale } = translator;
@@ -327,7 +330,7 @@ export function CheatsDirectory({
     }
 
     return (
-        <div className="grid min-w-0 grid-cols-1 gap-5 overflow-x-clip min-[800px]:grid-cols-[13rem_minmax(0,1fr)] min-[800px]:items-start min-[800px]:gap-6">
+        <div className={`grid min-w-0 grid-cols-1 gap-5 overflow-x-clip min-[800px]:grid-cols-[13rem_minmax(0,1fr)] min-[800px]:items-start min-[800px]:gap-6${aside ? " xl:grid-cols-[13rem_minmax(0,1fr)_18.75rem]" : ""}`}>
             <aside className="min-w-0 border border-white/10 bg-surface min-[800px]:sticky min-[800px]:top-20">
                 <div className="border-b border-white/10 px-4 py-3">
                     <p className={`${cheatsLabelClass("eyebrow")} text-[0.65rem]`}>
@@ -555,6 +558,7 @@ export function CheatsDirectory({
                     </div>
                 )}
             </div>
+            {aside && <div className="hidden min-w-0 xl:block">{aside}</div>}
         </div>
     );
 }
