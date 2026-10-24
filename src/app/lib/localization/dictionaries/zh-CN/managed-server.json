@@ -1,4 +1,5 @@
 {
+  "action.serverUpdating": "服务器正在更新。请稍等一分钟后重试。",
   "mods.error.uploadStatusUnavailable": "由于服务器已被暂停使用，无法确认 {id} 的安装结果。访问恢复后，请刷新模组列表以查看结果。",
   "action.refusal.serverSuspended": "此服务器已被暂停使用。请求已被拒绝，未进行任何更改。",
   "controls.stoppedAwaitingServerCheck": "上次检查时游戏已停止。服务器检查确认就绪后，启动和恢复工具将可用。",

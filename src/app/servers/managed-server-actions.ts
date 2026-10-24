@@ -80,6 +80,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
     } catch (error) {
         revalidatePath("/servers");
         const code = error instanceof MyServersApiError ? error.code : "operation_failed";
+        if (code === "server_updating") return { ok: false, message: t("action.serverUpdating") };
         if (code === "server_not_found") {
             return { ok: false, message: t("action.actions.thisServerIsUnavailableOrYourAccessWasRemoved") };
         }

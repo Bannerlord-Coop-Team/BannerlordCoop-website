@@ -40,6 +40,20 @@ it("forwards exact original identity/generation and validates configuration agai
     expect(await submitManagedServerFile(form, "owner")).toMatchObject({ ok: false, notSubmitted: true });
     expect(mocks.submit).not.toHaveBeenCalled();
 });
+it("keeps the import request recoverable when the runner is updating", async () => {
+    const form = new FormData();
+    for (const [key, value] of Object.entries({ action: "import-config", requestId: id, serverId: id, expectedUpdatedAt: updatedAt })) form.set(key, value);
+    const file = new File([JSON.stringify(config)], "config.json");
+    Object.defineProperty(file, "text", { value: async () => JSON.stringify(config) });
+    form.set("config", file);
+    mocks.submit.mockRejectedValue(new MyServersApiError("server_updating", "Upstream text", true));
+    expect(await submitManagedServerFile(form, "owner")).toMatchObject({
+        ok: false, notSubmitted: false, rejected: false, stale: false,
+        message: "Your server is updating. Try again in a minute.",
+    });
+    expect(mocks.submit).toHaveBeenCalledWith("original-owner-token", id, expect.objectContaining({ serverId: id }));
+});
+
 it("rejects oversize config before reading bytes and preserves unknown transport failures", async () => {
     const file = new File(["x".repeat(65537)], "config.json");
     const form = new FormData();

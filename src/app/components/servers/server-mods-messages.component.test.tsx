@@ -8,6 +8,14 @@ import { isModLoadFailure, type ModLoadFailure } from "@/app/lib/hosting/mod-loa
 import { isOwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
 
 const { t } = createTranslator("en", serverTestMessages["managed-server"]);
+
+it.each(["en", "de", "es", "fr", "ja", "ko", "pt-BR", "pt-PT", "ru", "tr", "zh-CN"])("localizes retryable runner maintenance in %s", locale => {
+    const messages = JSON.parse(readFileSync(`src/app/lib/localization/dictionaries/${locale}/managed-server.json`, "utf8"));
+    const message = modsErrorMessage(new ServerModsError("server_updating", true), createTranslator(locale as "en", messages).t);
+    expect(message).toBe(messages["action.serverUpdating"]);
+    expect(message.length).toBeGreaterThan(10);
+    if (locale === "en") expect(message).toBe("Your server is updating. Try again in a minute.");
+});
 const insight = { desiredState: "stopped", observedAt: null, allowedActions: ["start"], crashLoopDetected: false,
     failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: null };
 

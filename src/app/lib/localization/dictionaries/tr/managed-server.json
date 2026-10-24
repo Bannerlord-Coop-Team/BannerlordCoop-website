@@ -1,4 +1,5 @@
 {
+  "action.serverUpdating": "Sunucunuz güncelleniyor. Bir dakika sonra tekrar deneyin.",
   "mods.error.uploadStatusUnavailable": "Sunucu askıya alındığı için {id} kurulumunun sonucu doğrulanamadı. Erişim yeniden sağlandığında sonucu kontrol etmek için mod listesini yenileyin.",
   "action.refusal.serverSuspended": "Bu sunucu askıya alınmış. İstek reddedildi ve hiçbir değişiklik yapılmadı.",
   "controls.stoppedAwaitingServerCheck": "Son kontrolde oyun durmuş durumdaydı. Sunucu kontrolleri hazır olduğunu doğruladığında başlatma ve kurtarma araçları kullanılabilir hale gelir.",
