@@ -889,7 +889,7 @@
   "hostingOffer.dismiss": "Скрыть предложение хостинга",
   "hostingOffer.title": "Арендовать сервер",
   "hostingOffer.description": "Ваша кооперативная кампания — на нашем хостинге и онлайн круглосуточно.",
-  "hostingOffer.feature.online": "Онлайн 24/7 без включённого ПК",
+  "hostingOffer.feature.online": "Всегда доступен — автоматически просыпается при подключении",
   "hostingOffer.feature.backups": "Ежедневные автоматические резервные копии",
   "hostingOffer.feature.updates": "Обновления игры мы берём на себя",
   "hostingOffer.feature.support": "Приоритетная поддержка",

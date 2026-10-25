@@ -453,7 +453,8 @@ function OverviewView({ overview }: { overview: OverviewSummary }) {
     const baseStats = [
         { label: "Running", value: fleet.running, href: "/admin/control-plane?view=servers", destination: "servers", help: stateExplanation("running") },
         { label: "Stopped", value: fleet.stopped, href: "/admin/control-plane?view=servers", destination: "servers", help: stateExplanation("stopped") },
-        { label: "Suspended", value: fleet.suspended, href: "/admin/control-plane?view=servers", destination: "servers", help: stateExplanation("suspended") },
+        ...(fleet.sleeping === undefined ? [] : [{ label: "Sleeping", value: fleet.sleeping, href: "/admin/control-plane?view=servers", destination: "servers", help: "Sleeping servers wake when a player connects; retry joining in about 2 minutes." }]),
+        { label: fleet.sleeping === undefined ? "Suspended (sleeping or hold)" : "On hold", value: fleet.suspended, href: "/admin/control-plane?view=servers", destination: "servers", help: fleet.sleeping === undefined ? "This control plane combines sleeping servers and holds." : stateExplanation("suspended") },
         { label: "Provisioning", value: fleet.provisioning, href: "/admin/control-plane?view=servers", destination: "servers", help: stateExplanation("provisioning") },
         { label: "Failed / degraded", value: fleet.failedOrDegraded, href: "/admin/control-plane?view=servers", destination: "servers", help: `${stateExplanation("failed")} ${stateExplanation("degraded")}` },
         { label: "Active jobs", value: fleet.activeJobs, href: "/admin/control-plane?view=jobs&state=active", destination: "jobs", help: "Durable jobs that are queued, running, or waiting to retry." },

@@ -39,6 +39,8 @@
   "table.unknownPlayers": "—",
   "table.direct": "Прямое подключение",
   "table.status.Online": "В сети",
+  "table.status.Asleep": "В спящем режиме",
+  "table.sleepHint": "Первая попытка подключения разбудит сервер; повторите попытку примерно через 2 минуты.",
   "table.status.Offline": "Не в сети",
   "table.status.Unknown": "Статус неизвестен",
   "loading.label": "Загрузка серверов",

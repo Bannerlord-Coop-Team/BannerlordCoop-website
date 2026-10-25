@@ -36,6 +36,8 @@
   "table.unknownPlayers": "—",
   "table.direct": "直连",
   "table.status.Online": "在线",
+  "table.status.Asleep": "休眠中",
+  "table.sleepHint": "首次连接会唤醒服务器；请在约 2 分钟后重试。",
   "table.status.Offline": "离线",
   "table.status.Unknown": "未知",
   "loading.label": "正在加载服务器",

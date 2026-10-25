@@ -889,7 +889,7 @@
   "hostingOffer.dismiss": "호스팅 안내 숨기기",
   "hostingOffer.title": "서버 대여",
   "hostingOffer.description": "협동 캠페인을 대신 호스팅하고 24시간 온라인으로 유지합니다.",
-  "hostingOffer.feature.online": "24시간 온라인, PC를 켜 둘 필요 없음",
+  "hostingOffer.feature.online": "언제든 이용 가능 — 접속하면 자동으로 깨어납니다",
   "hostingOffer.feature.backups": "매일 자동 백업",
   "hostingOffer.feature.updates": "게임 업데이트는 저희가 처리",
   "hostingOffer.feature.support": "우선 지원",

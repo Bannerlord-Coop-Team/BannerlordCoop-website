@@ -37,6 +37,8 @@
   "table.unknownPlayers": "—",
   "table.direct": "Direct",
   "table.status.Online": "Online",
+  "table.status.Asleep": "Asleep",
+  "table.sleepHint": "Your first join wakes it; retry in about 2 minutes.",
   "table.status.Offline": "Offline",
   "table.status.Unknown": "Unknown",
   "loading.label": "Loading servers",

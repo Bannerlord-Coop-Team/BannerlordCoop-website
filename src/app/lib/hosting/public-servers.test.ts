@@ -95,3 +95,13 @@ test("public loader runs in workerd and rejects redirects without following them
         }
     } finally { await runtime.dispose(); }
 });
+
+for (const observedGameState of ["running", "stopped", "asleep"]) {
+    test(`public loader accepts existing and sleeping CP payload: ${observedGameState}`, async () => {
+        const item = { ...server, observedGameState };
+        const result = await listPublicServers(async (_url, init) => Response.json({ version: 1,
+            requestId: new Headers(init?.headers).get("x-request-id"), ok: true,
+            result: { items: [item], nextCursor: null } }));
+        assert.deepEqual(result, [item]);
+    });
+}

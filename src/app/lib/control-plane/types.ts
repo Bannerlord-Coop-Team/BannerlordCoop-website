@@ -1056,6 +1056,7 @@ export type FleetSummary = {
     provisioning: number;
     failedOrDegraded: number;
     suspended: number;
+    sleeping?: number;
     pendingDeletion: number;
     activeJobs: number;
     stuckJobs: number;

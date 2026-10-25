@@ -889,7 +889,7 @@
   "hostingOffer.dismiss": "Hide hosting offer",
   "hostingOffer.title": "Rent a Server",
   "hostingOffer.description": "Your co-op campaign, hosted for you and online around the clock.",
-  "hostingOffer.feature.online": "Online 24/7, no PC left on",
+  "hostingOffer.feature.online": "Always available — wakes automatically when you join",
   "hostingOffer.feature.backups": "Automatic daily backups",
   "hostingOffer.feature.updates": "Game updates handled for you",
   "hostingOffer.feature.support": "Priority support",

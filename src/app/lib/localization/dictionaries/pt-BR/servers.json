@@ -37,6 +37,8 @@
   "table.unknownPlayers": "—",
   "table.direct": "Direta",
   "table.status.Online": "Online",
+  "table.status.Asleep": "Em repouso",
+  "table.sleepHint": "Sua primeira tentativa de conexão desperta o servidor; tente novamente em cerca de 2 minutos.",
   "table.status.Offline": "Offline",
   "table.status.Unknown": "Desconhecido",
   "loading.label": "Carregando servidores",
