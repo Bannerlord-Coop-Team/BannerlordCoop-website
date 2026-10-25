@@ -643,6 +643,7 @@
   "state.deletion-pending": "Deletion Pending",
   "state.deleting": "Deleting",
   "state.deleted": "Deleted",
+  "state.sleeping": "Sleeping — wakes when a player connects",
   "state.suspended": "Suspended",
   "state.awaiting-save": "Awaiting Save",
   "state.ready": "Ready",

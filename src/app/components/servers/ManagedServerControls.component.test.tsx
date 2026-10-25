@@ -865,3 +865,24 @@ vi.mock("@/app/lib/localization/server", () => ({
     getMessages: async () => serverTestMessages,
     getTranslations: async (namespace: keyof typeof serverTestMessages) => createTranslator("en", serverTestMessages[namespace]),
 }));
+
+it.each([
+    ["sleeper", "running", ["start", "stop"]],
+    ["sleeper without Stop admission", "running", ["start"]],
+    ["admin hold", "stopped", []],
+    ["subscription hold", "stopped", []],
+    ["held with running intent", "running", []],
+] as const)("keeps allowedActions authoritative for %s", async (name, desiredState, allowedActions) => {
+    const container = document.createElement("div"); const root = createRoot(container);
+    const insight: OwnerRuntimeInsight = { desiredState, allowedActions: [...allowedActions], observedAt: null,
+        crashLoopDetected: false, failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: null };
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} operationState="suspended"
+            observedGameState="stopped" runtimeInsight={insight} subscriptionHold={name === "subscription hold" ? { reason: "subscription-funding-lapsed" } : null} /></TestLocalization>));
+        for (const action of ["start", "stop"] as const) {
+            const button = [...container.querySelectorAll("button")].find(button => button.textContent?.trim() === (action === "start" ? "Start" : "Stop"))!;
+            expect(button).toBeDefined();
+            expect(button.disabled).toBe(!insight.allowedActions.includes(action));
+        }
+    } finally { await act(async () => root.unmount()); }
+});

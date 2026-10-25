@@ -97,3 +97,11 @@ it("translates configuration labels and injects detailed import diagnostics", ()
     const translator = createTranslator("es", dictionary);
     expect(() => readConfigurationFile('{"difficulty":{}}', "server", configurationImportMessages(translator.t))).toThrow("Seleccione el archivo de juego");
 });
+
+it.each(Object.values(localeDefinitions).filter(locale => locale.enabled))("provides sleeping guidance distinct from holds in $locale", async definition => {
+    const dictionary = (await definition.dictionaries["managed-server"]!()).default;
+    const { t } = createTranslator(definition.locale, dictionary);
+    expect(t("state.sleeping").length).toBeGreaterThan(10);
+    expect(t("state.sleeping")).not.toBe(t("state.suspended"));
+    if (definition.locale !== "en") expect(t("state.sleeping")).not.toBe("Sleeping — wakes when a player connects");
+});
