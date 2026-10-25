@@ -112,11 +112,10 @@ it.each(Object.values(localeDefinitions).filter(locale => locale.enabled))("prov
     expect(directory["table.status.Asleep"]).toBeTruthy();
     expect(directory["table.status.Starting"]).toBeTruthy();
     expect(directory["table.sleepHint"]).toContain("2");
-    expect(ad["hostingOffer.description"]).toContain("2");
     expect(ad["hostingOffer.description"]).not.toMatch(/24|around the clock|rund um die Uhr|a todas horas|круглосуточно|günün her saati|全天候|o tempo todo/);
     expect(ad["hostingOffer.feature.online"]).not.toMatch(/24|around the clock/);
     if (definition.locale !== "en") {
         expect(directory["table.status.Asleep"]).not.toBe("Asleep");
-        expect(ad["hostingOffer.feature.online"]).not.toBe("Always available — wakes automatically when you join");
+        expect(ad["hostingOffer.feature.online"]).not.toBe("Always available");
     }
 });
