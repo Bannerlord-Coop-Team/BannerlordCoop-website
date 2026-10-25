@@ -120,8 +120,10 @@ function cpuCores(value: unknown) {
 }
 
 function memoryBytes(value: unknown) {
-    if (!isRecord(value) || !hasExactKeys(value, ["p50", "p95", "max"])) return false;
-    const figures = [value.p50, value.p95, value.max];
+    if (!isRecord(value)) return false;
+    const keys = "p99" in value ? ["p50", "p95", "p99", "max"] : ["p50", "p95", "max"];
+    if (!hasExactKeys(value, keys)) return false;
+    const figures = keys.map((key) => value[key]);
     return figures.every((figure) => count(figure)) && ordered(figures as number[]);
 }
 
@@ -290,8 +292,8 @@ function host(value: unknown, shape: Shape, rule: HostingAdminFleetCapacity["mod
     const concurrent = value.concurrentServers;
     return effectiveVcpu(value.effectiveVcpu, value.vCpu as number)
         && nullable(value.typicalCpuCores, (cores) => amount(cores))
-        && capped(value.demandCpuCores, rule.staticBurstVcpuPerServer) && capped(value.burstCpuCores, rule.staticBurstVcpuPerServer)
-        && nullable(value.demandMemoryBytes, (bytes) => count(bytes) && (bytes as number) <= rule.staticBurstMemoryBytesPerServer)
+        && capped(value.demandCpuCores, 64) && capped(value.burstCpuCores, 64)
+        && nullable(value.demandMemoryBytes, (bytes) => count(bytes) && (bytes as number) <= MAXIMUM_BURST_MEMORY_BYTES)
         && burstServers(value.burstServers)
         // M is never more than S; without servers it is S, every slot counted.
         && count(concurrent) && (concurrent as number) <= slots
@@ -507,7 +509,7 @@ export function staticRuleLabel(model: HostingAdminFleetCapacity["model"]) {
 }
 
 const CPU_PERCENTILES: Record<number, keyof HostingFleetCapacityCpuCores> = { 50: "p50", 90: "p90", 95: "p95", 99: "p99", 100: "max" };
-const MEMORY_PERCENTILES: Record<number, keyof HostingFleetCapacityMemoryBytes> = { 50: "p50", 95: "p95", 100: "max" };
+const MEMORY_PERCENTILES: Record<number, keyof HostingFleetCapacityMemoryBytes> = { 50: "p50", 95: "p95", 99: "p99", 100: "max" };
 
 /** The figure at the model's percentile, falling back to p95 for a percentile the demand does not report. */
 export function modelCpu(cores: HostingFleetCapacityCpuCores, percentileValue: number) {
@@ -517,7 +519,7 @@ export function modelCpu(cores: HostingFleetCapacityCpuCores, percentileValue: n
 
 export function modelMemory(bytes: HostingFleetCapacityMemoryBytes, percentileValue: number) {
     const key = MEMORY_PERCENTILES[percentileValue] ?? "p95";
-    return { key, value: bytes[key] };
+    return { key: key === 'p99' && bytes.p99 === undefined ? 'p95' : key, value: bytes[key] ?? bytes.p95 };
 }
 
 /** What one server is planned to need when every one bursts at once: the model's burst target, or its peak where higher. */
@@ -592,6 +594,7 @@ export function staticRuleComparison(capacity: Pick<HostingAdminFleetCapacity, "
  */
 function typicalPlan(rule: HostingAdminFleetCapacity["model"] & { cpuTypicalPercentile: number; memoryBurstBytes: number },
     cores: HostingFleetCapacityCpuCores, bytes: HostingFleetCapacityMemoryBytes) {
+    if (rule.memoryPercentile === 99) return `Each server plans its measured CPU p95 and working-set p99 over the rolling week. New servers use the measured fleet demand after six running hours of history. CPU is normalized for the evaluated hardware. Peaks are informational. The policy slot floors remain in effect.`;
     const cap = rule.staticBurstVcpuPerServer;
     const typical = modelCpu(cores, rule.cpuTypicalPercentile);
     // Rounded to three decimals as the control plane rounds each VPS's planned CPU, and shown with them.
@@ -766,8 +769,9 @@ export function demandSourceLabel(source: HostingFleetCapacityDemandSource) {
  * 3 GiB memory cap · peaks 2.720 cores, 3.25 GiB".
  */
 export function perServerSourceLabel(host: Pick<HostingFleetCapacityHost, "demandSource" | "peakCpuCores" | "peakMemoryBytes" | "typicalCpuCores">,
-    capacityModel: Pick<HostingAdminFleetCapacity["model"], "cpuBurstVcpu" | "memoryBurstBytes" | "cpuTypicalPercentile" | "staticBurstVcpuPerServer" | "staticBurstMemoryBytesPerServer">) {
+    capacityModel: Pick<HostingAdminFleetCapacity["model"], "cpuBurstVcpu" | "memoryBurstBytes" | "cpuTypicalPercentile" | "staticBurstVcpuPerServer" | "staticBurstMemoryBytesPerServer"> & { memoryPercentile?: number }) {
     const source = demandSourceLabel(host.demandSource);
+    if (capacityModel.memoryPercentile === 99) return `${source} · measured CPU p95 / memory p99 · peaks ${host.peakCpuCores === null ? "—" : formatCoresExact(host.peakCpuCores)}, ${host.peakMemoryBytes === null ? "—" : formatGiB(host.peakMemoryBytes)}`;
     if (host.demandSource === "none" || host.peakCpuCores === null) return source;
     if (capacityModel.cpuTypicalPercentile !== undefined && host.typicalCpuCores !== undefined && host.typicalCpuCores !== null
         && capacityModel.memoryBurstBytes !== null && host.peakMemoryBytes !== null) {
@@ -812,7 +816,7 @@ export function occupantDemandLabel(occupantDemand: HostingFleetCapacityDemand,
     const cpu = stable === null || occupantDemand.cpuCores === null ? "CPU —"
         : `${formatCores(stable.value)} stable (${stable.key}), ${typical === null ? "" : `${typical.key} ${formatCores(typical.value).replace(/ cores$/u, "")}, `}peak ${formatCores(occupantDemand.cpuCores.max).replace(/ cores$/u, "")}`;
     const bytes = occupantDemand.memoryBytes;
-    const memory = bytes === null ? "memory —" : capacityModel.memoryBurstBytes === null ? `${formatGiB(bytes.p95)} at p95`
+    const memory = bytes?.p99 !== undefined ? `${formatGiB(bytes.p99)} at p99, peak ${formatGiB(bytes.max).replace(/ GiB$/u, "")}` : bytes === null ? "memory —" : capacityModel.memoryBurstBytes === null ? `${formatGiB(bytes.p95)} at p95`
         : `${formatGiB(bytes.p95)} at p95, peak ${formatGiB(bytes.max).replace(/ GiB$/u, "")}`;
     return `${cpu} · ${memory}`;
 }
@@ -919,7 +923,7 @@ export function fleetCapacityHints(capacityModel: HostingAdminFleetCapacity["mod
     const busy = concurrentBusyFraction === 0.5 ? "half" : `${Number((concurrentBusyFraction * 100).toFixed(2))}%`;
     const hourShare = `${Number((concurrentHourShare * 100).toFixed(2))}%`;
     const workingSet = "Memory one server used (its working set) at the end of each running interval of about 5 minutes, in GiB.";
-    return {
+    const hints = {
         ...earlier,
         memory: `${workingSet} The model plans memory at ${memoryBurst}, or the peak where higher, at most ${memoryCap}.`,
         max: `The highest interval in the week. Each VPS plans the peak of its own demand source (its own servers, its instance type or the fleet) where that is above the ${memoryBurst} target, at most ${memoryCap}, as its per-server column shows; no source peaks above this.`,
@@ -934,6 +938,18 @@ export function fleetCapacityHints(capacityModel: HostingAdminFleetCapacity["mod
         concurrent: `Co-online (M): how many of its current servers are online together at most, leaving under ${hourShare} of the week's hours with more, a server counting as online in an hour it ran at least ${busy} of, or had no samples in. Some servers counted as always online: a server with too few hours of samples counts as online in every hour, the worst case for it. Unmeasured, using slots: a VPS with no servers, or every VPS while the servers' online history cannot be read, counts every slot. Coverage is the share of the week's hours in which every current server has samples.`,
         burst: `Burst headroom: how many of its servers could burst at once, each to ${cpuBurst}, or its source's peak where higher, at most ${cap}, with the same memory per server. Information only: it never changes the verdict.`,
         limitedBy: "Whether CPU or memory runs out first at what servers usually need; where the static rule's floor sets servers at once, the one that limits the floor.",
+    };
+    if (capacityModel.memoryPercentile !== 99) return hints;
+    return { ...hints,
+        memory: `${workingSet} Planning uses each server's measured p99 working set.`,
+        p95: "p99: 99% of sampled interval-end working sets were at or below this value.",
+        max: "The highest sampled working set in the rolling week, shown separately from p99. Memory overflow can cause OOM.",
+        cpuP50: "p50: median CPU use, shown for comparison.",
+        cpuP95: "p95: the measured CPU planning demand. Target-host hardware normalization is retained.",
+        cpuMax: "Highest sampled interval CPU use, informational only; shorter spikes may be averaged out.",
+        perServer: "The mean of current occupants' individual CPU p95 and memory p99 planning demands. Short histories use qualified fleet measurements.",
+        demandSource: "Each server qualifies after six running hours in the rolling week. Short histories use the fleet's measured p95 CPU and p99 memory from qualified servers; no qualified fleet history uses the documented bootstrap. Host planning figures average those individual demands.",
+        burst: "Informational headroom at measured peak CPU, without a demand cap. It never changes the verdict.",
     };
 }
 

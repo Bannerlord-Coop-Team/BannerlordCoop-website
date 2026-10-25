@@ -563,7 +563,7 @@ export type HostingAdminPlacementOverlap = {
 export type HostingFleetCapacityCpuCores = { p50: number; p90: number; p95: number; p99: number; max: number };
 
 /** Nearest-rank percentiles of one server's working set at the end of each running interval, in bytes. */
-export type HostingFleetCapacityMemoryBytes = { p50: number; p95: number; max: number };
+export type HostingFleetCapacityMemoryBytes = { p50: number; p95: number; p99?: number; max: number };
 
 /** What one server needs while it runs, from the 5-minute intervals of the servers it covers; null without data. */
 export type HostingFleetCapacityDemand = {

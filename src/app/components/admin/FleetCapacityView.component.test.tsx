@@ -730,6 +730,20 @@ const typicalRead: HostingAdminFleetCapacity = {
 };
 const typicalHints = fleetCapacityHints(typicalModel);
 
+it("does not relabel an absent nested p99 as p99 when only p95 is available", async () => {
+    mocks.request.mockResolvedValue({ ...typicalRead, model: { ...typicalModel, memoryPercentile: 99 } });
+    await open();
+    for (const title of ["Providers", "Instance types"]) {
+        const table = pane(title).querySelector("table")!;
+        const headers = [...table.querySelectorAll("thead th")];
+        const index = headers.findIndex(header => header.textContent?.includes("Memory p99"));
+        expect(index).toBeGreaterThanOrEqual(0);
+        for (const row of table.querySelectorAll("tbody tr")) {
+            expect(row.children[index]?.textContent).toBe("—No data yet");
+        }
+    }
+});
+
 it("shows a control plane's typical fit: what each VPS can run at once against its co-online servers, with burst headroom as information", async () => {
     mocks.request.mockResolvedValue(typicalRead);
     await open();
