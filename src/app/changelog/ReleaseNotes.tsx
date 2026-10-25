@@ -120,10 +120,11 @@ export function ReleaseNotes({ body, emptyMessage }: ReleaseNotesProps) {
 
 /**
  * Drops HTML comments, which GitHub never renders (release tooling stores metadata in them). As in
- * CommonMark, an unterminated comment hides the rest of the body.
+ * CommonMark, an unterminated comment hides the rest of the body. Inline code spans are matched first
+ * and kept, so a literal `<!--` written as code stays visible and cannot swallow the notes after it.
  */
 function stripHtmlComments(markdown: string) {
-    return markdown.replace(/<!--[\s\S]*?(?:-->|$)/g, "");
+    return markdown.replace(/(`[^`\n]+`)|<!--[\s\S]*?(?:-->|$)/g, (_match, code: string | undefined) => code ?? "");
 }
 
 function parseBlocks(markdown: string): NotesBlock[] {

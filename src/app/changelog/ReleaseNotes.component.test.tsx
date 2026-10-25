@@ -28,6 +28,20 @@ it("hides HTML comments that GitHub does not render, such as release-coordinatio
     expect(notes.querySelector("li")?.textContent).toBe("Fixed sieges");
 });
 
+it("keeps comment delimiters written as inline code, along with the notes after them", () => {
+    const notes = render([
+        "Fixed parsing of `<!--`.",
+        "",
+        "Use `<!-- example -->` to hide a line.",
+        "",
+        "- Also fixed sieges",
+    ].join("\n"));
+
+    expect([...notes.querySelectorAll("code")].map((code) => code.textContent)).toEqual(["<!--", "<!-- example -->"]);
+    expect(notes.querySelectorAll("p")).toHaveLength(2);
+    expect(notes.querySelector("li")?.textContent).toBe("Also fixed sieges");
+});
+
 it("lets long auto-linked pull request URLs wrap instead of overflowing narrow screens", () => {
     const notes = render("Fixed sieges in https://github.com/Bannerlord-Coop-Team/BannerlordCoop/pull/3451.");
 
