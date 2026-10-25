@@ -299,11 +299,11 @@ it("localizes whole inventory totals and isolated errors without translating ser
 
 it("signed-out directory retains sleepers and running rows but hides stopped and failed rows", async () => {
     mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: null } }), getSession: async () => ({ data: { session: null } }) } });
-    mocks.publicList.mockResolvedValue(["asleep", "running", "stopped", "failed"].map(observedGameState => ({
+    mocks.publicList.mockResolvedValue(["asleep", "starting", "running", "stopped", "failed"].map(observedGameState => ({
         serverId: observedGameState, displayName: observedGameState, observedGameState, connectionIp: "203.0.113.4", gamePorts: [4200],
     })));
     await renderPage();
-    expect(mocks.directory.mock.calls.at(-1)?.[0].servers.map((server: { status: string }) => server.status)).toEqual(["Asleep", "Online"]);
+    expect(mocks.directory.mock.calls.at(-1)?.[0].servers.map((server: { status: string }) => server.status)).toEqual(["Asleep", "Starting", "Online"]);
     expect(mocks.list).not.toHaveBeenCalled();
 });
 
@@ -314,8 +314,21 @@ it.each([
     { desiredState: undefined, subscriptionHold: null, label: "Offline" },
 ])("My Servers distinguishes sleep from holds: $label $desiredState", async ({ desiredState, subscriptionHold, label }) => {
     mocks.list.mockResolvedValue([{ serverId: ONBOARDING_TEST_ID, displayName: "Assigned campaign", operationState: "suspended",
-        observedGameState: "stopped", accessRole: "owner", runtimeInsight: { desiredState }, subscriptionHold }]);
+        observedGameState: "stopped", accessRole: "owner", runtimeInsight: { desiredState, failureCode: null, observedAt: new Date().toISOString() }, subscriptionHold }]);
     const html = await renderPage();
     expect(html).toContain(label);
     expect(html.includes("Your first join wakes it")).toBe(label === "Asleep");
+});
+
+it.each([
+    { state: "starting", failureCode: null, age: 0, label: "Starting / waking" },
+    { state: "stopped", failureCode: "operation_failed", age: 0, label: "Offline" },
+    { state: "stopped", failureCode: null, age: 600_001, label: "Offline" },
+])("My Servers shows $label during wake or unavailable sleep", async ({ state, failureCode, age, label }) => {
+    mocks.list.mockResolvedValue([{ serverId: ONBOARDING_TEST_ID, displayName: "Assigned campaign", operationState: "suspended",
+        observedGameState: state, accessRole: "owner", runtimeInsight: { desiredState: "running", failureCode,
+            observedAt: new Date(Date.now() - age).toISOString(), allowedActions: state === "starting" ? ["stop"] : [] }, subscriptionHold: null }]);
+    const html = await renderPage();
+    expect(html).toContain(label);
+    expect(html).not.toContain("Your first join wakes it");
 });

@@ -38,6 +38,7 @@
   "table.direct": "Doğrudan",
   "table.status.Online": "Çevrimiçi",
   "table.status.Asleep": "Uykuda",
+  "table.status.Starting": "Başlatılıyor / uyanıyor",
   "table.sleepHint": "İlk katılma denemeniz sunucuyu uyandırır; yaklaşık 2 dakika sonra tekrar deneyin.",
   "table.status.Offline": "Çevrimdışı",
   "table.status.Unknown": "Bilinmiyor",

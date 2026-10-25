@@ -38,6 +38,7 @@
   "table.direct": "Direkt",
   "table.status.Online": "Online",
   "table.status.Asleep": "Schlafend",
+  "table.status.Starting": "Startet / wacht auf",
   "table.sleepHint": "Dein erster Beitritt weckt den Server; versuche es in etwa 2 Minuten erneut.",
   "table.status.Offline": "Offline",
   "table.status.Unknown": "Unbekannt",

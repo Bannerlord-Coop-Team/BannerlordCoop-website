@@ -110,6 +110,7 @@ it.each(Object.values(localeDefinitions).filter(locale => locale.enabled))("prov
     const directory = (await definition.dictionaries.servers!()).default;
     const ad = (await definition.dictionaries.cheats!()).default;
     expect(directory["table.status.Asleep"]).toBeTruthy();
+    expect(directory["table.status.Starting"]).toBeTruthy();
     expect(directory["table.sleepHint"]).toContain("2");
     expect(ad["hostingOffer.description"]).toContain("2");
     expect(ad["hostingOffer.description"]).not.toMatch(/24|around the clock|rund um die Uhr|a todas horas|круглосуточно|günün her saati|全天候|o tempo todo/);
