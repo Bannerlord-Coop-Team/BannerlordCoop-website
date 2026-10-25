@@ -820,6 +820,7 @@ it("accepts uncapped demand and memory p99 while retaining today's response", ()
     expect(parseFleetCapacity(value)).toBe(value);
     const parsed = parseFleetCapacity(value)!;
     expect(fleetCapacityHints(parsed.model).perServer).toContain("individual CPU p95 and memory p99");
+    expect(fleetCapacityHints(parsed.model).demandSource).toContain("qualified servers");
     expect(perServerSourceLabel(parsed.hosts[0]!, parsed.model)).toContain("measured CPU p95 / memory p99");
     expect(occupantDemandLabel(parsed.fleet.demand, parsed.model)).toContain("at p99");
 });

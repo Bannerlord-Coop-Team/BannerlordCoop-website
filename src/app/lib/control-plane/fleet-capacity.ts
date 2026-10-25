@@ -948,6 +948,7 @@ export function fleetCapacityHints(capacityModel: HostingAdminFleetCapacity["mod
         cpuP95: "p95: the measured CPU planning demand. Target-host hardware normalization is retained.",
         cpuMax: "Highest sampled interval CPU use, informational only; shorter spikes may be averaged out.",
         perServer: "The mean of current occupants' individual CPU p95 and memory p99 planning demands. Short histories use qualified fleet measurements.",
+        demandSource: "Each server qualifies after six running hours in the rolling week. Short histories use the fleet's measured p95 CPU and p99 memory from qualified servers; no qualified fleet history uses the documented bootstrap. Host planning figures average those individual demands.",
         burst: "Informational headroom at measured peak CPU, without a demand cap. It never changes the verdict.",
     };
 }

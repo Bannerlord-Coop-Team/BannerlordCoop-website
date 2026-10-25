@@ -560,7 +560,7 @@ it("explains each column as the control plane computes it", () => {
     expect(hints.free).toContain("0 for Drain and Unmeasured");
     expect(hints.capacity).toContain("borrowed (provider and vCPU), the median of the measured VPSs of its provider and vCPU count");
     expect(hints.capacity).toContain("unknown, nothing to measure or borrow, which leaves the VPS Unmeasured. Each is borrowed on its own.");
-    expect(hints.capacity).toContain("2.5 GiB of memory on it, as the reported fleet fallback; the measured model uses each occupant's own p99 working set");
+    expect(hints.capacity).toContain("current capacity model reports 2.5 GiB as its default online memory demand");
     expect(hints.shortfall).toContain("the read does not say how many");
     // No hint names a raw provider id.
     for (const hint of Object.values(hints)) expect(hint).not.toMatch(/ovhcloud-vps|contabo-vps|hosthatch-vps/u);
@@ -578,11 +578,11 @@ it("accepts the typical new server's CPU from a control plane that fits on typic
     expect(slotSizingTypicalServer(fleet.model)).toContain("plans 1.600 cores and 2.5 GiB while online, as reported by the current capacity model");
     const hints = slotSizingHints(typicalModel);
     expect(hints.recommended).toContain("one observed for under 7 days counts with the typical week, and one without a measured need at the typical 1.600 cores.");
-    expect(hints.capacity).toContain("Each online server is planned to need 2.5 GiB of memory on it, as the reported fleet fallback; the measured model uses each occupant's own p99 working set.");
+    expect(hints.capacity).toContain("memory demands supplied by that model");
     // The current control plane's copy is as it was.
     const current = slotSizingHints(parseSlotSizing(fleet)!.model);
     expect(current.recommended).toContain("and one without a measured need at 1.6 vCPU.");
-    expect(current.capacity).toContain("reported fleet fallback");
+    expect(current.capacity).toContain("memory demands supplied by that model");
     expect(slotSizingTypicalServer(parseSlotSizing(fleet)!.model)).toContain("plans 1.600 cores and 2.5 GiB while online");
 });
 
