@@ -3,7 +3,7 @@
 The cheats page advertises managed hosting beside the command directory.
 
 - **Placement.** From `xl` (1280 px), `CheatsDirectory`'s `aside` slot adds a 300 px third grid column beside the command list. Below `xl`, `CheatsView` renders the same offer inline after the console tip: stacked on phones, and as a horizontal banner from `sm`.
-  - On viewports at least 45rem (720 px) tall, the column is sticky at `top-20`. The tallest locale's card fits below that offset, so it's never cut off. On shorter viewports it scrolls with the page.
+  - On viewports at least 50rem (800 px) tall, the column is sticky at `top-20`. The tallest locale's card (French, about 693 px) plus that 80 px offset still fits, so the card is never cut off. On shorter viewports it scrolls with the page.
   - The categories rail stays sticky too, and scrolls internally (`max-h` plus `overflow-y-auto`) so every category stays reachable.
   - Sticky works because `globals.css` clips root horizontal overflow (`overflow-x: clip`) instead of hiding it. Browsers without `clip` fall back to `hidden`, where sticky stays inert.
 - **Link.** The call to action is the only click target. It opens the Patreon checkout for the $20 Veteran tier (`https://www.patreon.com/checkout/BannerlordCoop?rid=28995946`) in a new tab with `rel="noopener noreferrer"`. Its accessible name is the visible label plus a screen-reader note that Patreon opens in a new tab.

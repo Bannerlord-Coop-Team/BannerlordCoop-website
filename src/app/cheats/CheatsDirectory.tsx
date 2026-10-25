@@ -128,7 +128,7 @@ export function CheatsDirectory({
 }: {
     commands: readonly CheatCommand[];
     initialQuery: CheatsQuery;
-    /** Optional third column beside the command list, shown from xl up and pinned on viewports at least 45rem tall. */
+    /** Optional third column beside the command list, shown from xl up and pinned on viewports at least 50rem tall. */
     aside?: ReactNode;
 }) {
     const translator = useTranslations("cheats");
@@ -559,8 +559,9 @@ export function CheatsDirectory({
                 )}
             </div>
             {aside && (
-                // Pinned only when the viewport fits the whole column below the top-20 offset.
-                <div className="hidden min-w-0 xl:block xl:[@media(min-height:45rem)]:sticky xl:[@media(min-height:45rem)]:top-20">
+                // Pinned only when the viewport fits the whole column below the top-20 offset; the tallest
+                // locale's hosting card (French, about 693px) plus top-20 needs about 773px of the 800px.
+                <div className="hidden min-w-0 xl:block xl:[@media(min-height:50rem)]:sticky xl:[@media(min-height:50rem)]:top-20">
                     {aside}
                 </div>
             )}
