@@ -1,3 +1,4 @@
+import { Blob as NodeBlob } from "node:buffer";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -417,6 +418,11 @@ function playersNeed() {
     return [...heading.parentElement!.querySelectorAll("li")].map(item => item.textContent);
 }
 
+/** Finds the "Download mod list" button, if shown. */
+function downloadButton() {
+    return [...container.querySelectorAll("button")].find(button => button.textContent === "Download mod list");
+}
+
 /** Builds the full order with one mod's runs-on changed, as the panel would send it. */
 function orderWith(catalog: MockServerModCatalog, id: string, runsOn: "server" | "players") {
     return catalog.state.mods.map(mod => mod.id === id ? { id: mod.id, enabled: mod.enabled, runsOn } : { id: mod.id, enabled: mod.enabled });
@@ -436,6 +442,35 @@ it("says players need no community mods when no owner mod is enabled", async () 
     expect(playersNeed()).toEqual([]);
     expect(container.textContent).toContain("Players need no community mods besides Bannerlord Co-op to join.");
     expect(container.textContent).toContain("Players must also disable any official DLC, such as War Sails.");
+});
+
+it("downloads the players' full load order as JSON, leaving out disabled and dedicated-server modules", async () => {
+    await render(createMockServerModCatalog(runsOnMods()));
+    let saved: NodeBlob | undefined;
+    vi.stubGlobal("Blob", NodeBlob);
+    vi.stubGlobal("URL", { createObjectURL: vi.fn((blob: NodeBlob) => { saved = blob; return "blob:mod-list"; }), revokeObjectURL: vi.fn() });
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { expect(this.download).toBe("BannerlordCoop-mod-list.json"); });
+    vi.useFakeTimers({ toFake: ["Date"] }).setSystemTime(new Date("2026-10-24T12:00:00.000Z"));
+    await act(async () => downloadButton()!.click());
+    vi.unstubAllGlobals();
+    expect(click).toHaveBeenCalledOnce();
+    expect(saved!.type).toBe("application/json");
+    const file = JSON.parse(await saved!.text());
+    expect(file).toMatchObject({ format: "bannerlord-coop-mod-list", formatVersion: 1, serverId: SERVER_ID, exportedAt: "2026-10-24T12:00:00.000Z" });
+    expect(file.mods).toEqual([
+        { order: 1, id: "Native", name: "Native", version: "", kind: "core", playersOnly: false },
+        { order: 2, id: "SandBoxCore", name: "SandBoxCore", version: "", kind: "core", playersOnly: false },
+        { order: 3, id: "SandBox", name: "SandBox", version: "", kind: "core", playersOnly: false },
+        { order: 4, id: "Coop", name: "Coop", version: "", kind: "coop", playersOnly: false },
+        { order: 5, id: "Bannerlord.Harmony", name: "Harmony", version: "v2.4.2.225", kind: "mod", playersOnly: true },
+        { order: 6, id: "ClientUi", name: "Client UI", version: "v1.0.3", kind: "mod", playersOnly: true },
+        { order: 7, id: "Gamma", name: "Gamma", version: "v3.1.0", kind: "mod", playersOnly: false },
+    ]);
+});
+
+it("offers no mod list download when players need no community mods", async () => {
+    await render(createMockServerModCatalog(sampleServerMods([sampleOwnerMod("Off", { enabled: false })])));
+    expect(downloadButton()).toBeUndefined();
 });
 
 it("shows where each owner mod runs, locks Harmony, and lists players-only mods as needed by players", async () => {

@@ -85,6 +85,13 @@ the website's side of it.
   official DLC (such as War Sails), which Coop's join check refuses. Disabled mods
   are left out. It reads the
   saved list, so it changes once an edit is saved.
+  - **Download mod list**, shown when players need at least one mod, saves
+    `BannerlordCoop-mod-list.json`: every module a player enables to join, in load
+    order. That is the enabled core modules, Coop and owner mods, without
+    `DedicatedServer.*`, which only the server loads. The shape is
+    `{ format: "bannerlord-coop-mod-list", formatVersion: 1, serverId, exportedAt,
+    mods: [{ order, id, name, version, kind: "core" | "coop" | "mod", playersOnly }] }`,
+    where `order` starts at 1.
 - When the running game uses an older list (`restartRequired`), the tab says that a
   restart applies the changes. Nothing restarts the server automatically.
 - Saving changes nothing in a running game, so it needs no confirmation; the

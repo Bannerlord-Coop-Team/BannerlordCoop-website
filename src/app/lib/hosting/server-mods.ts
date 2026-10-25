@@ -99,6 +99,32 @@ export function serverModsPlayersNeed(mods: readonly ServerMod[]): ServerMod[] {
     return mods.filter(mod => isOwnerMod(mod) && mod.enabled);
 }
 
+/** One module in a downloaded mod list, at its 1-based position in the players' load order. */
+export type ServerModListEntry = { order: number; id: string; name: string; version: string; kind: "core" | "coop" | "mod"; playersOnly: boolean };
+/** The downloadable mod list: every module a player enables to join, in load order. */
+export type ServerModListFile = { format: "bannerlord-coop-mod-list"; formatVersion: 1; serverId: string; exportedAt: string; mods: ServerModListEntry[] };
+
+/** Whether a module exists only on the dedicated server (`DedicatedServer.*`), so players never load it. */
+function isDedicatedServerModule(mod: ServerMod): boolean {
+    return mod.id.toLowerCase().startsWith("dedicatedserver.");
+}
+
+/** Returns the modules a player enables to join, in load order: every enabled module except the dedicated-server ones. */
+export function serverModsPlayerLoadOrder(mods: readonly ServerMod[]): ServerMod[] {
+    return mods.filter(mod => mod.enabled && !isDedicatedServerModule(mod));
+}
+
+/** Builds the downloadable mod list from the saved list, stamped with the given export time. */
+export function serverModListFile(serverId: string, mods: readonly ServerMod[], exportedAt: Date): ServerModListFile {
+    return {
+        format: "bannerlord-coop-mod-list", formatVersion: 1, serverId, exportedAt: exportedAt.toISOString(),
+        mods: serverModsPlayerLoadOrder(mods).map((mod, index) => ({
+            order: index + 1, id: mod.id, name: mod.name, version: mod.version,
+            kind: mod.required ? "coop" : mod.pinned ? "core" : "mod", playersOnly: mod.runsOn === "players",
+        })),
+    };
+}
+
 /** Counts enabled owner mods, which the control plane caps at 32. */
 export function enabledOwnerModCount(mods: readonly ServerMod[]): number {
     return mods.filter(mod => isOwnerMod(mod) && mod.enabled).length;

@@ -947,6 +947,7 @@
   "mods.playersNeed.none": "参加するのに、Bannerlord Co-op 以外のコミュニティ MOD は必要ありません。",
   "mods.playersNeed.noDlc": "プレイヤーは War Sails などの公式 DLC もすべて無効にする必要があります。",
   "mods.playersNeed.playersOnly": "プレイヤーのみ：サーバーでは実行されません",
+  "mods.playersNeed.download": "MOD リストをダウンロード",
   "mods.issue.noServerSubmodule": "この MOD のコードはサーバーで一切実行されません。実行すべき場合は、もう一度アップロードしてください。",
   "mods.issue.noRenderTagRemoved": "サーバーがすべてのコードを読み込むよう、UI 専用タグが削除されました。",
   "mods.issue.headlessServerUnsupported": "画面なしのサーバーでは動作しないことがわかっています。有効にしている間は開始に失敗することがあります。",
