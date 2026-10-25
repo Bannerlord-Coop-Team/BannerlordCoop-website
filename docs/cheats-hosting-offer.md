@@ -21,7 +21,9 @@ The cheats page advertises managed hosting beside the command directory.
   - `page.tsx` reads that cookie, so a dismissed offer is absent from the server HTML and never flashes.
   - The page was already rendered dynamically.
 - **Art.** `public/images/hosting/riders-band.webp` (600 × 320, about 30 KB) is served through `next/image` with `alt=""` and lazy loading.
-- **Changing the offer.** Update `HOSTING_OFFER_CHECKOUT_URL`, `HOSTING_OFFER_TIER` and `HOSTING_OFFER_PRICE_USD` in `src/app/cheats/HostingOffer.tsx`, together with the `hostingOffer.finePrint` messages.
+- **Changing the offer.**
+  - The checkout link is `PATREON_HOSTING_CHECKOUT_URL` in `src/app/lib/hosting/patreon-checkout.ts`. The home page's "Rent a Server" button uses it too, also in a new tab with a localized `hero.rentServerNewTab` note.
+  - Update it together with `HOSTING_OFFER_TIER` and `HOSTING_OFFER_PRICE_USD` in `src/app/cheats/HostingOffer.tsx`, and the `hostingOffer.finePrint` messages.
 
 Production build (`next start`), signed out:
 

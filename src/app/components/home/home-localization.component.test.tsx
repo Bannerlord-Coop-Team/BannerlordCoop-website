@@ -11,6 +11,7 @@ import { localeDefinitions } from "@/app/lib/localization/registry";
 import home from "@/app/lib/localization/dictionaries/en/home.json";
 import common from "@/app/lib/localization/dictionaries/en/common.json";
 import { getHomepageVideos } from "@/app/lib/homepage-videos";
+import { PATREON_HOSTING_CHECKOUT_URL } from "@/app/lib/hosting/patreon-checkout";
 import type { Dictionary } from "@/app/lib/localization/types";
 
 const request = vi.hoisted(() => ({ value: undefined as string | undefined }));
@@ -61,7 +62,13 @@ describe("home localization", () => {
         expect(root.querySelector("video a")?.getAttribute("href")).toContain("bannerlord-coop-trailer-v4.mp4");
         const heroDownload = root.querySelector("section[aria-labelledby='hero-heading'] button[aria-haspopup='dialog']");
         expect(heroDownload?.textContent).toBe(`${common["download.trigger"]}${home["download.platforms"]}`);
-        expect(root.querySelector("section[aria-labelledby='hero-heading'] a[href='/servers']")?.textContent).toContain(home["hero.rentServer"]);
+        // "Rent a Server" opens the same Veteran-tier Patreon checkout as the cheats hosting offer.
+        const rentServer = root.querySelector(`section[aria-labelledby='hero-heading'] a[href='${PATREON_HOSTING_CHECKOUT_URL}']`);
+        expect(PATREON_HOSTING_CHECKOUT_URL).toBe("https://www.patreon.com/checkout/BannerlordCoop?rid=28995946");
+        expect(rentServer?.getAttribute("target")).toBe("_blank");
+        expect(rentServer?.getAttribute("rel")).toBe("noopener noreferrer");
+        expect(rentServer?.textContent).toBe(`${home["hero.rentServer"]}${home["hero.rentServerDetail"]} ${home["hero.rentServerNewTab"]}`);
+        expect(root.querySelector("section[aria-labelledby='hero-heading'] a[href='/servers']")).toBeNull();
         expect(root.querySelector("section[aria-labelledby='hero-heading'] a[href='https://discord.gg/bannerlordcoop']")?.getAttribute("aria-label")).toBe(home["hero.discord"]);
         expect(await generateMetadata()).toMatchObject({ description: home["metadata.description"], alternates: { canonical: "/" }, openGraph: { locale: "en_US", title: "Bannerlord Co-op", description: home["metadata.description"] }, twitter: { description: home["metadata.description"] } });
     });

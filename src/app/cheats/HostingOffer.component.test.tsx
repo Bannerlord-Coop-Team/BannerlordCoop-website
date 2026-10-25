@@ -9,7 +9,8 @@ import german from "../lib/localization/dictionaries/de/cheats.json";
 import commandsData from "./commands.json";
 import type { CheatCommand } from "./CheatsDirectory";
 import { CheatsView } from "./CheatsView";
-import { HOSTING_OFFER_CHECKOUT_URL, HostingOffer } from "./HostingOffer";
+import { PATREON_HOSTING_CHECKOUT_URL } from "../lib/hosting/patreon-checkout";
+import { HostingOffer } from "./HostingOffer";
 import { HOSTING_OFFER_COOKIE } from "./hostingOfferCookie";
 import CheatsPage from "./page";
 import { parseCheatsQuery } from "./query";
@@ -87,8 +88,8 @@ it("sends the only call to action to the Veteran Patreon checkout in a new tab",
 
     const links = offer.querySelectorAll("a");
     expect(links).toHaveLength(1);
-    expect(HOSTING_OFFER_CHECKOUT_URL).toBe("https://www.patreon.com/checkout/BannerlordCoop?rid=28995946");
-    expect(links[0].getAttribute("href")).toBe(HOSTING_OFFER_CHECKOUT_URL);
+    expect(PATREON_HOSTING_CHECKOUT_URL).toBe("https://www.patreon.com/checkout/BannerlordCoop?rid=28995946");
+    expect(links[0].getAttribute("href")).toBe(PATREON_HOSTING_CHECKOUT_URL);
     expect(links[0].getAttribute("target")).toBe("_blank");
     expect(links[0].getAttribute("rel")).toBe("noopener noreferrer");
     // The accessible name starts with the visible label and announces the new tab.
