@@ -888,7 +888,7 @@
   "hostingOffer.label": "Alojamento oficial",
   "hostingOffer.dismiss": "Ocultar oferta de alojamento",
   "hostingOffer.title": "Alugar um servidor",
-  "hostingOffer.description": "A sua campanha cooperativa, alojada para si e online 24 horas por dia.",
+  "hostingOffer.description": "A tua campanha cooperativa, alojada para ti. Os servidores em repouso despertam quando te ligas; tenta novamente dentro de cerca de 2 minutos.",
   "hostingOffer.feature.online": "Sempre disponível — desperta automaticamente quando te ligas",
   "hostingOffer.feature.backups": "Cópias de segurança diárias automáticas",
   "hostingOffer.feature.updates": "Atualizações do jogo tratadas por nós",

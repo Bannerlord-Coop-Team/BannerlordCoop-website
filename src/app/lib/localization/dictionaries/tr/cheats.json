@@ -888,7 +888,7 @@
   "hostingOffer.label": "Resmi barındırma",
   "hostingOffer.dismiss": "Barındırma teklifini gizle",
   "hostingOffer.title": "Sunucu kiralayın",
-  "hostingOffer.description": "Coop seferiniz sizin için barındırılır ve günün her saati çevrimiçi kalır.",
+  "hostingOffer.description": "Coop seferiniz sizin için barındırılır. Uyuyan sunucular katıldığınızda uyanır; yaklaşık 2 dakika sonra tekrar deneyin.",
   "hostingOffer.feature.online": "Her zaman erişilebilir — katıldığınızda otomatik olarak uyanır",
   "hostingOffer.feature.backups": "Otomatik günlük yedekler",
   "hostingOffer.feature.updates": "Oyun güncellemeleri bizden",

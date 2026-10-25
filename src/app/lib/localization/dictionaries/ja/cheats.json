@@ -888,7 +888,7 @@
   "hostingOffer.label": "公式ホスティング",
   "hostingOffer.dismiss": "ホスティングの案内を非表示にする",
   "hostingOffer.title": "サーバーをレンタル",
-  "hostingOffer.description": "協力プレイのキャンペーンを代わりにホスティングし、24時間オンラインに保ちます。",
+  "hostingOffer.description": "協力プレイのキャンペーンをホスティングします。スリープ中のサーバーは接続すると起動します。約2分後にもう一度接続してください。",
   "hostingOffer.feature.online": "いつでも利用可能 — 接続すると自動で起動します",
   "hostingOffer.feature.backups": "毎日の自動バックアップ",
   "hostingOffer.feature.updates": "ゲームのアップデートはおまかせ",
