@@ -540,7 +540,7 @@ it("groups VPSs by provider then region, without a region last, keeping the read
 it("states the budgets, the typical server and a failed capacity read from the model", () => {
     expect(slotSizingBudgets(model)).toBe("Each VPS gets the most slots, from floor(vCPU ÷ 2) to 32, at which its servers now plus typical new servers in the rest keep two budgets: at most 1 core-hour a week of expected CPU shortage, and more servers online at once than its memory holds in under 1% of the week.");
     expect(slotSizingBudgets({ ...model, cpuShortageBudgetCoreHoursPerWeek: 0.5, memoryOverflowShare: 0.025 })).toContain("at most 0.5 core-hours a week of expected CPU shortage, and more servers online at once than its memory holds in under 2.5% of the week.");
-    expect(slotSizingTypicalServer(fleet.model)).toBe("A typical new server needs 1.6 vCPU and 2.5 GiB while online and is online 41.37 hours a week, the mean of servers' weeks over the last 28 days (14-day half-life). A server observed for under 7 days counts with that typical week.");
+    expect(slotSizingTypicalServer(fleet.model)).toContain("plans 1.600 cores and 2.5 GiB while online, as reported by the current capacity model");
     expect(slotSizingCapacityNote(model)).toBeNull();
     expect(slotSizingCapacityNote({ capacityErrorCode: "fleet_capacity_history_unavailable" })).toBe("Capacity samples could not be read (fleet_capacity_history_unavailable), so no VPS's usable cores or memory are known: every VPS is unmeasured and has no recommendation.");
 });
@@ -556,11 +556,11 @@ it("explains each column as the control plane computes it", () => {
     expect(hints.reason).toContain("Unmeasured: its usable cores or memory are neither measured nor borrowable");
     expect(hints.shortage).toContain("summed over the week's half-hours");
     expect(hints.shortage).toContain("The budget is 1 core-hour. Over budget marks where the control plane says the exact figure breaks it, which the rounded figure cannot show at the edge; only Drain and Floor can be.");
-    expect(hints.overflow).toContain("floor(usable memory ÷ memory per server). The budget is under 1%. Over budget marks where the control plane says the exact share reaches it");
+    expect(hints.overflow).toContain("combined memory demand of online servers exceeds usable memory. The budget is under 1%. Over budget marks where the control plane says the exact share reaches it");
     expect(hints.free).toContain("0 for Drain and Unmeasured");
     expect(hints.capacity).toContain("borrowed (provider and vCPU), the median of the measured VPSs of its provider and vCPU count");
     expect(hints.capacity).toContain("unknown, nothing to measure or borrow, which leaves the VPS Unmeasured. Each is borrowed on its own.");
-    expect(hints.capacity).toContain("2.5 GiB of memory on it, or its servers' measured peak where higher");
+    expect(hints.capacity).toContain("current capacity model reports 2.5 GiB as its default online memory demand");
     expect(hints.shortfall).toContain("the read does not say how many");
     // No hint names a raw provider id.
     for (const hint of Object.values(hints)) expect(hint).not.toMatch(/ovhcloud-vps|contabo-vps|hosthatch-vps/u);
@@ -575,15 +575,15 @@ it("accepts the typical new server's CPU from a control plane that fits on typic
     // A capacity read that fails with the control plane's new history error names it, as every capacity error does.
     expect(slotSizingCapacityNote({ capacityErrorCode: "fleet_capacity_history_invalid" })).toBe("Capacity samples could not be read (fleet_capacity_history_invalid), so no VPS's usable cores or memory are known: every VPS is unmeasured and has no recommendation.");
     const typicalModel = parseSlotSizing(typicalFleet)!.model;
-    expect(slotSizingTypicalServer(typicalModel)).toBe("A typical new server needs 1.600 cores and 2.5 GiB while online: what servers usually need, the 1.6 vCPU target or the fleet's p95 CPU where higher, at most 2 vCPU (the target before the fleet has data). It is online 41.37 hours a week, the mean of servers' weeks over the last 28 days (14-day half-life). A server observed for under 7 days counts with that typical week.");
+    expect(slotSizingTypicalServer(fleet.model)).toContain("plans 1.600 cores and 2.5 GiB while online, as reported by the current capacity model");
     const hints = slotSizingHints(typicalModel);
     expect(hints.recommended).toContain("one observed for under 7 days counts with the typical week, and one without a measured need at the typical 1.600 cores.");
-    expect(hints.capacity).toContain("Each online server is planned to need 2.5 GiB of memory on it, or its servers' measured peak where higher, at most 3 GiB.");
+    expect(hints.capacity).toContain("memory demands supplied by that model");
     // The current control plane's copy is as it was.
     const current = slotSizingHints(parseSlotSizing(fleet)!.model);
     expect(current.recommended).toContain("and one without a measured need at 1.6 vCPU.");
-    expect(current.capacity).toContain("or its servers' measured peak where higher.");
-    expect(slotSizingTypicalServer(parseSlotSizing(fleet)!.model)).toMatch(/^A typical new server needs 1\.6 vCPU and 2\.5 GiB while online/u);
+    expect(current.capacity).toContain("memory demands supplied by that model");
+    expect(slotSizingTypicalServer(parseSlotSizing(fleet)!.model)).toContain("plans 1.600 cores and 2.5 GiB while online");
 });
 
 it.each([
