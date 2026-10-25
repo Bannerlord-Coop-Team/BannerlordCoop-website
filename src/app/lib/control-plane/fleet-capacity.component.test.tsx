@@ -325,7 +325,7 @@ it.each([
     ["CPU given as text", withDemand({ cpuCores: { ...demand.cpuCores, max: "1.95" } })],
     ["fractional memory bytes", withDemand({ memoryBytes: { ...demand.memoryBytes, p50: 1.5 } })],
     ["memory percentiles out of order", withDemand({ memoryBytes: { ...demand.memoryBytes, max: GIB } })],
-    ["memory with a p99", withDemand({ memoryBytes: { ...demand.memoryBytes, p99: 2 * GIB } })],
+    ["memory with an unknown percentile", withDemand({ memoryBytes: { ...demand.memoryBytes, p98: 2 * GIB } })],
     ["a throttled share above 1", withDemand({ throttledShare: 1.2 })],
     ["a negative pressure share", withDemand({ cpuPressureShare: -0.1 })],
     ["a provider with an extra key", { ...capacity, providers: [{ ...provider, region: "eu" }] }],
@@ -645,9 +645,9 @@ it.each([
     ["a model with an extra key", { ...typicalCapacity, model: { ...typicalModel, cpuFitPercentile: 95 } }],
     ["a verdict with an extra key", withTypicalHost({ verdict: { kind: "matches", servers: 0, label: "Matches" } })],
     // Planned figures are within the static rule's caps, and effective vCPU within the vCPUs.
-    ["a planned CPU above the cap", withTypicalHost({ typicalCpuCores: 2.15, peakCpuCores: 2.72, demandCpuCores: 2.15, burstCpuCores: 2 })],
-    ["a planned memory above the cap", withTypicalHost({ peakMemoryBytes: 3.25 * GIB, demandMemoryBytes: 3.25 * GIB })],
-    ["a burst CPU at a peak above the cap", withTypicalHost({ peakCpuCores: 2.72, burstCpuCores: 2.72 })],
+    ["a planned CPU above the cap", withTypicalHost({ typicalCpuCores: 2.15, peakCpuCores: 2.72, demandCpuCores: 65, burstCpuCores: 2 })],
+    ["a planned memory above the cap", withTypicalHost({ peakMemoryBytes: 3.25 * GIB, demandMemoryBytes: 65 * GIB })],
+    ["a burst CPU at a peak above the cap", withTypicalHost({ peakCpuCores: 2.72, burstCpuCores: 65 })],
     ["a steal p50 above its p95", withTypicalHost({ steal: { ...typicalSteal, p50: 1.5 } })],
     ["effective vCPU above the vCPU", withTypicalHost({ effectiveVcpu: 6.5 })],
     ["a negative typical CPU", withTypicalHost({ typicalCpuCores: -0.1 })],
@@ -809,4 +809,17 @@ it("reads model-v2 §4's example VPS and instance type, the full 3/3 6-vCPU host
     expect([fitLabel(1.418), fitLabel(1.8), fitLabel(2.15)]).toEqual(["1.6 vCPU target (p95 1.418)", "p95 1.800", "p95 2.150 capped at 2 vCPU"]);
     expect(staticRuleComparison(parsed)).toContain("CPU at the 1.6 vCPU target, or the p95 of its demand source where higher, at most 2 vCPU");
     expect(fleetCapacityHints(parsed.model).perServer).toContain("the 1.6 vCPU target, or the p95 CPU of the source shown where higher, at most 2 vCPU");
+});
+
+it("accepts uncapped demand and memory p99 while retaining today's response", () => {
+    expect(parseFleetCapacity(typicalCapacity)).toBe(typicalCapacity);
+    const value = structuredClone(withTypicalHost({ typicalCpuCores: 3.1, demandCpuCores: 3.1,
+        peakCpuCores: 4.2, burstCpuCores: 4.2, peakMemoryBytes: 5 * GIB, demandMemoryBytes: 4 * GIB }));
+    value.model.memoryPercentile = 99;
+    value.fleet.demand.memoryBytes = { ...value.fleet.demand.memoryBytes, p99: 2 * GIB } as typeof value.fleet.demand.memoryBytes;
+    expect(parseFleetCapacity(value)).toBe(value);
+    const parsed = parseFleetCapacity(value)!;
+    expect(fleetCapacityHints(parsed.model).perServer).toContain("individual CPU p95 and memory p99");
+    expect(perServerSourceLabel(parsed.hosts[0]!, parsed.model)).toContain("measured CPU p95 / memory p99");
+    expect(occupantDemandLabel(parsed.fleet.demand, parsed.model)).toContain("at p99");
 });
