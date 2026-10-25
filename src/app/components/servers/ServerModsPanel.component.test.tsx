@@ -112,6 +112,50 @@ it("keeps movable mods between the pinned head and tail modules", () => {
     expect(toggleServerMod(list, "Beta").find(mod => mod.id === "Beta")?.enabled).toBe(true);
 });
 
+it("moves core modules independently when the runner reports movement support, keeping toggles and delete locked", async () => {
+    const listed = mods().map(mod => ({ ...mod, reorderable: true }));
+    const ids = ["Native", "Alpha", "SandBoxCore", "Beta", "SandBox", "Coop", "DedicatedServer.Linux", "Gamma"];
+    const catalog = createMockServerModCatalog(ids.map(id => listed.find(mod => mod.id === id)!));
+    const save = vi.spyOn(catalog, "saveServerModOrder");
+    await render(catalog);
+    for (const id of ["Native", "SandBoxCore", "SandBox", "DedicatedServer.Linux"]) {
+        expect(container.querySelector(`[aria-label="Reorder ${id}"]`)).not.toBeNull();
+        expect(checkbox(id).disabled).toBe(true);
+        expect(container.querySelector(`[aria-label="Delete ${id}"]`)).toBeNull();
+    }
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const handle = container.querySelector<HTMLButtonElement>('[aria-label="Reorder Native"]')!;
+    await act(async () => { handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
+    await act(async () => { vi.advanceTimersByTime(600); });
+    expect(save).toHaveBeenCalledOnce();
+    expect(save.mock.calls[0][2].map(entry => entry.id)).toEqual(["Alpha", "Native", ...ids.slice(2)]);
+    expect(order()).toEqual(["Alpha", "Native", ...ids.slice(2)]);
+    // Each core row moves independently: the move did not carry SandBoxCore or SandBox along with Native.
+    expect(order().indexOf("SandBoxCore")).toBe(2);
+    expect(moveServerMod(listed, listed.length - 1, 4)[4].id).toBe("DedicatedServer.Linux");
+});
+
+it("restores a refused core dependency order and displays the control plane's named module", async () => {
+    const initial = mods().map(mod => ({ ...mod, reorderable: true }));
+    const catalog = createMockServerModCatalog(initial);
+    const save = vi.spyOn(catalog, "saveServerModOrder").mockRejectedValueOnce(new ServerModsError("mod_order_invalid", false, "SandBoxCore"));
+    await render(catalog);
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const handle = container.querySelector<HTMLButtonElement>('[aria-label="Reorder Native"]')!;
+    await act(async () => { handle.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true })); });
+    await act(async () => { vi.advanceTimersByTime(600); });
+    expect(save).toHaveBeenCalledOnce();
+    expect(order()).toEqual(initial.map(mod => mod.id));
+    expect(container.textContent).toContain("This order breaks a load rule for SandBoxCore.");
+});
+
+it("honors an explicit non-movable flag without changing legacy movement defaults", () => {
+    const listed = mods();
+    const locked = listed.map(mod => mod.id === "Alpha" ? { ...mod, reorderable: false } : mod);
+    expect(moveServerMod(locked, 4, 3)).toEqual(locked);
+    expect(moveServerMod(listed, 0, 4)).toEqual(listed);
+});
+
 it("loads only once the tab is shown", async () => {
     const catalog = createMockServerModCatalog(mods());
     const list = vi.spyOn(catalog, "listServerMods");

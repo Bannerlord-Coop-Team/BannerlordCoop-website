@@ -91,6 +91,19 @@ test("validates mod lists strictly", () => {
     assert.doesNotThrow(() => parseModsState(state([entry({ issues: ["image-module-not-loaded:StoryMode", "future-issue"] })])));
 });
 
+test("reads optional movement capability independently of core ownership and runs-on fields", () => {
+    for (const reorderable of [true, false]) {
+        const parsed = parseModsState(state([entry({ reorderable })]));
+        assert.equal(parsed.mods[1].reorderable, reorderable);
+    }
+    const original = { ...state(), mods: [entry({ id: "Native", name: "Native", version: "", pinned: true,
+        sizeBytes: 0, sha256: null, reorderable: true, dependsOn: [], issues: [] })] };
+    assert.equal(parseModsState(original).mods[0].pinned, true);
+    assert.equal(parseModsState(original).mods[0].reorderable, true);
+    assert.equal(Object.hasOwn(parseModsState(state()).mods[0], "reorderable"), false);
+    for (const reorderable of ["true", 1, null]) assert.throws(() => parseModsState(state([entry({ reorderable })])));
+});
+
 test("accepts entries with the whole runs-on set or none of it, the lock reason exactly when locked", () => {
     const parsed = parseModsState(state()).mods[1];
     for (const key of ["runsOn", "runsOnDefault", "runsOnLocked", "runsOnLockReason"]) assert.equal(Object.hasOwn(parsed, key), false, key);
