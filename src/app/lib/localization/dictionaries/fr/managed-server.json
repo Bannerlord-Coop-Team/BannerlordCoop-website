@@ -948,6 +948,7 @@
   "mods.playersNeed.none": "Les joueurs n’ont besoin d’aucun mod communautaire en dehors de Bannerlord Co-op pour rejoindre.",
   "mods.playersNeed.noDlc": "Les joueurs doivent aussi désactiver tout DLC officiel, comme War Sails.",
   "mods.playersNeed.playersOnly": "Joueurs uniquement : non exécuté sur le serveur",
+  "mods.playersNeed.download": "Télécharger la liste des mods",
   "mods.issue.noServerSubmodule": "Aucune partie du code de ce mod ne s’exécute sur le serveur. Si elle devrait, envoyez-le à nouveau.",
   "mods.issue.noRenderTagRemoved": "Ses balises réservées à l’interface ont été supprimées pour que le serveur charge tout son code.",
   "mods.issue.headlessServerUnsupported": "Connu pour ne pas fonctionner sur le serveur sans affichage ; le démarrage peut échouer tant qu’il est activé.",

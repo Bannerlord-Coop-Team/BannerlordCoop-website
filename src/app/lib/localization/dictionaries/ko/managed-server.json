@@ -947,6 +947,7 @@
   "mods.playersNeed.none": "참가하는 데 Bannerlord Co-op 외의 커뮤니티 모드는 필요하지 않습니다.",
   "mods.playersNeed.noDlc": "플레이어는 War Sails 같은 공식 DLC도 모두 비활성화해야 합니다.",
   "mods.playersNeed.playersOnly": "플레이어만: 서버에서 실행되지 않음",
+  "mods.playersNeed.download": "모드 목록 다운로드",
   "mods.issue.noServerSubmodule": "이 모드의 코드는 서버에서 전혀 실행되지 않습니다. 실행되어야 한다면 다시 업로드하세요.",
   "mods.issue.noRenderTagRemoved": "서버가 모든 코드를 불러오도록 인터페이스 전용 태그를 제거했습니다.",
   "mods.issue.headlessServerUnsupported": "화면 없는 서버에서 실행되지 않는 것으로 알려져 있습니다. 활성화된 동안 시작이 실패할 수 있습니다.",

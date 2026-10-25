@@ -950,6 +950,7 @@
   "mods.playersNeed.none": "Чтобы подключиться, игрокам не нужны моды сообщества, кроме Bannerlord Co-op.",
   "mods.playersNeed.noDlc": "Игрокам также нужно отключить все официальные DLC, например War Sails.",
   "mods.playersNeed.playersOnly": "Только игроки: не работает на сервере",
+  "mods.playersNeed.download": "Скачать список модов",
   "mods.issue.noServerSubmodule": "Никакой код этого мода не выполняется на сервере. Если должен, загрузите мод заново.",
   "mods.issue.noRenderTagRemoved": "Его теги «только для интерфейса» удалены, чтобы сервер загружал весь его код.",
   "mods.issue.headlessServerUnsupported": "Известно, что не работает на сервере без графики; запуск может завершиться ошибкой, пока мод включён.",

@@ -1,15 +1,15 @@
 "use client";
 
 import { useEffect, useEffectEvent, useId, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
-import { FlaskConical, Lock, Menu, Puzzle, RefreshCw, Trash2, Upload } from "lucide-react";
+import { Download, FlaskConical, Lock, Menu, Puzzle, RefreshCw, Trash2, Upload } from "lucide-react";
 
 import { useTranslations } from "@/app/lib/localization/client";
 import { buildModArchive, ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
 import {
     canChooseServerModRunsOn, changedServerModRunsOn, enabledOwnerModCount, findServerMod, isOwnerMod, isPlayersOnlyAgainstDefault,
-    moveServerMod, sameServerModOrder, serverModLoadOrder, serverModsPlayersNeed, ServerModsError, setServerModRunsOn,
+    moveServerMod, sameServerModOrder, serverModListFile, serverModLoadOrder, serverModsPlayersNeed, ServerModsError, setServerModRunsOn,
     toggleServerMod,
-    type ServerMod, type ServerModArchive, type ServerModCatalog, type ServerModRunsOn, type ServerModsState, type ServerModUploadProgress,
+    type ServerMod, type ServerModArchive, type ServerModCatalog, type ServerModListFile, type ServerModRunsOn, type ServerModsState, type ServerModUploadProgress,
 } from "@/app/lib/hosting/server-mods";
 import { createBrowserServerModCatalog } from "@/app/lib/hosting/server-mods-transport";
 import { MOD_MAXIMUM_ENABLED_OWNER_MODS } from "../../../../supabase/functions/_shared/server-mods-contract";
@@ -19,6 +19,8 @@ import { fileButtonClass, fileIconButtonClass, filePrimaryButtonClass } from "./
 import { WorkspaceCard, workspaceNoticeClass } from "./server-workspace-ui";
 
 const badgeClass = "shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-xs font-medium text-foreground-muted";
+/** The downloaded players' mod list, named like the configuration export. */
+const MOD_LIST_FILE_NAME = "BannerlordCoop-mod-list.json";
 
 /** The owner declined to replace an installed mod; nothing was sent. */
 const CANCELLED = "cancelled";
@@ -323,7 +325,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
                     onKeyDown={event => handleKey(event, index)} onToggle={() => toggle(mod)} onRunsOn={runsOn => chooseRunsOn(mod, runsOn)} onDelete={() => remove(mod)} />)}
             </ol>
             <p id={`${idPrefix}-reorder-help`} className="sr-only">{t("mods.reorderHelp")}</p>
-            <ModsPlayersNeed mods={loaded.mods} idPrefix={idPrefix} />
+            <ModsPlayersNeed serverId={serverId} mods={loaded.mods} idPrefix={idPrefix} />
         </>}
         <p role="status" className="sr-only">{announcement}</p>
     </WorkspaceCard>;
@@ -379,8 +381,8 @@ function ModRunsOnChoice({ mod, id, editable, onChange }: { mod: ServerMod; id: 
     </div>;
 }
 
-/** Lists the mods every player must install, at their exact versions, from the saved list. */
-function ModsPlayersNeed({ mods, idPrefix }: { mods: readonly ServerMod[]; idPrefix: string }) {
+/** Lists the mods every player must install, at their exact versions, from the saved list, and offers it as a JSON download. */
+function ModsPlayersNeed({ serverId, mods, idPrefix }: { serverId: string; mods: readonly ServerMod[]; idPrefix: string }) {
     const { t } = useTranslations("managed-server");
     const needed = serverModsPlayersNeed(mods);
     return <section aria-labelledby={`${idPrefix}-players-need`} className="border-t border-white/10 p-5">
@@ -394,7 +396,19 @@ function ModsPlayersNeed({ mods, idPrefix }: { mods: readonly ServerMod[]; idPre
                 {mod.runsOn === "players" && <span className={badgeClass}>{t("mods.playersNeed.playersOnly")}</span>}
             </li>)}
         </ul>}
+        {needed.length > 0 && <button type="button" onClick={() => downloadModList(serverModListFile(serverId, mods, new Date()))} className={`${fileButtonClass} mt-4`}>
+            <Download className="size-4" aria-hidden="true" />{t("mods.playersNeed.download")}
+        </button>}
     </section>;
+}
+
+/** Saves the mod list as a pretty-printed JSON file through a temporary object URL. */
+function downloadModList(file: ServerModListFile) {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(file, null, 2) + "\n"], { type: "application/json" }));
+    const anchor = document.createElement("a");
+    anchor.href = url; anchor.download = MOD_LIST_FILE_NAME;
+    document.body.append(anchor); anchor.click(); anchor.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
 /** Shows the current upload phase, with a percentage while chunks are sent. */

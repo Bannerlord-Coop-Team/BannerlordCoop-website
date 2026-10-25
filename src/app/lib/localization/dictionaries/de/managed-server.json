@@ -948,6 +948,7 @@
   "mods.playersNeed.none": "Spieler brauchen zum Beitreten außer Bannerlord Co-op keine Community-Mods.",
   "mods.playersNeed.noDlc": "Spieler müssen außerdem jeden offiziellen DLC deaktivieren, etwa War Sails.",
   "mods.playersNeed.playersOnly": "Nur Spieler: läuft nicht auf dem Server",
+  "mods.playersNeed.download": "Mod-Liste herunterladen",
   "mods.issue.noServerSubmodule": "Kein Code dieser Mod läuft auf dem Server. Falls er das soll, lade sie erneut hoch.",
   "mods.issue.noRenderTagRemoved": "Ihre Nur-Oberfläche-Tags wurden entfernt, damit der Server ihren gesamten Code lädt.",
   "mods.issue.headlessServerUnsupported": "Läuft bekanntermaßen nicht auf dem Server ohne Grafik; der Start kann fehlschlagen, solange sie aktiviert ist.",
