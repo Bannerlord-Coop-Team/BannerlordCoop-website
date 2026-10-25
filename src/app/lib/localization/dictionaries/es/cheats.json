@@ -892,7 +892,7 @@
   "hostingOffer.feature.online": "En línea 24/7, sin dejar tu PC encendido",
   "hostingOffer.feature.backups": "Copias de seguridad diarias automáticas",
   "hostingOffer.feature.updates": "Nos encargamos de las actualizaciones del juego",
-  "hostingOffer.feature.console": "Trucos del servidor desde tu navegador",
+  "hostingOffer.feature.support": "Soporte prioritario",
   "hostingOffer.price": "{amount}/mes",
   "hostingOffer.tier": "Nivel {tier} de Patreon",
   "hostingOffer.cta": "Consigue tu servidor",

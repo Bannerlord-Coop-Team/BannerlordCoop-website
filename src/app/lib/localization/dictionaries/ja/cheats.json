@@ -892,7 +892,7 @@
   "hostingOffer.feature.online": "24時間オンライン、PCの電源は不要",
   "hostingOffer.feature.backups": "毎日の自動バックアップ",
   "hostingOffer.feature.updates": "ゲームのアップデートはおまかせ",
-  "hostingOffer.feature.console": "ブラウザからサーバーのチートを実行",
+  "hostingOffer.feature.support": "優先サポート",
   "hostingOffer.price": "月額{amount}",
   "hostingOffer.tier": "Patreon {tier}ティア",
   "hostingOffer.cta": "サーバーを手に入れる",

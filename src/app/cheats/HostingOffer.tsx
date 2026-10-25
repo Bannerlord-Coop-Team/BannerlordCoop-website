@@ -14,7 +14,7 @@ export const HOSTING_OFFER_TIER = "Veteran";
 /** Monthly tier price in whole US dollars; the campaign bills in USD. */
 export const HOSTING_OFFER_PRICE_USD = 20;
 
-const features = ["online", "backups", "updates", "console"] as const;
+const features = ["online", "backups", "updates", "support"] as const;
 
 /**
  * Advertises managed hosting through the Veteran tier's Patreon checkout. The rail layout fills the

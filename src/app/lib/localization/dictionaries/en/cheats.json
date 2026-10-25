@@ -892,7 +892,7 @@
   "hostingOffer.feature.online": "Online 24/7, no PC left on",
   "hostingOffer.feature.backups": "Automatic daily backups",
   "hostingOffer.feature.updates": "Game updates handled for you",
-  "hostingOffer.feature.console": "Server cheats from your browser",
+  "hostingOffer.feature.support": "Priority support",
   "hostingOffer.price": "{amount}/month",
   "hostingOffer.tier": "Patreon {tier} tier",
   "hostingOffer.cta": "Get your server",

@@ -78,7 +78,7 @@ it("sends the only call to action to the Veteran Patreon checkout in a new tab",
     expect(title.textContent).toBe("Rent a Server");
     expect(offer.querySelector("h1, h2, h3, h4, h5, h6")).toBeNull();
     expect(offer.textContent).toContain("Official hosting");
-    for (const feature of ["Online 24/7, no PC left on", "Automatic daily backups", "Game updates handled for you", "Server cheats from your browser"]) {
+    for (const feature of ["Online 24/7, no PC left on", "Automatic daily backups", "Game updates handled for you", "Priority support"]) {
         expect(offer.textContent).toContain(feature);
     }
     expect(offer.textContent).toContain("$20/month");

@@ -892,7 +892,7 @@
   "hostingOffer.feature.online": "Онлайн 24/7 без включённого ПК",
   "hostingOffer.feature.backups": "Ежедневные автоматические резервные копии",
   "hostingOffer.feature.updates": "Обновления игры мы берём на себя",
-  "hostingOffer.feature.console": "Чит-команды сервера прямо из браузера",
+  "hostingOffer.feature.support": "Приоритетная поддержка",
   "hostingOffer.price": "{amount} в месяц",
   "hostingOffer.tier": "Уровень {tier} на Patreon",
   "hostingOffer.cta": "Получить сервер",
