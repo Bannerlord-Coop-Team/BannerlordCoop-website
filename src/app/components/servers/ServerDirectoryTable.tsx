@@ -14,7 +14,7 @@ export type ManagedServerDirectoryEntry = Omit<
     "players" | "status"
 > & {
     players: number | null;
-    status: HostedServerStatus | "Unknown" | "Asleep";
+    status: HostedServerStatus | "Unknown" | "Asleep" | "Starting";
     manageUrl?: string;
 };
 

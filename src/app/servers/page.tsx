@@ -248,7 +248,8 @@ async function loadPublicInventory() {
         allServers = listedServers.map(server => ({
             id: server.serverId,
             name: server.displayName,
-            status: server.observedGameState === "running" ? "Online" : server.observedGameState === "asleep" ? "Asleep" : "Unknown",
+            status: server.observedGameState === "running" ? "Online" : server.observedGameState === "asleep" ? "Asleep"
+                : server.observedGameState === "starting" ? "Starting" : "Unknown",
             connectionType: "Direct",
             joinUrl: "",
             connectionAddress: connectionAddress(server.connectionIp, server.gamePorts),
@@ -272,13 +273,16 @@ function DirectoryLoading({ label }: { label: string }) {
 function toDirectoryServer(server: MyServerSummary): ManagedServerDirectoryEntry {
     const isRunning = server.observedGameState === "running";
     const isAsleep = isColdSleeping(server.operationState, server.runtimeInsight?.desiredState)
-        && server.observedGameState === "stopped" && !server.subscriptionHold;
+        && server.observedGameState === "stopped" && !server.subscriptionHold
+        && server.runtimeInsight?.failureCode === null && server.runtimeInsight.observedAt !== null
+        && Date.parse(server.runtimeInsight.observedAt) > Date.now() - 10 * 60_000;
     const isStopped = server.observedGameState === "stopped"
         || ["stopped", "suspended"].includes(server.operationState);
     return {
         id: server.serverId,
         name: server.displayName,
-        status: isRunning ? "Online" : isAsleep ? "Asleep" : isStopped ? "Offline" : "Unknown",
+        status: isRunning ? "Online" : isAsleep ? "Asleep"
+            : server.observedGameState === "starting" && !server.subscriptionHold ? "Starting" : isStopped ? "Offline" : "Unknown",
         connectionType: "Direct",
         joinUrl: `bannerlordcoop://join/${encodeURIComponent(server.serverId)}`,
         connectionAddress: connectionAddress(server.connectionIp ?? null, server.gamePorts ?? []),

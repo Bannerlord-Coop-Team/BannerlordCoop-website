@@ -38,6 +38,7 @@
   "table.direct": "Direct",
   "table.status.Online": "Online",
   "table.status.Asleep": "Asleep",
+  "table.status.Starting": "Starting / waking",
   "table.sleepHint": "Your first join wakes it; retry in about 2 minutes.",
   "table.status.Offline": "Offline",
   "table.status.Unknown": "Unknown",

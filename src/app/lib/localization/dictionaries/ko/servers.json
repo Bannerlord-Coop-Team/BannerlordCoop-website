@@ -37,6 +37,7 @@
   "table.direct": "직접 연결",
   "table.status.Online": "온라인",
   "table.status.Asleep": "절전 중",
+  "table.status.Starting": "시작 중 / 절전 해제 중",
   "table.sleepHint": "첫 접속 시 서버가 깨어납니다. 약 2분 후 다시 접속해 주세요.",
   "table.status.Offline": "오프라인",
   "table.status.Unknown": "알 수 없음",

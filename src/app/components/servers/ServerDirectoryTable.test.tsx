@@ -39,7 +39,7 @@ test("renders an explicit management link without inline lifecycle controls", ()
     assert.doesNotMatch(html, />Restart</u);
 });
 
-for (const status of ["Online", "Asleep", "Offline", "Unknown"] as const) {
+for (const status of ["Online", "Asleep", "Starting", "Offline", "Unknown"] as const) {
     test(`directory ${status} preserves join availability and sleep guidance`, () => {
         const html = renderToStaticMarkup(<LocalizationProvider locale="en" messages={{ servers, "server-common": serverCommon }}>
             <ServerDirectoryTable servers={[{ ...server, status, connectionAddress: "203.0.113.4:4200" }]} emptyMessage="Empty" />

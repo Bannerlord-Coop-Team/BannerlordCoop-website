@@ -37,6 +37,7 @@
   "table.direct": "直接接続",
   "table.status.Online": "オンライン",
   "table.status.Asleep": "スリープ中",
+  "table.status.Starting": "起動中 / 復帰中",
   "table.sleepHint": "最初の接続でサーバーが起動します。約2分後にもう一度接続してください。",
   "table.status.Offline": "オフライン",
   "table.status.Unknown": "不明",
