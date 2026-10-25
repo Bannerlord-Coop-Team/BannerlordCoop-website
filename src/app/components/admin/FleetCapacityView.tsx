@@ -203,7 +203,7 @@ function ServerNeeds({ capacity, hints }: { capacity: HostingAdminFleetCapacity;
         { label: "CPU max", hint: `${hints.cpu} ${hints.cpuMax}`, value: figure(cpu?.max, formatCores) },
         { label: "Running server-hours", hint: hints.runningHours, value: formatServerHours(demand.runningServerHours) },
         { label: "Memory p50", hint: `${hints.memory} ${hints.p50}`, value: figure(memory?.p50, formatGiB) },
-        { label: memory?.p99 === undefined ? "Memory p95" : "Memory p99", hint: `${hints.memory} ${hints.p95}`, value: figure(memory?.p99 ?? memory?.p95, formatGiB) },
+        { label: capacity.model.memoryPercentile === 99 ? "Memory p99" : "Memory p95", hint: `${hints.memory} ${hints.p95}`, value: figure(capacity.model.memoryPercentile === 99 ? memory?.p99 : memory?.p95, formatGiB) },
         { label: "Memory max", hint: `${hints.memory} ${hints.max}`, value: figure(memory?.max, formatGiB) },
         { label: "Throttled", hint: hints.throttled, value: figure(demand.throttledShare, formatShare) },
     ];
@@ -261,7 +261,7 @@ function ProvidersPane({ capacity, hints }: { capacity: HostingAdminFleetCapacit
                                     <StealCells steal={entry.steal} typical={typical} />
                                     <td className="p-3 text-right font-mono">{figure(entry.demand.cpuCores?.p50, formatCores)}</td>
                                     <td className="p-3 text-right font-mono">{figure(entry.demand.cpuCores?.p95, formatCores)}</td>
-                                    <td className="p-3 text-right font-mono">{figure(entry.demand.memoryBytes?.p99 ?? entry.demand.memoryBytes?.p95, formatGiB)}</td>
+                                    <td className="p-3 text-right font-mono">{figure(capacity.model.memoryPercentile === 99 ? entry.demand.memoryBytes?.p99 : entry.demand.memoryBytes?.p95, formatGiB)}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -349,7 +349,7 @@ function InstanceTypesPane({ capacity, hints }: { capacity: HostingAdminFleetCap
                                     <td className="p-3 text-right align-top font-mono">{entry.servers}</td>
                                     <td className="p-3 text-right align-top font-mono">{figure(entry.demand.cpuCores?.p50, formatCores)}</td>
                                     <td className="p-3 text-right align-top font-mono">{figure(entry.demand.cpuCores?.p95, formatCores)}</td>
-                                    <td className="p-3 text-right align-top font-mono">{figure(entry.demand.memoryBytes?.p99 ?? entry.demand.memoryBytes?.p95, formatGiB)}</td>
+                                    <td className="p-3 text-right align-top font-mono">{figure(capacity.model.memoryPercentile === 99 ? entry.demand.memoryBytes?.p99 : entry.demand.memoryBytes?.p95, formatGiB)}</td>
                                     <td className="p-3 text-right align-top font-mono">{typical && entry.steal !== null && entry.steal.p50 !== undefined
                                         ? `${formatPercent(entry.steal.p50)} · ${formatPercent(entry.steal.p95)}` : figure(entry.steal?.p95, formatPercent)}</td>
                                     <td className="p-3 align-top"><ModelledCue entry={entry} slots={staticSlots(entry.vCpu, capacity.model)} /></td>
