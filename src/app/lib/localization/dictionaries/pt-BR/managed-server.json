@@ -149,7 +149,6 @@
   "backups.waitingToRetrySafelyProgress": "Aguardando para tentar novamente com segurança. {progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "Digite um comando coop.* (até 4096 caracteres), sem caracteres de controle nem separadores de comandos.",
   "commands.gameConsole": "Console do jogo",
-  "commands.moreActions": "Mais ações",
   "commands.gameCommand": "Comando de jogo",
   "commands.enterOneCoopCommand": "Digite um comando coop.*",
   "commands.commandsRequireOwnerOrManagerAccessAndARunningHealthy": "Os comandos exigem acesso de proprietário ou gerente e um servidor em execução, funcionando normalmente.",
@@ -972,5 +971,10 @@
   "controls.modLoadFailedMissingDll": "Falta ao mod {modId} uma DLL listada em SubModule.xml. Envie o mod completo com a pasta bin ou desative-o em Mods. Depois inicie novamente.",
   "controls.modLoadFailed": "O mod {modId} não carregou. Envie uma versão compatível com esta versão do servidor e suas dependências ou desative-o em Mods. Depois inicie novamente.",
   "controls.modLoadFailedHarmony": "O mod {modId} não conseguiu carregar o Harmony (0Harmony.dll) fornecido pelo servidor. É um problema da hospedagem; reenviar Bannerlord.Harmony não resolve. Contate o suporte ou desative este mod e os que dependem dele em Mods antes de iniciar novamente.",
-  "controls.modLoadFailedUnknown": "Um mod personalizado não carregou. Confira os mods enviados e suas dependências ou desative os últimos mods ativados antes de iniciar novamente."
+  "controls.modLoadFailedUnknown": "Um mod personalizado não carregou. Confira os mods enviados e suas dependências ou desative os últimos mods ativados antes de iniciar novamente.",
+  "maintenance.title": "Manutenção",
+  "maintenance.update": "Atualização do servidor de jogo",
+  "maintenance.updateDescription": "Instala agora a versão {channel} mais recente. Um backup é feito antes.",
+  "maintenance.log": "Log do servidor",
+  "maintenance.logDescription": "Baixe o arquivo de log mais recente para solucionar problemas ou relatar bugs."
 }

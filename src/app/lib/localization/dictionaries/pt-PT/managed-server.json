@@ -149,7 +149,6 @@
   "backups.waitingToRetrySafelyProgress": "A aguardar para tentar novamente em segurança. {progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "Introduza um comando coop.* (até 4096 carateres), sem carateres de controlo nem separadores de comandos.",
   "commands.gameConsole": "Consola do jogo",
-  "commands.moreActions": "Mais ações",
   "commands.gameCommand": "Comando do jogo",
   "commands.enterOneCoopCommand": "Introduzir um comando coop.*",
   "commands.commandsRequireOwnerOrManagerAccessAndARunningHealthy": "Os comandos exigem acesso de proprietário ou gestor e um servidor em execução e em bom estado.",
@@ -972,5 +971,10 @@
   "controls.modLoadFailedMissingDll": "Falta ao mod {modId} uma DLL indicada em SubModule.xml. Carregue o mod completo com a pasta bin ou desative-o em Mods. Depois inicie novamente.",
   "controls.modLoadFailed": "O mod {modId} não carregou. Carregue uma versão compatível com esta versão do servidor e as suas dependências ou desative-o em Mods. Depois inicie novamente.",
   "controls.modLoadFailedHarmony": "O mod {modId} não conseguiu carregar o Harmony (0Harmony.dll) fornecido pelo servidor. É um problema do alojamento; voltar a carregar Bannerlord.Harmony não resolve. Contacte o suporte ou desative este mod e os que dependem dele em Mods antes de iniciar novamente.",
-  "controls.modLoadFailedUnknown": "Um mod personalizado não carregou. Verifique os mods carregados e as suas dependências ou desative os últimos mods ativados antes de iniciar novamente."
+  "controls.modLoadFailedUnknown": "Um mod personalizado não carregou. Verifique os mods carregados e as suas dependências ou desative os últimos mods ativados antes de iniciar novamente.",
+  "maintenance.title": "Manutenção",
+  "maintenance.update": "Atualização do servidor de jogo",
+  "maintenance.updateDescription": "Instala agora a versão {channel} mais recente. É feita uma cópia de segurança antes.",
+  "maintenance.log": "Registo do servidor",
+  "maintenance.logDescription": "Transfira o ficheiro de registo mais recente para resolver problemas ou comunicar erros."
 }

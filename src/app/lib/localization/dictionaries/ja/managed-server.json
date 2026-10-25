@@ -149,7 +149,6 @@
   "backups.waitingToRetrySafelyProgress": "安全に再試行できるよう待機しています。{progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "制御文字やコマンド区切りを含めずに、coop.*コマンドを1つ入力してください（4096文字以内）。",
   "commands.gameConsole": "ゲームコンソール",
-  "commands.moreActions": "その他の操作",
   "commands.gameCommand": "ゲームコマンド",
   "commands.enterOneCoopCommand": "coop.*コマンドを1つ入力",
   "commands.commandsRequireOwnerOrManagerAccessAndARunningHealthy": "コマンドを使用するには、所有者またはマネージャーのアクセス権と、正常に稼働しているサーバーが必要です。",
@@ -971,5 +970,10 @@
   "controls.modLoadFailedMissingDll": "Mod {modId}のSubModule.xmlに記載されたDLLがありません。binフォルダーを含む完全なModをアップロードするか、「Mods」で無効にしてから再起動してください。",
   "controls.modLoadFailed": "Mod {modId}を読み込めませんでした。このサーバーバージョンと依存関係に対応するバージョンをアップロードするか、「Mods」で無効にしてから再起動してください。",
   "controls.modLoadFailedHarmony": "Mod {modId}はサーバーが提供するHarmony（0Harmony.dll）を読み込めませんでした。ホスティング側の問題のため、Bannerlord.Harmonyを再アップロードしても解決しません。サポートに連絡するか、「Mods」でこのModと依存するModを無効にしてから再起動してください。",
-  "controls.modLoadFailedUnknown": "カスタムModを読み込めませんでした。アップロードしたModと依存関係を確認するか、最近有効にしたModを無効にしてから再起動してください。"
+  "controls.modLoadFailedUnknown": "カスタムModを読み込めませんでした。アップロードしたModと依存関係を確認するか、最近有効にしたModを無効にしてから再起動してください。",
+  "maintenance.title": "メンテナンス",
+  "maintenance.update": "ゲームサーバーの更新",
+  "maintenance.updateDescription": "最新の{channel}リリースを今すぐインストールします。事前にバックアップが作成されます。",
+  "maintenance.log": "サーバーログ",
+  "maintenance.logDescription": "トラブルシューティングやバグ報告用に最新のログファイルをダウンロードします。"
 }

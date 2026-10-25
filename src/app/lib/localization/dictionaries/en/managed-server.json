@@ -149,7 +149,6 @@
   "backups.waitingToRetrySafelyProgress": "Waiting to retry safely. {progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "Enter one coop.* command (up to 4096 characters), without control characters or command separators.",
   "commands.gameConsole": "Game console",
-  "commands.moreActions": "More actions",
   "commands.gameCommand": "Game command",
   "commands.enterOneCoopCommand": "Enter one coop.* command",
   "commands.commandsRequireOwnerOrManagerAccessAndARunningHealthy": "Commands require owner or manager access and a running, healthy server.",
@@ -972,5 +971,10 @@
   "controls.modLoadFailedMissingDll": "Mod {modId} is missing a DLL listed in SubModule.xml. Upload the complete mod including its bin folder, or disable it in Mods. Then start again.",
   "controls.modLoadFailed": "Mod {modId} could not load. Upload a version compatible with this server build and its dependencies, or disable it in Mods. Then start again.",
   "controls.modLoadFailedHarmony": "Mod {modId} could not load the server-provided Harmony (0Harmony.dll). This is a hosting problem; re-uploading Bannerlord.Harmony will not fix it. Contact support, or disable this mod and its dependants in Mods before starting again.",
-  "controls.modLoadFailedUnknown": "A custom mod failed to load. Check your uploaded mods and their dependencies, or disable recently enabled mods before starting again."
+  "controls.modLoadFailedUnknown": "A custom mod failed to load. Check your uploaded mods and their dependencies, or disable recently enabled mods before starting again.",
+  "maintenance.title": "Maintenance",
+  "maintenance.update": "Game server update",
+  "maintenance.updateDescription": "Installs the latest {channel} release now. A backup is taken first.",
+  "maintenance.log": "Server log",
+  "maintenance.logDescription": "Download the latest log file for troubleshooting or bug reports."
 }

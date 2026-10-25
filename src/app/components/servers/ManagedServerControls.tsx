@@ -17,14 +17,15 @@ import { modLoadFailureMessage } from "./server-mods-messages";
 import { Check, Download, KeyRound, LoaderCircle, Play, RotateCw, Square } from "lucide-react";
 import { filePrimaryButtonClass } from "./server-file-styles";
 import { WorkspaceCard } from "./server-workspace-ui";
+import { fileButtonClass } from "./server-file-styles";
 import { useEffect, useEffectEvent, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { isMoveInProgress } from "@/app/lib/hosting/server-move";
 import { DisabledControlHint } from "./DisabledControlHint";
-import { useOverflowMenuSlot } from "./OverflowMenu";
+import { useMaintenanceUpdateSlot } from "./ManagedServerMaintenance";
 import { useManagedServerMove } from "./managed-server-move-context";
 import { useRevealServerAddress } from "./ServerManagementWorkspace";
-import { menuItemClass, segmentedButtonClass, segmentedGroupClass, toolbarButtonClass } from "./segmented-controls";
+import { segmentedButtonClass, segmentedGroupClass, toolbarButtonClass } from "./segmented-controls";
 
 const TRANSITIONAL_STATES = new Set([
     "provisioning",
@@ -135,6 +136,7 @@ export function ManagedServerControls({
     const [isPending, startTransition] = useTransition();
     const [pendingOperation, setPendingOperation] = useState<Operation | null>(null);
     const [message, setMessage] = useState("");
+    const [lastOperation, setLastOperation] = useState<Operation | null>(null);
     const [startRevision, setStartRevision] = useState(expectedUpdatedAt);
     const [startJobId, setStartJobId] = useState<string | null>(() => ["owner", "manager"].includes(accessRole) && runtimeInsight?.start && ["queued", "running", "retry-wait"].includes(runtimeInsight.start.state) ? runtimeInsight.start.jobId : null);
     const [startStatus, setStartStatus] = useState<StartProgressStatus | null>(null);
@@ -156,7 +158,7 @@ export function ManagedServerControls({
     const { session: pollingSession, timedOutSession, beginPolling, endPolling } = useManagedServerPolling();
     const consoleSignals = useManagedConsoleSignals();
     const statusSlot = useManagedServerStatusSlot();
-    const menuSlot = useOverflowMenuSlot();
+    const updateSlot = useMaintenanceUpdateSlot();
     // Stopping or restarting mid-save would cut the owner's save short, so both wait for it.
     const saving = useManagedServerSaves()?.isSaving(serverId) ?? false;
     // A move to another machine owns the server until it finishes; an announced one leaves the controls usable.
@@ -412,6 +414,7 @@ export function ManagedServerControls({
             t("controls.updateDisplaynameNowABackupWillBeTakenFirstIf", { displayName: displayName }),
         )) return;
 
+        setLastOperation(operation);
         setMessage(operation === "start" ? t("controls.sendingYourStartRequest")
             : operation === "stop" ? t("controls.sendingYourStopRequest")
                 : operation === "update-now" ? t("controls.sendingYourUpdateRequest") : "");
@@ -470,7 +473,9 @@ export function ManagedServerControls({
         && (startJobId === null || startJobId === receiptId) ? runtimeInsight?.start ?? null : null;
     const displayedStartStatus = startStatus ?? serverReceipt;
     const showStart = pendingOperation === "start" || startJobId !== null || displayedStartStatus !== null;
-    const statusArea = showStart || restart !== null || progressPaused || stopCheckPaused || message ? (
+    // With a Maintenance card, Update now reports beside its own button instead of in the console.
+    const updateMessageInSlot = updateSlot !== undefined && lastOperation === "update-now";
+    const statusArea = showStart || restart !== null || progressPaused || stopCheckPaused || (message && !updateMessageInSlot) ? (
         <div className="flex w-full flex-col items-start gap-2">
             {showStart && <StartProgress key={`${serverId}:${startProgressIdentity}`} status={displayedStartStatus} paused={progressPaused} />}
             {restart !== null && <RestartProgressCard progress={restart} />}
@@ -487,7 +492,7 @@ export function ManagedServerControls({
                     {t("controls.checkNow")}
                 </button>
             </div>}
-            {message && !stopCheckPaused && (
+            {message && !stopCheckPaused && !updateMessageInSlot && (
                 <p
                     aria-live="polite"
                     className="max-w-xl text-left text-xs leading-5 text-foreground-muted"
@@ -498,15 +503,19 @@ export function ManagedServerControls({
         </div>
     ) : null;
 
-    // Inside the console header, update sits in its overflow menu and notices move to the status row below it.
+    // On the server page, Update now lives in the Save & config Maintenance card; notices move below the console bar.
     const updateAction = <ControlButton
         label={t("controls.updateNow")}
         icon={Download}
         disabled={busy || trackingRestart}
         pending={pendingOperation === "update-now"}
-        menuItem={menuSlot !== undefined}
         onClick={() => requestOperation("update-now")}
+        className={updateSlot ? fileButtonClass : undefined}
     />;
+    const updateInSlot = <>
+        <DisabledControlHint disabled={moving} message={t("move.controlsUnavailable")}>{updateAction}</DisabledControlHint>
+        {updateMessageInSlot && message && <p aria-live="polite" className="text-xs leading-5 text-foreground-muted sm:text-right">{message}</p>}
+    </>;
     const alreadyStopped = !busy && canStart && operationState === "stopped" && observedGameState === "stopped"
         && <p className="max-w-sm text-xs text-foreground-muted">{t("controls.alreadyStopped")}</p>;
     const noticesInStatusRow = statusSlot !== undefined;
@@ -543,10 +552,10 @@ export function ManagedServerControls({
                             onClick={() => requestOperation("restart-game")}
                         />
                     </div>
-                    {menuSlot === undefined && updateAction}
+                    {updateSlot === undefined && updateAction}
                 </div>
             </DisabledControlHint>
-            {menuSlot && createPortal(<DisabledControlHint disabled={moving} message={t("move.controlsUnavailable")}>{updateAction}</DisabledControlHint>, menuSlot)}
+            {updateSlot && createPortal(updateInSlot, updateSlot)}
             {noticesInStatusRow ? statusSlot && createPortal(notices, statusSlot) : <>{alreadyStopped}{statusArea}</>}
         </div>
     );
@@ -672,7 +681,7 @@ export function ManagedServerPassword({ serverId, accessRole, operationState, ex
     </WorkspaceCard>;
 }
 
-/** Renders a lifecycle action with consistent target size and pending feedback, as a toolbar button, segment or menu item. */
+/** Renders a lifecycle action with consistent target size and pending feedback, as a toolbar button or segment. */
 function ControlButton({
     label,
     icon: Icon,
@@ -680,7 +689,7 @@ function ControlButton({
     pending,
     onClick,
     segmented = false,
-    menuItem = false,
+    className,
 }: {
     label: string;
     icon: typeof Play;
@@ -688,15 +697,15 @@ function ControlButton({
     pending: boolean;
     onClick: () => void;
     segmented?: boolean;
-    menuItem?: boolean;
+    /** Replaces the toolbar look, so a control can match the card it is placed in. */
+    className?: string;
 }) {
     return (
         <button
             type="button"
-            role={menuItem ? "menuitem" : undefined}
             disabled={disabled}
             onClick={onClick}
-            className={menuItem ? menuItemClass : segmented ? `${segmentedButtonClass} flex-1 sm:flex-none` : toolbarButtonClass}
+            className={className ?? (segmented ? `${segmentedButtonClass} flex-1 sm:flex-none` : toolbarButtonClass)}
         >
             <Icon aria-hidden="true" className={`size-3.5 ${pending ? "animate-pulse" : ""}`} />
             {pending ? `${label}…` : label}

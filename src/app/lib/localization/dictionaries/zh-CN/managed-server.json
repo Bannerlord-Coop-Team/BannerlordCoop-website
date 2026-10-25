@@ -149,7 +149,6 @@
   "backups.waitingToRetrySafelyProgress": "正在等待安全重试。{progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "请输入一条 coop.* 命令（最多 4096 个字符），不得包含控制字符或命令分隔符。",
   "commands.gameConsole": "游戏控制台",
-  "commands.moreActions": "更多操作",
   "commands.gameCommand": "游戏命令",
   "commands.enterOneCoopCommand": "输入一条 coop.* 命令",
   "commands.commandsRequireOwnerOrManagerAccessAndARunningHealthy": "使用命令需要所有者或管理者权限，且服务器必须正在正常运行。",
@@ -971,5 +970,10 @@
   "controls.modLoadFailedMissingDll": "模组 {modId} 缺少 SubModule.xml 中列出的 DLL。请上传包含 bin 文件夹的完整模组，或在“模组”中禁用它，然后重新启动。",
   "controls.modLoadFailed": "模组 {modId} 无法加载。请上传与此服务器版本及其依赖项兼容的版本，或在“模组”中禁用它，然后重新启动。",
   "controls.modLoadFailedHarmony": "模组 {modId} 无法加载服务器提供的 Harmony（0Harmony.dll）。这是托管服务的问题，重新上传 Bannerlord.Harmony 无法解决。请联系支持，或在“模组”中禁用此模组及依赖它的模组，然后重新启动。",
-  "controls.modLoadFailedUnknown": "自定义模组无法加载。请检查上传的模组及其依赖项，或禁用最近启用的模组后再重新启动。"
+  "controls.modLoadFailedUnknown": "自定义模组无法加载。请检查上传的模组及其依赖项，或禁用最近启用的模组后再重新启动。",
+  "maintenance.title": "维护",
+  "maintenance.update": "游戏服务器更新",
+  "maintenance.updateDescription": "立即安装最新的{channel}版本。安装前会先创建备份。",
+  "maintenance.log": "服务器日志",
+  "maintenance.logDescription": "下载最新的日志文件，用于排查问题或提交错误报告。"
 }

@@ -149,7 +149,6 @@
   "backups.waitingToRetrySafelyProgress": "Güvenli şekilde yeniden denemek için bekleniyor. {progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "Denetim karakterleri veya komut ayırıcıları içermeyen tek bir coop.* komutu girin (en fazla 4096 karakter).",
   "commands.gameConsole": "Oyun konsolu",
-  "commands.moreActions": "Diğer işlemler",
   "commands.gameCommand": "Oyun komutu",
   "commands.enterOneCoopCommand": "Tek bir coop.* komutu girin",
   "commands.commandsRequireOwnerOrManagerAccessAndARunningHealthy": "Komutlar için sahip veya yetkili erişimi ve çalışan, sağlıklı bir sunucu gerekir.",
@@ -972,5 +971,10 @@
   "controls.modLoadFailedMissingDll": "{modId} modunun SubModule.xml dosyasında belirtilen bir DLL eksik. Modu bin klasörü dahil tamamen yükleyin veya Modlar bölümünde devre dışı bırakıp yeniden başlatın.",
   "controls.modLoadFailed": "{modId} modu yüklenemedi. Sunucu sürümü ve bağımlılıklarıyla uyumlu bir sürüm yükleyin veya Modlar bölümünde devre dışı bırakıp yeniden başlatın.",
   "controls.modLoadFailedHarmony": "{modId} modu, sunucunun sağladığı Harmony (0Harmony.dll) bileşenini yükleyemedi. Bu bir barındırma sorunudur; Bannerlord.Harmony modunu yeniden yüklemek sorunu çözmez. Destekle iletişime geçin veya yeniden başlatmadan önce Modlar bölümünde bu modu ve ona bağlı modları devre dışı bırakın.",
-  "controls.modLoadFailedUnknown": "Bir özel mod yüklenemedi. Yüklediğiniz modları ve bağımlılıklarını kontrol edin veya son etkinleştirdiğiniz modları devre dışı bırakıp yeniden başlatın."
+  "controls.modLoadFailedUnknown": "Bir özel mod yüklenemedi. Yüklediğiniz modları ve bağımlılıklarını kontrol edin veya son etkinleştirdiğiniz modları devre dışı bırakıp yeniden başlatın.",
+  "maintenance.title": "Bakım",
+  "maintenance.update": "Oyun sunucusu güncellemesi",
+  "maintenance.updateDescription": "En son {channel} sürümünü şimdi yükler. Önce bir yedek alınır.",
+  "maintenance.log": "Sunucu günlüğü",
+  "maintenance.logDescription": "Sorun gidermek veya hata bildirmek için en son günlük dosyasını indirin."
 }
