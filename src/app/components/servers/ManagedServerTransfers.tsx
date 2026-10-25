@@ -401,10 +401,10 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
             configuration={status?.managedConfig}
             configAccess={canEditConfig ? { serverId, userId, canEdit: true } : undefined}
             saveActions={<>
-                <button className={buttonClass} disabled={blocked || !canExportSave || !status?.activeSave || !(["running", "stopped", "awaiting-save"].includes(status.operationState) || subscriptionRescue && status.operationState === "suspended" && status.observedGameState === "stopped")} onClick={() => submit("export-save")}><Download aria-hidden className="size-4" />{t("transfers.exportSave")}</button>
                 <DisabledControlHint disabled={importSaveDisabled} message={importSaveHint}>
                     <button className={buttonClass} disabled={importSaveDisabled} onClick={() => openImport("import-save")}><Upload aria-hidden className="size-4" />{t("transfers.importSave")}</button>
                 </DisabledControlHint>
+                <button className={buttonClass} disabled={blocked || !canExportSave || !status?.activeSave || !(["running", "stopped", "awaiting-save"].includes(status.operationState) || subscriptionRescue && status.operationState === "suspended" && status.observedGameState === "stopped")} onClick={() => submit("export-save")}><Download aria-hidden className="size-4" />{t("transfers.exportSave")}</button>
             </>}
             saveNotice={transferFeedback("save")}
             configActions={<>

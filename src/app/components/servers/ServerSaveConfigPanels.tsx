@@ -21,8 +21,8 @@ export function ServerSaveConfigPanels({ saveName, campaigns, configuration, con
         <WorkspaceCard headingId="campaign-save-heading" title={campaigns ? t("campaigns.title") : t("saveConfigPanels.campaignSave")} icon={Save}
             description={campaigns && saveName && <span className="break-all font-mono">{saveName}</span>}
             actions={saveActions ?? <>
-                <button disabled className={fileButtonClass}><Download className="size-4" aria-hidden="true" />{t("saveConfigPanels.exportSave")}</button>
                 <button disabled className={fileButtonClass}><Upload className="size-4" aria-hidden="true" />{t("saveConfigPanels.importSave")}</button>
+                <button disabled className={fileButtonClass}><Download className="size-4" aria-hidden="true" />{t("saveConfigPanels.exportSave")}</button>
             </>}>
             <div className="space-y-3">
                 {campaigns ?? <p className="break-all font-mono text-sm">{saveName ?? t("saveConfigPanels.campaignSaveUnavailable")}</p>}
