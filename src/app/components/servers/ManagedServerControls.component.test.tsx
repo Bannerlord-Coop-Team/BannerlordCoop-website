@@ -11,6 +11,9 @@ import { MyServersApiError, readMyServersResponse } from "@/app/lib/hosting/my-s
 import { createMyServersHandler } from "../../../../supabase/functions/_shared/my-servers";
 import type { MyServerMove } from "@/app/lib/control-plane/types";
 import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
+import { readFileSync } from "node:fs";
+import { LocalizationProvider } from "@/app/lib/localization/client";
+import { locales, type Messages } from "@/app/lib/localization/types";
 
 const { revealAddress } = vi.hoisted(() => ({ revealAddress: vi.fn() }));
 const { backupStatus, deletionStatus } = vi.hoisted(() => ({ backupStatus: vi.fn(), deletionStatus: vi.fn() }));
@@ -563,6 +566,25 @@ it("clears local failed progress when a newer summary confirms recovery and clea
     } finally { await act(async () => root.unmount()); }
 });
 
+it.each(locales)("renders a retained missing-assembly diagnosis in %s without Start or console errors", async locale => {
+    const messages: Messages = {};
+    for (const namespace of ["common", "managed-server", "server-common", "cheats", "servers"] as const) {
+        messages[namespace] = JSON.parse(readFileSync(`src/app/lib/localization/dictionaries/${locale}/${namespace}.json`, "utf8"));
+    }
+    request.mockReset(); beginPolling.mockClear();
+    const error = vi.spyOn(console, "error"), container = document.createElement("div"), root = createRoot(container);
+    const insight: OwnerRuntimeInsight = { desiredState: "stopped", observedAt: null, allowedActions: ["start"], crashLoopDetected: false,
+        failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: null,
+        modLoadFailure: { modId: "Bannerlord.UIExtenderEx", reason: "missing-assembly", assembly: "TaleWorlds.GauntletUI" } };
+    try {
+        await act(async () => root.render(<LocalizationProvider locale={locale} messages={messages}><ManagedServerControls {...progressProps}
+            operationState="stopped" observedGameState="stopped" runtimeInsight={insight} /></LocalizationProvider>));
+        expect(container.textContent).toContain(String(messages["managed-server"]!["controls.modLoadFailedMissingAssembly"]).replace("{modId}", "Bannerlord.UIExtenderEx").replace("{assembly}", "TaleWorlds.GauntletUI"));
+        expect(request).not.toHaveBeenCalled();
+        expect(error).not.toHaveBeenCalled();
+    } finally { await act(async () => root.unmount()); error.mockRestore(); }
+});
+
 it("shows a stopped server's retained mod diagnosis on reload without sending Start", async () => {
     request.mockClear(); startStatus.mockClear();
     const insight: OwnerRuntimeInsight = { desiredState: "stopped", observedAt: null, allowedActions: ["start"], crashLoopDetected: false,
@@ -590,7 +612,7 @@ it("names the mod a failed Start could not load, from its recorded diagnosis", a
         await act(async () => root.render(<TestLocalization>{<ManagedServerControls observedGameState="stopped" {...progressProps} />} </TestLocalization>));
         await act(async () => container.querySelector("button")!.click());
         expect(container.textContent).toContain("Server could not start");
-        expect(container.textContent).toContain("Mod OffTheClock.RichMerchants needs TaleWorlds.CampaignSystem.ViewModelCollection. Upload the dependency or disable this mod in Mods. Then start again.");
+        expect(container.textContent).toContain("Mod OffTheClock.RichMerchants failed to load: missing assembly TaleWorlds.CampaignSystem.ViewModelCollection. Disable it and mods that depend on it, then start again.");
         expect(container.textContent).not.toContain("You can press Start to try again.");
     } finally { await act(async () => root.unmount()); }
 });

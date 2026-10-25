@@ -250,6 +250,7 @@ it("reads only the exact accepted Start afresh and propagates access revocation"
 it("accepts a failed Start's mod-load diagnosis only in its closed shape", async () => {
     const failed = { ...startStatus, state: "failed", progress: "Mod Broken.Mod failed to load. Disable it and start again." };
     for (const modLoadFailure of [{ modId: "Broken.Mod", reason: "load-error" }, { modId: "Broken.Mod", reason: "missing-dll" },
+        { modId: "Bannerlord.UIExtenderEx", reason: "missing-assembly", assembly: "TaleWorlds.GauntletUI" },
         { modId: "Broken.Mod", reason: "missing-assembly", assembly: "TaleWorlds.CampaignSystem.ViewModelCollection" }]) {
         vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...failed, modLoadFailure }));
         expect(await getMyServerStartStatus(TOKEN, server.serverId, startJobId)).toEqual({ ...failed, modLoadFailure });

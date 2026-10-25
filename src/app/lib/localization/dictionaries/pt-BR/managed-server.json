@@ -968,7 +968,7 @@
   "mods.archive.invalidPath": "Não é possível enviar {path}: o caminho é longo ou profundo demais, ou usa caracteres não aceitos.",
   "mods.archive.duplicatePath": "{path} difere de outro arquivo apenas por maiúsculas, minúsculas ou acentos.",
   "mods.archive.compressionRatio": "A pasta compacta mais de 100:1, o que o servidor recusa.",
-  "controls.modLoadFailedMissingAssembly": "O mod {modId} precisa de {assembly}. Envie a dependência ou desative este mod em Mods. Depois inicie novamente.",
+  "controls.modLoadFailedMissingAssembly": "Não foi possível carregar o mod {modId}: falta o assembly {assembly}. Desative-o e os mods que dependem dele e inicie novamente.",
   "controls.modLoadFailedMissingDll": "Falta ao mod {modId} uma DLL listada em SubModule.xml. Envie o mod completo com a pasta bin ou desative-o em Mods. Depois inicie novamente.",
   "controls.modLoadFailed": "O mod {modId} não carregou. Envie uma versão compatível com esta versão do servidor e suas dependências ou desative-o em Mods. Depois inicie novamente.",
   "controls.modLoadFailedHarmony": "O mod {modId} não conseguiu carregar o Harmony (0Harmony.dll) fornecido pelo servidor. É um problema da hospedagem; reenviar Bannerlord.Harmony não resolve. Contate o suporte ou desative este mod e os que dependem dele em Mods antes de iniciar novamente.",

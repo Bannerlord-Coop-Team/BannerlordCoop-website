@@ -967,7 +967,7 @@
   "mods.archive.invalidPath": "{path}은(는) 업로드할 수 없습니다. 경로가 너무 길거나 깊거나 지원하지 않는 문자를 사용합니다.",
   "mods.archive.duplicatePath": "{path}은(는) 대소문자나 악센트만 다른 파일이 이미 있습니다.",
   "mods.archive.compressionRatio": "폴더 압축률이 100:1을 넘어 서버가 거부합니다.",
-  "controls.modLoadFailedMissingAssembly": "모드 {modId}에 {assembly}이(가) 필요합니다. 종속 모드를 업로드하거나 Mods에서 이 모드를 비활성화한 뒤 다시 시작하세요.",
+  "controls.modLoadFailedMissingAssembly": "모드 {modId}을(를) 불러오지 못했습니다. 어셈블리 {assembly}이(가) 없습니다. 이 모드와 이 모드에 의존하는 모드를 비활성화한 후 다시 시작하세요.",
   "controls.modLoadFailedMissingDll": "모드 {modId}의 SubModule.xml에 나열된 DLL이 없습니다. bin 폴더를 포함한 전체 모드를 업로드하거나 Mods에서 비활성화한 뒤 다시 시작하세요.",
   "controls.modLoadFailed": "모드 {modId}을(를) 로드할 수 없습니다. 이 서버 버전 및 종속성과 호환되는 버전을 업로드하거나 Mods에서 비활성화한 뒤 다시 시작하세요.",
   "controls.modLoadFailedHarmony": "모드 {modId}에서 서버가 제공하는 Harmony(0Harmony.dll)를 불러오지 못했습니다. 호스팅 문제이므로 Bannerlord.Harmony를 다시 업로드해도 해결되지 않습니다. 지원팀에 문의하거나 Mods에서 이 모드와 이 모드에 의존하는 모드를 비활성화한 뒤 다시 시작하세요.",

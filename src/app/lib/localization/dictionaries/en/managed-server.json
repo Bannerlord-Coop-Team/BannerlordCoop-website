@@ -968,7 +968,7 @@
   "mods.archive.invalidPath": "{path} cannot be uploaded: its path is too long, too deep, or uses unsupported characters.",
   "mods.archive.duplicatePath": "{path} differs from another file only by letter case or accents.",
   "mods.archive.compressionRatio": "The folder compresses more than 100:1, which the server refuses.",
-  "controls.modLoadFailedMissingAssembly": "Mod {modId} needs {assembly}. Upload the dependency or disable this mod in Mods. Then start again.",
+  "controls.modLoadFailedMissingAssembly": "Mod {modId} failed to load: missing assembly {assembly}. Disable it and mods that depend on it, then start again.",
   "controls.modLoadFailedMissingDll": "Mod {modId} is missing a DLL listed in SubModule.xml. Upload the complete mod including its bin folder, or disable it in Mods. Then start again.",
   "controls.modLoadFailed": "Mod {modId} could not load. Upload a version compatible with this server build and its dependencies, or disable it in Mods. Then start again.",
   "controls.modLoadFailedHarmony": "Mod {modId} could not load the server-provided Harmony (0Harmony.dll). This is a hosting problem; re-uploading Bannerlord.Harmony will not fix it. Contact support, or disable this mod and its dependants in Mods before starting again.",
