@@ -892,7 +892,7 @@
   "hostingOffer.feature.online": "24시간 온라인, PC를 켜 둘 필요 없음",
   "hostingOffer.feature.backups": "매일 자동 백업",
   "hostingOffer.feature.updates": "게임 업데이트는 저희가 처리",
-  "hostingOffer.feature.console": "브라우저에서 서버 치트 실행",
+  "hostingOffer.feature.support": "우선 지원",
   "hostingOffer.price": "월 {amount}",
   "hostingOffer.tier": "Patreon {tier} 티어",
   "hostingOffer.cta": "서버 받기",

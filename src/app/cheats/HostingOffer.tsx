@@ -1,12 +1,10 @@
 "use client";
 
 import { cheatsLabelClass } from "@/app/cheats/locale";
+import { PATREON_HOSTING_CHECKOUT_URL } from "@/app/lib/hosting/patreon-checkout";
 import { useTranslations } from "@/app/lib/localization/client";
 import { ArrowRight, Check, X } from "lucide-react";
 import Image from "next/image";
-
-/** Patreon checkout for the $20 Veteran tier (reward 28995946); a qualifying membership funds one managed server. */
-export const HOSTING_OFFER_CHECKOUT_URL = "https://www.patreon.com/checkout/BannerlordCoop?rid=28995946";
 
 /** Patreon tier name, shown verbatim in every locale like other product names. */
 export const HOSTING_OFFER_TIER = "Veteran";
@@ -14,7 +12,7 @@ export const HOSTING_OFFER_TIER = "Veteran";
 /** Monthly tier price in whole US dollars; the campaign bills in USD. */
 export const HOSTING_OFFER_PRICE_USD = 20;
 
-const features = ["online", "backups", "updates", "console"] as const;
+const features = ["online", "backups", "updates", "support"] as const;
 
 /**
  * Advertises managed hosting through the Veteran tier's Patreon checkout. The rail layout fills the
@@ -92,7 +90,7 @@ export function HostingOffer({ layout, onHide }: { layout: "rail" | "inline"; on
                     </div>
                     <div className={inline ? "mt-4 sm:mt-0 sm:w-64" : "mt-4"}>
                         <a
-                            href={HOSTING_OFFER_CHECKOUT_URL}
+                            href={PATREON_HOSTING_CHECKOUT_URL}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-sm border border-crimson bg-crimson px-5 font-label text-sm font-semibold uppercase tracking-[0.14em] text-white transition-colors duration-200 hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-background [&:lang(zh-CN)]:normal-case [&:lang(zh-CN)]:tracking-normal"

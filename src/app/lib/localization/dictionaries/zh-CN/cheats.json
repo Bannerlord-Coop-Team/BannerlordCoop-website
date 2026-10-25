@@ -892,7 +892,7 @@
   "hostingOffer.feature.online": "全天候在线，无需一直开着电脑",
   "hostingOffer.feature.backups": "每日自动备份",
   "hostingOffer.feature.updates": "游戏更新交给我们",
-  "hostingOffer.feature.console": "在浏览器中执行服务器作弊指令",
+  "hostingOffer.feature.support": "优先支持",
   "hostingOffer.price": "每月 {amount}",
   "hostingOffer.tier": "Patreon {tier} 档位",
   "hostingOffer.cta": "获取你的服务器",

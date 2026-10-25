@@ -892,7 +892,7 @@
   "hostingOffer.feature.online": "7/24 çevrimiçi, PC'nizi açık bırakmanız gerekmez",
   "hostingOffer.feature.backups": "Otomatik günlük yedekler",
   "hostingOffer.feature.updates": "Oyun güncellemeleri bizden",
-  "hostingOffer.feature.console": "Tarayıcınızdan sunucu hileleri",
+  "hostingOffer.feature.support": "Öncelikli destek",
   "hostingOffer.price": "Aylık {amount}",
   "hostingOffer.tier": "Patreon {tier} kademesi",
   "hostingOffer.cta": "Sunucunuzu alın",
