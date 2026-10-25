@@ -290,7 +290,7 @@ export function ServerSettingsPanel({ name, visibility, visibilityAccess, releas
             </SettingRow>}
             {visibleSettings === 0 && <p role="status" className="px-5 py-6 text-center text-sm text-foreground-muted">{t("settingsPanel.noSettingsMatchSearch")}</p>}
         </div>
-        {/* Root overflow clipping defeats position: sticky, so unsaved changes pin the bar to the viewport instead. */}
+        {/* Unsaved changes pin the bar to the bottom of the viewport so it stays visible while the form scrolls. */}
         {dirty && <div aria-hidden="true" className="h-28 sm:h-20" />}
         <div data-unsaved-bar={dirty ? "pinned" : undefined} className={dirty ? "fixed inset-x-0 bottom-0 z-30 border-t border-gold/60 bg-surface shadow-[0_-12px_32px_rgba(0,0,0,0.45)]" : "rounded-b-lg border-t border-white/10 bg-surface"}>
             <div className={dirty ? "bg-linear-to-r from-gold/15 to-gold/5" : ""}>

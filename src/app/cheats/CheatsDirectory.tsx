@@ -128,7 +128,7 @@ export function CheatsDirectory({
 }: {
     commands: readonly CheatCommand[];
     initialQuery: CheatsQuery;
-    /** Optional third column beside the command list, shown from xl up. */
+    /** Optional third column beside the command list, shown from xl up and pinned on viewports at least 50rem tall. */
     aside?: ReactNode;
 }) {
     const translator = useTranslations("cheats");
@@ -331,7 +331,7 @@ export function CheatsDirectory({
 
     return (
         <div className={`grid min-w-0 grid-cols-1 gap-5 overflow-x-clip min-[800px]:grid-cols-[13rem_minmax(0,1fr)] min-[800px]:items-start min-[800px]:gap-6${aside ? " xl:grid-cols-[13rem_minmax(0,1fr)_18.75rem]" : ""}`}>
-            <aside className="min-w-0 border border-white/10 bg-surface min-[800px]:sticky min-[800px]:top-20">
+            <aside className="min-w-0 border border-white/10 bg-surface min-[800px]:sticky min-[800px]:top-20 min-[800px]:max-h-[calc(100svh-6rem)] min-[800px]:overflow-y-auto min-[800px]:overscroll-contain">
                 <div className="border-b border-white/10 px-4 py-3">
                     <p className={`${cheatsLabelClass("eyebrow")} text-[0.65rem]`}>
                         {t("ui.categories")}
@@ -558,7 +558,13 @@ export function CheatsDirectory({
                     </div>
                 )}
             </div>
-            {aside && <div className="hidden min-w-0 xl:block">{aside}</div>}
+            {aside && (
+                // Pinned only when the viewport fits the whole column below the top-20 offset; the tallest
+                // locale's hosting card (French, about 693px) plus top-20 needs about 773px of the 800px.
+                <div className="hidden min-w-0 xl:block xl:[@media(min-height:50rem)]:sticky xl:[@media(min-height:50rem)]:top-20">
+                    {aside}
+                </div>
+            )}
         </div>
     );
 }

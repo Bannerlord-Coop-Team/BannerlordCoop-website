@@ -55,10 +55,19 @@ html {
   margin-inline: auto;
 }
 
+/* clip, unlike hidden, does not make body a scroll container, so position: sticky keeps working. */
 html,
 body {
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
+}
+
+/* Browsers without clip (Safari < 16, Chrome < 90) keep hidden: no horizontal scrolling, sticky stays inert. */
+@supports not (overflow-x: clip) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
 }
 
 body {
