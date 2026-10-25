@@ -892,7 +892,7 @@
   "hostingOffer.feature.online": "24/7 online, dein PC kann aus bleiben",
   "hostingOffer.feature.backups": "Automatische tägliche Backups",
   "hostingOffer.feature.updates": "Spiel-Updates übernehmen wir",
-  "hostingOffer.feature.console": "Server-Cheats direkt im Browser",
+  "hostingOffer.feature.support": "Bevorzugter Support",
   "hostingOffer.price": "{amount}/Monat",
   "hostingOffer.tier": "Patreon-Stufe {tier}",
   "hostingOffer.cta": "Hol dir deinen Server",
