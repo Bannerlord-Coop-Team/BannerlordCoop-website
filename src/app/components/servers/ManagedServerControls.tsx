@@ -14,14 +14,17 @@ import { useRouter } from "next/navigation";
 import type { ManagedStartStatus } from "@/app/lib/hosting/my-servers-server";
 import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
 import { modLoadFailureMessage } from "./server-mods-messages";
-import { Check, Download, LoaderCircle, Play, RotateCw, Square } from "lucide-react";
+import { Check, Download, KeyRound, LoaderCircle, Play, RotateCw, Square } from "lucide-react";
+import { filePrimaryButtonClass } from "./server-file-styles";
+import { WorkspaceCard } from "./server-workspace-ui";
 import { useEffect, useEffectEvent, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { isMoveInProgress } from "@/app/lib/hosting/server-move";
 import { DisabledControlHint } from "./DisabledControlHint";
+import { useOverflowMenuSlot } from "./OverflowMenu";
 import { useManagedServerMove } from "./managed-server-move-context";
 import { useRevealServerAddress } from "./ServerManagementWorkspace";
-import { segmentedButtonClass, segmentedGroupClass, toolbarButtonClass } from "./segmented-controls";
+import { menuItemClass, segmentedButtonClass, segmentedGroupClass, toolbarButtonClass } from "./segmented-controls";
 
 const TRANSITIONAL_STATES = new Set([
     "provisioning",
@@ -153,6 +156,7 @@ export function ManagedServerControls({
     const { session: pollingSession, timedOutSession, beginPolling, endPolling } = useManagedServerPolling();
     const consoleSignals = useManagedConsoleSignals();
     const statusSlot = useManagedServerStatusSlot();
+    const menuSlot = useOverflowMenuSlot();
     // Stopping or restarting mid-save would cut the owner's save short, so both wait for it.
     const saving = useManagedServerSaves()?.isSaving(serverId) ?? false;
     // A move to another machine owns the server until it finishes; an announced one leaves the controls usable.
@@ -322,8 +326,13 @@ export function ManagedServerControls({
     }, [consoleSignals, trackingRestart]);
 
     const trackingStart = startJobId !== null && !["succeeded", "failed", "cancelled"].includes(startStatus?.state ?? "");
-    const insightPanel = runtimeInsight && <div className="max-w-xl space-y-2 text-sm leading-6 text-foreground-muted">
-        {pendingOperation === null && !trackingStart && !trackingStop && !trackingRestart && (runtimeInsight.modLoadFailure && ["stopped", "failed"].includes(observedGameState)
+    const showInsightDetails = pendingOperation === null && !trackingStart && !trackingStop && !trackingRestart;
+    const modLoadFailed = !!runtimeInsight?.modLoadFailure && ["stopped", "failed"].includes(observedGameState);
+    // Rendered only when it has something to say, so it never leaves an empty block in the status row.
+    const hasInsight = !!runtimeInsight && (!!runtimeInsight.failureCode
+        || (showInsightDetails && (modLoadFailed || !!runtimeInsight.failureMessage || !!runtimeInsight.recommendation)));
+    const insightPanel = runtimeInsight && hasInsight && <div className="max-w-xl space-y-2 text-sm leading-6 text-foreground-muted">
+        {showInsightDetails && (runtimeInsight.modLoadFailure && ["stopped", "failed"].includes(observedGameState)
             ? <p className="text-red-200">{modLoadFailureMessage(runtimeInsight.modLoadFailure, t)}</p>
             : <>{runtimeInsight.failureMessage && <p className="text-red-200">{runtimeInsight.failureMessage}</p>}
                 {runtimeInsight.recommendation && <p>{runtimeInsight.recommendation}</p>}</>)}
@@ -489,12 +498,26 @@ export function ManagedServerControls({
         </div>
     ) : null;
 
+    // Inside the console header, update sits in its overflow menu and notices move to the status row below it.
+    const updateAction = <ControlButton
+        label={t("controls.updateNow")}
+        icon={Download}
+        disabled={busy || trackingRestart}
+        pending={pendingOperation === "update-now"}
+        menuItem={menuSlot !== undefined}
+        onClick={() => requestOperation("update-now")}
+    />;
+    const alreadyStopped = !busy && canStart && operationState === "stopped" && observedGameState === "stopped"
+        && <p className="max-w-sm text-xs text-foreground-muted">{t("controls.alreadyStopped")}</p>;
+    const noticesInStatusRow = statusSlot !== undefined;
+    const notices = <>{insightPanel}{alreadyStopped}{statusArea}</>;
+
     return (
-        <div className="flex flex-col items-start gap-2">
-            {insightPanel}
+        <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-start">
+            {!noticesInStatusRow && insightPanel}
             <DisabledControlHint disabled={moving} message={t("move.controlsUnavailable")}>
-                <div className="flex flex-wrap gap-2">
-                    <div role="group" aria-label={t("controls.serverPower")} className={segmentedGroupClass}>
+                <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                    <div role="group" aria-label={t("controls.serverPower")} className={`${segmentedGroupClass} w-full sm:w-auto`}>
                         <ControlButton
                             segmented
                             label={t("controls.start")}
@@ -520,17 +543,11 @@ export function ManagedServerControls({
                             onClick={() => requestOperation("restart-game")}
                         />
                     </div>
-                    <ControlButton
-                        label={t("controls.updateNow")}
-                        icon={Download}
-                        disabled={busy || trackingRestart}
-                        pending={pendingOperation === "update-now"}
-                        onClick={() => requestOperation("update-now")}
-                    />
+                    {menuSlot === undefined && updateAction}
                 </div>
             </DisabledControlHint>
-            {!busy && canStart && operationState === "stopped" && observedGameState === "stopped" && <p className="max-w-sm text-xs text-foreground-muted">{t("controls.alreadyStopped")}</p>}
-            {statusArea !== null && (statusSlot === undefined ? statusArea : statusSlot ? createPortal(statusArea, statusSlot) : null)}
+            {menuSlot && createPortal(<DisabledControlHint disabled={moving} message={t("move.controlsUnavailable")}>{updateAction}</DisabledControlHint>, menuSlot)}
+            {noticesInStatusRow ? statusSlot && createPortal(notices, statusSlot) : <>{alreadyStopped}{statusArea}</>}
         </div>
     );
 }
@@ -645,19 +662,17 @@ export function ManagedServerPassword({ serverId, accessRole, operationState, ex
         });
     }
 
-    return <section aria-labelledby="game-password-heading" className="rounded-lg border border-white/10 bg-surface p-5">
-        <h2 id="game-password-heading" className="text-base font-semibold">{t("controls.gamePassword")}</h2>
-        <p className="mt-1 text-sm leading-6 text-foreground-muted">{t("controls.controlsWhoCanJoinTheGameChangingItWhileRunning")}</p>
-        <form onSubmit={savePassword} className="mt-4 flex max-w-xl flex-col gap-3 sm:flex-row sm:items-end">
-            <label className="min-w-0 flex-1 text-sm font-medium">{t("controls.newGamePassword")}<input className="mt-2 block min-h-11 w-full rounded-md border border-white/15 bg-background px-3 py-2 focus-visible:outline-2 focus-visible:outline-gold disabled:opacity-40" type="password" autoComplete="new-password" required maxLength={128} value={password} onChange={event => setPassword(event.target.value)} disabled={busy} />
+    return <WorkspaceCard headingId="game-password-heading" title={t("controls.gamePassword")} icon={KeyRound}>
+        <form onSubmit={savePassword} className="flex max-w-xl flex-col gap-2 sm:flex-row sm:items-end">
+            <label className="min-w-0 flex-1 text-sm font-medium">{t("controls.newGamePassword")}<input className="mt-2 block min-h-10 w-full rounded-md border border-white/15 bg-background px-3 py-2 text-sm outline-none focus:border-gold focus:ring-1 focus:ring-gold disabled:opacity-40" type="password" autoComplete="new-password" required maxLength={128} value={password} onChange={event => setPassword(event.target.value)} disabled={busy} />
             </label>
-            <button type="submit" disabled={busy || !password} className="min-h-11 rounded-md border border-gold/40 bg-gold/10 px-4 py-2 text-sm text-gold focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40">{isPending ? t("controls.saving") : t("controls.setPassword")}</button>
+            <button type="submit" disabled={busy || !password} className={`${filePrimaryButtonClass} shrink-0`}>{isPending ? t("controls.saving") : t("controls.setPassword")}</button>
         </form>
         {message && <p role="status" className="mt-3 text-sm leading-6 text-foreground-muted">{message}</p>}
-    </section>;
+    </WorkspaceCard>;
 }
 
-/** Renders a lifecycle action with consistent target size and pending feedback, alone or inside a segmented group. */
+/** Renders a lifecycle action with consistent target size and pending feedback, as a toolbar button, segment or menu item. */
 function ControlButton({
     label,
     icon: Icon,
@@ -665,6 +680,7 @@ function ControlButton({
     pending,
     onClick,
     segmented = false,
+    menuItem = false,
 }: {
     label: string;
     icon: typeof Play;
@@ -672,13 +688,15 @@ function ControlButton({
     pending: boolean;
     onClick: () => void;
     segmented?: boolean;
+    menuItem?: boolean;
 }) {
     return (
         <button
             type="button"
+            role={menuItem ? "menuitem" : undefined}
             disabled={disabled}
             onClick={onClick}
-            className={segmented ? segmentedButtonClass : toolbarButtonClass}
+            className={menuItem ? menuItemClass : segmented ? `${segmentedButtonClass} flex-1 sm:flex-none` : toolbarButtonClass}
         >
             <Icon aria-hidden="true" className={`size-3.5 ${pending ? "animate-pulse" : ""}`} />
             {pending ? `${label}…` : label}

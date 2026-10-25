@@ -11,7 +11,7 @@ import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 const NOTICE_MILLISECONDS = 10_000;
 
 // Presents authenticated log downloads with detailed localized diagnostics.
-export function DownloadServerLogButton({ serverId, userId, className }: { serverId?: string; userId?: string; className: string }) {
+export function DownloadServerLogButton({ serverId, userId, className, role }: { serverId?: string; userId?: string; className: string; role?: "menuitem" }) {
     const { t } = useTranslations("managed-server");
     const [pending, setPending] = useState(false);
     const [error, setError] = useState("");
@@ -49,7 +49,7 @@ export function DownloadServerLogButton({ serverId, userId, className }: { serve
 
     // Feedback floats under the button so toolbars never reflow around it.
     return <span className="relative inline-flex">
-        <button type="button" disabled={!serverId || !userId || pending} onClick={download}
+        <button type="button" role={role} disabled={!serverId || !userId || pending} onClick={download}
             title={t("downloadServerLogButton.downloadTheLatestLogFileFromTheServerSLogs")}
             className={className}>
             {pending ? <LoaderCircle className="size-4 animate-spin" aria-hidden="true" /> : <Download className="size-4" aria-hidden="true" />}

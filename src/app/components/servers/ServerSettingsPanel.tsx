@@ -2,7 +2,7 @@
 
 import { useTranslations } from "@/app/lib/localization/client";
 
-import { useEffect, useRef, useState, useTransition, type FormEvent } from "react";
+import { useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { managedServerNameMessage, managedServerNameProblem } from "@/app/servers/managed-server-name-validation";
 import { setServerVisibility } from "@/app/servers/server-visibility-actions";
@@ -10,11 +10,13 @@ import { changeServerRelease, readServerReleaseStatus } from "@/app/servers/serv
 import { saveServerSettings, type ServerSettingsField, type ServerSettingsPrevious } from "@/app/servers/server-settings-actions";
 import { HOSTING_MAINTENANCE_SLOTS, HOSTING_TIME_ZONE, type MaintenanceSlot, type OwnerSettingsMutation } from "../../../../supabase/functions/_shared/server-settings-contract";
 import type { ReleaseChannel, ReleaseStatus } from "../../../../supabase/functions/_shared/server-release-contract";
-import { CircleAlert, Globe2, LockKeyhole, Search } from "lucide-react";
+import { CircleAlert, Globe2, LockKeyhole, Search, Settings2 } from "lucide-react";
+import { WorkspaceCard, workspaceNoticeClass } from "./server-workspace-ui";
 import { ManagedServerManagerAccess } from "./ManagedServerManagerAccess";
 import type { ServerManager } from "@/app/lib/hosting/server-managers";
 
 const button = "inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-white/15 bg-white/[0.03] px-3 py-2 text-sm font-medium text-foreground disabled:cursor-not-allowed disabled:opacity-40";
+const settingControlClass = "min-h-10 w-full rounded-md border border-white/15 bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-gold focus:ring-1 focus:ring-gold disabled:cursor-not-allowed disabled:opacity-50";
 const ACTIVE_RELEASE_JOB_STATES = new Set(["queued", "running", "retry-wait"]);
 
 // Adds a watched release job without replacing an unchanged set.
@@ -117,10 +119,10 @@ export function ServerSettingsPanel({ name, visibility, visibilityAccess, releas
     const nameError = fieldErrors.displayName ?? (nameDirty && nameTouched ? nameProblem(nameState.draft) : null);
     const searchTerm = settingsSearch.trim().toLocaleLowerCase();
     const matchesSettings = (text: string) => !searchTerm || text.toLocaleLowerCase().includes(searchTerm);
-    const showName = matchesSettings(`${t("settingsPanel.serverName")} ${t("settingsPanel.theServerDisplayName")}`);
-    const showMaintenance = !!settingsAccess && matchesSettings(`${t("settingsPanel.maintenanceWindow")} ${t("settingsPanel.maintenanceHelp", { timezone: HOSTING_TIME_ZONE })}`);
-    const showRelease = !!releaseAccess && matchesSettings(`${t("settingsPanel.releaseChannel")} ${t("settingsPanel.savingADifferentChannelStopsTheServerBacksUpThe")} ${t("settingsPanel.stable")} ${t("settingsPanel.nightly")}`);
-    const showVisibility = matchesSettings(`${t("settingsPanel.directoryVisibility")} ${t("settingsPanel.publicVisibilityAllowsThisServerToAppearInThePublic")} ${t("settingsPanel.private")} ${t("settingsPanel.public")}`);
+    const showName = matchesSettings(t("settingsPanel.serverName"));
+    const showMaintenance = !!settingsAccess && matchesSettings(`${t("settingsPanel.maintenanceWindow")} ${t("settingsPanel.maintenanceSlot", { slot: "" })}`);
+    const showRelease = !!releaseAccess && matchesSettings(`${t("settingsPanel.releaseChannel")} ${t("settingsPanel.stable")} ${t("settingsPanel.nightly")}`);
+    const showVisibility = matchesSettings(`${t("settingsPanel.directoryVisibility")} ${t("settingsPanel.private")} ${t("settingsPanel.public")} ${t("settingsPanel.hiddenFromThePublicDirectory")} ${t("settingsPanel.includeThisServerInThePublicDirectory")}`);
     const visibleSettings = Number(showName) + Number(showMaintenance) + Number(showRelease) + Number(showVisibility);
 
     // Checks a name draft with the rules its save path enforces, so problems appear beside the field.
@@ -233,73 +235,66 @@ export function ServerSettingsPanel({ name, visibility, visibilityAccess, releas
     }
 
     return <>
-    <section aria-labelledby="server-settings-heading" className="min-w-0 rounded-lg border border-white/10 bg-surface">
-        <div className="border-b border-white/10 p-5">
-            <h2 id="server-settings-heading" className="text-base font-semibold">{t("settingsPanel.serverSettings")}</h2>
-            <p className="mt-1 text-sm leading-6 text-foreground-muted">{t("settingsPanel.changesApplyOnlyWhenYouSave")}</p>
+    <WorkspaceCard headingId="server-settings-heading" title={t("settingsPanel.serverSettings")} icon={Settings2} flush
+        actions={<>
             <label htmlFor="settings-search" className="sr-only">{t("settingsPanel.searchSettings")}</label>
-            <div className="relative mt-4 max-w-xl">
-                <Search aria-hidden="true" className="pointer-events-none absolute top-3 left-3 size-4 text-foreground-muted" />
-                <input id="settings-search" type="search" value={settingsSearch} onChange={event => setSettingsSearch(event.target.value)} placeholder={t("settingsPanel.searchSettingsPlaceholder")} className="w-full rounded-md border border-white/15 bg-background py-2.5 pr-3 pl-9 text-sm text-foreground outline-none focus:border-gold focus:ring-1 focus:ring-gold" />
+            <div className="relative w-full sm:w-64">
+                <Search aria-hidden="true" className="pointer-events-none absolute top-2.5 left-3 size-4 text-foreground-muted" />
+                <input id="settings-search" type="search" value={settingsSearch} onChange={event => setSettingsSearch(event.target.value)} placeholder={t("settingsPanel.searchSettings")} className="min-h-10 w-full rounded-md border border-white/15 bg-background py-2 pr-3 pl-9 text-sm text-foreground outline-none focus:border-gold focus:ring-1 focus:ring-gold" />
             </div>
-        </div>
+        </>}>
         <form onSubmit={save} noValidate>
-        <div className="max-w-3xl space-y-5 p-5">
-            {showName && <div>
-                <label htmlFor="settings-server-name" className="text-sm font-medium">{t("settingsPanel.serverName")}</label>
+        <div className="divide-y divide-white/10">
+            {showName && <SettingRow label={<label htmlFor="settings-server-name">{t("settingsPanel.serverName")}</label>}>
                 <input id="settings-server-name" ref={nameInput} disabled={!canRename || pending || updateBusy} required minLength={3} maxLength={48} value={nameState.draft}
-                    aria-invalid={nameError ? true : undefined} aria-describedby={nameError ? "settings-server-name-error settings-server-name-help" : "settings-server-name-help"}
+                    aria-invalid={nameError ? true : undefined} aria-describedby={nameError ? "settings-server-name-error" : canRename ? undefined : "settings-server-name-help"}
                     onChange={event => { setNameState(current => ({ ...current, draft: event.target.value })); setFieldErrors(current => ({ ...current, displayName: undefined })); setMessage(""); }}
                     onBlur={() => setNameTouched(true)}
-                    className="mt-2 w-full rounded-md border border-white/15 bg-background px-3 py-2.5 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-red-400" />
+                    className={`${settingControlClass} aria-[invalid=true]:border-red-400`} />
                 {nameError && <p id="settings-server-name-error" role="alert" className="mt-2 text-sm text-red-200">{nameError}</p>}
-                <p id="settings-server-name-help" className="mt-2 text-xs leading-5 text-foreground-muted">{canRename ? t("settingsPanel.theServerDisplayName") : t("settingsPanel.renamingIsUnavailableForThisServerOrYourAccessLevel")}</p>
-            </div>}
-            {showMaintenance && settingsAccess && <div>
-                <label htmlFor="settings-maintenance-window" className="text-sm font-medium">{t("settingsPanel.maintenanceWindow")}</label>
-                <select id="settings-maintenance-window" aria-describedby={fieldErrors.maintenanceSlot ? "maintenance-window-error maintenance-window-help" : "maintenance-window-help"} aria-invalid={fieldErrors.maintenanceSlot ? true : undefined}
+                {!canRename && <p id="settings-server-name-help" className="mt-2 text-xs leading-5 text-foreground-muted">{t("settingsPanel.renamingIsUnavailableForThisServerOrYourAccessLevel")}</p>}
+            </SettingRow>}
+            {showMaintenance && settingsAccess && <SettingRow label={<label htmlFor="settings-maintenance-window">{t("settingsPanel.maintenanceWindow")}</label>}>
+                <select id="settings-maintenance-window" aria-describedby={fieldErrors.maintenanceSlot ? "maintenance-window-error" : undefined} aria-invalid={fieldErrors.maintenanceSlot ? true : undefined}
                     value={hasMaintenance ? maintenanceState.draft : ""} disabled={!canChangeSettings || pending || updateBusy}
                     onChange={event => { setMaintenanceState(current => ({ ...current, draft: event.target.value })); setFieldErrors(current => ({ ...current, maintenanceSlot: undefined })); setMessage(""); }}
-                    className="mt-2 w-full rounded-md border border-white/15 bg-background px-3 py-2.5 text-sm disabled:opacity-50 aria-[invalid=true]:border-red-400">
+                    className={`${settingControlClass} aria-[invalid=true]:border-red-400`}>
                     {!hasMaintenance && <option value="">{t("settingsPanel.maintenanceWindowUnavailable")}</option>}
                     {HOSTING_MAINTENANCE_SLOTS.map(slot => <option key={slot} value={slot}>{t("settingsPanel.maintenanceSlot", { slot: slot.replace("-", "–") })}</option>)}
                 </select>
                 {fieldErrors.maintenanceSlot && <p id="maintenance-window-error" role="alert" className="mt-2 text-sm text-red-200">{fieldErrors.maintenanceSlot}</p>}
-                <p id="maintenance-window-help" className="mt-2 text-sm leading-6 text-foreground-muted">{t("settingsPanel.maintenanceHelp", { timezone: HOSTING_TIME_ZONE })}</p>
                 {!hasMaintenance && <p role="status" className="mt-2 text-sm text-foreground-muted">{t("settingsPanel.maintenanceSettingsCouldNotBeLoadedRefreshOrContactHosting")}</p>}
                 {hasMaintenance && !settingsAccess.canEdit && <p className="mt-2 text-xs text-foreground-muted">{t("settingsPanel.onlyTheServerOwnerCanChangeHostingSettings")}</p>}
-            </div>}
-            {showRelease && releaseAccess && <div>
-                <label htmlFor="settings-release-channel" className="text-sm font-medium">{t("settingsPanel.releaseChannel")}</label>
-                <select id="settings-release-channel" aria-describedby="release-channel-help" value={channelState.draft} disabled={!releaseAccess.canEdit || pending || updateBusy}
+            </SettingRow>}
+            {showRelease && releaseAccess && <SettingRow label={<label htmlFor="settings-release-channel">{t("settingsPanel.releaseChannel")}</label>}>
+                <select id="settings-release-channel" aria-describedby={channelDirty ? "release-channel-help" : undefined} value={channelState.draft} disabled={!releaseAccess.canEdit || pending || updateBusy}
                     onChange={event => { setChannelState(current => ({ ...current, draft: event.target.value as ReleaseChannel })); setMessage(""); }}
-                    className="mt-2 w-full rounded-md border border-white/15 bg-background px-3 py-2.5 text-sm disabled:opacity-50">
+                    className={settingControlClass}>
                     <option value="stable">{t("settingsPanel.stable")}</option><option value="nightly">{t("settingsPanel.nightly")}</option>
                 </select>
-                <p id="release-channel-help" className="mt-2 text-sm leading-6 text-foreground-muted">{t("settingsPanel.savingADifferentChannelStopsTheServerBacksUpThe")}</p>
-                <div role="status" aria-live="polite" className="mt-3 text-sm text-foreground-muted">
-                    {shownReleaseJob && <p>{shownReleaseJob.state === "succeeded" ? t("settingsPanel.releaseUpdateCompleted") : shownReleaseJob.state === "failed" ? t("settingsPanel.theReleaseUpdateDidnTFinishYouCanTryAgainOnceTheServer") : shownReleaseJob.state === "cancelled" ? t("settingsPanel.releaseUpdateWasCancelled") : shownReleaseJob.progress}</p>}
-                    {progressError && <p>{progressError} <button type="button" className="underline" onClick={() => setPollVersion(value => value + 1)}>{t("settingsPanel.checkProgress")}</button></p>}
+                {/* The restart warning matters only once a different channel is about to be saved. */}
+                {channelDirty && <p id="release-channel-help" className={`mt-3 ${workspaceNoticeClass}`}>{t("settingsPanel.savingADifferentChannelStopsTheServerBacksUpThe")}</p>}
+                <div role="status" aria-live="polite" className="text-sm text-foreground-muted empty:hidden">
+                    {shownReleaseJob && <p className="mt-3">{shownReleaseJob.state === "succeeded" ? t("settingsPanel.releaseUpdateCompleted") : shownReleaseJob.state === "failed" ? t("settingsPanel.theReleaseUpdateDidnTFinishYouCanTryAgainOnceTheServer") : shownReleaseJob.state === "cancelled" ? t("settingsPanel.releaseUpdateWasCancelled") : shownReleaseJob.progress}</p>}
+                    {progressError && <p className="mt-3">{progressError} <button type="button" className="underline" onClick={() => setPollVersion(value => value + 1)}>{t("settingsPanel.checkProgress")}</button></p>}
                 </div>
-            </div>}
-            {showVisibility && <fieldset disabled={!canChangeVisibility || pending}>
-                <legend className="text-sm font-medium">{t("settingsPanel.directoryVisibility")}</legend>
-                <p className="mt-2 text-sm leading-6 text-foreground-muted">{t("settingsPanel.publicVisibilityAllowsThisServerToAppearInThePublic")}</p>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    {([{ value: "private", title: t("settingsPanel.private"), description: t("settingsPanel.hiddenFromThePublicDirectory"), icon: LockKeyhole }, { value: "public", title: t("settingsPanel.public"), description: t("settingsPanel.includeThisServerInThePublicDirectory"), icon: Globe2 }] as const).map(({ value, title, description, icon: Icon }) => <label key={value} className={`flex items-start gap-3 rounded-md border p-4 ${!canChangeVisibility || pending ? "cursor-not-allowed opacity-50" : "cursor-pointer"} ${visibilityState.draft === value ? "border-gold/50 bg-gold/5" : "border-white/10"}`}>
+            </SettingRow>}
+            {showVisibility && <SettingRow label={<span id="settings-visibility-label">{t("settingsPanel.directoryVisibility")}</span>}>
+                <fieldset aria-labelledby="settings-visibility-label" disabled={!canChangeVisibility || pending} className="grid gap-2 sm:grid-cols-2">
+                    {([{ value: "private", title: t("settingsPanel.private"), description: t("settingsPanel.hiddenFromThePublicDirectory"), icon: LockKeyhole }, { value: "public", title: t("settingsPanel.public"), description: t("settingsPanel.includeThisServerInThePublicDirectory"), icon: Globe2 }] as const).map(({ value, title, description, icon: Icon }) => <label key={value} className={`flex items-start gap-3 rounded-md border px-3 py-2.5 ${!canChangeVisibility || pending ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:border-gold/40"} ${visibilityState.draft === value ? "border-gold/50 bg-gold/5" : "border-white/15"}`}>
                         <input disabled={!canChangeVisibility || pending} type="radio" name="settings-visibility" value={value} checked={visibilityState.draft === value} onChange={() => { setVisibilityState(current => ({ ...current, draft: value })); setMessage(""); }} className="mt-1 accent-gold" />
-                        <span><span className="flex items-center gap-2 text-sm font-medium"><Icon className={`size-4 ${visibilityState.draft === value ? "text-gold" : "text-foreground-muted"}`} aria-hidden="true" />{title}</span><span className="mt-2 block text-xs leading-5 text-foreground-muted">{description}</span></span>
+                        <span><span className="flex items-center gap-2 text-sm font-medium"><Icon className={`size-4 ${visibilityState.draft === value ? "text-gold" : "text-foreground-muted"}`} aria-hidden="true" />{title}</span><span className="mt-0.5 block text-xs leading-5 text-foreground-muted">{description}</span></span>
                     </label>)}
-                </div>
-                <p className="mt-3 text-xs leading-5 text-foreground-muted">{visibility ? canChangeVisibility ? t("settingsPanel.chooseAPreferenceThenSaveSettings") : t("settingsPanel.onlyTheServerOwnerCanChangeVisibility") : t("settingsPanel.directoryVisibilityIsUnavailableForThisServer")}</p>
-            </fieldset>}
-            {visibleSettings === 0 && <p role="status" className="rounded-md border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-foreground-muted">{t("settingsPanel.noSettingsMatchSearch")}</p>}
+                </fieldset>
+                {!canChangeVisibility && <p className="mt-2 text-xs leading-5 text-foreground-muted">{visibility ? t("settingsPanel.onlyTheServerOwnerCanChangeVisibility") : t("settingsPanel.directoryVisibilityIsUnavailableForThisServer")}</p>}
+            </SettingRow>}
+            {visibleSettings === 0 && <p role="status" className="px-5 py-6 text-center text-sm text-foreground-muted">{t("settingsPanel.noSettingsMatchSearch")}</p>}
         </div>
         {/* Root overflow clipping defeats position: sticky, so unsaved changes pin the bar to the viewport instead. */}
         {dirty && <div aria-hidden="true" className="h-28 sm:h-20" />}
         <div data-unsaved-bar={dirty ? "pinned" : undefined} className={dirty ? "fixed inset-x-0 bottom-0 z-30 border-t border-gold/60 bg-surface shadow-[0_-12px_32px_rgba(0,0,0,0.45)]" : "rounded-b-lg border-t border-white/10 bg-surface"}>
             <div className={dirty ? "bg-linear-to-r from-gold/15 to-gold/5" : ""}>
-                <div className={`flex flex-wrap items-center justify-between gap-3 py-4 ${dirty ? "site-container" : "px-5"}`}>
+                <div className={`flex flex-wrap items-center justify-between gap-3 ${dirty ? "site-container py-4" : "px-5 py-3"}`}>
                     <div className="min-w-0 basis-full text-sm sm:flex-1">
                         <div role="status" aria-atomic="true">
                             {dirty ? <><p className="flex items-center gap-2 font-semibold text-gold"><CircleAlert className="size-5 shrink-0" aria-hidden="true" />{t("settingsPanel.unsavedChanges")}</p><p className="mt-1 text-foreground">{t("settingsPanel.saveSettingsToApplyYourChanges")}</p></> : <p className="text-foreground-muted">{t("settingsPanel.noPendingChanges")}</p>}
@@ -311,7 +306,15 @@ export function ServerSettingsPanel({ name, visibility, visibilityAccess, releas
             </div>
         </div>
         </form>
-    </section>
-    {managerAccess && <div className="mt-5"><ManagedServerManagerAccess {...managerAccess} /></div>}
+    </WorkspaceCard>
+    {managerAccess && <ManagedServerManagerAccess {...managerAccess} />}
     </>;
+}
+
+/** Lays out one setting as a label column beside its control, so every settings row lines up. */
+function SettingRow({ label, children }: { label: ReactNode; children: ReactNode }) {
+    return <div className="grid gap-2 px-5 py-4 sm:grid-cols-[13rem_minmax(0,1fr)] sm:gap-6">
+        <div className="text-sm font-medium sm:pt-2.5">{label}</div>
+        <div className="min-w-0 max-w-xl">{children}</div>
+    </div>;
 }

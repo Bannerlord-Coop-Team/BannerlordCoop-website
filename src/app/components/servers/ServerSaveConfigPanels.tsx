@@ -3,44 +3,41 @@
 import { useTranslations } from "@/app/lib/localization/client";
 
 import type { ReactNode } from "react";
-import { Download, Upload } from "lucide-react";
+import { Download, Save, SlidersHorizontal, Upload } from "lucide-react";
 import { ManagedServerConfigEditor, type ConfigAccess } from "./ManagedServerConfigEditor";
 import { fileButtonClass } from "./server-file-styles";
+import { WorkspaceCard } from "./server-workspace-ui";
 import type { ManagedServerConfiguration } from "../../../../supabase/functions/_shared/managed-server-configuration";
 
 export { fileButtonClass } from "./server-file-styles";
 
 // Composes save and configuration panels with localized unavailable states.
-export function ServerSaveConfigPanels({ saveName, configuration, configAccess, saveActions, configActions, saveNotice, configNotice, configStatus }: {
-    saveName?: string; configuration?: ManagedServerConfiguration; configAccess?: ConfigAccess; saveActions?: ReactNode; configActions?: ReactNode;
+export function ServerSaveConfigPanels({ saveName, campaigns, configuration, configAccess, saveActions, configActions, saveNotice, configNotice, configStatus }: {
+    saveName?: string; campaigns?: ReactNode; configuration?: ManagedServerConfiguration; configAccess?: ConfigAccess; saveActions?: ReactNode; configActions?: ReactNode;
     saveNotice?: ReactNode; configNotice?: ReactNode; configStatus?: ReactNode;
 }) {
     const { t } = useTranslations("managed-server");
     return <div className="space-y-5">
-        <section aria-labelledby="campaign-save-heading" className="rounded-lg border border-white/10 bg-surface p-5">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-                <div className="min-w-0">
-                    <h2 id="campaign-save-heading" className="text-base font-semibold">{t("saveConfigPanels.campaignSave")}</h2>
-                    <p className="mt-2 break-all font-mono text-sm">{saveName ?? t("saveConfigPanels.campaignSaveUnavailable")}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">{saveActions ?? <>
-                    <button disabled className={fileButtonClass}><Download className="size-4" aria-hidden="true" />{t("saveConfigPanels.exportSave")}</button>
-                    <button disabled className={fileButtonClass}><Upload className="size-4" aria-hidden="true" />{t("saveConfigPanels.importSave")}</button>
-                </>}</div>
+        <WorkspaceCard headingId="campaign-save-heading" title={campaigns ? t("campaigns.title") : t("saveConfigPanels.campaignSave")} icon={Save}
+            description={campaigns && saveName && <span className="break-all font-mono">{saveName}</span>}
+            actions={saveActions ?? <>
+                <button disabled className={fileButtonClass}><Download className="size-4" aria-hidden="true" />{t("saveConfigPanels.exportSave")}</button>
+                <button disabled className={fileButtonClass}><Upload className="size-4" aria-hidden="true" />{t("saveConfigPanels.importSave")}</button>
+            </>}>
+            <div className="space-y-3">
+                {campaigns ?? <p className="break-all font-mono text-sm">{saveName ?? t("saveConfigPanels.campaignSaveUnavailable")}</p>}
+                {saveNotice}
             </div>
-            {saveNotice}
-        </section>
-        <section aria-labelledby="configuration-heading" className="min-w-0 rounded-lg border border-white/10 bg-surface">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
-                <div><h2 id="configuration-heading" className="text-base font-semibold">{t("saveConfigPanels.configuration")}</h2><p className="mt-1 text-sm leading-6 text-foreground-muted">{t("saveConfigPanels.editSettingsInTheFormOrAsJsonThenSave")}</p></div>
-                <div className="flex flex-wrap gap-2">{configActions ?? <>
-                    <button disabled className={fileButtonClass}><Upload className="size-4" aria-hidden="true" />{t("saveConfigPanels.importConfig")}</button>
-                    <button disabled className={fileButtonClass}><Download className="size-4" aria-hidden="true" />{t("saveConfigPanels.exportConfig")}</button>
-                </>}</div>
-            </div>
+        </WorkspaceCard>
+        <WorkspaceCard headingId="configuration-heading" title={t("saveConfigPanels.configuration")} icon={SlidersHorizontal} flush
+            description={t("saveConfigPanels.changesApplyOnNextStart")}
+            actions={configActions ?? <>
+                <button disabled className={fileButtonClass}><Upload className="size-4" aria-hidden="true" />{t("saveConfigPanels.importConfig")}</button>
+                <button disabled className={fileButtonClass}><Download className="size-4" aria-hidden="true" />{t("saveConfigPanels.exportConfig")}</button>
+            </>}>
             {/* Import and export feedback sits directly under the buttons that started it. */}
-            {configStatus && <div className="px-5">{configStatus}</div>}
+            {configStatus && <div className="px-5 empty:hidden">{configStatus}</div>}
             <ManagedServerConfigEditor configuration={configuration} access={configAccess} notice={configNotice} />
-        </section>
+        </WorkspaceCard>
     </div>;
 }

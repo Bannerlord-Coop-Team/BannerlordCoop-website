@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useEffectEvent, useId, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
-import { FlaskConical, Lock, Menu, RefreshCw, Trash2, Upload } from "lucide-react";
+import { FlaskConical, Lock, Menu, Puzzle, RefreshCw, Trash2, Upload } from "lucide-react";
 
 import { useTranslations } from "@/app/lib/localization/client";
 import { buildModArchive, ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
@@ -15,10 +15,10 @@ import { createBrowserServerModCatalog } from "@/app/lib/hosting/server-mods-tra
 import { MOD_MAXIMUM_ENABLED_OWNER_MODS } from "../../../../supabase/functions/_shared/server-mods-contract";
 import { useServerWorkspaceSectionShown } from "./ServerManagementWorkspace";
 import { archiveProblemMessage, describeModIssue, lockedRunsOnMessage, modsErrorMessage } from "./server-mods-messages";
-import { fileButtonClass } from "./server-file-styles";
+import { fileButtonClass, fileIconButtonClass, filePrimaryButtonClass } from "./server-file-styles";
+import { WorkspaceCard, workspaceNoticeClass } from "./server-workspace-ui";
 
-const iconButtonClass = "inline-flex size-10 shrink-0 items-center justify-center rounded-md text-foreground-muted hover:bg-white/[0.05] hover:text-foreground focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40";
-const badgeClass = "shrink-0 rounded-sm border border-white/10 px-2 py-0.5 font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-foreground-muted";
+const badgeClass = "shrink-0 rounded-full border border-white/15 px-2 py-0.5 text-xs font-medium text-foreground-muted";
 
 /** The owner declined to replace an installed mod; nothing was sent. */
 const CANCELLED = "cancelled";
@@ -294,23 +294,20 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
     // Refresh, upload and delete wait for pending saves so they start from the list the owner sees.
     const settled = !saving && loaded !== null && sameServerModOrder(draft, loaded.mods);
 
-    return <section aria-labelledby={`${idPrefix}-heading`} aria-busy={busyNow || saving} className="min-w-0 rounded-lg border border-white/10 bg-surface">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
-            <div>
-                <h2 id={`${idPrefix}-heading`} className="text-base font-semibold">{t("mods.heading")}</h2>
-                {!canEdit && <p className="mt-1 text-sm leading-6 text-foreground-muted">{t("mods.readOnly")}</p>}
-            </div>
-            {canEdit && <div className="flex flex-wrap items-center gap-3">
-                <input ref={input => { uploadRef.current = input; if (input) input.webkitdirectory = true; }} type="file" hidden aria-label={t("mods.folderInput")} onChange={upload} />
-                <button type="button" disabled={busyNow || !settled} onClick={() => void load()} className={fileButtonClass}><RefreshCw className="size-4" aria-hidden="true" />{t("mods.refresh")}</button>
-                <button type="button" disabled={busyNow || !settled} onClick={() => uploadRef.current?.click()} className={fileButtonClass}><Upload className="size-4" aria-hidden="true" />{t("mods.upload")}</button>
-            </div>}
-            <p className="flex w-full items-center gap-2 rounded-md border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-foreground-muted"><FlaskConical className="size-4 shrink-0" aria-hidden="true" />{t("mods.experimental")}</p>
-            {loaded?.restartRequired && <p role="status" className="w-full rounded-md border border-gold/30 bg-gold/[0.06] px-3 py-2 text-sm text-foreground">{t("mods.restartRequired")}</p>}
+    return <WorkspaceCard headingId={`${idPrefix}-heading`} aria-busy={busyNow || saving} title={t("mods.heading")} icon={Puzzle} flush
+        description={<span className="flex items-center gap-1.5"><FlaskConical className="size-3.5 shrink-0" aria-hidden="true" />{t("mods.experimental")}</span>}
+        actions={canEdit && <>
+            <input ref={input => { uploadRef.current = input; if (input) input.webkitdirectory = true; }} type="file" hidden aria-label={t("mods.folderInput")} onChange={upload} />
+            <button type="button" disabled={busyNow || !settled} onClick={() => void load()} className={fileButtonClass}><RefreshCw className="size-4" aria-hidden="true" />{t("mods.refresh")}</button>
+            <button type="button" disabled={busyNow || !settled} onClick={() => uploadRef.current?.click()} className={filePrimaryButtonClass}><Upload className="size-4" aria-hidden="true" />{t("mods.upload")}</button>
+        </>}>
+        {!canEdit && <p className="p-5 text-sm leading-6 text-foreground-muted">{t("mods.readOnly")}</p>}
+        <div className="space-y-3 border-b border-white/10 px-5 py-3 empty:hidden">
+            {loaded?.restartRequired && <p role="status" className={workspaceNoticeClass}>{t("mods.restartRequired")}</p>}
             {progress && <UploadProgress progress={progress} />}
-            {busy === "preparing" && <p role="status" className="w-full text-sm text-foreground-muted">{t("mods.phase.preparing")}</p>}
-            {saving && <p role="status" className="w-full text-sm text-foreground-muted">{t("mods.saving")}</p>}
-            {notice && !saving && <p aria-live="polite" className={`w-full text-sm ${notice.tone === "error" ? "text-red-300" : "text-foreground-muted"}`}>{notice.text}</p>}
+            {busy === "preparing" && <p role="status" className="text-sm text-foreground-muted">{t("mods.phase.preparing")}</p>}
+            {saving && <p role="status" className="text-sm text-foreground-muted">{t("mods.saving")}</p>}
+            {notice && !saving && <p aria-live="polite" className={`text-sm ${notice.tone === "error" ? "text-red-300" : "text-foreground-muted"}`}>{notice.text}</p>}
         </div>
         {canEdit && loaded === null && <div className="p-5 text-sm text-foreground-muted">
             {loadFailed === null ? <p role="status">{t("mods.loading")}</p> : <>
@@ -329,7 +326,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
             <ModsPlayersNeed mods={loaded.mods} idPrefix={idPrefix} />
         </>}
         <p role="status" className="sr-only">{announcement}</p>
-    </section>;
+    </WorkspaceCard>;
 }
 
 /** One load-order row: position, handle or lock, name, runs-on choice and notes, badges, enabled switch and delete. */
@@ -345,7 +342,7 @@ function ModRow({ mod, index, idPrefix, editable, canDelete, dragging, onDragSta
     return <li onDragOver={onDragOver} onDrop={event => event.preventDefault()} className={`flex items-center gap-3 px-3 py-3 sm:px-5 ${dragging ? "bg-gold/10 opacity-60" : ""}`}>
         <span className="w-6 shrink-0 text-right font-mono text-xs text-foreground-muted">{index + 1}</span>
         {movable
-            ? <button type="button" draggable data-mod-handle={mod.id} aria-label={t("mods.reorder", { name: mod.name })} aria-describedby={`${idPrefix}-reorder-help`} onDragStart={onDragStart} onDragEnd={onDragEnd} onKeyDown={onKeyDown} className={`${iconButtonClass} cursor-grab active:cursor-grabbing`}><Menu className="size-4" aria-hidden="true" /></button>
+            ? <button type="button" draggable data-mod-handle={mod.id} aria-label={t("mods.reorder", { name: mod.name })} aria-describedby={`${idPrefix}-reorder-help`} onDragStart={onDragStart} onDragEnd={onDragEnd} onKeyDown={onKeyDown} className={`${fileIconButtonClass} cursor-grab active:cursor-grabbing`}><Menu className="size-4" aria-hidden="true" /></button>
             : <span className="inline-flex size-10 shrink-0 items-center justify-center text-foreground-muted/50" title={mod.pinned ? t("mods.coreLocked") : undefined}>{mod.pinned && <Lock className="size-4" aria-label={t("mods.coreLocked")} />}</span>}
         <div className="min-w-0 flex-1">
             <label htmlFor={checkboxId} title={mod.id} className={`block truncate text-sm ${editable && owner ? "cursor-pointer" : ""}`}>
@@ -358,7 +355,7 @@ function ModRow({ mod, index, idPrefix, editable, canDelete, dragging, onDragSta
         {mod.pinned ? <span className={badgeClass}>{t("mods.core")}</span> : mod.required && <span className={badgeClass}>{t("mods.required")}</span>}
         <ModSwitch id={checkboxId} checked={mod.enabled} disabled={!editable || !owner} onChange={onToggle} />
         {editable && owner
-            ? <button type="button" disabled={!canDelete} aria-label={t("mods.delete", { name: mod.name })} onClick={onDelete} className={`${iconButtonClass} hover:!text-red-300`}><Trash2 className="size-4" aria-hidden="true" /></button>
+            ? <button type="button" disabled={!canDelete} aria-label={t("mods.delete", { name: mod.name })} onClick={onDelete} className={`${fileIconButtonClass} hover:!text-red-300`}><Trash2 className="size-4" aria-hidden="true" /></button>
             : <span className="size-10 shrink-0" aria-hidden="true" />}
     </li>;
 }

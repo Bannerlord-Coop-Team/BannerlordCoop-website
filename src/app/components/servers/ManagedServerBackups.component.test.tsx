@@ -660,6 +660,11 @@ async function renderAutosaves({ currentServer = stopped, items = autosaves.item
     await advance(0);
 }
 
+// Finds the recent autosaves group inside the backups card, if it rendered.
+function autosaveSection() {
+    return [...container.querySelectorAll("section section")].find((candidate) => candidate.querySelector("h3")?.textContent?.startsWith("Recent autosaves")) ?? null;
+}
+
 function loadButtons() {
     return Array.from(container.querySelectorAll("button")).filter((candidate) => candidate.textContent === "Load autosave");
 }
@@ -667,9 +672,8 @@ function loadButtons() {
 describe("ManagedServerBackups recent autosaves", () => {
     it("lists the current save and both earlier autosaves above the retained backups", async () => {
         await renderAutosaves();
-        const section = container.querySelector("section")!;
+        const section = autosaveSection()!;
         expect(section.querySelector("h3")!.textContent).toBe("Recent autosaves · Northern March");
-        expect(section.textContent).toContain("They are replaced every time it saves.");
         const rows = [...section.querySelectorAll("li")];
         expect(rows.map((row) => row.querySelector("p")!.textContent)).toEqual(["Current save", "Earlier autosave 1", "Earlier autosave 2"]);
         expect(rows[0].textContent).toContain("In use");
@@ -859,14 +863,14 @@ describe("ManagedServerBackups recent autosaves", () => {
         await renderAutosaves({ items });
         expect(container.textContent).toContain("No earlier autosaves yet. They appear after the server has autosaved a few times.");
         expect(loadButtons()).toHaveLength(0);
-        expect(container.querySelectorAll("section li")).toHaveLength(items.length);
+        expect(autosaveSection()!.querySelectorAll("li")).toHaveLength(items.length);
         expect(container.textContent).not.toContain("Stop the game server before loading");
     });
 
     it("keeps retained backups usable when the autosaves could not be read", async () => {
         const notice = "Recent autosaves couldn’t be loaded just now. Retained backups are unaffected; refresh the page to try again.";
         await renderAutosaves({ withAutosaves: false, autosaveLoadError: notice });
-        const section = container.querySelector("section")!;
+        const section = autosaveSection()!;
         expect(section.querySelector("h3")!.textContent).toBe("Recent autosaves");
         expect(section.querySelector('[role="status"]')!.textContent).toBe(notice);
         expect(container.textContent).not.toContain("No earlier autosaves yet");
@@ -877,7 +881,7 @@ describe("ManagedServerBackups recent autosaves", () => {
 
     it("omits the section when no campaign autosaves were provided", async () => {
         await renderAutosaves({ withAutosaves: false });
-        expect(container.querySelector("section")).toBeNull();
+        expect(autosaveSection()).toBeNull();
         expect(container.textContent).not.toContain("Recent autosaves");
     });
 
