@@ -5,7 +5,7 @@
   "membership.status.needs_patreon": "Verbinde Patreon, um die Abo-Vorteile für dieses Konto zu prüfen.",
   "membership.status.verification_pending": "Die Verifizierung wartet auf die Bestätigung deines Kontos. Kehre zu deinem Konto zurück und starte keine weitere Autorisierung.",
   "membership.status.sync_pending": "Die Mitgliedschaft wurde geprüft; die Synchronisierung der Zuteilung steht noch aus. Aktualisiere den Status.",
-  "membership.status.nonqualifying": "Es wurde kein qualifizierender Abo-Vorteil verifiziert. Abonniere oder upgrade auf Patreon und prüfe dann erneut.",
+  "membership.status.nonqualifying": "Deine Patreon-Mitgliedschaft enthält keinen Server. Für Hosting brauchst du mindestens die Veteran-Stufe für 20 $/Monat. Upgrade auf Patreon und prüfe dann erneut.",
   "membership.status.verification_expired": "Prüfe deine Mitgliedschaft erneut über die Patreon-Autorisierung. Die Verifizierung gilt höchstens 24 Stunden und nur für neue Zuteilungen.",
   "membership.status.review_required": "Die Mitgliedschaft oder Zuteilung muss geprüft werden. Wende dich an den Support; bestehende Server bleiben verfügbar.",
   "membership.status.unavailable": "Der Status deines Kontos oder deiner Mitgliedschaft konnte nicht bestätigt werden. Versuche den Status erneut abzurufen; „Erneut prüfen“ verwendet eine neue Patreon-Autorisierung.",

@@ -5,7 +5,7 @@
   "membership.status.needs_patreon": "请关联 Patreon，以检查此账户的订阅权益。",
   "membership.status.verification_pending": "验证正在等待您确认账户。请返回账户页面，不要再次发起授权。",
   "membership.status.sync_pending": "已检查会员资格，配额尚待同步。请刷新状态。",
-  "membership.status.nonqualifying": "未验证到符合条件的订阅权益。请在 Patreon 上订阅或升级，然后再次检查。",
+  "membership.status.nonqualifying": "你当前的 Patreon 会员不包含服务器。托管需要每月 20 美元的 Veteran 档位或更高。请在 Patreon 上升级，然后再次检查。",
   "membership.status.verification_expired": "请通过 Patreon 授权重新检查您的会员资格。验证结果最多在 24 小时内有效，且仅用于新配额分配。",
   "membership.status.review_required": "会员资格或配额需要审核。请联系支持人员；现有服务器仍可使用。",
   "membership.status.unavailable": "无法确认账户或会员资格状态。请重试状态检查；再次检查会员资格会发起新的 Patreon 授权。",

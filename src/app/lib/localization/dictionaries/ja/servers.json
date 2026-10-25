@@ -5,7 +5,7 @@
   "membership.status.needs_patreon": "Patreon と連携して、このアカウントのサブスクリプション特典を確認してください。",
   "membership.status.verification_pending": "アカウントの確認待ちです。アカウントページに戻ってください。新たな認可手続きは開始しないでください。",
   "membership.status.sync_pending": "メンバーシップは確認済みですが、利用枠の同期は保留中です。ステータスを更新してください。",
-  "membership.status.nonqualifying": "対象となるサブスクリプション特典を確認できませんでした。Patreon で登録またはアップグレードしてから、再確認してください。",
+  "membership.status.nonqualifying": "現在の Patreon メンバーシップにはサーバーが含まれていません。ホスティングには月額 20 ドルの Veteran ティア以上が必要です。Patreon でアップグレードしてから、再確認してください。",
   "membership.status.verification_expired": "Patreon の認可手続きを通じてメンバーシップを再確認してください。確認結果の有効期間は最長24時間で、新規割り当てにのみ適用されます。",
   "membership.status.review_required": "メンバーシップまたは利用枠の確認が必要です。サポートにお問い合わせください。既存のサーバーは引き続き利用できます。",
   "membership.status.unavailable": "アカウントまたはメンバーシップのステータスを確認できませんでした。ステータスの取得を再試行してください。再確認には新たな Patreon の認可手続きが必要です。",
