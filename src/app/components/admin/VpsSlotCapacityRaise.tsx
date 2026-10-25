@@ -73,7 +73,7 @@ export function VpsSlotCapacityRaise({
         ? `This VPS already holds the most slots, ${MAXIMUM_VPS_SLOT_CAPACITY}.`
         : host.runnerOnboarding?.state !== "succeeded"
             ? "Available once this VPS's runner onboarding has succeeded."
-            : "A slot reserves no cores: placement plans about 1.6 vCPU for each server online together, so more online at once than that fits (about three on a 6-vCPU VPS) slow each other. Refused unless the control plane runs with HOSTING_DYNAMIC_SLOT_CAPACITY on.";
+            : "A slot reserves no cores: placement uses the current capacity model for servers online together. More demand than the host can supply causes contention. Refused unless the control plane runs with HOSTING_DYNAMIC_SLOT_CAPACITY on.";
     return (
         <form onSubmit={raise} noValidate aria-label={`Raise the slot capacity of ${host.name}`} className="flex flex-wrap items-end gap-x-4 gap-y-2 border-t border-white/10 px-6 py-3 text-xs">
             <div>
