@@ -1,6 +1,7 @@
 import { LocalizationProvider } from "@/app/lib/localization/client";
 import { getLocale, getMessages, getTranslations, getOpenGraphLocale } from "@/app/lib/localization/server";
 import { Hero } from "@/app/components/home/Hero";
+import { BadExperience } from "@/app/components/home/BadExperience";
 import { CommunityStats } from "@/app/components/home/community/CommunityStats";
 import { CoopFeatures } from "@/app/components/home/features/CampaignFeatures";
 import { Roadmap } from "@/app/components/home/roadmap/Roadmap";
@@ -61,19 +62,21 @@ export default async function Home() {
 
     return (
         <LocalizationProvider locale={locale} messages={messages}>
-            <Navbar />
-            <main>
-                <Hero />
-                <Suspense fallback={<CommunityStats loading playersOnline={null} dedicatedServersCount={null} battlesFoughtTotal={null} totalDownloads={null} />}>
-                    <NetworkStatistics />
-                </Suspense>
-                <CommunityMedia />
-                <CoopFeatures />
-                <Roadmap />
-                <AboutProject />
-                <DownloadSection />
-            </main>
-            <Footer />
+            <BadExperience>
+                <Navbar />
+                <main>
+                    <Hero />
+                    <Suspense fallback={<CommunityStats loading playersOnline={null} dedicatedServersCount={null} battlesFoughtTotal={null} totalDownloads={null} />}>
+                        <NetworkStatistics />
+                    </Suspense>
+                    <CommunityMedia />
+                    <CoopFeatures />
+                    <Roadmap />
+                    <AboutProject />
+                    <DownloadSection />
+                </main>
+                <Footer />
+            </BadExperience>
         </LocalizationProvider>
     );
 }
