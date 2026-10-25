@@ -14,7 +14,7 @@ export type ManagedServerDirectoryEntry = Omit<
     "players" | "status"
 > & {
     players: number | null;
-    status: HostedServerStatus | "Unknown";
+    status: HostedServerStatus | "Unknown" | "Asleep";
     manageUrl?: string;
 };
 
@@ -86,6 +86,7 @@ export function ServerDirectoryTable({
                                                 <span aria-hidden="true" className={`size-1.5 rounded-full ${isOnline ? "bg-emerald-400" : "bg-foreground-dim"}`} />
                                                 {t(`table.status.${server.status}`)}
                                             </p>
+                                            {server.status === "Asleep" && <p className="mt-1 max-w-sm text-sm text-foreground-muted">{t("table.sleepHint")}</p>}
                                         </div>
                                     </div>
                                 </td>
@@ -101,7 +102,7 @@ export function ServerDirectoryTable({
                                     <div className="flex flex-wrap items-start justify-end gap-2">
                                         <CopyJoinButton
                                             address={server.connectionAddress ?? null}
-                                            disabled={!isOnline}
+                                            disabled={!isOnline && server.status !== "Asleep"}
                                         />
                                         {manageUrl && (
                                             <Link

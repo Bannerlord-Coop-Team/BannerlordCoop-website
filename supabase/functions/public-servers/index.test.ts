@@ -89,3 +89,11 @@ test("preserves accepted Unicode display names through Edge and retains closed f
     }
     assert.throws(() => parsePublicServerPage({ items: [server], nextCursor: "next\u200dpage" }));
 });
+
+test("anonymous proxy accepts asleep with the unchanged public DTO", async () => {
+    const page = { items: [{ ...server, observedGameState: "asleep" }], nextCursor: null };
+    assert.deepEqual(parsePublicServerPage(page), page);
+    const response = await handler(async () => ok(page))(request());
+    assert.equal(response.status, 200);
+    assert.deepEqual((await response.json()).result, page);
+});

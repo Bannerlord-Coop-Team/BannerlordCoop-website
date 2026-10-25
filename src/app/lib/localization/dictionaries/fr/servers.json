@@ -38,6 +38,8 @@
   "table.unknownPlayers": "—",
   "table.direct": "Direct",
   "table.status.Online": "En ligne",
+  "table.status.Asleep": "En veille",
+  "table.sleepHint": "Votre première connexion le réveille ; réessayez dans environ 2 minutes.",
   "table.status.Offline": "Hors ligne",
   "table.status.Unknown": "Inconnu",
   "loading.label": "Chargement des serveurs",

@@ -1,3 +1,4 @@
+import { isColdSleeping } from "@/app/lib/hosting/cold-sleep";
 import { LocalizationProvider } from "@/app/lib/localization/client";
 import { getLocale, getMessages, getTranslations } from "@/app/lib/localization/server";
 import { Suspense } from "react";
@@ -247,7 +248,7 @@ async function loadPublicInventory() {
         allServers = listedServers.map(server => ({
             id: server.serverId,
             name: server.displayName,
-            status: server.observedGameState === "running" ? "Online" : "Unknown",
+            status: server.observedGameState === "running" ? "Online" : server.observedGameState === "asleep" ? "Asleep" : "Unknown",
             connectionType: "Direct",
             joinUrl: "",
             connectionAddress: connectionAddress(server.connectionIp, server.gamePorts),
@@ -270,12 +271,14 @@ function DirectoryLoading({ label }: { label: string }) {
 /** Maps an authenticated server record into its directory presentation. */
 function toDirectoryServer(server: MyServerSummary): ManagedServerDirectoryEntry {
     const isRunning = server.observedGameState === "running";
+    const isAsleep = isColdSleeping(server.operationState, server.runtimeInsight?.desiredState)
+        && server.observedGameState === "stopped" && !server.subscriptionHold;
     const isStopped = server.observedGameState === "stopped"
         || ["stopped", "suspended"].includes(server.operationState);
     return {
         id: server.serverId,
         name: server.displayName,
-        status: isRunning ? "Online" : isStopped ? "Offline" : "Unknown",
+        status: isRunning ? "Online" : isAsleep ? "Asleep" : isStopped ? "Offline" : "Unknown",
         connectionType: "Direct",
         joinUrl: `bannerlordcoop://join/${encodeURIComponent(server.serverId)}`,
         connectionAddress: connectionAddress(server.connectionIp ?? null, server.gamePorts ?? []),

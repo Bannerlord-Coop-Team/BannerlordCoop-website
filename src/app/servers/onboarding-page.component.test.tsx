@@ -296,3 +296,26 @@ it("localizes whole inventory totals and isolated errors without translating ser
         expect(mocks.list).toHaveBeenCalledWith("test-page-jwt", expect.any(AbortSignal));
     } finally { localeDefinitions.en.dictionaries.servers = original; }
 });
+
+it("signed-out directory retains sleepers and running rows but hides stopped and failed rows", async () => {
+    mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: null } }), getSession: async () => ({ data: { session: null } }) } });
+    mocks.publicList.mockResolvedValue(["asleep", "running", "stopped", "failed"].map(observedGameState => ({
+        serverId: observedGameState, displayName: observedGameState, observedGameState, connectionIp: "203.0.113.4", gamePorts: [4200],
+    })));
+    await renderPage();
+    expect(mocks.directory.mock.calls.at(-1)?.[0].servers.map((server: { status: string }) => server.status)).toEqual(["Asleep", "Online"]);
+    expect(mocks.list).not.toHaveBeenCalled();
+});
+
+it.each([
+    { desiredState: "running", subscriptionHold: null, label: "Asleep" },
+    { desiredState: "stopped", subscriptionHold: null, label: "Offline" },
+    { desiredState: "running", subscriptionHold: { state: "held" }, label: "Offline" },
+    { desiredState: undefined, subscriptionHold: null, label: "Offline" },
+])("My Servers distinguishes sleep from holds: $label $desiredState", async ({ desiredState, subscriptionHold, label }) => {
+    mocks.list.mockResolvedValue([{ serverId: ONBOARDING_TEST_ID, displayName: "Assigned campaign", operationState: "suspended",
+        observedGameState: "stopped", accessRole: "owner", runtimeInsight: { desiredState }, subscriptionHold }]);
+    const html = await renderPage();
+    expect(html).toContain(label);
+    expect(html.includes("Your first join wakes it")).toBe(label === "Asleep");
+});

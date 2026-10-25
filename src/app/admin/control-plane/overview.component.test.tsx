@@ -382,3 +382,17 @@ it("requests the ordinary-session guard unless impersonation was fully validated
     expect(mocks.request.mock.calls.at(-1)?.[0].requireOrdinarySession).toBe(false);
     expect(mocks.auth).not.toHaveBeenCalled();
 });
+
+it.each([true, false])("separates sleeping counts only after CP supports them: %s", async supported => {
+    const base = await mocks.request.getMockImplementation()!({ onAuthenticated: () => undefined });
+    mocks.request.mockImplementation(async request => {
+        request.onAuthenticated();
+        return { ...base, fleet: { ...base.fleet, suspended: 3, ...(supported ? { sleeping: 2 } : {}) } };
+    });
+    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "overview" }) }));
+    await stream.allReady;
+    const html = await new Response(stream).text();
+    expect(html.includes("Sleeping servers wake")).toBe(supported);
+    expect(html.includes("Suspended (sleeping or hold)")).toBe(!supported);
+    expect(html.includes("On hold")).toBe(supported);
+});
