@@ -3,6 +3,7 @@
   "hero.discord": "加入 Discord",
   "hero.rentServer": "租用服务器",
   "hero.rentServerDetail": "通过 Patreon 为你托管",
+  "hero.rentServerNewTab": "（在新标签页中打开 Patreon）",
   "hero.trailer": "官方预告片",
   "stats.players": "在线玩家",
   "stats.playersDescription": "所有上报数据的服务器合计",

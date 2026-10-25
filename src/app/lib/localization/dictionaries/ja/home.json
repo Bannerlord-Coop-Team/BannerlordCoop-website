@@ -3,6 +3,7 @@
   "hero.discord": "Discordに参加",
   "hero.rentServer": "サーバーをレンタル",
   "hero.rentServerDetail": "Patreon経由でホスティング",
+  "hero.rentServerNewTab": "（Patreonを新しいタブで開きます）",
   "hero.trailer": "公式トレーラー",
   "stats.players": "オンラインのプレイヤー",
   "stats.playersDescription": "データを報告している全サーバーの合計",

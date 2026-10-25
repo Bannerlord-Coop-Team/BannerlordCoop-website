@@ -36,7 +36,11 @@ test.describe("homepage display", () => {
         await page.keyboard.press("Escape");
         await expect(page.getByRole("dialog")).toHaveCount(0);
 
-        await expect(page.getByRole("link", {name: "Rent a Server",})).toHaveAttribute("href", "/servers");
+        const rentServerLink = page.getByRole("link", {name: /Rent a Server.*\(opens Patreon in a new tab\)/,});
+
+        await expect(rentServerLink).toHaveAttribute("href", "https://www.patreon.com/checkout/BannerlordCoop?rid=28995946");
+        await expect(rentServerLink).toHaveAttribute("target", "_blank");
+        await expect(rentServerLink).toHaveAttribute("rel", "noopener noreferrer");
 
         const discordLink = page.getByRole("link", {name: "Join the Discord",});
 
