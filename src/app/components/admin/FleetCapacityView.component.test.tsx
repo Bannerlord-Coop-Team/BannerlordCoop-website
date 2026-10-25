@@ -739,7 +739,7 @@ it("does not relabel an absent nested p99 as p99 when only p95 is available", as
         const index = headers.findIndex(header => header.textContent?.includes("Memory p99"));
         expect(index).toBeGreaterThanOrEqual(0);
         for (const row of table.querySelectorAll("tbody tr")) {
-            expect(row.children[index]?.textContent).toBe("—");
+            expect(row.children[index]?.textContent).toBe("—No data yet");
         }
     }
 });
