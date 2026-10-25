@@ -1,3 +1,4 @@
+import { isColdSleeping } from "./cold-sleep";
 import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
 import { timestamp } from "../../../../supabase/functions/_shared/server-visibility-contract";
 import { isModLoadFailure, type ModLoadFailure } from "./mod-load-failure";
@@ -58,7 +59,7 @@ export function isOwnerStartInsight(value: unknown): value is OwnerStartInsight 
 }
 
 /** Legacy summaries omit the insight entirely; a present insight must be complete. */
-export function isOwnerRuntimeInsight(value: unknown): value is OwnerRuntimeInsight {
+export function isOwnerRuntimeInsight(value: unknown, context?: { operationState: unknown; observedGameState: unknown; subscriptionHold?: unknown }): value is OwnerRuntimeInsight {
     if (!isRecord(value) || !hasExactKeys(value, [...RUNTIME_KEYS, ...(Object.hasOwn(value, "modLoadFailure") ? ["modLoadFailure"] : [])])) return false;
     if (Object.hasOwn(value, "modLoadFailure") && (!isModLoadFailure(value.modLoadFailure)
         || value.desiredState === "deleted" || (isRecord(value.start) && ["queued", "running", "retry-wait", "succeeded"].includes(value.start.state as string)))) return false;
@@ -67,7 +68,10 @@ export function isOwnerRuntimeInsight(value: unknown): value is OwnerRuntimeInsi
         && Array.isArray(value.allowedActions) && value.allowedActions.length <= 3
         && new Set(value.allowedActions).size === value.allowedActions.length
         && value.allowedActions.every(action => ["start", "stop", "restart-game"].includes(action))
-        && !(value.allowedActions.includes("start") && (value.allowedActions.includes("stop") || value.allowedActions.includes("restart-game")))
+        && !(value.allowedActions.includes("start") && value.allowedActions.includes("restart-game"))
+        && (!(value.allowedActions.includes("start") && value.allowedActions.includes("stop"))
+            || (typeof context?.operationState === "string" && isColdSleeping(context.operationState, typeof value.desiredState === "string" ? value.desiredState : undefined)
+                && context.observedGameState === "stopped" && !context.subscriptionHold))
         && !(value.crashLoopDetected === true && value.allowedActions.includes("start"))
         && !(value.desiredState === "deleted" && value.allowedActions.length > 0)
         && (value.crashLoopDetected === null || typeof value.crashLoopDetected === "boolean")

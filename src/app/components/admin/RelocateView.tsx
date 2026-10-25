@@ -50,7 +50,7 @@ export function RelocateView({ data, query, accounts }: { data: RelocateViewData
                         return (
                             <tr key={row.server.serverId}>
                                 <td className="p-4"><p className="font-semibold text-gold">{row.server.displayName}</p><p className="mt-1 text-xs text-foreground-muted">{formatAccountOwner(row.server, ownerLabels)}</p></td>
-                                <td className="p-4">{relocating ? <span className="inline-flex border border-sky-400/30 bg-sky-400/10 px-2 py-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-sky-300">Relocating</span> : <State value={row.server.operationState} />}</td>
+                                <td className="p-4">{relocating ? <span className="inline-flex border border-sky-400/30 bg-sky-400/10 px-2 py-1 font-label text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-sky-300">Relocating</span> : <State value={row.server.operationState} desiredState={row.server.desiredState} />}</td>
                                 <td className="p-4 text-sm text-foreground">{row.regionLabel}</td>
                                 <td className="p-4 font-mono text-xs text-foreground-muted">{row.hostName === null ? "—" : `${row.hostName} · slot ${row.slotIndex}`}</td>
                                 <td className="p-4 text-right">

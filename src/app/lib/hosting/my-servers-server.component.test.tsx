@@ -586,3 +586,49 @@ it("accepts an absent or null subscription hold and validates every supplied fie
         await expect(getMyServerSummary(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
     }
 });
+
+it.each([{ allowedActions: ["start"] }, { allowedActions: ["start", "stop"] }, { allowedActions: ["stop"] }])("accepts sleeper actions %j through the owner summary parser", async ({ allowedActions }) => {
+    const sleeping = { ...summary, operationState: "suspended", observedGameState: "stopped",
+        runtimeInsight: { ...runtimeInsight, desiredState: "running", allowedActions, failureCode: null,
+            recommendedAction: null, failureMessage: null, recommendation: null, start: null } };
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), sleeping));
+    expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual(sleeping);
+});
+
+it.each([
+    { desiredState: "stopped", allowedActions: ["start", "stop"] },
+    { desiredState: "running", allowedActions: ["start", "restart-game"] },
+    { desiredState: "running", allowedActions: ["start", "stop", "restart-game"] },
+    { desiredState: "running", allowedActions: ["start", "start"] },
+    { desiredState: "running", allowedActions: ["shell"] },
+])("rejects invalid sleeper actions %j", async insight => {
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), {
+        ...summary, operationState: "suspended", observedGameState: "stopped", runtimeInsight: { ...runtimeInsight, ...insight },
+    }));
+    await expect(getMyServerSummary(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
+});
+
+it.each([
+    { name: "cold sleeper", operationState: "suspended", observedGameState: "stopped", desiredState: "running", allowedActions: ["start", "stop"], subscriptionHold: null },
+    { name: "grace hold", operationState: "suspended", observedGameState: "stopped", desiredState: "stopped", allowedActions: [], subscriptionHold: { state: "held", reason: "subscription-funding-lapsed", removalDueAt: "2026-11-01T00:00:00.000Z", canExportSave: true } },
+    { name: "admin hold", operationState: "suspended", observedGameState: "stopped", desiredState: "stopped", allowedActions: [], subscriptionHold: null },
+    { name: "running", operationState: "running", observedGameState: "running", desiredState: "running", allowedActions: ["stop", "restart-game"], subscriptionHold: null },
+    { name: "stopped", operationState: "stopped", observedGameState: "stopped", desiredState: "stopped", allowedActions: ["start"], subscriptionHold: null },
+])("parses the CP-shaped $name owner summary", async ({ operationState, observedGameState, desiredState, allowedActions, subscriptionHold }) => {
+    const value = { ...summary, operationState, observedGameState, subscriptionHold,
+        runtimeInsight: { desiredState, allowedActions, observedAt: server.updatedAt, crashLoopDetected: false,
+            failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: null } };
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), value));
+    expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual(value);
+});
+
+it.each([
+    { observedGameState: "running", subscriptionHold: null },
+    { observedGameState: "stopped", subscriptionHold: { state: "held", reason: "subscription-funding-lapsed", removalDueAt: "2026-11-01T00:00:00.000Z", canExportSave: true } },
+])("rejects combined sleeper actions outside the cold-sleep context %j", async context => {
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), {
+        ...summary, operationState: "suspended", ...context,
+        runtimeInsight: { ...runtimeInsight, allowedActions: ["start", "stop"] },
+    }));
+    await expect(getMyServerSummary(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
+});

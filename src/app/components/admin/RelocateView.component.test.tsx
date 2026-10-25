@@ -158,3 +158,11 @@ it("sends a null VPS for any free slot and keeps the pop-up open with the error 
     expect(container.querySelector("dialog")).not.toBeNull();
     expect(dialog.querySelector('[role="alert"]')?.textContent).toBe("No free slot is available in France.");
 });
+
+it.each(["running", "stopped"])("labels suspended relocation rows with %s intent", async desiredState => {
+    const value = { ...data, activeJobs: [], servers: { ...data.servers, items: [{ ...data.servers.items[0], operationState: "suspended", desiredState }] } };
+    await act(async () => root.render(<RelocateView data={value} query="" accounts={[]} />));
+    expect(container.textContent).toContain(desiredState === "running" ? "Sleeping — wakes when a player connects" : "suspended");
+    if (desiredState === "running") expect(container.innerHTML).not.toContain("on hold");
+    else expect(container.textContent).not.toContain("Sleeping");
+});
