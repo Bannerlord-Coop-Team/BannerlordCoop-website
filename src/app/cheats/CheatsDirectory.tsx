@@ -128,7 +128,7 @@ export function CheatsDirectory({
 }: {
     commands: readonly CheatCommand[];
     initialQuery: CheatsQuery;
-    /** Optional third column beside the command list, shown from xl up. */
+    /** Optional third column beside the command list, shown from xl up and pinned on viewports at least 45rem tall. */
     aside?: ReactNode;
 }) {
     const translator = useTranslations("cheats");
@@ -558,7 +558,12 @@ export function CheatsDirectory({
                     </div>
                 )}
             </div>
-            {aside && <div className="hidden min-w-0 xl:block">{aside}</div>}
+            {aside && (
+                // Pinned only when the viewport fits the whole column below the top-20 offset.
+                <div className="hidden min-w-0 xl:block xl:[@media(min-height:45rem)]:sticky xl:[@media(min-height:45rem)]:top-20">
+                    {aside}
+                </div>
+            )}
         </div>
     );
 }

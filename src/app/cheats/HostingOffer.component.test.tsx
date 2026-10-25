@@ -116,7 +116,8 @@ it("hides both placements together and remembers the dismissal for /cheats", () 
     const rail = view.querySelector('[aria-labelledby="hosting-offer-rail"]')!;
     const inline = view.querySelector('[aria-labelledby="hosting-offer-inline"]')!;
 
-    expect(rail.parentElement?.className).toBe("hidden min-w-0 xl:block");
+    // The rail column only pins on viewports tall enough to show the whole card.
+    expect(rail.parentElement?.className).toBe("hidden min-w-0 xl:block xl:[@media(min-height:45rem)]:sticky xl:[@media(min-height:45rem)]:top-20");
     expect(rail.parentElement?.parentElement?.className).toContain("xl:grid-cols-[13rem_minmax(0,1fr)_18.75rem]");
     expect(inline.parentElement?.className).toBe("mt-8 xl:hidden");
 

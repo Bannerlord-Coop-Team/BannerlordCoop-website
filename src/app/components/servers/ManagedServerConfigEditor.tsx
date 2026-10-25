@@ -324,7 +324,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         </div>}
         {notice}
         {message && <p role="status" className={`mt-4 ${workspaceNoticeClass}`}>{pending && <LoaderCircle aria-hidden className="mr-2 inline size-4 animate-spin" />}{message}{stale && <> <button type="button" className="underline" onClick={reload}>{t("configEditor.reloadSettings")}</button></>}</p>}
-        {/* Root overflow clipping defeats position: sticky, so unsaved changes pin the bar to the viewport instead. */}
+        {/* Unsaved changes pin the bar to the bottom of the viewport so it stays visible while the form scrolls. */}
         {dirty && <div aria-hidden="true" className="h-20" />}
         <div data-unsaved-bar={dirty ? "pinned" : undefined} className={dirty ? "fixed inset-x-0 bottom-0 z-30 border-t border-gold/60 bg-surface shadow-[0_-12px_32px_rgba(0,0,0,0.45)]" : "-mx-5 -mb-5 mt-5 rounded-b-lg border-t border-white/10 bg-surface"}>
             <div className={dirty ? "bg-linear-to-r from-gold/15 to-gold/5" : ""}>

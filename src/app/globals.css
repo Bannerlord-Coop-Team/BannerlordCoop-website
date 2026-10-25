@@ -62,6 +62,14 @@ body {
   overflow-x: clip;
 }
 
+/* Browsers without clip (Safari < 16, Chrome < 90) keep hidden: no horizontal scrolling, sticky stays inert. */
+@supports not (overflow-x: clip) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+}
+
 body {
   min-height: 100vh;
   margin: 0;
