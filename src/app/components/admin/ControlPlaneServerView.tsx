@@ -46,7 +46,7 @@ export function ControlPlaneServerView({ initial, accounts }: { initial: ServerP
             <ControlPlaneProgress active={progress.active} error={progress.error} />
             <section className="flex flex-col justify-between gap-5 border border-white/10 bg-surface p-5 lg:flex-row lg:items-start">
                 <div><p className="font-label text-[0.65rem] uppercase tracking-[0.14em] text-gold">Managed server</p><h2 className="mt-2 font-display text-3xl font-semibold text-foreground">{server.displayName}</h2><p className="mt-2 font-mono text-xs text-foreground-dim">{server.serverId}</p></div>
-                <State value={server.operationState} />
+                <State value={server.operationState} desiredState={server.desiredState} />
             </section>
             {activeJob && (
                 <section className="border border-gold/25 bg-gold/8 p-5" aria-live="polite">

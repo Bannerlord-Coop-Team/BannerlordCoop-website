@@ -633,6 +633,7 @@
   "state.deletion-pending": "Ожидает удаления",
   "state.deleting": "Удаляется",
   "state.deleted": "Удалён",
+  "state.sleeping": "Спит — проснётся при подключении игрока",
   "state.suspended": "Приостановлен",
   "state.awaiting-save": "Ожидает сохранения",
   "state.ready": "Готов",

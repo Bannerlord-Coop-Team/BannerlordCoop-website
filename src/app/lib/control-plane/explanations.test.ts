@@ -93,3 +93,10 @@ test("explains exact and structured audit actions", () => {
     assert.match(auditActionExplanation("hosting.job.stop.succeeded"), /durable job transition/iu);
     assert.match(auditActionExplanation("hosting.provider.synthetic_observation"), /provider/iu);
 });
+
+test("distinguishes cold sleep from holds using running intent", () => {
+    assert.equal(stateExplanation("suspended", "running"), "Sleeping — wakes when a player connects");
+    assert.match(stateExplanation("suspended", "stopped"), /on hold/);
+    assert.match(stateExplanation("suspended"), /on hold/);
+    assert.doesNotMatch(stateExplanation("running", "running"), /Sleeping/);
+});

@@ -633,6 +633,7 @@
   "state.deletion-pending": "Löschung ausstehend",
   "state.deleting": "Wird gelöscht",
   "state.deleted": "Gelöscht",
+  "state.sleeping": "Im Ruhemodus — wacht auf, wenn sich ein Spieler verbindet",
   "state.suspended": "Ausgesetzt",
   "state.awaiting-save": "Wartet auf Speichern",
   "state.ready": "Bereit",

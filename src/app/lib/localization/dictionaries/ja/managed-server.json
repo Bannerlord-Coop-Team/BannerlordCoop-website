@@ -633,6 +633,7 @@
   "state.deletion-pending": "削除待ち",
   "state.deleting": "削除中",
   "state.deleted": "削除済み",
+  "state.sleeping": "スリープ中 — プレイヤーが接続すると復帰します",
   "state.suspended": "利用停止",
   "state.awaiting-save": "セーブデータ待ち",
   "state.ready": "準備完了",

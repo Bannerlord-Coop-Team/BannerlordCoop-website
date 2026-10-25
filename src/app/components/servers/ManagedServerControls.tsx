@@ -1,5 +1,7 @@
 "use client";
 
+import { isColdSleeping } from "@/app/lib/hosting/cold-sleep";
+
 import { useTranslations } from "@/app/lib/localization/client";
 
 import {
@@ -57,6 +59,7 @@ type ManagedServerControlsProps = {
     observedGameState: string;
     expectedUpdatedAt: string;
     runtimeInsight?: OwnerRuntimeInsight;
+    subscriptionHold?: { reason: "subscription-funding-lapsed" } | null;
     releaseChannel?: "stable" | "nightly";
 };
 
@@ -129,6 +132,7 @@ export function ManagedServerControls({
     observedGameState,
     expectedUpdatedAt,
     runtimeInsight,
+    subscriptionHold,
     releaseChannel,
 }: ManagedServerControlsProps) {
     const { t } = useTranslations("managed-server");
@@ -227,7 +231,7 @@ export function ManagedServerControls({
             endPolling(serverId);
         }, 0);
         return () => clearTimeout(timeout);
-    }, [serverId, stopRevision, operationState, observedGameState, expectedUpdatedAt, runtimeInsight, isPending, endPolling, t]);
+    }, [serverId, stopRevision, operationState, observedGameState, expectedUpdatedAt, runtimeInsight, isPending, endPolling, t, runtimeInsight?.desiredState, subscriptionHold]);
 
     useEffect(() => {
         const current = restartRef.current;
@@ -238,12 +242,12 @@ export function ManagedServerControls({
         const timeout = setTimeout(() => {
             clearTimeout(timers.current.restart);
             updateRestart(null);
-            setMessage(t("controls.statusCheckedCurrentStateState", { state: stateLabel(operationState, t) }));
+            setMessage(t("controls.statusCheckedCurrentStateState", { state: stateLabel(operationState, t, subscriptionHold ? undefined : runtimeInsight?.desiredState) }));
             setRestartRevision(null);
             endPolling(serverId);
         }, 0);
         return () => clearTimeout(timeout);
-    }, [serverId, restart, restartRevision, restartWindowOpen, operationState, observedGameState, expectedUpdatedAt, endPolling, t]);
+    }, [serverId, restart, restartRevision, restartWindowOpen, operationState, observedGameState, expectedUpdatedAt, endPolling, t, runtimeInsight?.desiredState, subscriptionHold]);
 
     useEffect(() => {
         if (verifyRevision === null || isPending) return;
@@ -251,12 +255,12 @@ export function ManagedServerControls({
         const observed = expectedUpdatedAt > verifyRevision;
         if (!verifyTimedOut && ((!observed && verifyWindowOpen) || TRANSITIONAL_STATES.has(operationState))) return;
         const timeout = setTimeout(() => {
-            setMessage(t("controls.statusCheckedCurrentStateState", { state: stateLabel(operationState, t) }));
+            setMessage(t("controls.statusCheckedCurrentStateState", { state: stateLabel(operationState, t, subscriptionHold ? undefined : runtimeInsight?.desiredState) }));
             setVerifyRevision(null);
             endPolling(serverId);
         }, 0);
         return () => clearTimeout(timeout);
-    }, [serverId, verifyRevision, verifyWindowOpen, verifyTimedOut, operationState, expectedUpdatedAt, isPending, endPolling, t]);
+    }, [serverId, verifyRevision, verifyWindowOpen, verifyTimedOut, operationState, expectedUpdatedAt, isPending, endPolling, t, runtimeInsight?.desiredState, subscriptionHold]);
 
     useEffect(() => {
         if (!canOperate || startJobId === null) return;
@@ -562,7 +566,8 @@ export function ManagedServerControls({
 }
 
 // Resolves a lifecycle state label, keeping unknown external values readable.
-function stateLabel(state: string, t: (key: string) => string) {
+function stateLabel(state: string, t: (key: string) => string, desiredState?: string) {
+    if (isColdSleeping(state, desiredState)) return t("state.sleeping");
     if (LABELLED_STATES.has(state)) return t(`state.${state}`);
     return state.split("-").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }

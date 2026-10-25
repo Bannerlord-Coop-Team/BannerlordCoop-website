@@ -633,6 +633,7 @@
   "state.deletion-pending": "待删除",
   "state.deleting": "正在删除",
   "state.deleted": "已删除",
+  "state.sleeping": "休眠中 — 玩家连接时唤醒",
   "state.suspended": "已暂停",
   "state.awaiting-save": "等待存档",
   "state.ready": "已就绪",

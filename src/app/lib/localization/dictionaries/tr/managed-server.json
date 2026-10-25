@@ -633,6 +633,7 @@
   "state.deletion-pending": "Silme bekleniyor",
   "state.deleting": "Siliniyor",
   "state.deleted": "Silindi",
+  "state.sleeping": "Uyuyor — bir oyuncu bağlandığında uyanır",
   "state.suspended": "Askıya alındı",
   "state.awaiting-save": "Kayıt dosyası bekleniyor",
   "state.ready": "Hazır",

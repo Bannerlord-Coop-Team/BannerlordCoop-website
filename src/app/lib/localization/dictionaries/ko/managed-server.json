@@ -633,6 +633,7 @@
   "state.deletion-pending": "삭제 대기 중",
   "state.deleting": "삭제 중",
   "state.deleted": "삭제됨",
+  "state.sleeping": "절전 중 — 플레이어가 접속하면 깨어납니다",
   "state.suspended": "이용 정지됨",
   "state.awaiting-save": "저장 파일 대기 중",
   "state.ready": "준비 완료",

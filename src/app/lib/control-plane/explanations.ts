@@ -1,3 +1,5 @@
+import { COLD_SLEEP_LABEL, isColdSleeping } from "../hosting/cold-sleep";
+
 const STATE_EXPLANATIONS: Record<string, string> = {
     "awaiting-save": "The slot is prepared and stopped while the default campaign save is being established.",
     available: "The resource is ready for use.",
@@ -150,7 +152,8 @@ const AUDIT_ACTION_EXPLANATIONS: Record<string, string> = {
     "hosting.runner.ovhcloud_vps_update_retry_scheduled": "A retryable managed-runner update failure was retained and scheduled for bounded recovery.",
 };
 
-export function stateExplanation(value: string) {
+export function stateExplanation(value: string, desiredState?: string) {
+    if (isColdSleeping(value, desiredState)) return COLD_SLEEP_LABEL;
     return STATE_EXPLANATIONS[value] ?? "This is the control plane's current durable state for the item.";
 }
 

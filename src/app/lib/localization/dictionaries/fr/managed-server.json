@@ -633,6 +633,7 @@
   "state.deletion-pending": "Suppression en attente",
   "state.deleting": "Suppression",
   "state.deleted": "Supprimé",
+  "state.sleeping": "En veille — se réveille quand un joueur se connecte",
   "state.suspended": "Suspendu",
   "state.awaiting-save": "En attente de sauvegarde",
   "state.ready": "Prêt",

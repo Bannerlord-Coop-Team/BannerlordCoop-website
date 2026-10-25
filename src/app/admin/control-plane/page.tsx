@@ -519,7 +519,7 @@ function ServersView({ page, query, accounts }: { page: HostingPage<ManagedServe
                         >
                             <td className="p-4"><p className="font-semibold text-gold group-hover:underline">{server.displayName}</p><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.serverId}</p></td>
                             <td className="p-4 text-xs text-foreground-muted"><p className="font-semibold text-foreground">{formatAccountOwner(server, ownerLabels)}</p><p className="mt-1 font-mono text-[0.65rem] text-foreground-dim">{server.ownerAccountId ?? server.ownerDiscordUserId}</p></td>
-                            <td className="p-4"><State value={server.operationState} /></td>
+                            <td className="p-4"><State value={server.operationState} desiredState={server.desiredState} /></td>
                             <td className="p-4"><RuntimeObservation server={server} /></td>
                             <td className="p-4 text-xs text-foreground-muted">{releaseChannelLabel(server.releaseChannel)}<br />{shortId(server.installedBuildId)}</td>
                             <td className="p-4 text-xs text-foreground-muted">{vpsProviderLabel(server.provider)}<br />{shortId(server.providerResourceId)}</td>

@@ -1,3 +1,4 @@
+import { isColdSleeping } from "@/app/lib/hosting/cold-sleep";
 import type { Translator } from "@/app/lib/localization/types";
 import { LocalizationProvider } from "@/app/lib/localization/client";
 import { localizedRegionLabel } from "@/app/lib/hosting/region-labels";
@@ -231,6 +232,7 @@ async function ManagedServerLifecycleSection({ server }: { server: MyServerSumma
                     observedGameState={server.observedGameState}
                     expectedUpdatedAt={server.updatedAt}
                     runtimeInsight={server.runtimeInsight}
+                    subscriptionHold={server.subscriptionHold}
                     releaseChannel={server.releaseChannel}
                 />
         </section>
@@ -370,7 +372,7 @@ async function ManagedServerStatus({ accessToken, server, move, checkBackup }: {
     const entries = [
         [t("page.gameState"), backup === "paused" ? t("page.pausedForBackup") : formatManagedValue(server.observedGameState, t)],
         [t("page.lifecycle"), isMoveInProgress(move) ? t(move.state === "returning" ? "move.lifecycleReturning" : "move.lifecycleMoving")
-            : backup !== null ? t("page.backingUp") : formatManagedValue(server.operationState, t)],
+            : backup !== null ? t("page.backingUp") : (isColdSleeping(server.operationState, server.runtimeInsight?.desiredState) && !server.subscriptionHold ? t("state.sleeping") : formatManagedValue(server.operationState, t))],
         [t("page.releaseChannel"), releaseChannelLabel(server.releaseChannel, { stable: t("page.releaseStable"), nightly: t("page.releaseNightly") })],
     ];
     const initializing = INITIALIZING_SERVER_STATES.has(server.operationState);
