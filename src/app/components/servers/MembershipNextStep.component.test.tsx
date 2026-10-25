@@ -21,6 +21,12 @@ it("resolves every membership status from dictionary data and preserves the Patr
         expect(html).toContain('name="returnPath" value="/servers"');
     }
 });
+it("tells a linked patron below the hosting tier which tier includes a server", () => {
+    const summary = composeOnboarding(null, null, null, null);
+    const html = renderToStaticMarkup(<LocalizationProvider locale="en" messages={{ servers }}><MembershipNextStep summary={{ ...summary, status: "nonqualifying", nextAction: "connect_patreon" }} /></LocalizationProvider>);
+    expect(html).toContain("$20/month Veteran tier or higher");
+    expect(html).not.toContain("No qualifying subscription benefit");
+});
 it("pending verification navigates back to account confirmation without OAuth or cookie mutation", async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     const container = document.createElement("div"); document.body.append(container);

@@ -5,7 +5,7 @@
   "membership.status.needs_patreon": "Associe o Patreon para verificar os benefícios da subscrição para esta conta.",
   "membership.status.verification_pending": "A verificação aguarda a confirmação da sua conta. Volte à sua conta; não inicie outra autorização.",
   "membership.status.sync_pending": "A subscrição foi verificada; a sincronização da atribuição está pendente. Atualize o estado.",
-  "membership.status.nonqualifying": "Não foi confirmado nenhum benefício de subscrição elegível. Subscreva ou passe para um nível superior no Patreon e, em seguida, verifique novamente.",
+  "membership.status.nonqualifying": "A sua subscrição do Patreon não inclui um servidor. O alojamento requer o nível Veteran de 20 USD/mês ou superior. Passe para esse nível no Patreon e, em seguida, verifique novamente.",
   "membership.status.verification_expired": "Verifique novamente a sua subscrição através da autorização do Patreon. A verificação é válida durante, no máximo, 24 horas e apenas para novas atribuições.",
   "membership.status.review_required": "A subscrição ou a atribuição precisa de ser revista. Contacte o apoio; os servidores existentes continuam disponíveis.",
   "membership.status.unavailable": "Não foi possível confirmar o estado da conta ou da subscrição. Tente atualizar o estado novamente; a opção Verificar novamente usa uma nova autorização do Patreon.",

@@ -5,7 +5,7 @@
   "membership.status.needs_patreon": "Conecta Patreon para comprobar los beneficios de tu suscripción para esta cuenta.",
   "membership.status.verification_pending": "La verificación está a la espera de que confirmes tu cuenta. Vuelve a tu cuenta; no inicies otra autorización.",
   "membership.status.sync_pending": "Se comprobó la membresía; la sincronización de la asignación está pendiente. Actualiza el estado.",
-  "membership.status.nonqualifying": "No se verificó ningún beneficio de suscripción que cumpla los requisitos. Suscríbete o sube de nivel en Patreon y luego vuelve a comprobarlo.",
+  "membership.status.nonqualifying": "Tu membresía de Patreon no incluye un servidor. El alojamiento requiere el nivel Veteran de 20 $/mes o superior. Sube de nivel en Patreon y luego vuelve a comprobarlo.",
   "membership.status.verification_expired": "Vuelve a comprobar tu membresía mediante la autorización de Patreon. La verificación tiene una validez máxima de 24 horas y solo se aplica a nuevas asignaciones.",
   "membership.status.review_required": "La membresía o la asignación requieren revisión. Contacta con soporte; los servidores existentes siguen disponibles.",
   "membership.status.unavailable": "No se pudo confirmar el estado de la cuenta o de la membresía. Vuelve a consultar el estado; comprobar de nuevo requiere una nueva autorización de Patreon.",

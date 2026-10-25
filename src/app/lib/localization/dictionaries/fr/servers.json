@@ -5,7 +5,7 @@
   "membership.status.needs_patreon": "Connectez Patreon pour vérifier les avantages d’abonnement associés à ce compte.",
   "membership.status.verification_pending": "La vérification attend la confirmation de votre compte. Retournez sur votre compte ; ne lancez pas une autre autorisation.",
   "membership.status.sync_pending": "L’abonnement a été vérifié ; la synchronisation de l’allocation est en attente. Actualisez le statut.",
-  "membership.status.nonqualifying": "Aucun avantage d’abonnement éligible n’a été vérifié. Abonnez-vous ou passez à une formule supérieure sur Patreon, puis relancez la vérification.",
+  "membership.status.nonqualifying": "Votre abonnement Patreon n’inclut pas de serveur. L’hébergement nécessite au minimum le palier Veteran à 20 $/mois. Passez à ce palier sur Patreon, puis relancez la vérification.",
   "membership.status.verification_expired": "Vérifiez de nouveau votre abonnement via l’autorisation Patreon. La vérification dure 24 heures au maximum et ne vaut que pour une nouvelle allocation.",
   "membership.status.review_required": "L’abonnement ou l’allocation doit être examiné. Contactez l’assistance ; les serveurs existants restent disponibles.",
   "membership.status.unavailable": "Le statut du compte ou de l’abonnement n’a pas pu être confirmé. Réessayez de récupérer le statut ; « Vérifier à nouveau » utilise une nouvelle autorisation Patreon.",
