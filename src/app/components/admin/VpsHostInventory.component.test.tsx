@@ -261,3 +261,13 @@ function resources(used: number, free: number): HostingAdminHostResources {
         diskTotalBytes: 100 * 1024,
     };
 }
+
+it("uses neutral suspended wording when slot desired state is unavailable", async () => {
+    const value = host("sleep-host", resources(60, 40), 0);
+    value.occupiedSlots[0].operationState = "suspended";
+    await act(async () => root.render(<VpsHostInventory hosts={[value]} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for sleep-host"]')!.click());
+    expect(container.textContent).toContain("Suspended (sleeping or hold)");
+    expect(container.textContent).not.toContain("Sleeping — wakes when a player connects");
+    expect(container.innerHTML).not.toContain("Check its subscription or administrator notice");
+});

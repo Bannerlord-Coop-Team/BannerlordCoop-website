@@ -540,3 +540,19 @@ it("gives the move status the header's address", async () => {
     expect((await findServerElement(tree, "ServerManagementWorkspace" as string) as ReactElement<{ address?: string | null }>).props.address).toBe("198.51.100.20:4203");
     expect((await findServerElement(tree, "ManagedServerMoveProvider"))?.props).toMatchObject({ headerAddress: "198.51.100.20:4203" });
 });
+
+it.each([
+    ["sleeper", "running", null, "Sleeping — wakes when a player connects"],
+    ["admin hold", "stopped", null, "Suspended"],
+    ["subscription hold", "stopped", { state: "held", reason: "subscription-funding-lapsed", removalDueAt: "2026-11-01T00:00:00.000Z", canExportSave: true }, "Suspended"],
+    ["subscription hold with running intent", "running", { state: "held", reason: "subscription-funding-lapsed", removalDueAt: "2026-11-01T00:00:00.000Z", canExportSave: true }, "Suspended"],
+    ["legacy unknown intent", undefined, null, "Suspended"],
+])("labels %s in the owner header", async (_name, desiredState, subscriptionHold, label) => {
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, operationState: "suspended", observedGameState: "stopped",
+        runtimeInsight: desiredState ? { desiredState, allowedActions: [] } : undefined, subscriptionHold });
+    const workspace = await findServerElement(await page(), "ServerManagementWorkspace");
+    const status = (workspace!.props as unknown as { status: ReactElement<{ children: ReactElement }> }).status.props.children;
+    const html = renderToStaticMarkup(<>{await (status.type as (props: unknown) => Promise<ReactNode>)(status.props)}</>);
+    expect(html).toContain(`Lifecycle</dt><dd class="font-medium text-foreground">${label}`);
+    if (label === "Suspended") expect(html).not.toContain("Sleeping");
+});

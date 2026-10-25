@@ -633,6 +633,7 @@
   "state.deletion-pending": "Eliminación pendiente",
   "state.deleting": "Eliminando",
   "state.deleted": "Eliminado",
+  "state.sleeping": "En reposo — se activa cuando se conecta un jugador",
   "state.suspended": "Suspendido",
   "state.awaiting-save": "Esperando partida guardada",
   "state.ready": "Listo",

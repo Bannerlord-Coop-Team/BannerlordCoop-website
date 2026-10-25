@@ -36,7 +36,7 @@ export async function getMyServerSummary(accessToken: string, serverId: string, 
         ...(Object.hasOwn(value, "subscriptionHold") ? ["subscriptionHold"] : []),
         ...(Object.hasOwn(value, "runtimeInsight") ? ["runtimeInsight"] : [])])
         || (Object.hasOwn(value, "subscriptionHold") && !isSubscriptionHold(value.subscriptionHold))
-        || (Object.hasOwn(value, "runtimeInsight") && !isOwnerRuntimeInsight(value.runtimeInsight))
+        || (Object.hasOwn(value, "runtimeInsight") && !isOwnerRuntimeInsight(value.runtimeInsight, { operationState: value.operationState, observedGameState: value.observedGameState, subscriptionHold: value.subscriptionHold }))
         || value.serverId !== serverId || !timestamp(value.updatedAt)
         || typeof value.displayName !== "string" || value.displayName.length < 1 || value.displayName.length > 48 || /[\p{Cc}]/u.test(value.displayName)
         || !["owner", "manager", "support", "admin"].includes(value.accessRole as string)

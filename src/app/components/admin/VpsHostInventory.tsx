@@ -239,8 +239,9 @@ function HostDetailFooter({ host, runnerTargetSourceCommit }: { host: HostingAdm
 function StateBadge({ value }: { value: string }) {
     const good = ["running", "succeeded", "validated", "available", "healthy"].includes(value);
     const bad = ["failed", "degraded", "revoked", "rejected", "cancelled", "unavailable"].includes(value);
-    const explanation = stateExplanation(value);
-    return <span title={explanation} aria-label={`${value}: ${explanation}`} className={`inline-flex w-fit cursor-help border px-2 py-1 font-label text-[0.58rem] font-semibold uppercase tracking-[0.08em] ${good ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : bad ? "border-crimson/30 bg-crimson/10 text-red-200" : "border-gold/25 bg-gold/8 text-gold"}`}>{value}</span>;
+    const label = value === "suspended" ? "Suspended (sleeping or hold)" : value;
+    const explanation = value === "suspended" ? "This inventory does not include desired state. Open the server for its current sleep or hold status." : stateExplanation(value);
+    return <span title={explanation} aria-label={`${label}: ${explanation}`} className={`inline-flex w-fit cursor-help border px-2 py-1 font-label text-[0.58rem] font-semibold uppercase tracking-[0.08em] ${good ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : bad ? "border-crimson/30 bg-crimson/10 text-red-200" : "border-gold/25 bg-gold/8 text-gold"}`}>{label}</span>;
 }
 
 function formatVpsCost(cost: HostingAdminVpsHost["cost"]) {
