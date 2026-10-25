@@ -23,8 +23,14 @@ the website's side of it.
 - Owners and managers (the control plane's `manage-mods` capability) load the list
   when the tab is first opened. Support and administrator roles see that only owners
   and managers can view and change mods; the website sends no request for them.
-- Native, SandBoxCore and SandBox are pinned at the top and DedicatedServer.Linux at
-  the bottom. Bannerlord Co-op can be moved but stays enabled. Owner mods can be
+- Core modules remain enabled, image-owned and not deletable. When the control
+  plane reports `reorderable: true`, each core module has its own drag handle and
+  arrow-key movement, so owner mods may precede Native or sit between core
+  modules. The control plane validates the complete dependency order; a refused
+  order restores the saved list and names the module that broke a rule.
+  Without that optional field, Native, SandBoxCore and SandBox remain fixed at
+  the top and DedicatedServer.Linux at the bottom, preserving older runners.
+  Bannerlord Co-op can be moved but stays enabled, with no "Required" badge. Owner mods can be
   dragged by their handle or moved with the arrow keys, and toggled with the gold
   switch. Each change saves itself: a toggle saves at once, a drag when it ends,
   and arrow-key moves 600 ms after the last key (or at once if the owner leaves
@@ -207,6 +213,11 @@ Which mods run headless is the control plane's and the dedicated server's concer
   ends the pause now."). Neither refusal starts status polling or a retry.
 
 ## Rollout
+
+Deploy this website's optional `reorderable` reader before the control-plane
+writer emits that field. Core movement appears only when the assigned runner
+supports it. The control plane retains its reader-first store rollout and
+rollback gates; the website never infers support from a build or mod id.
 
 The tab depends on, in order:
 
