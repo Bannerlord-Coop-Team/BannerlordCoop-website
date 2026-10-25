@@ -228,7 +228,7 @@ it("marks in red the hours more servers were online than can each burst, and dra
     expect(burst[50]!.style.backgroundImage).toBe("");
     expect(rightColumn("vps-1a2b3c4d")).toEqual(["10 h over burst", "7.5 pair-h measured", "71% measured"]);
     expect(strip("vps-1a2b3c4d").getAttribute("aria-label")).toBe("vps-1a2b3c4d: 4 of 4 slots; 3 can burst together; over burst 10 hours in the week; busiest Wed 14 Oct 20:00 UTC, 4 online; 71% measured");
-    expect(legend().textContent).toContain("Red: more servers online than can each burst to 1.6 vCPU and 2.5 GiB");
+    expect(legend().textContent).toContain("Red: more servers online than the reported burst capacity");
     expect(legend().querySelector('span[aria-hidden="true"].bg-crimson')).not.toBeNull();
     expect(intro().textContent).toBe(INTRO);
     expect(container.textContent).not.toContain("All slots busy");
@@ -447,9 +447,9 @@ it("marks in red the hours over at-once capacity once the control plane reports 
     expect(legend().textContent).toContain("Red: more servers online than the VPS can run at once at what they usually need");
     expect(legend().textContent).not.toContain("can each burst");
     expect(cells("vps-1a2b3c4d").burst).toBeUndefined();
-    expect(rightColumn("vps-1a2b3c4d")).toEqual(["Fits at once", "3 can burst together (1.6 vCPU, 2.5 GiB each)", "7.5 pair-h measured", "71% measured"]);
+    expect(rightColumn("vps-1a2b3c4d")).toEqual(["Fits at once", "3 can burst together (reported capacity)", "7.5 pair-h measured", "71% measured"]);
     expect(cells("vps-1a2b3c4d").shading[2 * 24 + 20]!.getAttribute("title")).toBe("Wed 14 Oct 20:00 UTC · 4 online; can run 4 at once; 3 can burst together, over burst capacity");
-    expect(rightColumn("vps-spare")).toEqual(["At once not modelled yet", "2 can burst together (1.6 vCPU, 2.5 GiB each)", "0.0 pair-h measured", "0% measured"]);
+    expect(rightColumn("vps-spare")).toEqual(["At once not modelled yet", "2 can burst together (reported capacity)", "0.0 pair-h measured", "0% measured"]);
 
     // At three at once, the hours all four were online are over: the red row follows overAtOnce.
     mocks.request.mockResolvedValue({ ...overlap, hosts: [{ ...over, atOnceServers: 3, overAtOnce: over.overBurst, overAtOnceHours: 10 }] });
@@ -457,7 +457,7 @@ it("marks in red the hours over at-once capacity once the control plane reports 
     await settle();
     const red = cells("vps-1a2b3c4d").burst!;
     expect(red.filter((cell) => cell.classList.contains("bg-crimson"))).toHaveLength(10);
-    expect(rightColumn("vps-1a2b3c4d")).toEqual(["10 h over at once", "3 can burst together (1.6 vCPU, 2.5 GiB each)", "7.5 pair-h measured", "71% measured"]);
+    expect(rightColumn("vps-1a2b3c4d")).toEqual(["10 h over at once", "3 can burst together (reported capacity)", "7.5 pair-h measured", "71% measured"]);
 });
 
 it("draws the red row from at-once capacity where it differs from burst capacity", async () => {
@@ -473,5 +473,5 @@ it("draws the red row from at-once capacity where it differs from burst capacity
     await open();
     const red = cells("vps-de-split").burst!.flatMap((cell, hour) => cell.classList.contains("bg-crimson") ? [hour] : []);
     expect(red).toEqual([20, 21, 44, 45, 68, 69, 92, 93, 116, 117, 140, 141, 164, 165]);
-    expect(rightColumn("vps-de-split")).toEqual(["14 h over at once", "3 can burst together (1.6 vCPU, 2.5 GiB each)", "7.5 pair-h measured", "71% measured"]);
+    expect(rightColumn("vps-de-split")).toEqual(["14 h over at once", "3 can burst together (reported capacity)", "7.5 pair-h measured", "71% measured"]);
 });

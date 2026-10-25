@@ -72,7 +72,7 @@ it("accepts burst servers counted at 3 GiB each, as the current control plane do
     const at = (burstServers: number) => ({ ...burstOverlap, hosts: [{ ...burstHost, memoryBytes: 5 * GIB, burstServers }] });
     expect(parsePlacementOverlap(at(1))).not.toBeNull();
     expect(parsePlacementOverlap(at(2))).not.toBeNull();
-    expect(parsePlacementOverlap(at(3))).toBeNull();
+    expect(parsePlacementOverlap(at(3))).not.toBeNull();
 });
 
 it("accepts the burst-capacity shape exactly as the contract describes it", () => {
@@ -152,9 +152,6 @@ it.each([
     ["memoryBytes beyond the safe integers", { ...burstOverlap, hosts: [{ ...burstHost, memoryBytes: 2 ** 53 }] }],
     ["a negative burstServers", { ...burstOverlap, hosts: [{ ...burstHost, burstServers: -1 }] }],
     ["a fractional burstServers", { ...burstOverlap, hosts: [{ ...burstHost, burstServers: 2.5 }] }],
-    ["more burstServers than its vCPUs allow", { ...burstOverlap, hosts: [{ ...burstHost, vCpu: 4 }] }],
-    ["more burstServers than its RAM allows", { ...burstOverlap, hosts: [{ ...burstHost, memoryBytes: 7.5 * GIB - 1 }] }],
-    ["more burstServers than its vCPUs allow when its RAM is unknown", { ...burstOverlap, hosts: [{ ...burstHost, vCpu: 4, memoryBytes: null }] }],
     ["an over-burst character other than 1, 0 or -", { ...burstOverlap, hosts: [{ ...burstHost, overBurst: `x${burstHost.overBurst.slice(1)}` }] }],
     ["an over-burst string of 167 hours", { ...burstOverlap, hosts: [{ ...burstHost, overBurst: burstHost.overBurst.slice(1) }] }],
     ["an over-burst count that does not match its string", { ...burstOverlap, hosts: [{ ...burstHost, overBurstHours: 6 }] }],
@@ -221,7 +218,7 @@ it("accepts the at-once shape exactly as the contract describes it, with its red
     expect(overlapOverRow(atOnceHost)).toBeNull();
     expect(overlapBurstRow(atOnceHost)).toBe(burstHost.overBurst);
     expect(overlapAtOnceLabel(atOnceHost)).toBe("Fits at once");
-    expect(overlapBurstLabel(atOnceHost)).toBe("3 can burst together (1.6 vCPU, 2.5 GiB each)");
+    expect(overlapBurstLabel(atOnceHost)).toBe("3 can burst together (reported capacity)");
     expect(overlapBurstLabel(burstHost)).toBe("5 h over burst");
     expect(overlapCellLabel(atOnceHost, overlap.windowStartedAt, OVER_HOUR)).toBe("Wed 14 Oct 20:00 UTC · 4 online; can run 4 at once; 3 can burst together, over burst capacity");
     // Three at once: the over-burst hours are now over at-once capacity.
@@ -277,4 +274,12 @@ it("marks the hours over at-once capacity, not over burst capacity, where the tw
     expect(overlapAtOnceLabel(splitHost)).toBe("14 h over at once");
     expect(overlapCellLabel(splitHost, overlap.windowStartedAt, 20)).toBe("Mon 12 Oct 20:00 UTC · 3 online; can run 2 at once; over at-once capacity; 3 can burst together");
     expect(overlapCellLabel(splitHost, overlap.windowStartedAt, 21)).toBe("Mon 12 Oct 21:00 UTC · 4 online; can run 2 at once; over at-once capacity; 3 can burst together, over burst capacity");
+});
+
+ it("accepts measured burst capacity beyond the former CPU and memory ratios", () => {
+    for (const shape of [burstOverlap, atOnceOverlap]) {
+        const result = parsePlacementOverlap({ ...shape, hosts: [{ ...shape.hosts[0], burstServers: 12,
+            overBurst: "0".repeat(168), overBurstHours: 0 }] });
+        expect(result).not.toBeNull();
+    }
 });

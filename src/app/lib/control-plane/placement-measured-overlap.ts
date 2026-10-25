@@ -11,9 +11,6 @@ import type {
 
 /** The measured window: one week of whole UTC hours. */
 export const PLACEMENT_OVERLAP_HOURS = 168;
-/** What one server bursting needs: the fleet capacity model's burst targets, 1.6 vCPU and 2.5 GiB of RAM. */
-export const BURST_VCPU = 1.6;
-export const BURST_MEMORY_BYTES = 2.5 * 1024 ** 3;
 
 const HOUR_MILLISECONDS = 3_600_000;
 /** Allowance for figures the control plane rounds to two decimals. */
@@ -95,10 +92,8 @@ function burstFields(value: Record<string, unknown>) {
     if (!measuredFields(value)) return false;
     const memory = value.memoryBytes;
     return (memory === null || (Number.isSafeInteger(memory) && (memory as number) > 0))
-        // Each server bursting takes 1.6 vCPU and 2.5 GiB, so no more can at once than the VPS has room for. Older
-        // control planes counted 2 vCPU or 3 GiB per server, never more servers than this allows.
-        && count(value.burstServers, Math.floor((value.vCpu as number) / BURST_VCPU))
-        && (memory === null || (value.burstServers as number) <= Math.floor((memory as number) / BURST_MEMORY_BYTES))
+        // Capacity comes from the control plane model; it is not a static hardware ratio.
+        && count(value.burstServers, Number.MAX_SAFE_INTEGER)
         && verdicts(value.overBurst, value.overBurstHours)
         && withinSlots(value as HostingPlacementOverlapBurstHost)
         && consistentOverHours(value as HostingPlacementOverlapBurstHost, value.burstServers as number, value.overBurst as string);
@@ -185,7 +180,7 @@ export function overlapBurstRow(host: HostingPlacementOverlapHost) {
 
 /** The legend's red key: over at-once capacity once the control plane reports it, over burst capacity before. */
 export const OVERLAP_RED_AT_ONCE = "Red: more servers online than the VPS can run at once at what they usually need";
-export const OVERLAP_RED_BURST = "Red: more servers online than can each burst to 1.6 vCPU and 2.5 GiB";
+export const OVERLAP_RED_BURST = "Red: more servers online than the reported burst capacity";
 
 /** Whether a VPS reports its at-once capacity, as every host does once the control plane fits on typical demand. */
 export function overlapHasAtOnce(host: HostingPlacementOverlapHost): host is HostingPlacementOverlapBurstHost & { atOnceServers: number | null; overAtOnce: string; overAtOnceHours: number } {
@@ -334,15 +329,10 @@ export function overlapSummary(host: HostingPlacementOverlapHost, windowStartedA
     return clauses.join("; ");
 }
 
-/**
- * "10 h over burst" for a VPS that can exceed its burst capacity, "Bursts fit" for one that cannot; null without burst
- * capacity. Once the control plane reports at-once capacity, burst capacity is information: "3 can burst together (1.6
- * vCPU, 2.5 GiB each)", in the overlap's own terms, the VPS's vCPUs and RAM at the burst targets. That is not the capacity
- * tab's burst headroom, which counts usable cores at each source's burst CPU, so it is not worded as it is.
- */
+/** Report the control plane burst capacity without assuming its demand model. */
 export function overlapBurstLabel(host: HostingPlacementOverlapHost) {
     if (!overlapHasBurst(host)) return null;
-    if (overlapHasAtOnce(host)) return `${host.burstServers} can burst together (${BURST_VCPU} vCPU, ${BURST_MEMORY_BYTES / 1024 ** 3} GiB each)`;
+    if (overlapHasAtOnce(host)) return `${host.burstServers} can burst together (reported capacity)`;
     return overlapCanExceedBurst(host) ? `${host.overBurstHours} h over burst` : "Bursts fit";
 }
 
