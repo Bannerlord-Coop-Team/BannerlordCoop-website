@@ -3,7 +3,7 @@ import type { ModEntry, ModOrderEntry, ModRunsOn, ModsState, ModUploadManifest }
 // The Mods tab's domain: installed mods as the control plane lists them, the catalog the panel depends
 // on (the API-backed catalog implements it; panel tests use an in-memory one), and pure load-order edits.
 
-/** One installed module. `pinned`: a core module with a fixed position; `required`: Coop, always enabled. */
+/** One installed module. `pinned`: image-owned core; `required`: Coop. `reorderable` controls movement when supplied. */
 export type ServerMod = ModEntry;
 /** The installed list, its revision for stale-edit protection, and whether a restart would change the running game. */
 export type ServerModsState = ModsState;
@@ -44,12 +44,17 @@ export function isOwnerMod(mod: ServerMod): boolean {
     return !mod.pinned && !mod.required;
 }
 
-/** Moves a movable mod, keeping it between the pinned head modules and the pinned tail module. */
+/** Movement follows the control plane's flag; older responses retain their fixed core positions. */
+export function canMoveServerMod(mod: ServerMod): boolean {
+    return mod.reorderable ?? !mod.pinned;
+}
+
+/** Moves within the positions the runner exposes; dependency validation belongs to the saved-order request. */
 export function moveServerMod(mods: readonly ServerMod[], fromIndex: number, toIndex: number): ServerMod[] {
     const moving = mods[fromIndex];
-    if (!moving || moving.pinned) return [...mods];
-    const first = mods.findIndex(mod => !mod.pinned);
-    const last = mods.length - 1 - [...mods].reverse().findIndex(mod => !mod.pinned);
+    if (!moving || !canMoveServerMod(moving)) return [...mods];
+    const first = mods.findIndex(canMoveServerMod);
+    const last = mods.length - 1 - [...mods].reverse().findIndex(canMoveServerMod);
     const target = Math.min(Math.max(toIndex, first), last);
     if (target === fromIndex) return [...mods];
     const next = mods.filter((_, index) => index !== fromIndex);

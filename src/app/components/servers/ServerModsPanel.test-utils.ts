@@ -91,7 +91,7 @@ export function createMockServerModCatalog(mods: ServerMod[] = sampleServerMods(
             const byId = new Map(state.mods.map(mod => [mod.id, mod]));
             if (order.length !== byId.size || order.some(entry => !byId.has(entry.id))) throw new ServerModsError("invalid_request");
             const next = order.map(entry => applyRunsOn({ ...byId.get(entry.id)!, enabled: isOwnerMod(byId.get(entry.id)!) ? entry.enabled : true }, entry));
-            const movedPin = next.find((mod, index) => mod.pinned && state.mods[index].id !== mod.id);
+            const movedPin = next.find((mod, index) => mod.pinned && mod.reorderable !== true && state.mods[index].id !== mod.id);
             if (movedPin) throw new ServerModsError("mod_order_invalid", false, movedPin.id);
             return commit(next);
         },

@@ -99,6 +99,8 @@ export type ModEntry = {
     enabled: boolean;
     pinned: boolean;
     required: boolean;
+    /** Overrides legacy pinned-position behavior; ownership, enabled and deletion rules stay separate. */
+    reorderable?: boolean;
     sizeBytes: number;
     sha256: string | null;
     dependsOn: string[];
@@ -342,7 +344,10 @@ export function isModIssue(value: unknown): value is string {
 function parseModEntry(value: unknown): ModEntry {
     if (!isRecord(value)) throw new Error("Invalid mod entry");
     const reportsRunsOn = [...ENTRY_RUNS_ON_KEYS, ENTRY_LOCK_REASON_KEY].some((key) => Object.hasOwn(value, key));
-    exact(value, runsOnEntryKeys(reportsRunsOn, value.runsOnLocked === true));
+    const reportsReorderable = Object.hasOwn(value, "reorderable");
+    const keys = runsOnEntryKeys(reportsRunsOn, value.runsOnLocked === true);
+    exact(value, reportsReorderable ? [...keys, "reorderable"] : keys);
+    if (reportsReorderable && typeof value.reorderable !== "boolean") throw new Error("Invalid mod reorderable flag");
     if (!isModId(value.id) || !(isModName(value.name) || isModId(value.name))) throw new Error("Invalid mod identity");
     if (value.version !== "" && !isModVersion(value.version)) throw new Error("Invalid mod version");
     if (typeof value.enabled !== "boolean" || typeof value.pinned !== "boolean" || typeof value.required !== "boolean" || (value.pinned && value.required)) {
@@ -355,6 +360,7 @@ function parseModEntry(value: unknown): ModEntry {
     const entry: ModEntry = {
         id: value.id, name: value.name as string, version: value.version as string, enabled: value.enabled, pinned: value.pinned, required: value.required,
         sizeBytes: value.sizeBytes as number, sha256: value.sha256 as string | null, dependsOn: [...value.dependsOn], issues: [...value.issues as string[]],
+        ...(reportsReorderable ? { reorderable: value.reorderable as boolean } : {}),
     };
     return reportsRunsOn ? { ...entry, ...parseRunsOnFields(value) } : entry;
 }

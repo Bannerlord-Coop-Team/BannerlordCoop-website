@@ -6,7 +6,7 @@ import { Download, FlaskConical, Lock, Menu, Puzzle, RefreshCw, Trash2, Upload }
 import { useTranslations } from "@/app/lib/localization/client";
 import { buildModArchive, ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
 import {
-    canChooseServerModRunsOn, changedServerModRunsOn, enabledOwnerModCount, findServerMod, isOwnerMod, isPlayersOnlyAgainstDefault,
+    canChooseServerModRunsOn, canMoveServerMod, changedServerModRunsOn, enabledOwnerModCount, findServerMod, isOwnerMod, isPlayersOnlyAgainstDefault,
     moveServerMod, sameServerModOrder, serverModListFile, serverModLoadOrder, serverModsPlayersNeed, ServerModsError, setServerModRunsOn,
     toggleServerMod,
     type ServerMod, type ServerModArchive, type ServerModCatalog, type ServerModListFile, type ServerModRunsOn, type ServerModsState, type ServerModUploadProgress,
@@ -339,13 +339,14 @@ function ModRow({ mod, index, idPrefix, editable, canDelete, dragging, onDragSta
 }) {
     const { t } = useTranslations("managed-server");
     const checkboxId = `${idPrefix}-mod-${index}`;
-    const movable = editable && !mod.pinned;
+    const movable = editable && canMoveServerMod(mod);
+    const fixedCore = mod.pinned && !canMoveServerMod(mod);
     const owner = isOwnerMod(mod);
     return <li onDragOver={onDragOver} onDrop={event => event.preventDefault()} className={`flex items-center gap-3 px-3 py-3 sm:px-5 ${dragging ? "bg-gold/10 opacity-60" : ""}`}>
         <span className="w-6 shrink-0 text-right font-mono text-xs text-foreground-muted">{index + 1}</span>
         {movable
             ? <button type="button" draggable data-mod-handle={mod.id} aria-label={t("mods.reorder", { name: mod.name })} aria-describedby={`${idPrefix}-reorder-help`} onDragStart={onDragStart} onDragEnd={onDragEnd} onKeyDown={onKeyDown} className={`${fileIconButtonClass} cursor-grab active:cursor-grabbing`}><Menu className="size-4" aria-hidden="true" /></button>
-            : <span className="inline-flex size-10 shrink-0 items-center justify-center text-foreground-muted/50" title={mod.pinned ? t("mods.coreLocked") : undefined}>{mod.pinned && <Lock className="size-4" aria-label={t("mods.coreLocked")} />}</span>}
+            : <span className="inline-flex size-10 shrink-0 items-center justify-center text-foreground-muted/50" title={fixedCore ? t("mods.coreLocked") : undefined}>{fixedCore && <Lock className="size-4" aria-label={t("mods.coreLocked")} />}</span>}
         <div className="min-w-0 flex-1">
             <label htmlFor={checkboxId} title={mod.id} className={`block truncate text-sm ${editable && owner ? "cursor-pointer" : ""}`}>
                 <span className={`font-medium ${mod.enabled ? "text-foreground" : "text-foreground-muted"}`}>{mod.name}</span>
@@ -354,7 +355,7 @@ function ModRow({ mod, index, idPrefix, editable, canDelete, dragging, onDragSta
             {owner && mod.runsOn !== undefined && <ModRunsOnChoice mod={mod} id={`${idPrefix}-runs-on-${index}`} editable={editable} onChange={onRunsOn} />}
             {mod.issues.length > 0 && <ul className="mt-1 space-y-0.5 text-xs text-foreground-muted">{mod.issues.map(issue => <li key={issue}>{describeModIssue(issue, t)}</li>)}</ul>}
         </div>
-        {mod.pinned ? <span className={badgeClass}>{t("mods.core")}</span> : mod.required && <span className={badgeClass}>{t("mods.required")}</span>}
+        {mod.pinned && <span className={badgeClass}>{t("mods.core")}</span>}
         <ModSwitch id={checkboxId} checked={mod.enabled} disabled={!editable || !owner} onChange={onToggle} />
         {editable && owner
             ? <button type="button" disabled={!canDelete} aria-label={t("mods.delete", { name: mod.name })} onClick={onDelete} className={`${fileIconButtonClass} hover:!text-red-300`}><Trash2 className="size-4" aria-hidden="true" /></button>
