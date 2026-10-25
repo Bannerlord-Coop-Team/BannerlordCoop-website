@@ -11,6 +11,7 @@ import { isPublishedCheat } from "@/app/cheats/debugOnly";
 import { idLookupOutputs } from "@/app/cheats/idLookups";
 import { translateCheat } from "@/app/cheats/translation";
 import { DownloadServerLogButton } from "./DownloadServerLogButton";
+import { ghostButtonClass, segmentedButtonClass, segmentedGroupClass } from "./segmented-controls";
 import { SERVER_WORKSPACE_TAB_PARAMETER, serverWorkspaceSectionFromTab, serverWorkspaceTab, type ServerWorkspaceSection } from "./server-workspace-tabs";
 
 const sections = [
@@ -129,7 +130,6 @@ export function ServerConsoleWorkspace({ children, onSelectCommand, coopCommands
                     <div role="group" aria-label={cheats.t("ui.type")} className="flex flex-wrap gap-2">{typeFilters.map(option => <button key={option.id} type="button" aria-pressed={typeFilter === option.id} disabled={!available} onClick={() => setTypeFilter(option.id)} className={`inline-flex min-h-8 items-center gap-1.5 rounded-full border px-3 text-xs focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40 ${typeFilter === option.id ? "border-gold/50 bg-gold/15 text-gold" : "border-white/15 text-foreground-muted hover:text-foreground"}`}>{option.label}<span className="tabular-nums opacity-70">{searched.reduce((total, { commands }) => total + commands.filter(command => matchesConsoleFilter(command, option.id)).length, 0)}</span></button>)}</div>
                     {categories.length > 0 && <><label htmlFor={`${id}-category`} className="sr-only">{cheats.t("ui.categories")}</label><select id={`${id}-category`} value={category} onChange={event => setCategory(event.target.value)} disabled={!available} className="min-h-8 rounded-full border border-white/15 bg-background px-3 text-xs text-foreground-muted focus-visible:outline-2 focus-visible:outline-gold disabled:cursor-not-allowed disabled:opacity-40"><option value="">{cheats.t("ui.categories")}</option>{categories.map(name => <option key={name} value={name}>{name}</option>)}</select></>}
                 </div>
-                <p className="mt-3 text-xs leading-5 text-foreground-muted">{t("managementWorkspace.selectToInsertThenEditAnyLtArgumentsGtBefore")}</p>
                 <div className="mt-4 max-h-96 space-y-4 overflow-y-auto overscroll-contain pr-1">
                     {groups.map(({ group, commands }) => <section key={group}>
                         <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-foreground-muted">{group}</h3>
@@ -146,11 +146,12 @@ export function ServerConsoleWorkspace({ children, onSelectCommand, coopCommands
 export function UnavailableServerConsole({ controls, logDownload }: { controls?: ReactNode; logDownload?: { serverId: string; userId: string } }) {
     const { t } = useTranslations("server-common");
     return <section className="min-w-0 rounded-lg border border-white/10 bg-surface">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-5">
-            <h2 className="text-base font-semibold">{t("managementWorkspace.console")}</h2>
-            <DownloadServerLogButton {...logDownload} className={`${button} !border-transparent !bg-transparent !text-foreground-muted`} />
+        {/* Mirrors the live console header: title, lifecycle controls on the right, rare log download beside them. */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-3 border-b border-white/10 p-3 sm:px-4">
+            <h2 className="mr-auto flex items-center gap-2 text-sm font-semibold"><Terminal className="size-4 text-gold" aria-hidden="true" />{t("managementWorkspace.console")}</h2>
+            <div className="order-3 w-full sm:order-2 sm:w-auto">{controls ?? <div role="group" aria-label={t("managementWorkspace.serverControls")} className={`${segmentedGroupClass} w-full sm:w-auto`}>{[{ label: t("managementWorkspace.start"), icon: Play }, { label: t("managementWorkspace.stop"), icon: Square }, { label: t("managementWorkspace.restart"), icon: RotateCw }].map(({ label, icon: Icon }) => <button key={label} disabled className={`${segmentedButtonClass} flex-1 sm:flex-none`}><Icon className="size-3.5 shrink-0" aria-hidden="true" />{label}</button>)}</div>}</div>
+            <div className="order-2 sm:order-3"><DownloadServerLogButton {...logDownload} className={ghostButtonClass} /></div>
         </div>
-        <div className="border-b border-white/10 px-5 py-3">{controls ?? <div role="group" aria-label={t("managementWorkspace.serverControls")} className="grid grid-cols-3 gap-2 sm:flex">{[{ label: t("managementWorkspace.start"), icon: Play }, { label: t("managementWorkspace.stop"), icon: Square }, { label: t("managementWorkspace.restart"), icon: RotateCw }].map(({ label, icon: Icon }) => <button key={label} disabled className={`${button} !gap-1 !px-2 !text-xs sm:!gap-2 sm:!px-3 sm:!text-sm`}><Icon className="size-3.5 shrink-0 sm:size-4" aria-hidden="true" />{label}</button>)}</div>}</div>
         <div role="log" aria-label={t("managementWorkspace.consoleOutput")} tabIndex={0} className="h-80 overflow-auto bg-surface-raised p-4 font-mono text-[13px] leading-7 text-foreground-muted outline-gold sm:h-96 sm:p-5 sm:text-sm">{t("managementWorkspace.consoleOutputIsNotConnectedForThisServer")}</div>
         <div className="flex gap-2 border-t border-white/10 p-5">
             <label className="sr-only" htmlFor="console-command">{t("managementWorkspace.consoleCommand")}</label>
@@ -238,7 +239,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
             {banner}
             {notice && <p className="my-5 rounded-md border border-white/10 bg-surface px-4 py-3 text-sm leading-6 text-foreground-muted">{notice}</p>}
             <header className="mt-4 mb-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                     <div className="min-w-0">
                         {name}
                         <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-foreground-muted" onClick={event => {
@@ -246,7 +247,7 @@ export function ServerManagementWorkspace({ name, address, summary, status, visi
                             if (event.target instanceof Element && event.target.closest('a[href="#server-visibility"]')) setSection("Settings");
                         }}>{summary}{visibility}</div>
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 lg:pt-1">
                         <div className="flex flex-wrap items-center gap-2 text-sm">
                             <span id="server-address" className={`font-mono ${addressEmphasis ? "animate-pulse text-gold drop-shadow-[0_0_8px_rgba(212,175,55,0.8)]" : "text-foreground-muted"}`} aria-live="polite">{address ? (showAddress ? address : t("managementWorkspace.ipHidden")) : t("managementWorkspace.notAssigned")}</span>
                             <button disabled={!address || interactionLocked} className={button} aria-controls="server-address" aria-expanded={showAddress} aria-label={showAddress ? t("managementWorkspace.hideServerIpAndPort") : t("managementWorkspace.showServerIpAndPort")} title={showAddress ? t("managementWorkspace.hideServerIpAndPort") : t("managementWorkspace.showServerIpAndPort")} onClick={() => setShowAddress(!showAddress)}>{showAddress ? <EyeOff className="size-4" aria-hidden="true" /> : <Eye className="size-4" aria-hidden="true" />}</button>

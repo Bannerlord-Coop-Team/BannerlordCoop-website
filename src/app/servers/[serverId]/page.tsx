@@ -28,7 +28,7 @@ import {
     type MyServerDeletionStatus,
 } from "@/app/lib/hosting/my-servers";
 import { getMyServerDeletionStatus, getMyServerMoveStatus, getMyServerNotices, getMyServerSummary } from "@/app/lib/hosting/my-servers-server";
-import { listServerManagers } from "@/app/lib/hosting/server-managers";
+import { listServerManagers, type ServerManager } from "@/app/lib/hosting/server-managers";
 import { isMoveInProgress } from "@/app/lib/hosting/server-move";
 import { SubscriptionHoldNotice } from "@/app/components/servers/SubscriptionHoldNotice";
 import { ManagedServerNoticeBanner } from "@/app/components/servers/ManagedServerNoticeBanner";
@@ -174,12 +174,9 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
             <ManagedServerStatus accessToken={accessToken} server={server} move={move} checkBackup={server.accessRole === "owner" || server.accessRole === "manager"} />
         </Suspense>}
     >
-        <ManagedServerSections userId={userId} accessToken={accessToken} server={server} deletionStatus={deletionStatus} />
+        <ManagedServerSections userId={userId} accessToken={accessToken} server={server} deletionStatus={deletionStatus} managers={managers} />
         <ServerWorkspacePanel section="Mods">
             <ManagedServerMods key={`${userId}:${server.serverId}`} serverId={server.serverId} canManage={server.accessRole === "owner" || server.accessRole === "manager"} />
-        </ServerWorkspacePanel>
-        <ServerWorkspacePanel section="Settings">
-            <ServerSettingsPanel settingsAccess={{ serverId: server.serverId, maintenanceSlot: server.maintenanceSlot, timezone: server.timezone, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} managerAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner", managers }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
         </ServerWorkspacePanel>
     </ServerManagementWorkspace></ManagedServerMoveProvider>;
 }
@@ -190,11 +187,13 @@ function ManagedServerSections({
     accessToken,
     server,
     deletionStatus,
+    managers,
 }: {
     userId: string;
     accessToken: string;
     server: MyServerSummary;
     deletionStatus?: MyServerDeletionStatus | null;
+    managers: readonly ServerManager[] | null;
 }) {
     return (
         <ManagedServerPollingProvider readStatus={readManagedServerStatusFingerprint} initialServer={{ serverId: server.serverId, updatedAt: server.updatedAt, operationState: server.operationState }}>
@@ -204,6 +203,7 @@ function ManagedServerSections({
                     : <ServerConsoleWorkspace><UnavailableServerConsole controls={<ManagedServerLifecycleSection server={server} />} logDownload={{ serverId: server.serverId, userId }} /></ServerConsoleWorkspace>}
             </ServerWorkspacePanel>
             <ServerWorkspacePanel section="Settings">
+                <ServerSettingsPanel settingsAccess={{ serverId: server.serverId, maintenanceSlot: server.maintenanceSlot, timezone: server.timezone, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} managerAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner", managers }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
                 <ManagedServerPassword serverId={server.serverId} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} />
                 <ManagedServerDelete key={`${userId}:${server.serverId}`} serverId={server.serverId} displayName={server.displayName} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} deletionStatus={deletionStatus} />
             </ServerWorkspacePanel>

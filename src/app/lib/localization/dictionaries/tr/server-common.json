@@ -14,7 +14,6 @@
   "managementWorkspace.browseCommands": "Komutlara göz at",
   "managementWorkspace.searchConsoleCommands": "Konsol komutlarında ara",
   "managementWorkspace.searchCommands": "Komutlarda ara…",
-  "managementWorkspace.selectToInsertThenEditAnyLtArgumentsGtBefore": "Eklemek için seçin, ardından göndermeden önce varsa <arguments> yer tutucularını düzenleyin. Kullanılabilir komutlar kurulu sürüme bağlıdır.",
   "managementWorkspace.noCommandsMatchYourSearch": "Aramanızla eşleşen komut yok.",
   "managementWorkspace.idLookups": "Kimlik sorguları",
   "managementWorkspace.returnsIds": "Döndürür",

@@ -235,9 +235,9 @@ it("pins the save bar to the viewport only while there are unsaved changes", asy
     expect(bar()).toBeNull();
 });
 
-it("states once that configuration changes apply on the next start", async () => {
+it("keeps routine helper text out of an editable configuration", async () => {
     await render();
-    expect(container.textContent).toContain("Editing the files on the server's runner.");
+    expect(container.textContent).not.toContain("Editing the files on the server's runner.");
     expect(container.textContent).not.toContain("next time the server starts");
 });
 

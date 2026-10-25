@@ -55,7 +55,7 @@ it("renders current maintenance preferences and discards unsaved changes without
     await render();
     expect(container.querySelector<HTMLSelectElement>("#settings-maintenance-window")!.value).toBe("06:00-07:00");
     expect(container.querySelectorAll("#settings-maintenance-window option")).toHaveLength(3);
-    expect(container.textContent).toContain("America/Chicago");
+    expect(container.textContent).toContain("Central Time");
     expect(container.textContent).not.toContain("Nightly is experimental.");
     expect(container.querySelector("#config-json")).toBeNull();
     await change("#settings-maintenance-window", "10:00-11:00");

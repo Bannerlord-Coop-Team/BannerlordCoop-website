@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw, Sparkles } from "lucide-react";
+import { RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { changeManagedServerCampaign, listManagedServerCampaigns } from "@/app/servers/managed-server-campaign-actions";
 import { useSaveDeletion } from "./use-save-deletion";
 import { DisabledControlHint } from "./DisabledControlHint";
-import { fileButtonClass, filePrimaryButtonClass } from "./server-file-styles";
+import { fileButtonClass, fileIconButtonClass, filePrimaryButtonClass } from "./server-file-styles";
+import { workspaceBadgeClass, workspaceListClass } from "./server-workspace-ui";
 import type { CampaignPage } from "../../../../supabase/functions/_shared/server-campaign-contract";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
 
@@ -117,40 +118,37 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
     const newCampaignDisabled = busy || !stopped || !campaigns || noCampaignYet;
     const newCampaignHint = status === null ? "Campaign changes are unavailable until the server status loads." : !stopped ? "Stop the server before starting a new campaign." : busy ? "Finish the current campaign operation first." : !campaigns ? "Campaigns are still loading." : "This server has no campaign yet. Starting it creates a fresh one.";
 
-    return <div className="mt-4 border-t border-white/10 pt-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-                <h3 className="text-sm font-semibold">Campaigns on this server</h3>
-                <p className="mt-1 text-xs leading-5 text-foreground-muted">{stopHint ?? "Choose which campaign loads on the next start, or start over with a fresh one."}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-                <button type="button" className={fileButtonClass} disabled={busy} onClick={() => setVersion((value) => value + 1)}><RefreshCw aria-hidden className="size-4" />Refresh list</button>
-                <DisabledControlHint disabled={newCampaignDisabled} message={newCampaignHint}>
-                    <button type="button" className={fileButtonClass} disabled={newCampaignDisabled} onClick={() => setConfirming(true)}><Sparkles aria-hidden className="size-4" />New campaign</button>
-                </DisabledControlHint>
-            </div>
-        </div>
-        {loadError && <p role="alert" className="mt-3 text-sm text-red-300">{loadError}</p>}
-        {campaigns && <ul className="mt-3 divide-y divide-white/10 rounded-md border border-white/10">
-            {campaigns.items.length === 0 && <li className="px-3 py-2 text-sm text-foreground-muted">No campaigns are registered yet. Starting the server creates a fresh one.</li>}
+    return <div>
+        {loadError && <p role="alert" className="mb-3 text-sm text-red-300">{loadError}</p>}
+        {campaigns && <ul className={workspaceListClass}>
+            {campaigns.items.length === 0 && <li className="px-4 py-3 text-sm text-foreground-muted">No campaigns are registered yet. Starting the server creates a fresh one.</li>}
             {campaigns.items.map((campaign) => {
                 const active = campaign.saveId === campaigns.activeSaveId;
-                return <li key={campaign.saveId} className="flex flex-wrap items-center justify-between gap-3 px-3 py-2">
+                return <li key={campaign.saveId} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
                     <div className="min-w-0">
-                        <p className="truncate text-sm">{campaign.displayName}{active && <span className="ml-2 rounded bg-gold/20 px-1.5 py-0.5 text-xs text-gold">Selected</span>}</p>
-                        <p className="text-xs text-foreground-muted">{campaign.importedBy === "system" ? "Created by hosting" : "Imported"} · {new Date(campaign.createdAt).toLocaleDateString()} · {formatBytes(campaign.byteSize)}</p>
+                        <p className="flex min-w-0 items-center gap-2 text-sm font-medium"><span className="truncate">{campaign.displayName}</span>{active && <span className={workspaceBadgeClass}>Selected</span>}</p>
+                        <p className="mt-1 text-sm text-foreground-muted">{campaign.importedBy === "system" ? "Created by hosting" : "Imported"} · {new Date(campaign.createdAt).toLocaleDateString()} · {formatBytes(campaign.byteSize)}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                         {!active && <DisabledControlHint disabled={busy || !stopped} message={busy ? "Finish the current campaign operation first." : "Stop the server before switching campaigns."}>
                             <button type="button" className={fileButtonClass} disabled={busy || !stopped} onClick={() => change({ action: "select-save", saveId: campaign.saveId })}>Use this campaign</button>
                         </DisabledControlHint>}
                         {canDelete && campaign.importedBy === "owner" && <DisabledControlHint disabled={busy || deletion.blocksDeletion || !stopped || active} message={active ? "Select another campaign before deleting this one." : busy || deletion.blocksDeletion ? "Finish the current campaign operation first." : "Stop the server before deleting a campaign."}>
-                            <button type="button" aria-label={`Delete ${campaign.displayName}`} className="inline-flex size-10 items-center justify-center rounded-md border border-crimson/50 text-xl text-red-200 hover:border-crimson disabled:opacity-50" disabled={busy || deletion.blocksDeletion || !stopped || active} onClick={() => remove(campaign)}>×</button>
+                            <button type="button" aria-label={`Delete ${campaign.displayName}`} className={`${fileIconButtonClass} hover:!text-red-300`} disabled={busy || deletion.blocksDeletion || !stopped || active} onClick={() => remove(campaign)}><Trash2 aria-hidden className="size-4" /></button>
                         </DisabledControlHint>}
                     </div>
                 </li>;
             })}
         </ul>}
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            {stopHint && <p className="text-xs leading-5 text-foreground-muted">{stopHint}</p>}
+            <div className="ml-auto flex flex-wrap gap-2">
+                <button type="button" className={fileButtonClass} disabled={busy} onClick={() => setVersion((value) => value + 1)}><RefreshCw aria-hidden className="size-4" />Refresh list</button>
+                <DisabledControlHint disabled={newCampaignDisabled} message={newCampaignHint}>
+                    <button type="button" className={fileButtonClass} disabled={newCampaignDisabled} onClick={() => setConfirming(true)}><Sparkles aria-hidden className="size-4" />New campaign</button>
+                </DisabledControlHint>
+            </div>
+        </div>
         {message && <p role="status" className="mt-3 text-sm text-foreground-muted">{message}</p>}
         {deletion.message && <p role="status" className="mt-3 text-sm text-foreground-muted">{deletion.message}</p>}
         {deletion.canRecover && canDelete && <button type="button" className={fileButtonClass} onClick={deletion.recover}>Recover deletion request</button>}

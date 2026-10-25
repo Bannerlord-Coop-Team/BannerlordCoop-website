@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2, TriangleAlert, X } from "lucide-react";
+import { WorkspaceCard } from "./server-workspace-ui";
 import { useTranslations } from "@/app/lib/localization/client";
 import { deleteManagedServer, type ServerDeletionActionResult } from "@/app/servers/server-deletion-actions";
 import { useOptionalManagedServerPolling } from "./ManagedServerPollingProvider";
@@ -89,10 +90,9 @@ export function ServerDeletionPanel({ onDelete, deletionJob = null, ...props }: 
         // Keep uncertain submissions for an explicit retry with the same idempotency key.
         if (result?.rejected) { setAttempt(null); setResult(null); }
     }
-    return <section className="rounded-lg border border-red-400/25 bg-red-400/[0.03] p-5 sm:p-6" aria-labelledby="server-deletion-heading">
+    return <WorkspaceCard headingId="server-deletion-heading" tone="danger" title={t("deletion.title")} icon={TriangleAlert}>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div><h2 id="server-deletion-heading" className="flex items-center gap-2 text-base font-semibold text-red-200"><TriangleAlert aria-hidden="true" className="size-5" />{t("deletion.title")}</h2>
-                <p className="mt-2 max-w-xl text-sm leading-6 text-foreground-muted">{t("deletion.description")}</p></div>
+            <p className="text-sm leading-6 text-foreground-muted">{t("deletion.description")}</p>
             <button ref={trigger} type="button" disabled={(unavailable && !attempt) || result?.ok === true || (deletionJob !== null && ACTIVE_DELETION_STATES.has(deletionJob.state))} className={`${dangerButton} shrink-0`}
                 onClick={() => { if (!attempt) setResult(null); setTarget(attempt ? { ...props, displayName: attempt.confirmationText, expectedUpdatedAt: attempt.expectedUpdatedAt } : props); }}>
                 <Trash2 aria-hidden="true" className="size-4" />{t("deletion.open")}</button>
@@ -102,7 +102,7 @@ export function ServerDeletionPanel({ onDelete, deletionJob = null, ...props }: 
         {unavailable && !result?.ok && <p className="mt-3 text-sm text-foreground-muted">{t("deletion.unavailable")}</p>}
         {target && <DeletionDialog name={target.displayName} pending={pending} result={result} changed={changed}
             retry={attempt !== null && !result?.ok && !result?.rejected} onSubmit={submit} onDismiss={dismiss} trigger={trigger} />}
-    </section>;
+    </WorkspaceCard>;
 }
 
 function DeletionProgress({ job }: { job: MyServerDeletionJob }) {

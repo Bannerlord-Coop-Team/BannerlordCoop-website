@@ -14,7 +14,6 @@
   "managementWorkspace.browseCommands": "コマンド一覧",
   "managementWorkspace.searchConsoleCommands": "コンソールコマンドを検索",
   "managementWorkspace.searchCommands": "コマンドを検索…",
-  "managementWorkspace.selectToInsertThenEditAnyLtArgumentsGtBefore": "選択して挿入し、送信前に<arguments>を編集してください。利用可能なコマンドは、インストール済みのビルドによって異なります。",
   "managementWorkspace.noCommandsMatchYourSearch": "検索条件に一致するコマンドはありません。",
   "managementWorkspace.idLookups": "ID 検索",
   "managementWorkspace.returnsIds": "出力",
