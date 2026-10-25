@@ -33,8 +33,9 @@ export function ReleaseNotes({ body, emptyMessage }: ReleaseNotesProps) {
         );
     }
 
+    // Release notes auto-link bare pull request URLs, which must be able to wrap on phones.
     return (
-        <div className="space-y-5">
+        <div className="space-y-5 wrap-anywhere">
             {blocks.map((block, index) => {
                 const key = `${block.type}-${index}`;
 
@@ -117,8 +118,17 @@ export function ReleaseNotes({ body, emptyMessage }: ReleaseNotesProps) {
     );
 }
 
+/**
+ * Drops HTML comments, which GitHub never renders (release tooling stores metadata in them). As in
+ * CommonMark, an unterminated comment hides the rest of the body. Inline code spans are matched first
+ * and kept, so a literal `<!--` written as code stays visible and cannot swallow the notes after it.
+ */
+function stripHtmlComments(markdown: string) {
+    return markdown.replace(/(`[^`\n]+`)|<!--[\s\S]*?(?:-->|$)/g, (_match, code: string | undefined) => code ?? "");
+}
+
 function parseBlocks(markdown: string): NotesBlock[] {
-    const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
+    const lines = stripHtmlComments(markdown).replace(/\r\n?/g, "\n").split("\n");
     const blocks: NotesBlock[] = [];
     let paragraphLines: string[] = [];
     let listItems: string[] = [];
