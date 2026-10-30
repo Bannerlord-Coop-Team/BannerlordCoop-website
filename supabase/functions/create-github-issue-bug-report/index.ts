@@ -1,11 +1,12 @@
 // @ts-nocheck -- Deno npm specifiers are validated by the Edge deployment.
 import { PutObjectCommand, S3Client } from "npm:@aws-sdk/client-s3";
+import { isLegacyEmptyServerLog } from "./server-log.ts";
 
 // Edge Function: create-github-issue-bug-report
 //
 // Accepts one multipart PUT containing:
 //   report: JSON metadata
-//   serverLog: optional gzip file
+//   serverLog: optional gzip file (a zero-length legacy descriptor is dropped)
 //   clientLog-{clientNumber}: optional gzip files
 //   serverSave: optional Bannerlord save
 //   serverSaveSidecar: optional paired co-op session JSON
@@ -411,6 +412,12 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "report contains invalid JSON" }, 400);
   }
 
+  let serverLogFile = getFilePart(formData, "serverLog");
+  if (isLegacyEmptyServerLog(payload?.serverLog, serverLogFile)) {
+    payload.serverLog = null;
+    serverLogFile = null;
+  }
+
   const validationError = validatePayload(payload);
   if (validationError) return jsonResponse({ error: validationError }, 400);
 
@@ -419,7 +426,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "Idempotency-Key must match reportId" }, 400);
   }
 
-  const serverLogFile = getFilePart(formData, "serverLog");
   if ((payload.serverLog === null) !== (serverLogFile === null)) {
     return jsonResponse(
       {
