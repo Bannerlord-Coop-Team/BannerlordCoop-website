@@ -49,22 +49,16 @@ foreach (var declaration in release.Values)
         expression = method.ExpressionBody?.Expression ?? throw new InvalidOperationException("Only expression-bodied argument factories are supported.");
     }
     var expectedArgs = new List<object>();
-    if (expression is CollectionExpressionSyntax collection)
+    var elements = expression switch
     {
-        foreach (var element in collection.Elements.OfType<ExpressionElementSyntax>().Select(e => e.Expression))
-        {
-            if (element is not ObjectCreationExpressionSyntax creation || creation.Type.ToString() != "ExpectedArgs" || creation.ArgumentList == null)
-                throw new InvalidOperationException($"Unsupported argument metadata: {fullName}");
-            var values = creation.ArgumentList.Arguments;
-            if (values.Count is < 2 or > 3 || values.Take(2).Any(v => v.NameColon != null) || (values.Count == 3 && values[2].NameColon != null && values[2].NameColon!.Name.Identifier.Text != "isRequired")) throw new InvalidOperationException(fullName);
-            var required = values.Count == 2 || values[2].Expression.IsKind(SyntaxKind.TrueLiteralExpression);
-            if (values.Count == 3 && !required && !values[2].Expression.IsKind(SyntaxKind.FalseLiteralExpression)) throw new InvalidOperationException(fullName);
-            expectedArgs.Add(new { name = Literal(values[0].Expression, declaration), description = Literal(values[1].Expression, declaration), required });
-        }
-    }
-    else if (expression is ArrayCreationExpressionSyntax array && array.Initializer != null)
+        CollectionExpressionSyntax collection => collection.Elements.Select(e => e is ExpressionElementSyntax item ? item.Expression : null),
+        ArrayCreationExpressionSyntax { Initializer: not null } array => array.Initializer.Expressions,
+        InitializerExpressionSyntax initializer when initializer.IsKind(SyntaxKind.ArrayInitializerExpression) => initializer.Expressions,
+        _ => null,
+    };
+    if (elements != null)
     {
-        foreach (var element in array.Initializer.Expressions)
+        foreach (var element in elements)
         {
             if (element is not ObjectCreationExpressionSyntax creation || creation.Type.ToString() != "ExpectedArgs" || creation.ArgumentList == null)
                 throw new InvalidOperationException($"Unsupported argument metadata: {fullName}");
@@ -147,6 +141,7 @@ static string Literal(ExpressionSyntax expression, ClassDeclarationSyntax declar
 {
     if (expression is LiteralExpressionSyntax literal && literal.IsKind(SyntaxKind.StringLiteralExpression)) return literal.Token.ValueText;
     if (expression is BinaryExpressionSyntax binary && binary.IsKind(SyntaxKind.AddExpression)) return Literal(binary.Left, declaration) + Literal(binary.Right, declaration);
+    if (expression is InterpolatedStringExpressionSyntax interpolated) return Interpolated(interpolated, declaration);
     if (expression is IdentifierNameSyntax identifier)
     {
         foreach (var scope in declaration.AncestorsAndSelf().OfType<ClassDeclarationSyntax>())
@@ -155,6 +150,28 @@ static string Literal(ExpressionSyntax expression, ClassDeclarationSyntax declar
                 .SelectMany(f => f.Declaration.Variables).SingleOrDefault(v => v.Identifier.Text == identifier.Identifier.Text);
             if (variable?.Initializer != null) return Literal(variable.Initializer.Value, scope);
         }
+    }
+    throw new InvalidOperationException($"Unsupported metadata expression: {expression}");
+}
+// Renders an interpolated string whose holes are unformatted constants (string or integer literals).
+static string Interpolated(InterpolatedStringExpressionSyntax interpolated, ClassDeclarationSyntax declaration) =>
+    string.Concat(interpolated.Contents.Select(content => content switch
+    {
+        InterpolatedStringTextSyntax text => text.TextToken.ValueText,
+        InterpolationSyntax { AlignmentClause: null, FormatClause: null } hole => Constant(hole.Expression, declaration),
+        _ => throw new InvalidOperationException($"Unsupported metadata expression: {interpolated}"),
+    }));
+// Resolves an interpolation hole to its text, allowing integer constants alongside string metadata forms.
+static string Constant(ExpressionSyntax expression, ClassDeclarationSyntax declaration)
+{
+    if (expression is LiteralExpressionSyntax literal && literal.IsKind(SyntaxKind.NumericLiteralExpression) && literal.Token.Value is int number)
+        return number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    if (expression is not IdentifierNameSyntax identifier) return Literal(expression, declaration);
+    foreach (var scope in declaration.AncestorsAndSelf().OfType<ClassDeclarationSyntax>())
+    {
+        var variable = scope.Members.OfType<FieldDeclarationSyntax>().Where(f => f.Modifiers.Any(SyntaxKind.ConstKeyword))
+            .SelectMany(f => f.Declaration.Variables).SingleOrDefault(v => v.Identifier.Text == identifier.Identifier.Text);
+        if (variable?.Initializer != null) return Constant(variable.Initializer.Value, scope);
     }
     throw new InvalidOperationException($"Unsupported metadata expression: {expression}");
 }

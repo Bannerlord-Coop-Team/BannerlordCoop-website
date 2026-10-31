@@ -1,13 +1,13 @@
 {
   "source": {
     "repository": "https://github.com/Bannerlord-Coop-Team/BannerlordCoop",
-    "commit": "2ac901f91e8a852cbe59357333a3e6a2def78c39",
+    "commit": "c8233b09b18550561338b44d12b761d96af2d81c",
     "assemblies": [
       "GameInterface",
       "Missions"
     ],
     "configuration": "Release",
-    "registeredCount": 476,
+    "registeredCount": 488,
     "excludedFixtureCount": 62,
     "debugOnlyCommands": [
       "coop.debug.army.objective_fixture",
@@ -34,17 +34,27 @@
       "coop.debug.battle.siege_interaction_request",
       "coop.debug.battle.siege_interaction_target",
       "coop.debug.battle.wield_test",
+      "coop.debug.character_notification.advance",
+      "coop.debug.character_notification.dismiss",
+      "coop.debug.character_notification.inspect",
+      "coop.debug.character_notification.prepare",
       "coop.debug.crime.apply",
       "coop.debug.crime.coerce",
       "coop.debug.crime.daily_tick",
       "coop.debug.crime.preflight",
       "coop.debug.crime.read",
       "coop.debug.get_campaign_time",
+      "coop.debug.hero_conversation.choose",
       "coop.debug.hero_conversation.close",
       "coop.debug.hero_conversation.meeting_state",
       "coop.debug.hero_conversation.open",
       "coop.debug.hero_conversation.set_has_met",
       "coop.debug.hero_conversation.state",
+      "coop.debug.inventory.cancel",
+      "coop.debug.inventory.done",
+      "coop.debug.inventory.food_read",
+      "coop.debug.inventory.food_tick",
+      "coop.debug.inventory.open",
       "coop.debug.map_event.add_allied_ai_party",
       "coop.debug.map_event.deployment_retention_state",
       "coop.debug.map_event.late_join_mode_begin_field_battle",
@@ -151,7 +161,7 @@
       "coop.debug.ui.map_movement_state"
     ]
   },
-  "count": 414,
+  "count": 426,
   "categories": [
     {
       "name": "Alleys",
@@ -203,11 +213,11 @@
     },
     {
       "name": "Hero development",
-      "count": 5
+      "count": 7
     },
     {
       "name": "Heroes",
-      "count": 27
+      "count": 28
     },
     {
       "name": "Hideouts",
@@ -219,7 +229,7 @@
     },
     {
       "name": "Issues",
-      "count": 3
+      "count": 10
     },
     {
       "name": "Item rosters",
@@ -243,7 +253,7 @@
     },
     {
       "name": "Map events",
-      "count": 48
+      "count": 49
     },
     {
       "name": "Metrics",
@@ -279,7 +289,7 @@
     },
     {
       "name": "Settlements",
-      "count": 20
+      "count": 21
     },
     {
       "name": "Sieges",
@@ -328,7 +338,7 @@
       "arguments": [
         {
           "name": "settlement_id",
-          "description": "The settlement StringId.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -340,7 +350,7 @@
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyDebugCommand.cs",
         "type": "AlleyAbandonCoopCommand",
-        "line": 156
+        "line": 164
       },
       "category": "Alleys",
       "kind": "action",
@@ -356,7 +366,7 @@
       "arguments": [
         {
           "name": "settlement_id",
-          "description": "The settlement StringId.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -368,7 +378,7 @@
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyDebugCommand.cs",
         "type": "AlleyAttackCoopCommand",
-        "line": 212
+        "line": 227
       },
       "category": "Alleys",
       "kind": "action",
@@ -385,7 +395,7 @@
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyDebugCommand.cs",
         "type": "AlleyDailyTickCoopCommand",
-        "line": 189
+        "line": 204
       },
       "category": "Alleys",
       "kind": "action",
@@ -401,7 +411,7 @@
       "arguments": [
         {
           "name": "settlement_id",
-          "description": "The settlement StringId.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -413,7 +423,7 @@
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyDebugCommand.cs",
         "type": "AlleyInfoCoopCommand",
-        "line": 242
+        "line": 264
       },
       "category": "Alleys",
       "kind": "inspect",
@@ -429,14 +439,14 @@
       "arguments": [
         {
           "name": "settlement_id",
-          "description": "The settlement StringId.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyDebugCommand.cs",
         "type": "AlleyListCoopCommand",
-        "line": 54
+        "line": 52
       },
       "category": "Alleys",
       "kind": "inspect",
@@ -453,7 +463,7 @@
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyDebugCommand.cs",
         "type": "AlleyMyHeroIdCoopCommand",
-        "line": 87
+        "line": 91
       },
       "category": "Alleys",
       "kind": "inspect",
@@ -476,7 +486,7 @@
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyRecruitDebugCommand.cs",
         "type": "AlleyRecruitConversationCoopCommand",
-        "line": 483
+        "line": 517
       },
       "category": "Alleys",
       "kind": "action",
@@ -492,7 +502,7 @@
       "arguments": [
         {
           "name": "settlement_id",
-          "description": "The settlement StringId.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -504,7 +514,7 @@
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyRecruitDebugCommand.cs",
         "type": "AlleyRecruitConversationStartCoopCommand",
-        "line": 442
+        "line": 469
       },
       "category": "Alleys",
       "kind": "action",
@@ -527,7 +537,7 @@
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyRecruitDebugCommand.cs",
         "type": "AlleyRecruitInventoryCoopCommand",
-        "line": 526
+        "line": 560
       },
       "category": "Alleys",
       "kind": "action",
@@ -543,7 +553,7 @@
       "arguments": [
         {
           "name": "settlement_id",
-          "description": "The settlement StringId.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -555,7 +565,7 @@
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyRecruitDebugCommand.cs",
         "type": "AlleyRecruitOverseerStateCoopCommand",
-        "line": 408
+        "line": 428
       },
       "category": "Alleys",
       "kind": "inspect",
@@ -571,14 +581,14 @@
       "arguments": [
         {
           "name": "hero_registry_id",
-          "description": "The registered hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyRecruitDebugCommand.cs",
         "type": "AlleyRecruitRosterCoopCommand",
-        "line": 141
+        "line": 149
       },
       "category": "Alleys",
       "kind": "inspect",
@@ -594,14 +604,14 @@
       "arguments": [
         {
           "name": "hero_registry_id",
-          "description": "The registered fixture-owner hero id.",
+          "description": "Fixture-owner hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyRecruitDebugCommand.cs",
         "type": "AlleyRecruitStartLooterBattleCoopCommand",
-        "line": 576
+        "line": 610
       },
       "category": "Alleys",
       "kind": "action",
@@ -617,7 +627,7 @@
       "arguments": [
         {
           "name": "settlement_id",
-          "description": "The settlement StringId.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -627,14 +637,14 @@
         },
         {
           "name": "hero_registry_id",
-          "description": "The registered owner hero id.",
+          "description": "Owner hero name or id (the registry id from my_hero_id works); quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Alleys/Commands/AlleyDebugCommand.cs",
         "type": "AlleySetOwnerCoopCommand",
-        "line": 109
+        "line": 113
       },
       "category": "Alleys",
       "kind": "action",
@@ -667,17 +677,17 @@
       "arguments": [
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "target_settlement_id",
-          "description": "The registered target settlement id.",
+          "description": "Target settlement name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "hero_leader_id",
-          "description": "The registered leader hero id.",
+          "description": "Leader hero name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -689,7 +699,7 @@
       "source": {
         "path": "source/GameInterface/Services/Armies/Commands/ArmyDebugCommand.cs",
         "type": "ArmyCreateCoopCommand",
-        "line": 78
+        "line": 79
       },
       "category": "Armies",
       "kind": "action",
@@ -705,7 +715,7 @@
       "arguments": [
         {
           "name": "army_id",
-          "description": "The registered army id.",
+          "description": "Army name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -733,14 +743,14 @@
       "arguments": [
         {
           "name": "army_id",
-          "description": "The registered army id.",
+          "description": "Army name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Armies/Commands/ArmyDebugCommand.cs",
         "type": "ArmyInfoCoopCommand",
-        "line": 417
+        "line": 434
       },
       "category": "Armies",
       "kind": "inspect",
@@ -757,7 +767,7 @@
       "source": {
         "path": "source/GameInterface/Services/Armies/Commands/ArmyDebugCommand.cs",
         "type": "ArmyListCoopCommand",
-        "line": 33
+        "line": 34
       },
       "category": "Armies",
       "kind": "inspect",
@@ -773,19 +783,19 @@
       "arguments": [
         {
           "name": "army_id",
-          "description": "The registered army id.",
+          "description": "Army name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "mobile_party_id",
-          "description": "The registered mobile party id.",
+          "description": "Mobile party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Armies/Commands/ArmyDebugCommand.cs",
         "type": "ArmyMobilePartyAddCoopCommand",
-        "line": 277
+        "line": 281
       },
       "category": "Armies",
       "kind": "action",
@@ -801,14 +811,14 @@
       "arguments": [
         {
           "name": "army_id",
-          "description": "The registered army id.",
+          "description": "Army name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Armies/Commands/ArmyDebugCommand.cs",
         "type": "ArmyMobilePartyListCoopCommand",
-        "line": 231
+        "line": 235
       },
       "category": "Armies",
       "kind": "inspect",
@@ -824,19 +834,19 @@
       "arguments": [
         {
           "name": "army_id",
-          "description": "The registered army id.",
+          "description": "Army name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "mobile_party_id",
-          "description": "The registered mobile party id.",
+          "description": "Mobile party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Armies/Commands/ArmyDebugCommand.cs",
         "type": "ArmyMobilePartyRemoveCoopCommand",
-        "line": 329
+        "line": 334
       },
       "category": "Armies",
       "kind": "action",
@@ -852,7 +862,7 @@
       "arguments": [
         {
           "name": "army_id",
-          "description": "The registered army id.",
+          "description": "Army name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -862,14 +872,14 @@
         },
         {
           "name": "object_id",
-          "description": "The registered objective id, or none when finishing.",
+          "description": "Objective settlement or mobile party name or id (quote names with spaces), or none when finishing.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Armies/Commands/ArmyDebugCommand.cs",
         "type": "ArmySetObjectiveCoopCommand",
-        "line": 374
+        "line": 380
       },
       "category": "Armies",
       "kind": "action",
@@ -1481,14 +1491,14 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered player hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/PlayerCaptivityService/Commands/PlayerCaptivityCommands.cs",
         "type": "PlayerCaptivityCaptivityStateCoopCommand",
-        "line": 936
+        "line": 988
       },
       "category": "Captivity",
       "kind": "inspect",
@@ -1504,19 +1514,19 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered player hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "captor_party_id",
-          "description": "The registered captor mobile party id.",
+          "description": "Captor mobile party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/PlayerCaptivityService/Commands/PlayerCaptivityCommands.cs",
         "type": "PlayerCaptivityCapturePlayerCoopCommand",
-        "line": 93
+        "line": 97
       },
       "category": "Captivity",
       "kind": "action",
@@ -1532,19 +1542,19 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered player hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "captor_party_id",
-          "description": "The registered captor mobile party id.",
+          "description": "Captor mobile party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/PlayerCaptivityService/Commands/PlayerCaptivityCommands.cs",
         "type": "PlayerCaptivityDiscardPlayerFromPartyScreenCoopCommand",
-        "line": 664
+        "line": 699
       },
       "category": "Captivity",
       "kind": "action",
@@ -1560,14 +1570,14 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered player hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/PlayerCaptivityService/Commands/PlayerCaptivityCommands.cs",
         "type": "PlayerCaptivityLiberatePrisonerCoopCommand",
-        "line": 564
+        "line": 591
       },
       "category": "Captivity",
       "kind": "action",
@@ -1583,14 +1593,14 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered player hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/PlayerCaptivityService/Commands/PlayerCaptivityCommands.cs",
         "type": "PlayerCaptivityObservePlayerCoopCommand",
-        "line": 785
+        "line": 826
       },
       "category": "Captivity",
       "kind": "action",
@@ -1606,7 +1616,7 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered player hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
@@ -1629,14 +1639,14 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered player hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/PlayerCaptivityService/Commands/PlayerCaptivityCommands.cs",
         "type": "PlayerCaptivityRansomPlayerAtSettlementCoopCommand",
-        "line": 856
+        "line": 904
       },
       "category": "Captivity",
       "kind": "action",
@@ -1652,14 +1662,14 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered player hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/PlayerCaptivityService/Commands/PlayerCaptivityCommands.cs",
         "type": "PlayerCaptivityReleasePlayerCoopCommand",
-        "line": 327
+        "line": 347
       },
       "category": "Captivity",
       "kind": "action",
@@ -1675,14 +1685,14 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered player hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/PlayerCaptivityService/Commands/PlayerCaptivityCommands.cs",
         "type": "PlayerCaptivityStatusCoopCommand",
-        "line": 624
+        "line": 655
       },
       "category": "Captivity",
       "kind": "inspect",
@@ -1783,14 +1793,14 @@
       "arguments": [
         {
           "name": "character_id",
-          "description": "The registered character id.",
+          "description": "Character name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/CharacterObjects/Commands/CharacterObjectCommands.cs",
         "type": "CharacterObjectsInfoCoopCommand",
-        "line": 26
+        "line": 27
       },
       "category": "Characters",
       "kind": "inspect",
@@ -1807,7 +1817,7 @@
       "source": {
         "path": "source/GameInterface/Services/CharacterObjects/Commands/CharacterObjectCommands.cs",
         "type": "CharacterObjectsListCoopCommand",
-        "line": 59
+        "line": 66
       },
       "category": "Characters",
       "kind": "inspect",
@@ -1823,19 +1833,19 @@
       "arguments": [
         {
           "name": "clan_id",
-          "description": "The registered clan id.",
+          "description": "The clan name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "hero_id",
-          "description": "The registered companion hero id.",
+          "description": "The companion hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanAddCompanionCoopCommand",
-        "line": 631
+        "line": 692
       },
       "category": "Clans",
       "kind": "action",
@@ -1851,7 +1861,7 @@
       "arguments": [
         {
           "name": "clan_id",
-          "description": "The registered player clan id.",
+          "description": "The player clan name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -1861,14 +1871,14 @@
         },
         {
           "name": "parent",
-          "description": "Optional player hero id or exact name; defaults to the clan leader.",
+          "description": "Optional player hero name or id; quote names with spaces. Defaults to the clan leader.",
           "required": false
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanAddHeirsCoopCommand",
-        "line": 300
+        "line": 318
       },
       "category": "Clans",
       "kind": "action",
@@ -1884,7 +1894,7 @@
       "arguments": [
         {
           "name": "clan_id",
-          "description": "The registered clan id.",
+          "description": "The clan name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -1896,7 +1906,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanAddInfluenceCoopCommand",
-        "line": 473
+        "line": 497
       },
       "category": "Clans",
       "kind": "action",
@@ -1912,7 +1922,7 @@
       "arguments": [
         {
           "name": "clan_id",
-          "description": "The registered clan id.",
+          "description": "The clan name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -1924,7 +1934,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanAddRenownCoopCommand",
-        "line": 717
+        "line": 777
       },
       "category": "Clans",
       "kind": "action",
@@ -1940,23 +1950,33 @@
       "arguments": [
         {
           "name": "clan_id",
-          "description": "The registered clan id.",
+          "description": "The clan name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "The kingdom name or id; quote names with spaces.",
+          "required": true
+        },
+        {
+          "name": "join",
+          "description": "normal, defection or mercenary.",
+          "required": true
+        },
+        {
+          "name": "actor_controller_id",
+          "description": "The registered acting player for native diplomacy callbacks.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanChangeKingdomCoopCommand",
-        "line": 548
+        "line": 577
       },
       "category": "Clans",
       "kind": "action",
-      "usage": "coop.debug.clan.change_clan_kingdom <clan_id> <kingdom_id>",
+      "usage": "coop.debug.clan.change_clan_kingdom <clan_id> <kingdom_id> <join> <actor_controller_id>",
       "aliases": []
     },
     {
@@ -1968,19 +1988,19 @@
       "arguments": [
         {
           "name": "clan_id",
-          "description": "The registered clan id.",
+          "description": "The clan name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "hero_id",
-          "description": "The registered new leader hero id.",
+          "description": "The new leader hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanChangeLeaderCoopCommand",
-        "line": 503
+        "line": 533
       },
       "category": "Clans",
       "kind": "action",
@@ -1997,7 +2017,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanCloseCoopCommand",
-        "line": 74
+        "line": 76
       },
       "category": "Clans",
       "kind": "action",
@@ -2013,14 +2033,14 @@
       "arguments": [
         {
           "name": "clan_id",
-          "description": "The registered clan id.",
+          "description": "The clan name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanDailyGoldChangeCoopCommand",
-        "line": 1042
+        "line": 1138
       },
       "category": "Clans",
       "kind": "inspect",
@@ -2036,14 +2056,14 @@
       "arguments": [
         {
           "name": "clan_id",
-          "description": "The registered clan id.",
+          "description": "The clan name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanDestroyCoopCommand",
-        "line": 593
+        "line": 654
       },
       "category": "Clans",
       "kind": "action",
@@ -2059,14 +2079,14 @@
       "arguments": [
         {
           "name": "clan_id_or_name",
-          "description": "The optional clan id or display name. Quote multi-word names.",
+          "description": "The optional clan name or id. Quote multi-word names.",
           "required": false
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanEconomyCoopCommand",
-        "line": 767
+        "line": 828
       },
       "category": "Clans",
       "kind": "inspect",
@@ -2082,14 +2102,14 @@
       "arguments": [
         {
           "name": "clan_id",
-          "description": "The registered clan id.",
+          "description": "The clan name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanFieldDumpCoopCommand",
-        "line": 439
+        "line": 457
       },
       "category": "Clans",
       "kind": "inspect",
@@ -2105,7 +2125,7 @@
       "arguments": [
         {
           "name": "clan_id",
-          "description": "The registered clan id.",
+          "description": "The clan name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -2117,7 +2137,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanGiveInfluenceCoopCommand",
-        "line": 968
+        "line": 1056
       },
       "category": "Clans",
       "kind": "action",
@@ -2133,14 +2153,14 @@
       "arguments": [
         {
           "name": "clan_id",
-          "description": "The registered clan id.",
+          "description": "The clan name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanInfoCoopCommand",
-        "line": 1005
+        "line": 1097
       },
       "category": "Clans",
       "kind": "inspect",
@@ -2156,19 +2176,19 @@
       "arguments": [
         {
           "name": "clan_id",
-          "description": "The registered clan id.",
+          "description": "The clan name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "The kingdom name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanJoinKingdomCoopCommand",
-        "line": 842
+        "line": 897
       },
       "category": "Clans",
       "kind": "action",
@@ -2184,18 +2204,28 @@
       "arguments": [
         {
           "name": "clan_id",
-          "description": "The registered clan id.",
+          "description": "The clan name or id; quote names with spaces.",
+          "required": true
+        },
+        {
+          "name": "leave",
+          "description": "normal or rebellion.",
+          "required": true
+        },
+        {
+          "name": "actor_controller_id",
+          "description": "The registered acting player for native diplomacy callbacks.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanLeaveKingdomCoopCommand",
-        "line": 880
+        "line": 939
       },
       "category": "Clans",
       "kind": "action",
-      "usage": "coop.debug.clan.leave_kingdom <clan_id>",
+      "usage": "coop.debug.clan.leave_kingdom <clan_id> <leave> <actor_controller_id>",
       "aliases": []
     },
     {
@@ -2208,7 +2238,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanListCoopCommand",
-        "line": 407
+        "line": 425
       },
       "category": "Clans",
       "kind": "inspect",
@@ -2224,14 +2254,14 @@
       "arguments": [
         {
           "name": "clan_id",
-          "description": "The registered clan id.",
+          "description": "The clan name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanMembershipCoopCommand",
-        "line": 932
+        "line": 1016
       },
       "category": "Clans",
       "kind": "inspect",
@@ -2248,7 +2278,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanOpenCoopCommand",
-        "line": 48
+        "line": 50
       },
       "category": "Clans",
       "kind": "action",
@@ -2264,7 +2294,7 @@
       "arguments": [
         {
           "name": "party_id",
-          "description": "The registered mobile party id.",
+          "description": "The mobile party name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -2276,7 +2306,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanRefreshBurstCoopCommand",
-        "line": 264
+        "line": 273
       },
       "category": "Clans",
       "kind": "action",
@@ -2292,14 +2322,14 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered companion hero id.",
+          "description": "The companion hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanRemoveCompanionCoopCommand",
-        "line": 676
+        "line": 736
       },
       "category": "Clans",
       "kind": "action",
@@ -2316,7 +2346,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanScreenStateCoopCommand",
-        "line": 97
+        "line": 99
       },
       "category": "Clans",
       "kind": "inspect",
@@ -2333,7 +2363,7 @@
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanSelectPartiesCoopCommand",
-        "line": 128
+        "line": 130
       },
       "category": "Clans",
       "kind": "action",
@@ -2349,14 +2379,14 @@
       "arguments": [
         {
           "name": "clan_id",
-          "description": "The optional registered clan id.",
+          "description": "The optional clan name or id; quote names with spaces.",
           "required": false
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Clans/Commands/ClanDebugCommands.cs",
         "type": "ClanWageStateCoopCommand",
-        "line": 152
+        "line": 154
       },
       "category": "Clans",
       "kind": "inspect",
@@ -2373,7 +2403,7 @@
       "source": {
         "path": "source/GameInterface/Services/Companions/Commands/CompanionsCommands.cs",
         "type": "CompanionClearWanderersCoopCommand",
-        "line": 109
+        "line": 128
       },
       "category": "Companions",
       "kind": "action",
@@ -2390,7 +2420,7 @@
       "source": {
         "path": "source/GameInterface/Services/Companions/Commands/CompanionsCommands.cs",
         "type": "CompanionClosePartyScreenCoopCommand",
-        "line": 846
+        "line": 927
       },
       "category": "Companions",
       "kind": "action",
@@ -2407,7 +2437,7 @@
       "source": {
         "path": "source/GameInterface/Services/Companions/Commands/CompanionsCommands.cs",
         "type": "CompanionCommitPartyScreenCoopCommand",
-        "line": 867
+        "line": 948
       },
       "category": "Companions",
       "kind": "action",
@@ -2424,7 +2454,7 @@
       "source": {
         "path": "source/GameInterface/Services/Companions/Commands/CompanionsCommands.cs",
         "type": "CompanionListWanderersCoopCommand",
-        "line": 65
+        "line": 84
       },
       "category": "Companions",
       "kind": "inspect",
@@ -2441,7 +2471,7 @@
       "source": {
         "path": "source/GameInterface/Services/Companions/Commands/CompanionsCommands.cs",
         "type": "CompanionOpenPartyScreenCoopCommand",
-        "line": 824
+        "line": 905
       },
       "category": "Companions",
       "kind": "action",
@@ -2457,14 +2487,14 @@
       "arguments": [
         {
           "name": "party_id",
-          "description": "The registered mobile party id.",
+          "description": "Mobile party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Companions/Commands/CompanionsCommands.cs",
         "type": "CompanionScoutRoleStateCoopCommand",
-        "line": 374
+        "line": 402
       },
       "category": "Companions",
       "kind": "inspect",
@@ -2623,7 +2653,7 @@
       "arguments": [
         {
           "name": "hero_name_or_id",
-          "description": "The hero display name or StringId.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -2635,7 +2665,7 @@
       "source": {
         "path": "source/GameInterface/Services/HeroDevelopers/Commands/HeroDeveloperCommands.cs",
         "type": "HeroDeveloperAddAttributePointsCoopCommand",
-        "line": 78
+        "line": 83
       },
       "category": "Hero development",
       "kind": "action",
@@ -2651,7 +2681,7 @@
       "arguments": [
         {
           "name": "hero_name_or_id",
-          "description": "The hero display name or StringId.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -2663,7 +2693,7 @@
       "source": {
         "path": "source/GameInterface/Services/HeroDevelopers/Commands/HeroDeveloperCommands.cs",
         "type": "HeroDeveloperAddFocusPointsCoopCommand",
-        "line": 123
+        "line": 128
       },
       "category": "Hero development",
       "kind": "action",
@@ -2679,12 +2709,12 @@
       "arguments": [
         {
           "name": "hero_name_or_id",
-          "description": "The hero display name or StringId.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "skill_name",
-          "description": "The skill object name.",
+          "description": "The skill id, such as OneHanded or Riding; skills from other mods work too.",
           "required": true
         },
         {
@@ -2696,7 +2726,7 @@
       "source": {
         "path": "source/GameInterface/Services/HeroDevelopers/Commands/HeroDeveloperCommands.cs",
         "type": "HeroDeveloperAddSkillXpCoopCommand",
-        "line": 30
+        "line": 35
       },
       "category": "Hero development",
       "kind": "action",
@@ -2712,18 +2742,94 @@
       "arguments": [
         {
           "name": "hero_name_or_id",
-          "description": "The hero display name or StringId.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/HeroDevelopers/Commands/HeroDeveloperCommands.cs",
         "type": "HeroDeveloperResetSkillsCoopCommand",
-        "line": 168
+        "line": 173
       },
       "category": "Hero development",
       "kind": "action",
       "usage": "coop.debug.hero_developer.reset_skills <hero_name_or_id>",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.hero_developer.set_skill",
+      "name": "set_skill",
+      "group": "coop.debug.hero_developer",
+      "summary": "Sets a hero's skill and its skill xp to a level if the current level still matches.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "hero_name_or_id",
+          "description": "Hero name or id; quote names with spaces.",
+          "required": true
+        },
+        {
+          "name": "skill_name",
+          "description": "The skill id, such as OneHanded or Riding; skills from other mods work too.",
+          "required": true
+        },
+        {
+          "name": "level",
+          "description": "The new skill level, 0 to 1023.",
+          "required": true
+        },
+        {
+          "name": "expected_level",
+          "description": "The current skill level, as shown by coop.debug.hero_developer.stats.",
+          "required": true
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/HeroDevelopers/Commands/HeroDeveloperCommands.cs",
+        "type": "HeroDeveloperSetSkillCoopCommand",
+        "line": 214
+      },
+      "category": "Hero development",
+      "kind": "action",
+      "usage": "coop.debug.hero_developer.set_skill <hero_name_or_id> <skill_name> <level> <expected_level>",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.hero_developer.social_parameter",
+      "name": "social_parameter",
+      "group": "coop.debug.hero_developer",
+      "summary": "Read a hero's social parameter, or set it on the server only if its previous value still matches.",
+      "side": "either",
+      "arguments": [
+        {
+          "name": "hero_id",
+          "description": "Hero name or id; quote names with spaces.",
+          "required": true
+        },
+        {
+          "name": "parameter",
+          "description": "charm, mercy, female, persona_curt, persona_ironic, in_bloom, young_and_respectful, good_natured or tribute.",
+          "required": true
+        },
+        {
+          "name": "value",
+          "description": "Optional integer value; booleans use 0 or 1.",
+          "required": false
+        },
+        {
+          "name": "expected_value",
+          "description": "The previously read value, required for every write and restore.",
+          "required": false
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/HeroDevelopers/Commands/HeroDeveloperCommands.cs",
+        "type": "HeroSocialParameterCoopCommand",
+        "line": 271
+      },
+      "category": "Hero development",
+      "kind": "action",
+      "usage": "coop.debug.hero_developer.social_parameter <hero_id> <parameter> [<value>] [<expected_value>]",
       "aliases": []
     },
     {
@@ -2735,7 +2841,7 @@
       "arguments": [
         {
           "name": "hero_name",
-          "description": "The exact hero display name.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
@@ -2758,7 +2864,7 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -2770,7 +2876,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroAddPowerCoopCommand",
-        "line": 290
+        "line": 295
       },
       "category": "Heroes",
       "kind": "action",
@@ -2787,7 +2893,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroAuditCoopCommand",
-        "line": 267
+        "line": 272
       },
       "category": "Heroes",
       "kind": "audit",
@@ -2803,7 +2909,7 @@
       "arguments": [
         {
           "name": "hero_registry_id",
-          "description": "The registered hero id to boost.",
+          "description": "Hero name or id to boost; quote names with spaces.",
           "required": true
         }
       ],
@@ -2826,7 +2932,7 @@
       "arguments": [
         {
           "name": "character_object_id",
-          "description": "The character template StringId.",
+          "description": "Character template name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -2838,7 +2944,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroCreateCoopCommand",
-        "line": 218
+        "line": 223
       },
       "category": "Heroes",
       "kind": "action",
@@ -2854,14 +2960,14 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroGetBannerItemCoopCommand",
-        "line": 741
+        "line": 808
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -2877,19 +2983,19 @@
       "arguments": [
         {
           "name": "hero1_id",
-          "description": "The first registered hero id.",
+          "description": "First hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "hero2_id",
-          "description": "The second registered hero id.",
+          "description": "Second hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroGetEffectiveRelationCoopCommand",
-        "line": 1073
+        "line": 1164
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -2905,14 +3011,14 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroGetIssueCoopCommand",
-        "line": 865
+        "line": 942
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -2928,19 +3034,19 @@
       "arguments": [
         {
           "name": "hero1_id",
-          "description": "The first registered hero id.",
+          "description": "First hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "hero2_id",
-          "description": "The second registered hero id.",
+          "description": "Second hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroGetRelationCoopCommand",
-        "line": 1036
+        "line": 1125
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -2956,14 +3062,14 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroGoldStateCoopCommand",
-        "line": 379
+        "line": 384
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -2986,7 +3092,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroHomeSettlementSnapshotCoopCommand",
-        "line": 96
+        "line": 99
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -3020,19 +3126,19 @@
       "command": "coop.debug.hero.ill_days",
       "name": "ill_days",
       "group": "coop.debug.hero",
-      "summary": "Reports the local player's illness duration on clients or matching heroes on the server.",
+      "summary": "Reports the local player's illness duration on clients or a hero's on the server.",
       "side": "either",
       "arguments": [
         {
           "name": "hero_name",
-          "description": "The exact hero display name required on the server. Quote multi-word values.",
+          "description": "Hero name or id required on the server; quote names with spaces.",
           "required": false
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroIllDaysCoopCommand",
-        "line": 551
+        "line": 618
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -3048,14 +3154,14 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroInfoCoopCommand",
-        "line": 172
+        "line": 175
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -3066,17 +3172,55 @@
       "command": "coop.debug.hero.issues",
       "name": "issues",
       "group": "coop.debug.hero",
-      "summary": "Lists heroes with active issues.",
+      "summary": "Lists heroes with active issues and each issue's type.",
       "side": "either",
       "arguments": [],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroIssuesCoopCommand",
-        "line": 777
+        "line": 846
       },
       "category": "Heroes",
       "kind": "inspect",
       "usage": "coop.debug.hero.issues",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.hero.kill_npc",
+      "name": "kill_npc",
+      "group": "coop.debug.hero",
+      "summary": "Kills a living registered NPC through the native death action in a registered player's context.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "hero_id",
+          "description": "NPC hero name or id; quote names with spaces.",
+          "required": true
+        },
+        {
+          "name": "death_detail",
+          "description": "One of old_age, battle, or execution.",
+          "required": true
+        },
+        {
+          "name": "controller_id",
+          "description": "The acting player's registered controller id.",
+          "required": true
+        },
+        {
+          "name": "killer_hero_id",
+          "description": "Optional killer hero name or id; quote names with spaces.",
+          "required": false
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
+        "type": "HeroKillNpcCoopCommand",
+        "line": 538
+      },
+      "category": "Heroes",
+      "kind": "action",
+      "usage": "coop.debug.hero.kill_npc <hero_id> <death_detail> <controller_id> [<killer_hero_id>]",
       "aliases": []
     },
     {
@@ -3088,7 +3232,7 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered player hero id.",
+          "description": "Player hero name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -3098,14 +3242,14 @@
         },
         {
           "name": "killer_hero_id",
-          "description": "The optional registered killer hero id.",
+          "description": "Optional killer hero name or id; quote names with spaces.",
           "required": false
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroKillPlayerCoopCommand",
-        "line": 495
+        "line": 505
       },
       "category": "Heroes",
       "kind": "action",
@@ -3128,7 +3272,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroListCoopCommand",
-        "line": 45
+        "line": 48
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -3145,7 +3289,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroListBannerItemsCoopCommand",
-        "line": 711
+        "line": 778
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -3161,14 +3305,14 @@
       "arguments": [
         {
           "name": "settlement_id",
-          "description": "The optional settlement StringId; defaults to town_ES1.",
+          "description": "Optional settlement name or id; defaults to town_ES1. Quote names with spaces.",
           "required": false
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroRefreshVolunteersCoopCommand",
-        "line": 946
+        "line": 1026
       },
       "category": "Heroes",
       "kind": "action",
@@ -3179,12 +3323,12 @@
       "command": "coop.debug.hero.set_age",
       "name": "set_age",
       "group": "coop.debug.hero",
-      "summary": "Sets the age of heroes matching a display name or registered id on the server.",
+      "summary": "Sets the age of a hero by display name or registered id on the server.",
       "side": "server",
       "arguments": [
         {
           "name": "hero_name_or_id",
-          "description": "The exact hero display name or registered id. Quote multi-word values.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -3196,7 +3340,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroSetAgeCoopCommand",
-        "line": 438
+        "line": 461
       },
       "category": "Heroes",
       "kind": "action",
@@ -3212,19 +3356,19 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "banner_item_id",
-          "description": "The banner item StringId.",
+          "description": "Banner item name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroSetBannerItemCoopCommand",
-        "line": 662
+        "line": 726
       },
       "category": "Heroes",
       "kind": "action",
@@ -3240,12 +3384,12 @@
       "arguments": [
         {
           "name": "hero1_id",
-          "description": "The first registered hero id.",
+          "description": "First hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "hero2_id",
-          "description": "The second registered hero id.",
+          "description": "Second hero name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -3257,7 +3401,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroSetEffectiveRelationCoopCommand",
-        "line": 1127
+        "line": 1220
       },
       "category": "Heroes",
       "kind": "action",
@@ -3268,12 +3412,12 @@
       "command": "coop.debug.hero.set_gold",
       "name": "set_gold",
       "group": "coop.debug.hero",
-      "summary": "Sets gold for every hero with an exact display name on the server.",
+      "summary": "Sets gold for a hero by display name or registered id on the server.",
       "side": "server",
       "arguments": [
         {
           "name": "hero_name",
-          "description": "The exact hero display name. Quote multi-word values.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -3285,7 +3429,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroSetGoldCoopCommand",
-        "line": 334
+        "line": 341
       },
       "category": "Heroes",
       "kind": "action",
@@ -3301,7 +3445,7 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -3313,7 +3457,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroSetGoldStateCoopCommand",
-        "line": 405
+        "line": 419
       },
       "category": "Heroes",
       "kind": "action",
@@ -3329,7 +3473,7 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -3341,7 +3485,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroSetHitpointsCoopCommand",
-        "line": 613
+        "line": 675
       },
       "category": "Heroes",
       "kind": "action",
@@ -3357,7 +3501,7 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -3369,7 +3513,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroSetIssueCoopCommand",
-        "line": 814
+        "line": 888
       },
       "category": "Heroes",
       "kind": "action",
@@ -3385,12 +3529,12 @@
       "arguments": [
         {
           "name": "hero1_id",
-          "description": "The first registered hero id.",
+          "description": "First hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "hero2_id",
-          "description": "The second registered hero id.",
+          "description": "Second hero name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -3402,7 +3546,7 @@
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroSetRelationCoopCommand",
-        "line": 979
+        "line": 1066
       },
       "category": "Heroes",
       "kind": "action",
@@ -3418,14 +3562,14 @@
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The hero StringId.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/HeroDebugCommand.cs",
         "type": "HeroVolunteersCoopCommand",
-        "line": 899
+        "line": 978
       },
       "category": "Heroes",
       "kind": "inspect",
@@ -3441,7 +3585,7 @@
       "arguments": [
         {
           "name": "partyId",
-          "description": "The registered party id shown by coop.debug.players.list.",
+          "description": "Party name or id (ids shown by coop.debug.players.list); quote names with spaces.",
           "required": true
         }
       ],
@@ -3464,14 +3608,14 @@
       "arguments": [
         {
           "name": "hero_name",
-          "description": "The exact hero display name.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Inventory/Commands/InventoryCommands.cs",
         "type": "InventoryGiveAnimalsCoopCommand",
-        "line": 173
+        "line": 171
       },
       "category": "Inventory",
       "kind": "action",
@@ -3487,14 +3631,14 @@
       "arguments": [
         {
           "name": "hero_name",
-          "description": "The exact hero display name.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Inventory/Commands/InventoryCommands.cs",
         "type": "InventoryGiveWarhorsesCoopCommand",
-        "line": 239
+        "line": 236
       },
       "category": "Inventory",
       "kind": "action",
@@ -3510,14 +3654,14 @@
       "arguments": [
         {
           "name": "hero_name",
-          "description": "The exact hero display name.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Inventory/Commands/InventoryCommands.cs",
         "type": "InventoryHeroEquipmentCoopCommand",
-        "line": 125
+        "line": 124
       },
       "category": "Inventory",
       "kind": "action",
@@ -3533,14 +3677,14 @@
       "arguments": [
         {
           "name": "hero_name",
-          "description": "The exact hero display name.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Inventory/Commands/InventoryCommands.cs",
         "type": "InventoryItemIdsCoopCommand",
-        "line": 39
+        "line": 40
       },
       "category": "Inventory",
       "kind": "action",
@@ -3556,7 +3700,7 @@
       "arguments": [
         {
           "name": "hero_name",
-          "description": "The exact hero display name.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
@@ -3622,27 +3766,67 @@
       "aliases": []
     },
     {
+      "command": "coop.debug.issues.army_needs_supplies.setup",
+      "name": "setup",
+      "group": "coop.debug.issues.army_needs_supplies",
+      "summary": "Lets a player take Army Needs Supplies from Rhagaea: joins her kingdom, reaches clan tier 1, gives her an army if needed, gives the issue and teleports the player to her.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "controller_id",
+          "description": "The controller id of the player who will take the quest, see coop.debug.players.list.",
+          "required": true
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/Issues/Quests/ArmyNeedsSupplies/Commands/ArmyNeedsSuppliesSetupCoopCommand.cs",
+        "type": "ArmyNeedsSuppliesSetupCoopCommand",
+        "line": 20
+      },
+      "category": "Issues",
+      "kind": "action",
+      "usage": "coop.debug.issues.army_needs_supplies.setup <controller_id>",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.issues.army_needs_supplies.stock",
+      "name": "stock",
+      "group": "coop.debug.issues.army_needs_supplies",
+      "summary": "Tops up the owning player's party with the grain, livestock and wine Rhagaea's accepted quest asks for.",
+      "side": "server",
+      "arguments": [],
+      "source": {
+        "path": "source/GameInterface/Services/Issues/Quests/ArmyNeedsSupplies/Commands/ArmyNeedsSuppliesStockCoopCommand.cs",
+        "type": "ArmyNeedsSuppliesStockCoopCommand",
+        "line": 14
+      },
+      "category": "Issues",
+      "kind": "action",
+      "usage": "coop.debug.issues.army_needs_supplies.stock",
+      "aliases": []
+    },
+    {
       "command": "coop.debug.issues.complete",
       "name": "complete",
       "group": "coop.debug.issues",
-      "summary": "Runs the complete debug operation.",
+      "summary": "Ends a hero's issue with an outcome.",
       "side": "server",
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered issue owner hero id.",
+          "description": "Name or id of the hero that offers the issue; quote names with spaces.",
           "required": true
         },
         {
           "name": "outcome",
-          "description": "success, cancel, fail, timeout, or betrayal.",
+          "description": "success, fail, betrayal, cancel, timeout or ailord. Success is the default.",
           "required": false
         }
       ],
       "source": {
-        "path": "source/GameInterface/Services/Issues/Commands/IssuesDebugCommand.cs",
+        "path": "source/GameInterface/Services/Issues/Framework/Commands/IssuesCompleteCoopCommand.cs",
         "type": "IssuesCompleteCoopCommand",
-        "line": 126
+        "line": 10
       },
       "category": "Issues",
       "kind": "action",
@@ -3653,45 +3837,170 @@
       "command": "coop.debug.issues.give",
       "name": "give",
       "group": "coop.debug.issues",
-      "summary": "Runs the give debug operation.",
+      "summary": "Gives a hero a registered quest type, skipping the quest's own eligibility checks.",
       "side": "server",
       "arguments": [
         {
           "name": "hero_id",
-          "description": "The registered hero id.",
+          "description": "Name or id of the hero that offers the issue; quote names with spaces.",
           "required": true
         },
         {
-          "name": "quest_type_key",
-          "description": "The issue type key.",
+          "name": "quest_type",
+          "description": "The issue type name, see coop.debug.issues.list_types.",
           "required": true
         }
       ],
       "source": {
-        "path": "source/GameInterface/Services/Issues/Commands/IssuesDebugCommand.cs",
+        "path": "source/GameInterface/Services/Issues/Framework/Commands/IssuesGiveCoopCommand.cs",
         "type": "IssuesGiveCoopCommand",
-        "line": 22
+        "line": 11
       },
       "category": "Issues",
       "kind": "action",
-      "usage": "coop.debug.issues.give <hero_id> <quest_type_key>",
+      "usage": "coop.debug.issues.give <hero_id> <quest_type>",
       "aliases": []
     },
     {
       "command": "coop.debug.issues.list_types",
       "name": "list_types",
       "group": "coop.debug.issues",
-      "summary": "Reports list types.",
+      "summary": "Lists every registered quest type.",
       "side": "either",
       "arguments": [],
       "source": {
-        "path": "source/GameInterface/Services/Issues/Commands/IssuesDebugCommand.cs",
+        "path": "source/GameInterface/Services/Issues/Framework/Commands/IssuesListTypesCoopCommand.cs",
         "type": "IssuesListTypesCoopCommand",
-        "line": 198
+        "line": 8
       },
       "category": "Issues",
       "kind": "inspect",
       "usage": "coop.debug.issues.list_types",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.issues.scout_enemy_garrisons.goto",
+      "name": "goto",
+      "group": "coop.debug.issues.scout_enemy_garrisons",
+      "summary": "Teleports a player's party to a settlement's gate and holds it there, close enough to scout it.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "controller_id",
+          "description": "The controller id of the player to teleport, see coop.debug.players.list.",
+          "required": true
+        },
+        {
+          "name": "settlement_id",
+          "description": "Name or id of the settlement to scout, setup lists the targets, for example town_ES1 or Danustica; quote names with spaces.",
+          "required": true
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/Issues/Quests/ScoutEnemyGarrisons/Commands/ScoutEnemyGarrisonsGotoCoopCommand.cs",
+        "type": "ScoutEnemyGarrisonsGotoCoopCommand",
+        "line": 13
+      },
+      "category": "Issues",
+      "kind": "action",
+      "usage": "coop.debug.issues.scout_enemy_garrisons.goto <controller_id> <settlement_id>",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.issues.scout_enemy_garrisons.setup",
+      "name": "setup",
+      "group": "coop.debug.issues.scout_enemy_garrisons",
+      "summary": "Lets a player take Scout Enemy Garrisons from a lord (Rhagaea by default): joins the lord's kingdom, reaches clan tier 2 and Scouting 30, gives the issue and teleports the player to the lord.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "controller_id",
+          "description": "The controller id of the player who will take the quest, see coop.debug.players.list.",
+          "required": true
+        },
+        {
+          "name": "hero_id",
+          "description": "Name or id of the lord who offers the issue, Rhagaea (lord_1_14) by default; quote names with spaces.",
+          "required": false
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/Issues/Quests/ScoutEnemyGarrisons/Commands/ScoutEnemyGarrisonsSetupCoopCommand.cs",
+        "type": "ScoutEnemyGarrisonsSetupCoopCommand",
+        "line": 21
+      },
+      "category": "Issues",
+      "kind": "action",
+      "usage": "coop.debug.issues.scout_enemy_garrisons.setup <controller_id> [<hero_id>]",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.issues.the_conquest_of_settlement.accept",
+      "name": "accept",
+      "group": "coop.debug.issues.the_conquest_of_settlement",
+      "summary": "Accepts The Conquest of Settlement the way the ruler's dialog does, after the server ran setup for this player.",
+      "side": "client",
+      "arguments": [
+        {
+          "name": "hero_id",
+          "description": "The id of the ruler that setup printed.",
+          "required": true
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/Issues/Quests/TheConquestOfSettlement/Commands/TheConquestOfSettlementAcceptCoopCommand.cs",
+        "type": "TheConquestOfSettlementAcceptCoopCommand",
+        "line": 8
+      },
+      "category": "Issues",
+      "kind": "action",
+      "usage": "coop.debug.issues.the_conquest_of_settlement.accept <hero_id>",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.issues.the_conquest_of_settlement.setup",
+      "name": "setup",
+      "group": "coop.debug.issues.the_conquest_of_settlement",
+      "summary": "Lets a player take The Conquest of Settlement without meeting the ruler: joins a ruler's kingdom, gives the ruler the issue and counts the player as having talked to them. Then run accept on that player's client.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "controller_id",
+          "description": "The controller id of the player who will take the quest, see coop.debug.players.list.",
+          "required": true
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/Issues/Quests/TheConquestOfSettlement/Commands/TheConquestOfSettlementSetupCoopCommand.cs",
+        "type": "TheConquestOfSettlementSetupCoopCommand",
+        "line": 16
+      },
+      "category": "Issues",
+      "kind": "action",
+      "usage": "coop.debug.issues.the_conquest_of_settlement.setup <controller_id>",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.issues.the_conquest_of_settlement.state",
+      "name": "state",
+      "group": "coop.debug.issues.the_conquest_of_settlement",
+      "summary": "Reports a ruler's The Conquest of Settlement issue and the conquest quests in this machine's quest manager.",
+      "side": "either",
+      "arguments": [
+        {
+          "name": "hero_id",
+          "description": "The id of the ruler that setup printed.",
+          "required": true
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/Issues/Quests/TheConquestOfSettlement/Commands/TheConquestOfSettlementStateCoopCommand.cs",
+        "type": "TheConquestOfSettlementStateCoopCommand",
+        "line": 10
+      },
+      "category": "Issues",
+      "kind": "inspect",
+      "usage": "coop.debug.issues.the_conquest_of_settlement.state <hero_id>",
       "aliases": []
     },
     {
@@ -3703,7 +4012,7 @@
       "arguments": [
         {
           "name": "settlement_id",
-          "description": "The settlement StringId.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -3715,7 +4024,7 @@
       "source": {
         "path": "source/GameInterface/Services/ItemRosters/Commands/ItemRosterDebugCommands.cs",
         "type": "ItemRostersAddItemBurstCoopCommand",
-        "line": 62
+        "line": 67
       },
       "category": "Item rosters",
       "kind": "action",
@@ -3731,14 +4040,14 @@
       "arguments": [
         {
           "name": "settlement_id",
-          "description": "The settlement StringId.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/ItemRosters/Commands/ItemRosterDebugCommands.cs",
         "type": "ItemRostersAddRandomItemCoopCommand",
-        "line": 27
+        "line": 28
       },
       "category": "Item rosters",
       "kind": "action",
@@ -3754,14 +4063,14 @@
       "arguments": [
         {
           "name": "party_or_settlement_id",
-          "description": "The party or settlement StringId.",
+          "description": "Party or settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/ItemRosters/Commands/ItemRosterDebugCommands.cs",
         "type": "ItemRostersExportCoopCommand",
-        "line": 146
+        "line": 157
       },
       "category": "Item rosters",
       "kind": "action",
@@ -3777,14 +4086,14 @@
       "arguments": [
         {
           "name": "party_or_settlement_id",
-          "description": "The party or settlement StringId.",
+          "description": "Party or settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/ItemRosters/Commands/ItemRosterDebugCommands.cs",
         "type": "ItemRostersInfoCoopCommand",
-        "line": 115
+        "line": 124
       },
       "category": "Item rosters",
       "kind": "inspect",
@@ -3800,14 +4109,14 @@
       "arguments": [
         {
           "name": "item_id",
-          "description": "The registered item object id.",
+          "description": "Item name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/ItemObjects/Commands/ItemObjectCommands.cs",
         "type": "ItemObjectDataCoopCommand",
-        "line": 30
+        "line": 21
       },
       "category": "Items",
       "kind": "inspect",
@@ -3823,12 +4132,12 @@
       "arguments": [
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "proposer_clan_id",
-          "description": "The registered proposer clan id.",
+          "description": "Proposer clan name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -3843,24 +4152,24 @@
         },
         {
           "name": "decision_arg1",
-          "description": "The first fixed decision-specific argument.",
+          "description": "The first decision-specific argument; objects accept a name or id (quote names with spaces).",
           "required": false
         },
         {
           "name": "decision_arg2",
-          "description": "The second fixed decision-specific argument.",
+          "description": "The second decision-specific argument; objects accept a name or id (quote names with spaces).",
           "required": false
         },
         {
           "name": "decision_arg3",
-          "description": "The third fixed decision-specific argument.",
+          "description": "The third decision-specific argument; objects accept a name or id (quote names with spaces).",
           "required": false
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomAddDecisionCoopCommand",
-        "line": 2158
+        "line": 2299
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -3877,7 +4186,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomAddDecisionUsageCoopCommand",
-        "line": 892
+        "line": 950
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -3894,7 +4203,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomCloseCoopCommand",
-        "line": 231
+        "line": 241
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -3915,12 +4224,12 @@
         },
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "value_id",
-          "description": "The registered value id or proposer clan id.",
+          "description": "Value name or id (WarPartyComponent by id only), or the proposer clan name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -3952,7 +4261,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomCollectionAddCoopCommand",
-        "line": 1369
+        "line": 1461
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -3973,14 +4282,14 @@
         },
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomCollectionListCoopCommand",
-        "line": 1305
+        "line": 1390
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -4001,19 +4310,19 @@
         },
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "value_id_or_index",
-          "description": "The registered value id or one-based decision index.",
+          "description": "Value name or id (WarPartyComponent by id only), or one-based decision index; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomCollectionRemoveCoopCommand",
-        "line": 1461
+        "line": 1556
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4029,7 +4338,7 @@
       "arguments": [
         {
           "name": "leader_hero_name",
-          "description": "The exact leader display name or id. Quote multi-word names.",
+          "description": "Leader hero name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -4041,7 +4350,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomCreateCoopCommand",
-        "line": 590
+        "line": 639
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4057,14 +4366,14 @@
       "arguments": [
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomDecisionsCoopCommand",
-        "line": 1006
+        "line": 1066
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -4076,27 +4385,37 @@
       "name": "declare_war",
       "group": "coop.debug.kingdom",
       "summary": "Declares war between two factions on the server.",
-      "side": "either",
+      "side": "server",
       "arguments": [
         {
           "name": "faction1_id",
-          "description": "The first registered faction id.",
+          "description": "First faction (kingdom or clan) name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "faction2_id",
-          "description": "The second registered faction id.",
+          "description": "Second faction (kingdom or clan) name or id; quote names with spaces.",
+          "required": true
+        },
+        {
+          "name": "cause",
+          "description": "default, decision, hostility, rebellion, crime, creation, claim or agreement.",
+          "required": true
+        },
+        {
+          "name": "actor_controller_id",
+          "description": "The registered acting player, required for native war callbacks.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomDeclareWarCoopCommand",
-        "line": 1541
+        "line": 1639
       },
       "category": "Kingdoms",
       "kind": "action",
-      "usage": "coop.debug.kingdom.declare_war <faction1_id> <faction2_id>",
+      "usage": "coop.debug.kingdom.declare_war <faction1_id> <faction2_id> <cause> <actor_controller_id>",
       "aliases": []
     },
     {
@@ -4108,19 +4427,19 @@
       "arguments": [
         {
           "name": "kingdom1_id",
-          "description": "The first registered kingdom id.",
+          "description": "First kingdom name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "kingdom2_id",
-          "description": "The second registered kingdom id.",
+          "description": "Second kingdom name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomForceAllyCoopCommand",
-        "line": 1631
+        "line": 1781
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4141,14 +4460,14 @@
         },
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id, or none to restore a kingdomless clan.",
+          "description": "Kingdom name or id (quote names with spaces), or none to restore a kingdomless clan.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomForcePlayerJoinCoopCommand",
-        "line": 736
+        "line": 780
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4169,7 +4488,7 @@
         },
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -4181,7 +4500,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomForcePlayerVassalageCoopCommand",
-        "line": 830
+        "line": 882
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4197,19 +4516,19 @@
       "arguments": [
         {
           "name": "kingdom1_id",
-          "description": "The first registered kingdom id.",
+          "description": "First kingdom name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "kingdom2_id",
-          "description": "The second registered kingdom id.",
+          "description": "Second kingdom name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomForceTradeAgreementCoopCommand",
-        "line": 1697
+        "line": 1849
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4225,14 +4544,14 @@
       "arguments": [
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomInfoCoopCommand",
-        "line": 701
+        "line": 739
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -4249,7 +4568,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomListCoopCommand",
-        "line": 671
+        "line": 709
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -4265,7 +4584,7 @@
       "arguments": [
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -4277,7 +4596,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomListDecisionOutcomesCoopCommand",
-        "line": 1094
+        "line": 1156
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -4293,14 +4612,14 @@
       "arguments": [
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomListDecisionsCoopCommand",
-        "line": 959
+        "line": 1017
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -4316,14 +4635,14 @@
       "arguments": [
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomListPoliciesCoopCommand",
-        "line": 1253
+        "line": 1336
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -4335,27 +4654,32 @@
       "name": "make_peace",
       "group": "coop.debug.kingdom",
       "summary": "Makes peace between two factions on the server.",
-      "side": "either",
+      "side": "server",
       "arguments": [
         {
           "name": "faction1_id",
-          "description": "The first registered faction id.",
+          "description": "First faction (kingdom or clan) name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "faction2_id",
-          "description": "The second registered faction id.",
+          "description": "Second faction (kingdom or clan) name or id; quote names with spaces.",
+          "required": true
+        },
+        {
+          "name": "actor_controller_id",
+          "description": "The registered acting player for native peace callbacks.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomMakePeaceCoopCommand",
-        "line": 1585
+        "line": 1716
       },
       "category": "Kingdoms",
       "kind": "action",
-      "usage": "coop.debug.kingdom.make_peace <faction1_id> <faction2_id>",
+      "usage": "coop.debug.kingdom.make_peace <faction1_id> <faction2_id> <actor_controller_id>",
       "aliases": []
     },
     {
@@ -4368,7 +4692,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomOpenCoopCommand",
-        "line": 138
+        "line": 141
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4384,7 +4708,7 @@
       "arguments": [
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -4396,7 +4720,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomOpenDecisionCoopCommand",
-        "line": 164
+        "line": 167
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4413,7 +4737,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomPolicyTimeoutCaptureCoopCommand",
-        "line": 280
+        "line": 290
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4429,17 +4753,17 @@
       "arguments": [
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "proposer_clan_id",
-          "description": "The registered proposer clan id.",
+          "description": "Proposer clan name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "policy_id",
-          "description": "The registered policy id.",
+          "description": "Policy name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -4451,7 +4775,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomPolicyTimeoutRestoreCoopCommand",
-        "line": 426
+        "line": 448
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4467,17 +4791,17 @@
       "arguments": [
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "proposer_clan_id",
-          "description": "The registered proposer clan id.",
+          "description": "Proposer clan name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "policy_id",
-          "description": "The registered policy id.",
+          "description": "Policy name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -4489,7 +4813,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomPolicyTimeoutStageCoopCommand",
-        "line": 332
+        "line": 342
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4506,7 +4830,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomPolicyTimeoutStateCoopCommand",
-        "line": 393
+        "line": 415
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -4522,12 +4846,12 @@
       "arguments": [
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "policy_id",
-          "description": "The registered policy id.",
+          "description": "Policy name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -4539,7 +4863,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomPolicyTimeoutVerifyCoopCommand",
-        "line": 479
+        "line": 517
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4555,7 +4879,7 @@
       "arguments": [
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -4567,7 +4891,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomRemoveDecisionCoopCommand",
-        "line": 2226
+        "line": 2370
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4584,7 +4908,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomRemoveDecisionUsageCoopCommand",
-        "line": 931
+        "line": 989
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -4600,7 +4924,7 @@
       "arguments": [
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -4612,7 +4936,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomResolveDecisionCoopCommand",
-        "line": 1212
+        "line": 1288
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4629,7 +4953,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomScreenStateCoopCommand",
-        "line": 254
+        "line": 264
       },
       "category": "Kingdoms",
       "kind": "inspect",
@@ -4645,7 +4969,7 @@
       "arguments": [
         {
           "name": "kingdom_id",
-          "description": "The registered kingdom id.",
+          "description": "Kingdom name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -4672,7 +4996,7 @@
       "source": {
         "path": "source/GameInterface/Services/Kingdoms/Commands/KingdomDebugCommand.cs",
         "type": "KingdomVoteDecisionCoopCommand",
-        "line": 1142
+        "line": 1211
       },
       "category": "Kingdoms",
       "kind": "action",
@@ -4688,19 +5012,19 @@
       "arguments": [
         {
           "name": "locationId",
-          "description": "The location id.",
+          "description": "Location name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "characterObjectId",
-          "description": "The character object id.",
+          "description": "Character name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Locations/Commands/LocationDebugCommand.cs",
         "type": "AddCharacterCoopCommand",
-        "line": 266
+        "line": 297
       },
       "category": "Locations",
       "kind": "action",
@@ -4716,19 +5040,19 @@
       "arguments": [
         {
           "name": "locationId",
-          "description": "The location id.",
+          "description": "Location name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "itemObjectId",
-          "description": "The item object id.",
+          "description": "Item name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Locations/Commands/LocationDebugCommand.cs",
         "type": "AddSpecialItemCoopCommand",
-        "line": 396
+        "line": 450
       },
       "category": "Locations",
       "kind": "action",
@@ -4744,14 +5068,14 @@
       "arguments": [
         {
           "name": "locationId",
-          "description": "The location id.",
+          "description": "Location name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Locations/Commands/LocationDebugCommand.cs",
         "type": "EnterLocationCoopCommand",
-        "line": 29
+        "line": 32
       },
       "category": "Locations",
       "kind": "action",
@@ -4767,14 +5091,14 @@
       "arguments": [
         {
           "name": "locationId",
-          "description": "The location id.",
+          "description": "Location name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Locations/Commands/LocationDebugCommand.cs",
         "type": "InfoCoopCommand",
-        "line": 160
+        "line": 170
       },
       "category": "Locations",
       "kind": "action",
@@ -4791,7 +5115,7 @@
       "source": {
         "path": "source/GameInterface/Services/Locations/Commands/LocationDebugCommand.cs",
         "type": "LeaveLocationCoopCommand",
-        "line": 87
+        "line": 97
       },
       "category": "Locations",
       "kind": "action",
@@ -4808,7 +5132,7 @@
       "source": {
         "path": "source/GameInterface/Services/Locations/Commands/LocationDebugCommand.cs",
         "type": "ListLocationsCoopCommand",
-        "line": 118
+        "line": 128
       },
       "category": "Locations",
       "kind": "inspect",
@@ -4824,14 +5148,14 @@
       "arguments": [
         {
           "name": "locationId",
-          "description": "The location id.",
+          "description": "Location name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Locations/Commands/LocationDebugCommand.cs",
         "type": "ListCharactersCoopCommand",
-        "line": 194
+        "line": 211
       },
       "category": "Locations",
       "kind": "inspect",
@@ -4847,14 +5171,14 @@
       "arguments": [
         {
           "name": "locationId",
-          "description": "The location id.",
+          "description": "Location name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Locations/Commands/LocationDebugCommand.cs",
         "type": "ListSpecialItemsCoopCommand",
-        "line": 230
+        "line": 254
       },
       "category": "Locations",
       "kind": "inspect",
@@ -4870,14 +5194,14 @@
       "arguments": [
         {
           "name": "settlementStringId",
-          "description": "The settlement string id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Locations/Commands/LocationDebugCommand.cs",
         "type": "PopulateCoopCommand",
-        "line": 483
+        "line": 551
       },
       "category": "Locations",
       "kind": "action",
@@ -4893,14 +5217,14 @@
       "arguments": [
         {
           "name": "locationId",
-          "description": "The location id.",
+          "description": "Location name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Locations/Commands/LocationDebugCommand.cs",
         "type": "RemoveAllCharactersCoopCommand",
-        "line": 360
+        "line": 407
       },
       "category": "Locations",
       "kind": "action",
@@ -4916,19 +5240,19 @@
       "arguments": [
         {
           "name": "locationId",
-          "description": "The location id.",
+          "description": "Location name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "characterObjectId",
-          "description": "The character object id.",
+          "description": "Character name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Locations/Commands/LocationDebugCommand.cs",
         "type": "RemoveCharacterCoopCommand",
-        "line": 316
+        "line": 354
       },
       "category": "Locations",
       "kind": "action",
@@ -4944,19 +5268,19 @@
       "arguments": [
         {
           "name": "locationId",
-          "description": "The location id.",
+          "description": "Location name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "itemObjectId",
-          "description": "The item object id.",
+          "description": "Item name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Locations/Commands/LocationDebugCommand.cs",
         "type": "RemoveSpecialItemCoopCommand",
-        "line": 435
+        "line": 496
       },
       "category": "Locations",
       "kind": "action",
@@ -5007,7 +5331,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "BattleRewardClientStateCoopCommand",
-        "line": 1869
+        "line": 1974
       },
       "category": "Map events",
       "kind": "inspect",
@@ -5030,7 +5354,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "ChooseBattleModeCoopCommand",
-        "line": 3966
+        "line": 4125
       },
       "category": "Map events",
       "kind": "action",
@@ -5081,7 +5405,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "CompleteEncounterMeetingCoopCommand",
-        "line": 3936
+        "line": 4095
       },
       "category": "Map events",
       "kind": "action",
@@ -5097,14 +5421,14 @@
       "arguments": [
         {
           "name": "party_base_id",
-          "description": "The party base id.",
+          "description": "The party base id, or a mobile party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "ConversationHoldStateCoopCommand",
-        "line": 2621
+        "line": 2726
       },
       "category": "Map events",
       "kind": "inspect",
@@ -5138,7 +5462,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "EncounterStateCoopCommand",
-        "line": 3832
+        "line": 3991
       },
       "category": "Map events",
       "kind": "inspect",
@@ -5159,14 +5483,14 @@
         },
         {
           "name": "excluded_party_id",
-          "description": "The excluded party id.",
+          "description": "The excluded party name or id; quote names with spaces.",
           "required": false
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "EngageNearestBanditCoopCommand",
-        "line": 819
+        "line": 861
       },
       "category": "Map events",
       "kind": "action",
@@ -5183,7 +5507,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "EnterCurrentBattleCoopCommand",
-        "line": 2532
+        "line": 2637
       },
       "category": "Map events",
       "kind": "action",
@@ -5200,7 +5524,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "FinishCurrentEncounterCoopCommand",
-        "line": 2507
+        "line": 2612
       },
       "category": "Map events",
       "kind": "action",
@@ -5234,7 +5558,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "FinishNonBattleEncounterCoopCommand",
-        "line": 1259
+        "line": 1328
       },
       "category": "Map events",
       "kind": "action",
@@ -5257,7 +5581,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "FinishPlayerEncounterCoopCommand",
-        "line": 2572
+        "line": 2677
       },
       "category": "Map events",
       "kind": "action",
@@ -5280,7 +5604,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "GetEventCoopCommand",
-        "line": 4067
+        "line": 4226
       },
       "category": "Map events",
       "kind": "inspect",
@@ -5297,7 +5621,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "GetEventsCoopCommand",
-        "line": 4018
+        "line": 4177
       },
       "category": "Map events",
       "kind": "inspect",
@@ -5318,14 +5642,14 @@
         },
         {
           "name": "hero_id",
-          "description": "The AI lord's registered hero id.",
+          "description": "The AI lord's hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "HoldAiConversationCoopCommand",
-        "line": 2648
+        "line": 2787
       },
       "category": "Map events",
       "kind": "action",
@@ -5353,7 +5677,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "JoinExistingCoopCommand",
-        "line": 1286
+        "line": 1355
       },
       "category": "Map events",
       "kind": "action",
@@ -5370,7 +5694,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "KillAllButOneCoopCommand",
-        "line": 3701
+        "line": 3860
       },
       "category": "Map events",
       "kind": "action",
@@ -5438,7 +5762,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "KillRandomTroopCoopCommand",
-        "line": 3627
+        "line": 3786
       },
       "category": "Map events",
       "kind": "action",
@@ -5478,7 +5802,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "LateJoinModeCleanupCoopCommand",
-        "line": 3283
+        "line": 3430
       },
       "category": "Map events",
       "kind": "action",
@@ -5495,7 +5819,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "LateJoinModeEnterCoopCommand",
-        "line": 3010
+        "line": 3157
       },
       "category": "Map events",
       "kind": "action",
@@ -5512,7 +5836,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "LateJoinModeJoinCoopCommand",
-        "line": 2946
+        "line": 3093
       },
       "category": "Map events",
       "kind": "action",
@@ -5535,7 +5859,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "LateJoinModeStateCoopCommand",
-        "line": 3223
+        "line": 3370
       },
       "category": "Map events",
       "kind": "inspect",
@@ -5575,7 +5899,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "LeaveSettlementCoopCommand",
-        "line": 2465
+        "line": 2570
       },
       "category": "Map events",
       "kind": "action",
@@ -5592,7 +5916,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "ListPlayerEncounterCoopCommand",
-        "line": 3793
+        "line": 3952
       },
       "category": "Map events",
       "kind": "inspect",
@@ -5613,14 +5937,14 @@
         },
         {
           "name": "party_string_id",
-          "description": "The party string id.",
+          "description": "The party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "PeacePursuitStateCoopCommand",
-        "line": 3427
+        "line": 3574
       },
       "category": "Map events",
       "kind": "inspect",
@@ -5637,7 +5961,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "PlayerInteractionStateCoopCommand",
-        "line": 514
+        "line": 547
       },
       "category": "Map events",
       "kind": "inspect",
@@ -5693,14 +6017,14 @@
       "arguments": [
         {
           "name": "defender_mobile_party_id",
-          "description": "The defender mobile party id.",
+          "description": "The defender mobile party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "RequestPlayerFieldBattleCoopCommand",
-        "line": 446
+        "line": 475
       },
       "category": "Map events",
       "kind": "action",
@@ -5717,7 +6041,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "RestorePlayerFieldBattleCoopCommand",
-        "line": 406
+        "line": 435
       },
       "category": "Map events",
       "kind": "action",
@@ -5740,11 +6064,44 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "RetreatConfirmationCoopCommand",
-        "line": 3881
+        "line": 4040
       },
       "category": "Map events",
       "kind": "action",
       "usage": "coop.debug.map_event.retreat_confirmation <action>",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.map_event.route_enemies",
+      "name": "route_enemies",
+      "group": "coop.debug.map_event",
+      "summary": "Ask the active mission authority to retreat agents in an exact map event, defaulting to its enemy side.",
+      "side": "server",
+      "arguments": [
+        {
+          "name": "map_event_id",
+          "description": "The registered map event id.",
+          "required": true
+        },
+        {
+          "name": "enemies_to_leave_fighting",
+          "description": "The number of active enemy agents to leave fighting.",
+          "required": true
+        },
+        {
+          "name": "side",
+          "description": "Optional attacker or defender side instead of the authority's enemy side.",
+          "required": false
+        }
+      ],
+      "source": {
+        "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
+        "type": "RouteBattleEnemiesCoopCommand",
+        "line": 1856
+      },
+      "category": "Map events",
+      "kind": "action",
+      "usage": "coop.debug.map_event.route_enemies <map_event_id> <enemies_to_leave_fighting> [<side>]",
       "aliases": []
     },
     {
@@ -5774,7 +6131,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "StartAttackMissionCoopCommand",
-        "line": 588
+        "line": 621
       },
       "category": "Map events",
       "kind": "action",
@@ -5791,7 +6148,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "StartLooterCoopCommand",
-        "line": 643
+        "line": 676
       },
       "category": "Map events",
       "kind": "action",
@@ -5812,14 +6169,14 @@
         },
         {
           "name": "excluded_party_id",
-          "description": "The excluded party id.",
+          "description": "The excluded party name or id; quote names with spaces.",
           "required": false
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "StartNearestBanditAttackCoopCommand",
-        "line": 728
+        "line": 761
       },
       "category": "Map events",
       "kind": "action",
@@ -5836,7 +6193,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "StartNearestLooterCoopCommand",
-        "line": 678
+        "line": 711
       },
       "category": "Map events",
       "kind": "action",
@@ -5852,19 +6209,19 @@
       "arguments": [
         {
           "name": "attacker_mobile_party_id",
-          "description": "The attacker mobile party id.",
+          "description": "The attacker mobile party name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "defender_mobile_party_id",
-          "description": "The defender mobile party id.",
+          "description": "The defender mobile party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "StartPlayerFieldBattleCoopCommand",
-        "line": 292
+        "line": 320
       },
       "category": "Map events",
       "kind": "action",
@@ -5887,7 +6244,7 @@
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "SubmitPlayerInteractionCoopCommand",
-        "line": 537
+        "line": 570
       },
       "category": "Map events",
       "kind": "action",
@@ -5908,14 +6265,14 @@
         },
         {
           "name": "party_string_id",
-          "description": "The party string id.",
+          "description": "The party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/MapEvents/Commands/MapEventDebugCommands.cs",
         "type": "TestPeaceStopsPursuitCoopCommand",
-        "line": 3464
+        "line": 3617
       },
       "category": "Map events",
       "kind": "action",
@@ -6004,14 +6361,14 @@
       "arguments": [
         {
           "name": "hero_name",
-          "description": "The hero name.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "AddPrisonersCoopCommand",
-        "line": 946
+        "line": 1012
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6027,7 +6384,7 @@
       "arguments": [
         {
           "name": "hero_name",
-          "description": "The hero name.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -6039,7 +6396,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "AddTroopXpCoopCommand",
-        "line": 753
+        "line": 806
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6055,14 +6412,14 @@
       "arguments": [
         {
           "name": "hero_name",
-          "description": "The hero name.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "AddTroopsCoopCommand",
-        "line": 797
+        "line": 850
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6078,14 +6435,14 @@
       "arguments": [
         {
           "name": "hero_name_or_id",
-          "description": "The hero name or id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "CharacterIdsCoopCommand",
-        "line": 341
+        "line": 375
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6101,12 +6458,12 @@
       "arguments": [
         {
           "name": "clan_party_id",
-          "description": "The clan party id.",
+          "description": "Clan mobile party name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "character_id",
-          "description": "The character id.",
+          "description": "Troop character name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -6118,7 +6475,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/TroopXpTransferFixtureCommands.cs",
         "type": "ClanPartyTransferScreenStateCoopCommand",
-        "line": 349
+        "line": 366
       },
       "category": "Mobile parties",
       "kind": "inspect",
@@ -6135,7 +6492,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/TroopXpTransferFixtureCommands.cs",
         "type": "CommitClanPartyTransferCoopCommand",
-        "line": 417
+        "line": 438
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6152,7 +6509,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/GarrisonTroopXpFixtureCommands.cs",
         "type": "CommitGarrisonXpWithdrawalCoopCommand",
-        "line": 469
+        "line": 486
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6168,19 +6525,19 @@
       "arguments": [
         {
           "name": "party_id",
-          "description": "The party id.",
+          "description": "Mobile party name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "settlement_id",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "DeclareWarCoopCommand",
-        "line": 909
+        "line": 969
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6196,19 +6553,19 @@
       "arguments": [
         {
           "name": "captor_hero",
-          "description": "The captor hero.",
+          "description": "Captor hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "prisoner_hero",
-          "description": "The prisoner hero.",
+          "description": "Prisoner hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "ImprisonCompanionCoopCommand",
-        "line": 1054
+        "line": 1122
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6236,7 +6593,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "MoveOffsetCoopCommand",
-        "line": 149
+        "line": 151
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6252,12 +6609,12 @@
       "arguments": [
         {
           "name": "party_id",
-          "description": "The party id.",
+          "description": "Mobile party name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "settlement_id",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -6269,7 +6626,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "MoveToSettlementCoopCommand",
-        "line": 242
+        "line": 274
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6285,14 +6642,14 @@
       "arguments": [
         {
           "name": "clan_party_id",
-          "description": "The clan party id.",
+          "description": "Clan mobile party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/TroopXpTransferFixtureCommands.cs",
         "type": "OpenClanPartyTransferCoopCommand",
-        "line": 277
+        "line": 285
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6308,14 +6665,14 @@
       "arguments": [
         {
           "name": "character_id",
-          "description": "The character id.",
+          "description": "Troop character name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "PartyScreenTroopStateCoopCommand",
-        "line": 696
+        "line": 744
       },
       "category": "Mobile parties",
       "kind": "inspect",
@@ -6331,14 +6688,14 @@
       "arguments": [
         {
           "name": "party_id",
-          "description": "The party id.",
+          "description": "Mobile party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "PositionCoopCommand",
-        "line": 111
+        "line": 110
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6354,14 +6711,14 @@
       "arguments": [
         {
           "name": "hero_name",
-          "description": "The hero name.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "RemovePrisonersCoopCommand",
-        "line": 1006
+        "line": 1073
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6377,7 +6734,7 @@
       "arguments": [
         {
           "name": "party_id",
-          "description": "The registered mobile-party id.",
+          "description": "Mobile party name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -6399,7 +6756,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "RestorePositionCoopCommand",
-        "line": 192
+        "line": 194
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6415,14 +6772,14 @@
       "arguments": [
         {
           "name": "character_id",
-          "description": "The character id.",
+          "description": "Troop character name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "SelectPartyScreenTroopCoopCommand",
-        "line": 554
+        "line": 587
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6438,12 +6795,12 @@
       "arguments": [
         {
           "name": "party_id",
-          "description": "The party id.",
+          "description": "Mobile party name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "character_id",
-          "description": "The character id.",
+          "description": "Troop character name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -6470,7 +6827,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "SetTroopStateCoopCommand",
-        "line": 456
+        "line": 485
       },
       "category": "Mobile parties",
       "kind": "inspect",
@@ -6486,12 +6843,12 @@
       "arguments": [
         {
           "name": "party_id",
-          "description": "The party id.",
+          "description": "Mobile party name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "character_id",
-          "description": "The character id.",
+          "description": "Troop character name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -6503,7 +6860,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "SetTroopWoundedCoopCommand",
-        "line": 409
+        "line": 434
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6519,14 +6876,14 @@
       "arguments": [
         {
           "name": "party_id",
-          "description": "The party id.",
+          "description": "Mobile party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "SiegeBuffCoopCommand",
-        "line": 860
+        "line": 914
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6542,14 +6899,14 @@
       "arguments": [
         {
           "name": "hero_name_or_id",
-          "description": "The hero name or id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "SnapshotPrisonCoopCommand",
-        "line": 1105
+        "line": 1176
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6565,19 +6922,19 @@
       "arguments": [
         {
           "name": "clan_party_id",
-          "description": "The clan party id.",
+          "description": "Clan mobile party name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "character_id",
-          "description": "The character id.",
+          "description": "Troop character name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/TroopXpTransferFixtureCommands.cs",
         "type": "StageClanPartyTransferCoopCommand",
-        "line": 309
+        "line": 322
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6593,19 +6950,19 @@
       "arguments": [
         {
           "name": "garrison_party_id",
-          "description": "The garrison party id.",
+          "description": "Garrison mobile party name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "character_id",
-          "description": "The character id.",
+          "description": "Troop character name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/GarrisonTroopXpFixtureCommands.cs",
         "type": "StageGarrisonXpWithdrawalCoopCommand",
-        "line": 429
+        "line": 442
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6621,14 +6978,14 @@
       "arguments": [
         {
           "name": "character_id",
-          "description": "The character id.",
+          "description": "Troop character name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "StagePartyScreenTransferCoopCommand",
-        "line": 656
+        "line": 699
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6644,7 +7001,7 @@
       "arguments": [
         {
           "name": "character_id",
-          "description": "The character id.",
+          "description": "Troop character name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -6656,7 +7013,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "UpgradePartyScreenTroopCoopCommand",
-        "line": 594
+        "line": 632
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6673,7 +7030,7 @@
       "source": {
         "path": "source/GameInterface/Services/Party/Commands/PartyCommands.cs",
         "type": "WhoAmICoopCommand",
-        "line": 83
+        "line": 82
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6689,14 +7046,14 @@
       "arguments": [
         {
           "name": "partyStringId",
-          "description": "The party string id.",
+          "description": "Party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "AttachmentIdsCoopCommand",
-        "line": 184
+        "line": 192
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6713,7 +7070,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "AuditPartiesCoopCommand",
-        "line": 770
+        "line": 774
       },
       "category": "Mobile parties",
       "kind": "audit",
@@ -6729,14 +7086,14 @@
       "arguments": [
         {
           "name": "partyStringId",
-          "description": "The party string id.",
+          "description": "Party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "ComponentInfoCoopCommand",
-        "line": 147
+        "line": 155
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6752,19 +7109,19 @@
       "arguments": [
         {
           "name": "heroId",
-          "description": "The hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "CreateNewPartyCoopCommand",
-        "line": 426
+        "line": 433
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6781,7 +7138,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "DestroyAllBanditPartiesCoopCommand",
-        "line": 593
+        "line": 595
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6804,7 +7161,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "DestroyPartyCoopCommand",
-        "line": 549
+        "line": 554
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6820,7 +7177,7 @@
       "arguments": [
         {
           "name": "partyId",
-          "description": "The registered party id.",
+          "description": "Party name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -6832,7 +7189,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "DisorganizationCacheCoopCommand",
-        "line": 60
+        "line": 65
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6848,14 +7205,14 @@
       "arguments": [
         {
           "name": "partyStringId",
-          "description": "The party string id.",
+          "description": "Party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "InfoCoopCommand",
-        "line": 92
+        "line": 101
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6872,7 +7229,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "ListMobilePartiesCoopCommand",
-        "line": 636
+        "line": 638
       },
       "category": "Mobile parties",
       "kind": "inspect",
@@ -6888,7 +7245,7 @@
       "arguments": [
         {
           "name": "partyId",
-          "description": "The registered party id.",
+          "description": "Party name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -6900,7 +7257,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "SetDisorganizedCoopCommand",
-        "line": 31
+        "line": 32
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6916,7 +7273,7 @@
       "arguments": [
         {
           "name": "partyStringId",
-          "description": "The party string id.",
+          "description": "Party name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -6928,7 +7285,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "SetWagePaymentLimitCoopCommand",
-        "line": 670
+        "line": 672
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6944,7 +7301,7 @@
       "arguments": [
         {
           "name": "partyStringId",
-          "description": "The party string id.",
+          "description": "Party name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -6956,7 +7313,7 @@
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "SetUnlimitedWageToggleCoopCommand",
-        "line": 723
+        "line": 726
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -6977,14 +7334,14 @@
         },
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": false
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "SpawnTestPartiesCoopCommand",
-        "line": 478
+        "line": 481
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -7000,14 +7357,14 @@
       "arguments": [
         {
           "name": "mobilePartyId",
-          "description": "The mobile party id.",
+          "description": "Party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MobilePartyDebugCommand.cs",
         "type": "VerifyAiAuthorityCoopCommand",
-        "line": 231
+        "line": 239
       },
       "category": "Mobile parties",
       "kind": "action",
@@ -7064,7 +7421,7 @@
       "source": {
         "path": "source/GameInterface/Services/PartyVisuals/Commands/PartyVisualDebugCommands.cs",
         "type": "BufferStateCoopCommand",
-        "line": 31
+        "line": 32
       },
       "category": "Party visuals",
       "kind": "inspect",
@@ -7160,19 +7517,19 @@
       "arguments": [
         {
           "name": "player_hero_id",
-          "description": "The registered player hero id.",
+          "description": "Player hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "npc_hero_id",
-          "description": "The registered NPC hero id.",
+          "description": "NPC hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/RomanceDebugCommand.cs",
         "type": "RomanceAgreeCoopCommand",
-        "line": 235
+        "line": 263
       },
       "category": "Romance",
       "kind": "action",
@@ -7188,19 +7545,19 @@
       "arguments": [
         {
           "name": "player_hero_id",
-          "description": "The registered player hero id.",
+          "description": "Player hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "npc_hero_id",
-          "description": "The registered NPC hero id.",
+          "description": "NPC hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/RomanceDebugCommand.cs",
         "type": "RomanceCompatibleCoopCommand",
-        "line": 154
+        "line": 168
       },
       "category": "Romance",
       "kind": "action",
@@ -7216,19 +7573,19 @@
       "arguments": [
         {
           "name": "player_hero_id",
-          "description": "The registered player hero id.",
+          "description": "Player hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "npc_hero_id",
-          "description": "The registered NPC hero id.",
+          "description": "NPC hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/RomanceDebugCommand.cs",
         "type": "RomanceDivorceCoopCommand",
-        "line": 308
+        "line": 350
       },
       "category": "Romance",
       "kind": "action",
@@ -7244,19 +7601,19 @@
       "arguments": [
         {
           "name": "first_hero_id",
-          "description": "The first registered hero id.",
+          "description": "First hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "second_hero_id",
-          "description": "The second registered hero id.",
+          "description": "Second hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/RomanceDebugCommand.cs",
         "type": "RomanceFailPracticalitiesCoopCommand",
-        "line": 193
+        "line": 214
       },
       "category": "Romance",
       "kind": "action",
@@ -7306,19 +7663,19 @@
       "arguments": [
         {
           "name": "player_hero_id",
-          "description": "The registered player hero id.",
+          "description": "Player hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "npc_hero_id",
-          "description": "The registered NPC hero id.",
+          "description": "NPC hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/RomanceDebugCommand.cs",
         "type": "RomanceMarryCoopCommand",
-        "line": 274
+        "line": 309
       },
       "category": "Romance",
       "kind": "action",
@@ -7334,19 +7691,19 @@
       "arguments": [
         {
           "name": "player_hero_id",
-          "description": "The registered player hero id.",
+          "description": "Player hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "npc_hero_id",
-          "description": "The registered NPC hero id.",
+          "description": "NPC hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Heroes/Commands/RomanceDebugCommand.cs",
         "type": "RomanceStartCoopCommand",
-        "line": 115
+        "line": 122
       },
       "category": "Romance",
       "kind": "action",
@@ -7362,12 +7719,12 @@
       "arguments": [
         {
           "name": "player_hero_id",
-          "description": "The registered player hero id.",
+          "description": "Player hero name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "npc_hero_id",
-          "description": "The registered NPC hero id.",
+          "description": "NPC hero name or id; quote names with spaces.",
           "required": true
         }
       ],
@@ -7453,7 +7810,7 @@
       "arguments": [
         {
           "name": "settlementComponentId",
-          "description": "The settlement component id.",
+          "description": "Settlement component id, or the name or id of its settlement; quote names with spaces.",
           "required": true
         },
         {
@@ -7465,7 +7822,7 @@
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "SetGoldCoopCommand",
-        "line": 951
+        "line": 1038
       },
       "category": "Settlements",
       "kind": "action",
@@ -7481,7 +7838,7 @@
       "arguments": [
         {
           "name": "settlementComponentId",
-          "description": "The settlement component id.",
+          "description": "Settlement component id, or the name or id of its settlement; quote names with spaces.",
           "required": true
         },
         {
@@ -7493,7 +7850,7 @@
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "SetIsOwnerUnassignedCoopCommand",
-        "line": 996
+        "line": 1090
       },
       "category": "Settlements",
       "kind": "action",
@@ -7509,19 +7866,19 @@
       "arguments": [
         {
           "name": "settlementComponentId",
-          "description": "The settlement component id.",
+          "description": "Settlement component id, or the name or id of its settlement; quote names with spaces.",
           "required": true
         },
         {
           "name": "mobilePartyId",
-          "description": "The mobile party id.",
+          "description": "Settlement or mobile party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "SetOwnerCoopCommand",
-        "line": 778
+        "line": 831
       },
       "category": "Settlements",
       "kind": "action",
@@ -7554,19 +7911,19 @@
       "arguments": [
         {
           "name": "settlementNameOrId",
-          "description": "The exact settlement name or id; quote names containing spaces.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "capturerHeroId",
-          "description": "The capturer hero id.",
+          "description": "Capturer hero name or id; quote names with spaces.",
           "required": false
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "CaptureBySiegeCoopCommand",
-        "line": 834
+        "line": 885
       },
       "category": "Settlements",
       "kind": "action",
@@ -7582,14 +7939,14 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "CollectCacheNotablesCoopCommand",
-        "line": 670
+        "line": 715
       },
       "category": "Settlements",
       "kind": "action",
@@ -7605,7 +7962,7 @@
       "arguments": [
         {
           "name": "castleId",
-          "description": "The castle id.",
+          "description": "Castle name or id; quote names with spaces.",
           "required": false
         }
       ],
@@ -7628,14 +7985,14 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "GetTownNameCoopCommand",
-        "line": 208
+        "line": 221
       },
       "category": "Settlements",
       "kind": "action",
@@ -7651,14 +8008,14 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "InfoCoopCommand",
-        "line": 718
+        "line": 767
       },
       "category": "Settlements",
       "kind": "action",
@@ -7674,23 +8031,40 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "lastAttackerPartyId",
-          "description": "The last attacker party id.",
+          "description": "Last attacker party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "SetLastAttackerPartyCoopCommand",
-        "line": 439
+        "line": 468
       },
       "category": "Settlements",
       "kind": "action",
       "usage": "coop.debug.settlements.last_attacker <settlementId> <lastAttackerPartyId>",
+      "aliases": []
+    },
+    {
+      "command": "coop.debug.settlements.list_notables",
+      "name": "list_notables",
+      "group": "coop.debug.settlements",
+      "summary": "Lists the notables in the settlement the client is in, with their ids and names.",
+      "side": "client",
+      "arguments": [],
+      "source": {
+        "path": "source/GameInterface/Services/Settlements/Commands/SettlementListNotablesCoopCommand.cs",
+        "type": "SettlementListNotablesCoopCommand",
+        "line": 17
+      },
+      "category": "Settlements",
+      "kind": "inspect",
+      "usage": "coop.debug.settlements.list_notables",
       "aliases": []
     },
     {
@@ -7703,7 +8077,7 @@
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "ListSiegeStatesCoopCommand",
-        "line": 488
+        "line": 521
       },
       "category": "Settlements",
       "kind": "inspect",
@@ -7719,14 +8093,14 @@
       "arguments": [
         {
           "name": "settlementNameOrId",
-          "description": "The exact settlement name or id; quote names containing spaces.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "OwnerStateCoopCommand",
-        "line": 899
+        "line": 955
       },
       "category": "Settlements",
       "kind": "action",
@@ -7742,7 +8116,7 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -7754,7 +8128,7 @@
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "SetAlliesSpottedCoopCommand",
-        "line": 298
+        "line": 315
       },
       "category": "Settlements",
       "kind": "action",
@@ -7770,7 +8144,7 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -7782,7 +8156,7 @@
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "SetBribePaidCoopCommand",
-        "line": 345
+        "line": 366
       },
       "category": "Settlements",
       "kind": "action",
@@ -7798,7 +8172,7 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -7810,7 +8184,7 @@
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "SetEnemiesSpottedCoopCommand",
-        "line": 248
+        "line": 261
       },
       "category": "Settlements",
       "kind": "action",
@@ -7826,7 +8200,7 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -7838,7 +8212,7 @@
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "SetGarrisonWageLimitCoopCommand",
-        "line": 620
+        "line": 661
       },
       "category": "Settlements",
       "kind": "action",
@@ -7854,7 +8228,7 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -7866,7 +8240,7 @@
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "SetHitPointsCoopCommand",
-        "line": 392
+        "line": 417
       },
       "category": "Settlements",
       "kind": "action",
@@ -7882,7 +8256,7 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -7894,7 +8268,7 @@
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "SetMiltiiaCoopCommand",
-        "line": 570
+        "line": 607
       },
       "category": "Settlements",
       "kind": "action",
@@ -7910,23 +8284,28 @@
       "arguments": [
         {
           "name": "settlementNameOrId",
-          "description": "The exact settlement name or id; quote names containing spaces.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "heroId",
-          "description": "The hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
+        },
+        {
+          "name": "transfer",
+          "description": "gift (default) or barter.",
+          "required": false
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "SetOwnerClanCoopCommand",
-        "line": 1039
+        "line": 1140
       },
       "category": "Settlements",
       "kind": "action",
-      "usage": "coop.debug.settlements.set_owner_clan <settlementNameOrId> <heroId>",
+      "usage": "coop.debug.settlements.set_owner_clan <settlementNameOrId> <heroId> [<transfer>]",
       "aliases": []
     },
     {
@@ -7938,7 +8317,7 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -7950,7 +8329,7 @@
       "source": {
         "path": "source/GameInterface/Services/Settlements/Commands/SettlementCommands.cs",
         "type": "SetSiegeStateCoopCommand",
-        "line": 519
+        "line": 552
       },
       "category": "Settlements",
       "kind": "action",
@@ -7971,14 +8350,14 @@
         },
         {
           "name": "partyId",
-          "description": "The party id.",
+          "description": "Party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/BesiegerCamps/Commands/BesiegerCampDebugCommand.cs",
         "type": "AddPartyToBesiegerCampCoopCommand",
-        "line": 244
+        "line": 258
       },
       "category": "Sieges",
       "kind": "action",
@@ -7999,14 +8378,14 @@
         },
         {
           "name": "partyId",
-          "description": "The party id.",
+          "description": "Party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/BesiegerCamps/Commands/BesiegerCampDebugCommand.cs",
         "type": "RemovePartyFromBesiegerCampCoopCommand",
-        "line": 294
+        "line": 315
       },
       "category": "Sieges",
       "kind": "action",
@@ -8027,14 +8406,14 @@
         },
         {
           "name": "partyId",
-          "description": "The party id.",
+          "description": "Party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/BesiegerCamps/Commands/BesiegerCampDebugCommand.cs",
         "type": "SetBesiegerCampLeaderPartyCoopCommand",
-        "line": 194
+        "line": 202
       },
       "category": "Sieges",
       "kind": "action",
@@ -8062,7 +8441,7 @@
       "source": {
         "path": "source/GameInterface/Services/BesiegerCamps/Commands/BesiegerCampDebugCommand.cs",
         "type": "SetBesiegerCampNumberOfTroopsKilledOnSideCoopCommand",
-        "line": 38
+        "line": 39
       },
       "category": "Sieges",
       "kind": "action",
@@ -8090,7 +8469,7 @@
       "source": {
         "path": "source/GameInterface/Services/BesiegerCamps/Commands/BesiegerCampDebugCommand.cs",
         "type": "SetBesiegerCampPreparationsProgressCoopCommand",
-        "line": 88
+        "line": 89
       },
       "category": "Sieges",
       "kind": "action",
@@ -8111,14 +8490,14 @@
         },
         {
           "name": "strategyId",
-          "description": "The strategy id.",
+          "description": "Siege strategy name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/BesiegerCamps/Commands/BesiegerCampDebugCommand.cs",
         "type": "SetBesiegerCampSiegeStrategyCoopCommand",
-        "line": 138
+        "line": 139
       },
       "category": "Sieges",
       "kind": "action",
@@ -8139,14 +8518,14 @@
         },
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "ArmyReliefStateCoopCommand",
-        "line": 979
+        "line": 1005
       },
       "category": "Sieges",
       "kind": "action",
@@ -8162,14 +8541,14 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "StartAssaultCoopCommand",
-        "line": 1972
+        "line": 2068
       },
       "category": "Sieges",
       "kind": "action",
@@ -8186,7 +8565,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "AssaultEntryStateCoopCommand",
-        "line": 1183
+        "line": 1242
       },
       "category": "Sieges",
       "kind": "action",
@@ -8203,7 +8582,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "DumpEnginesCoopCommand",
-        "line": 2407
+        "line": 2544
       },
       "category": "Sieges",
       "kind": "inspect",
@@ -8226,7 +8605,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "DumpMachinesCoopCommand",
-        "line": 2493
+        "line": 2630
       },
       "category": "Sieges",
       "kind": "inspect",
@@ -8242,14 +8621,14 @@
       "arguments": [
         {
           "name": "heroNameOrPartyId",
-          "description": "The exact hero name or party id; quote names containing spaces.",
+          "description": "Party or hero name or id, or main; quote names containing spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "DumpPartyCoopCommand",
-        "line": 2335
+        "line": 2459
       },
       "category": "Sieges",
       "kind": "inspect",
@@ -8265,14 +8644,14 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "FocusSettlementCoopCommand",
-        "line": 2281
+        "line": 2402
       },
       "category": "Sieges",
       "kind": "action",
@@ -8288,14 +8667,14 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "GraphStateCoopCommand",
-        "line": 2213
+        "line": 2331
       },
       "category": "Sieges",
       "kind": "action",
@@ -8311,14 +8690,14 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "JoinActiveAssaultCoopCommand",
-        "line": 1095
+        "line": 1147
       },
       "category": "Sieges",
       "kind": "action",
@@ -8334,7 +8713,7 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -8351,7 +8730,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "JoinPlayersCoopCommand",
-        "line": 1575
+        "line": 1645
       },
       "category": "Sieges",
       "kind": "action",
@@ -8368,7 +8747,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "LeaveCoopCommand",
-        "line": 1287
+        "line": 1346
       },
       "category": "Sieges",
       "kind": "action",
@@ -8385,7 +8764,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "LeaveSettlementCoopCommand",
-        "line": 1318
+        "line": 1377
       },
       "category": "Sieges",
       "kind": "action",
@@ -8402,7 +8781,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "ListSiegesCoopCommand",
-        "line": 2174
+        "line": 2292
       },
       "category": "Sieges",
       "kind": "inspect",
@@ -8418,14 +8797,14 @@
       "arguments": [
         {
           "name": "partyId",
-          "description": "The party id.",
+          "description": "Party name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "PlayerStateCoopCommand",
-        "line": 1728
+        "line": 1806
       },
       "category": "Sieges",
       "kind": "action",
@@ -8441,14 +8820,14 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "PrepareLaddersOnlyCoopCommand",
-        "line": 1771
+        "line": 1857
       },
       "category": "Sieges",
       "kind": "action",
@@ -8464,14 +8843,14 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "RequestAssaultCoopCommand",
-        "line": 1060
+        "line": 1105
       },
       "category": "Sieges",
       "kind": "action",
@@ -8487,14 +8866,14 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "RequestBesiegeCoopCommand",
-        "line": 1025
+        "line": 1063
       },
       "category": "Sieges",
       "kind": "action",
@@ -8510,14 +8889,14 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "ResolveStarvationCoopCommand",
-        "line": 2120
+        "line": 2231
       },
       "category": "Sieges",
       "kind": "action",
@@ -8533,14 +8912,14 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "StageMachinesCoopCommand",
-        "line": 1863
+        "line": 1952
       },
       "category": "Sieges",
       "kind": "action",
@@ -8556,19 +8935,19 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "besiegerPartyId",
-          "description": "The besieger party id.",
+          "description": "Besieger party name or id; quote names with spaces.",
           "required": false
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "StartSiegeCoopCommand",
-        "line": 1363
+        "line": 1422
       },
       "category": "Sieges",
       "kind": "action",
@@ -8589,7 +8968,7 @@
         },
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -8601,7 +8980,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "StartArmyReliefCoopCommand",
-        "line": 856
+        "line": 874
       },
       "category": "Sieges",
       "kind": "action",
@@ -8617,7 +8996,7 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -8639,7 +9018,7 @@
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "StopSiegeCoopCommand",
-        "line": 1480
+        "line": 1547
       },
       "category": "Sieges",
       "kind": "action",
@@ -8655,14 +9034,14 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/SiegeEvents/Commands/SiegeDebugCommand.cs",
         "type": "TerminalStatusCoopCommand",
-        "line": 2048
+        "line": 2152
       },
       "category": "Sieges",
       "kind": "action",
@@ -8678,14 +9057,14 @@
       "arguments": [
         {
           "name": "hero_name",
-          "description": "The exact hero display name.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Smithing/Commands/SmithingCommands.cs",
         "type": "CraftingAddCraftedItemsCoopCommand",
-        "line": 250
+        "line": 240
       },
       "category": "Smithing",
       "kind": "action",
@@ -8701,14 +9080,14 @@
       "arguments": [
         {
           "name": "hero_name",
-          "description": "The exact hero display name.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Smithing/Commands/SmithingCommands.cs",
         "type": "CraftingAddTownOrderCoopCommand",
-        "line": 203
+        "line": 199
       },
       "category": "Smithing",
       "kind": "action",
@@ -8725,7 +9104,7 @@
       "source": {
         "path": "source/GameInterface/Services/Smithing/Commands/SmithingCommands.cs",
         "type": "CraftingCraftedItemHistoryCoopCommand",
-        "line": 345
+        "line": 333
       },
       "category": "Smithing",
       "kind": "action",
@@ -8742,7 +9121,7 @@
       "source": {
         "path": "source/GameInterface/Services/Smithing/Commands/SmithingCommands.cs",
         "type": "CraftingCraftingPiecesXpCoopCommand",
-        "line": 394
+        "line": 382
       },
       "category": "Smithing",
       "kind": "action",
@@ -8758,14 +9137,14 @@
       "arguments": [
         {
           "name": "hero_name",
-          "description": "The exact hero display name.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Smithing/Commands/SmithingCommands.cs",
         "type": "CraftingGiveSuppliesCoopCommand",
-        "line": 45
+        "line": 46
       },
       "category": "Smithing",
       "kind": "action",
@@ -8782,7 +9161,7 @@
       "source": {
         "path": "source/GameInterface/Services/Smithing/Commands/SmithingCommands.cs",
         "type": "CraftingStaminaCoopCommand",
-        "line": 308
+        "line": 296
       },
       "category": "Smithing",
       "kind": "action",
@@ -8798,14 +9177,14 @@
       "arguments": [
         {
           "name": "town_name",
-          "description": "The exact town display name.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Smithing/Commands/SmithingCommands.cs",
         "type": "CraftingTownOrdersCoopCommand",
-        "line": 157
+        "line": 156
       },
       "category": "Smithing",
       "kind": "action",
@@ -8822,7 +9201,7 @@
       "source": {
         "path": "source/GameInterface/Services/Smithing/Commands/SmithingCommands.cs",
         "type": "CraftingUnlockAllCraftingPiecesCoopCommand",
-        "line": 117
+        "line": 116
       },
       "category": "Smithing",
       "kind": "action",
@@ -8839,7 +9218,7 @@
       "source": {
         "path": "source/GameInterface/Services/Smithing/Commands/SmithingCommands.cs",
         "type": "CraftingUnlockedCraftingPiecesCoopCommand",
-        "line": 443
+        "line": 431
       },
       "category": "Smithing",
       "kind": "action",
@@ -8889,14 +9268,14 @@
       "arguments": [
         {
           "name": "townNameOrId",
-          "description": "The exact town name or id; quote names containing spaces.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Tournaments/Commands/TournamentDebugCommand.cs",
         "type": "AddTournamentToTownCoopCommand",
-        "line": 41
+        "line": 42
       },
       "category": "Tournaments",
       "kind": "action",
@@ -8912,7 +9291,7 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -8929,7 +9308,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "AddToTownSoldItemsCoopCommand",
-        "line": 610
+        "line": 630
       },
       "category": "Towns",
       "kind": "action",
@@ -8945,7 +9324,7 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -8957,7 +9336,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "ApplyGarrisonLifecycleCoopCommand",
-        "line": 284
+        "line": 279
       },
       "category": "Towns",
       "kind": "action",
@@ -8990,14 +9369,14 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "ChangeCurrentBuildingCoopCommand",
-        "line": 1015
+        "line": 1053
       },
       "category": "Towns",
       "kind": "action",
@@ -9013,14 +9392,14 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "ChangeCurrentBuildingQueueCoopCommand",
-        "line": 1054
+        "line": 1094
       },
       "category": "Towns",
       "kind": "action",
@@ -9036,14 +9415,14 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "FocusGarrisonCoopCommand",
-        "line": 234
+        "line": 227
       },
       "category": "Towns",
       "kind": "action",
@@ -9059,14 +9438,14 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "GarrisonBacklinkCoopCommand",
-        "line": 201
+        "line": 190
       },
       "category": "Towns",
       "kind": "action",
@@ -9082,14 +9461,14 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "InfoCoopCommand",
-        "line": 115
+        "line": 102
       },
       "category": "Towns",
       "kind": "action",
@@ -9105,7 +9484,7 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         }
       ],
@@ -9129,7 +9508,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "ListItemsCoopCommand",
-        "line": 82
+        "line": 69
       },
       "category": "Towns",
       "kind": "inspect",
@@ -9146,7 +9525,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "ListTownsCoopCommand",
-        "line": 46
+        "line": 33
       },
       "category": "Towns",
       "kind": "inspect",
@@ -9162,14 +9541,14 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "ListWorkshopsCoopCommand",
-        "line": 424
+        "line": 434
       },
       "category": "Towns",
       "kind": "inspect",
@@ -9185,14 +9564,14 @@
       "arguments": [
         {
           "name": "townName",
-          "description": "The exact town name; quote values containing spaces.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "ViewManagementDataCoopCommand",
-        "line": 1090
+        "line": 1132
       },
       "category": "Towns",
       "kind": "action",
@@ -9208,7 +9587,7 @@
       "arguments": [
         {
           "name": "townName",
-          "description": "The exact town name; quote values containing spaces.",
+          "description": "Town name or id, or ALL for every town; quote names with spaces.",
           "required": true
         }
       ],
@@ -9231,14 +9610,14 @@
       "arguments": [
         {
           "name": "townName",
-          "description": "The exact town name; quote values containing spaces.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/MobileParties/Commands/MercenaryStockDebugCommand.cs",
         "type": "RequestMercenaryStockCoopCommand",
-        "line": 92
+        "line": 96
       },
       "category": "Towns",
       "kind": "action",
@@ -9254,7 +9633,7 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -9266,7 +9645,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetFoodStocksCoopCommand",
-        "line": 459
+        "line": 479
       },
       "category": "Towns",
       "kind": "action",
@@ -9282,7 +9661,7 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -9294,7 +9673,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetTownGarrisonAutoRecruitmentIsEnabledCoopCommand",
-        "line": 917
+        "line": 953
       },
       "category": "Towns",
       "kind": "action",
@@ -9310,19 +9689,19 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "heroId",
-          "description": "The hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetTownGovernorCoopCommand",
-        "line": 510
+        "line": 532
       },
       "category": "Towns",
       "kind": "action",
@@ -9338,7 +9717,7 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -9350,7 +9729,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetTownInRebelliousStateCoopCommand",
-        "line": 834
+        "line": 860
       },
       "category": "Towns",
       "kind": "action",
@@ -9366,19 +9745,19 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "clanId",
-          "description": "The clan id.",
+          "description": "Clan name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetTownLastCapturedByCoopCommand",
-        "line": 560
+        "line": 581
       },
       "category": "Towns",
       "kind": "action",
@@ -9394,7 +9773,7 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -9406,7 +9785,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetTownLoyaltyCoopCommand",
-        "line": 735
+        "line": 759
       },
       "category": "Towns",
       "kind": "action",
@@ -9422,7 +9801,7 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -9434,7 +9813,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetTownProsperityCoopCommand",
-        "line": 686
+        "line": 709
       },
       "category": "Towns",
       "kind": "action",
@@ -9450,7 +9829,7 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -9462,7 +9841,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetTownSecurityCoopCommand",
-        "line": 784
+        "line": 809
       },
       "category": "Towns",
       "kind": "action",
@@ -9478,7 +9857,7 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -9490,7 +9869,7 @@
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "SetTradeTaxAccumulatedCoopCommand",
-        "line": 966
+        "line": 1003
       },
       "category": "Towns",
       "kind": "action",
@@ -9506,14 +9885,14 @@
       "arguments": [
         {
           "name": "townId",
-          "description": "The town id.",
+          "description": "Town name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Towns/Commands/TownDebugCommand.cs",
         "type": "StartRebellionCoopCommand",
-        "line": 877
+        "line": 904
       },
       "category": "Towns",
       "kind": "action",
@@ -9745,14 +10124,14 @@
       "arguments": [
         {
           "name": "villageId",
-          "description": "The village id.",
+          "description": "Village name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Villages/Commands/VillageDebugCommand.cs",
         "type": "InfoCoopCommand",
-        "line": 75
+        "line": 66
       },
       "category": "Villages",
       "kind": "action",
@@ -9769,7 +10148,7 @@
       "source": {
         "path": "source/GameInterface/Services/Villages/Commands/VillageDebugCommand.cs",
         "type": "ListVillagesCoopCommand",
-        "line": 38
+        "line": 29
       },
       "category": "Villages",
       "kind": "inspect",
@@ -9785,7 +10164,7 @@
       "arguments": [
         {
           "name": "villageId",
-          "description": "The village id.",
+          "description": "Village name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -9797,7 +10176,7 @@
       "source": {
         "path": "source/GameInterface/Services/Villages/Commands/VillageDebugCommand.cs",
         "type": "SetLastDemandTimeSatisifiedCoopCommand",
-        "line": 274
+        "line": 286
       },
       "category": "Villages",
       "kind": "action",
@@ -9813,7 +10192,7 @@
       "arguments": [
         {
           "name": "villageId",
-          "description": "The village id.",
+          "description": "Village name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -9825,7 +10204,7 @@
       "source": {
         "path": "source/GameInterface/Services/Villages/Commands/VillageDebugCommand.cs",
         "type": "SetVillageHearthCoopCommand",
-        "line": 170
+        "line": 174
       },
       "category": "Villages",
       "kind": "action",
@@ -9841,7 +10220,7 @@
       "arguments": [
         {
           "name": "villageId",
-          "description": "The village id.",
+          "description": "Village name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -9869,7 +10248,7 @@
       "arguments": [
         {
           "name": "villageId",
-          "description": "The village id.",
+          "description": "Village name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -9881,7 +10260,7 @@
       "source": {
         "path": "source/GameInterface/Services/Villages/Commands/VillageDebugCommand.cs",
         "type": "SetTradeTaxAccumulatedCoopCommand",
-        "line": 221
+        "line": 229
       },
       "category": "Villages",
       "kind": "action",
@@ -9897,14 +10276,14 @@
       "arguments": [
         {
           "name": "heroId",
-          "description": "The hero id.",
+          "description": "Hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Workshops/Commands/WorkshopDebugCommand.cs",
         "type": "HeroOwnedWorkshopsCommandCoopCommand",
-        "line": 229
+        "line": 217
       },
       "category": "Workshops",
       "kind": "action",
@@ -9920,14 +10299,14 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Workshops/Commands/WorkshopDebugCommand.cs",
         "type": "OwnersInSettlementCommandCoopCommand",
-        "line": 185
+        "line": 168
       },
       "category": "Workshops",
       "kind": "action",
@@ -9943,12 +10322,12 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "workshopType",
-          "description": "The workshop type.",
+          "description": "Workshop type name or id; quote names with spaces.",
           "required": true
         },
         {
@@ -9960,7 +10339,7 @@
       "source": {
         "path": "source/GameInterface/Services/Workshops/Commands/WorkshopDebugCommand.cs",
         "type": "SetWorkshopCustomNameCoopCommand",
-        "line": 65
+        "line": 52
       },
       "category": "Workshops",
       "kind": "action",
@@ -9976,24 +10355,24 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "workshopType",
-          "description": "The workshop type.",
+          "description": "Workshop type name or id; quote names with spaces.",
           "required": true
         },
         {
           "name": "newOwnerId",
-          "description": "The new owner id.",
+          "description": "New owner hero name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Workshops/Commands/WorkshopDebugCommand.cs",
         "type": "SetWorkshopOwnerCoopCommand",
-        "line": 115
+        "line": 104
       },
       "category": "Workshops",
       "kind": "action",
@@ -10010,7 +10389,7 @@
       "source": {
         "path": "source/GameInterface/Services/Workshops/Commands/WorkshopDebugCommand.cs",
         "type": "ViewWarehouseRostersCommandCoopCommand",
-        "line": 273
+        "line": 266
       },
       "category": "Workshops",
       "kind": "action",
@@ -10026,14 +10405,14 @@
       "arguments": [
         {
           "name": "settlementId",
-          "description": "The settlement id.",
+          "description": "Settlement name or id; quote names with spaces.",
           "required": true
         }
       ],
       "source": {
         "path": "source/GameInterface/Services/Workshops/Commands/WorkshopDebugCommand.cs",
         "type": "ViewWorkshopInfoCommandCoopCommand",
-        "line": 338
+        "line": 331
       },
       "category": "Workshops",
       "kind": "action",
