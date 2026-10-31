@@ -18,9 +18,9 @@ function render(q: string, lang: "en" | "zh-CN" = "en", side = "all") {
 
 test("CheatsDirectory renders source descriptions and required/optional argument help", () => {
     const gold = render("coop.debug.hero.set_gold");
-    assert.ok(gold.includes("Sets gold for every hero with an exact display name on the server."));
+    assert.ok(gold.includes("Sets gold for a hero by display name or registered id on the server."));
     assert.ok(gold.includes("&lt;hero_name&gt; &lt;gold&gt;"));
-    assert.ok(gold.includes("The exact hero display name. Quote multi-word values."));
+    assert.ok(gold.includes("Hero name or id; quote names with spaces."));
     assert.ok(gold.includes("Required"));
     const heroes = render("coop.debug.hero.list");
     assert.ok(heroes.includes("[&lt;name_prefix&gt;]"));
@@ -35,12 +35,12 @@ test("CheatsDirectory renders source descriptions and required/optional argument
 });
 
 test("CheatsDirectory searches translated argument help without translating command syntax", () => {
-    const html = render("包含多个词的值需加双引号", "zh-CN");
+    const html = render("英雄名称或 ID；含空格的名称请加引号", "zh-CN");
     assert.ok(html.includes('id="cheat-coop.debug.hero.set_gold"'));
     assert.ok(html.includes("&lt;hero_name&gt; &lt;gold&gt;"));
     assert.ok(html.includes("参数"));
     assert.ok(html.includes("必填"));
-    assert.ok(html.includes("英雄的完整显示名称。包含多个词的值需加双引号。"));
+    assert.ok(html.includes("英雄名称或 ID；含空格的名称请加引号。"));
     assert.ok(html.includes("/cheats?cheat=coop.debug.hero.set_gold&amp;lang=zh-CN"));
 });
 

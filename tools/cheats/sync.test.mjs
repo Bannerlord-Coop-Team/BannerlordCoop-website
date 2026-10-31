@@ -79,6 +79,20 @@ ${sample("both")}`;
         git("add", "."); git("commit", "-m", "unsupported generic command");
         assert.throws(() => extract(git("rev-parse", "HEAD")), /Unsupported generic or partial command/);
         writeFileSync(join(repo, "source/GameInterface/Inherited.cs"), "");
+        writeFileSync(sourcePath, `public class Limits {
+    private const int Max = 1023;
+    ${sample("interpolated", "Both", '$"Up to {Max}."', '{ new ExpectedArgs("level", $"Level 0 to {Max}.") }')}
+}`);
+        git("add", "."); git("commit", "-m", "interpolated constants and array initializer");
+        const interpolated = extract(git("rev-parse", "HEAD")).commands.find(c => c.name === "interpolated");
+        assert.equal(interpolated.summary, "Up to 1023.");
+        assert.deepEqual(interpolated.arguments, [{ name: "level", description: "Level 0 to 1023.", required: true }]);
+        writeFileSync(sourcePath, `public class Limits {
+    private const int Max = 1023;
+    ${sample("interpolated", "Both", '$"Up to {Max:N0}."')}
+}`);
+        git("add", "."); git("commit", "-m", "formatted interpolation");
+        assert.throws(() => extract(git("rev-parse", "HEAD")), /Unsupported metadata expression/);
         writeFileSync(sourcePath, sample("unsupported", "Unknown"));
         git("add", "."); git("commit", "-m", "unsupported side");
         assert.throws(() => extract(git("rev-parse", "HEAD")), /Unsupported Side/);
