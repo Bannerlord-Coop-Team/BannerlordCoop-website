@@ -5,6 +5,7 @@ import type { ReleaseBuild } from "./types";
 import {
     adminActionOptionValue,
     applyControlPlaneOperationDefaults,
+    clientVersionLabel,
     createServerProviderOptions,
     createServerRegionOptions,
     fieldRequirementLabel,
@@ -291,6 +292,11 @@ test("nightly names use the client version label with one v prefix", () => {
     assert.equal(releaseVersion(nightly), nightly.registryMetadata.versionTag);
     assert.equal(releaseVersion({ ...nightly, requiredClientModVersion: "" }), nightly.registryMetadata.versionTag);
     assert.equal(releaseVersion(build("historical-nightly", "validated", "a".repeat(40))), "historical-nightly");
+});
+
+test("client versions display with exactly one leading v", () => {
+    assert.equal(clientVersionLabel("0.1.6"), "v0.1.6");
+    assert.equal(clientVersionLabel("v0.1.6"), "v0.1.6");
 });
 
 test("overview statistic cards fill the final row evenly", () => {

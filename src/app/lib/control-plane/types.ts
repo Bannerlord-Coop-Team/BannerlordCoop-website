@@ -45,6 +45,8 @@ export type MyServerSummary = Pick<
     subscriptionHold?: { state: "held" | "removal-pending"; reason: "subscription-funding-lapsed"; removalDueAt: string; canExportSave: boolean } | null;
     runtimeInsight?: import("../hosting/owner-runtime-insight").OwnerRuntimeInsight;
     accessRole: "owner" | "manager" | "support" | "admin";
+    // Client mod version of the installed build; null before the first install, missing from older control planes.
+    installedVersion?: string | null;
     // Missing visibility is treated as private during the control-plane rollout.
     visibility?: "private" | "public";
     // Missing maintenance fields disable these settings until the control plane is updated.

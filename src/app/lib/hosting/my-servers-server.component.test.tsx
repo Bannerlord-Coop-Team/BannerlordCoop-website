@@ -352,12 +352,19 @@ it.each(["server_not_found", "forbidden", "invalid_request"])("propagates %s wit
     expect(fetch).toHaveBeenCalledTimes(code === "invalid_request" ? 3 : 2);
 });
 
+it.each([null, "v0.1.6"])("accepts the installed client version %j beside summaries without the field", async installedVersion => {
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...summary, installedVersion }));
+    expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual({ ...summary, installedVersion });
+});
+
 it.each([
     { ...summary, serverId: "22222222-2222-4222-8222-222222222222" },
     { ...summary, updatedAt: "yesterday" }, { ...summary, accessRole: "administrator" },
     { ...summary, operationState: "unbounded".repeat(20) }, { ...summary, observedGameState: "invalid" },
     { ...summary, gamePorts: [65536] }, { ...summary, connectionIp: "https://private.test" },
     { ...summary, visibility: "unlisted" }, { ...summary, maintenanceSlot: undefined },
+    { ...summary, installedVersion: "" }, { ...summary, installedVersion: "v".repeat(65) },
+    { ...summary, installedVersion: "v0.1.6\n" }, { ...summary, installedVersion: 6 },
     { ...summary, privatePayload: "must not enter presentation" }, null,
 ])("rejects malformed or wrong-server summary %j", async result => {
     const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), result));

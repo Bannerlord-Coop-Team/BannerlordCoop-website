@@ -434,6 +434,7 @@
   "page.gameState": "Spielstatus",
   "page.lifecycle": "Lebenszyklus",
   "page.releaseChannel": "Release-Kanal",
+  "page.installedVersion": "Version",
   "page.serverControls": "Serversteuerung",
   "page.loadingSavesConfigsAndBackups": "Spielstände, Konfigurationen und Backups werden geladen",
   "page.loadingServerManagement": "Serververwaltung wird geladen",

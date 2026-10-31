@@ -34,7 +34,9 @@ export async function getMyServerSummary(accessToken: string, serverId: string, 
     if (!isRecord(value) || !hasExactKeys(value, ["serverId", "displayName", "accessRole", "friendlyRegion", "operationState",
         "observedGameState", "releaseChannel", "maintenanceSlot", "timezone", "visibility", "connectionIp", "gamePorts", "updatedAt",
         ...(Object.hasOwn(value, "subscriptionHold") ? ["subscriptionHold"] : []),
+        ...(Object.hasOwn(value, "installedVersion") ? ["installedVersion"] : []),
         ...(Object.hasOwn(value, "runtimeInsight") ? ["runtimeInsight"] : [])])
+        || (Object.hasOwn(value, "installedVersion") && !isInstalledVersion(value.installedVersion))
         || (Object.hasOwn(value, "subscriptionHold") && !isSubscriptionHold(value.subscriptionHold))
         || (Object.hasOwn(value, "runtimeInsight") && !isOwnerRuntimeInsight(value.runtimeInsight, { operationState: value.operationState, observedGameState: value.observedGameState, subscriptionHold: value.subscriptionHold }))
         || value.serverId !== serverId || !timestamp(value.updatedAt)
@@ -53,6 +55,11 @@ export async function getMyServerSummary(accessToken: string, serverId: string, 
         throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid summary.", true);
     }
     return value as MyServerSummary;
+}
+
+/** Accepts a missing install as null and otherwise a short printable version string. */
+function isInstalledVersion(value: unknown) {
+    return value === null || (typeof value === "string" && value.length >= 1 && value.length <= 64 && !/[\p{Cc}\p{Cf}\s]/u.test(value));
 }
 
 /** Accepts old responses without the field; present hold data must match the closed contract. */

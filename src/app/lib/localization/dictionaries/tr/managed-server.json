@@ -434,6 +434,7 @@
   "page.gameState": "Oyun durumu",
   "page.lifecycle": "Yaşam döngüsü",
   "page.releaseChannel": "Sürüm kanalı",
+  "page.installedVersion": "Sürüm",
   "page.serverControls": "Sunucu denetimleri",
   "page.loadingSavesConfigsAndBackups": "Kayıt dosyaları, yapılandırmalar ve yedekler yükleniyor",
   "page.loadingServerManagement": "Sunucu yönetimi yükleniyor",
