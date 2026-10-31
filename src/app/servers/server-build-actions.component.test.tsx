@@ -57,6 +57,9 @@ it.each([
     ["validated_build_unavailable", "That version is no longer available. Refresh the page and choose another."],
     ["operation_in_progress", "Another server operation is running. Try again when it finishes."],
     ["no_update_available", "This server already follows the latest public version."],
+    ["operation_unavailable", "Version changes are not available for this server right now. Try again later or contact hosting support."],
+    ["native_game_maintenance_unsupported", "Version changes are not available for this server right now. Try again later or contact hosting support."],
+    ["game_maintenance_state_unknown", "Version changes are not available for this server right now. Try again later or contact hosting support."],
 ])("explains the %s refusal in plain language and marks it rejected", async (code, message) => {
     mocks.change.mockRejectedValueOnce(new MyServersApiError(code, "raw upstream text"));
     expect(await changeServerBuild(input)).toEqual({ ok: false, rejected: true, message });

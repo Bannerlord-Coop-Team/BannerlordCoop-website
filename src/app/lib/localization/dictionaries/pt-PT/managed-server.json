@@ -1053,5 +1053,6 @@
   "serverVersion.working": "A processar…",
   "serverVersion.yourCampaignWasLastSavedByVersionHasNotBeenVerifiedToRead": "A sua campanha foi guardada pela última vez pela {current}. Não foi verificado se a {version} a consegue ler, pelo que o jogo pode não a carregar e o progresso pode perder-se.",
   "serverVersion.installVersionQuestion": "Instalar {version}?",
-  "serverVersion.stayOnVersionQuestion": "Manter a {version}?"
+  "serverVersion.stayOnVersionQuestion": "Manter a {version}?",
+  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "As alterações de versão não estão disponíveis para este servidor neste momento. Tente novamente mais tarde ou contacte o suporte de alojamento."
 }

@@ -1052,5 +1052,6 @@
   "serverVersion.working": "处理中…",
   "serverVersion.yourCampaignWasLastSavedByVersionHasNotBeenVerifiedToRead": "你的战役上次由 {current} 保存。尚未验证 {version} 能否读取它，因此游戏可能无法加载该战役，进度也可能丢失。",
   "serverVersion.installVersionQuestion": "安装 {version}？",
-  "serverVersion.stayOnVersionQuestion": "保持在 {version}？"
+  "serverVersion.stayOnVersionQuestion": "保持在 {version}？",
+  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "此服务器目前无法更改版本。请稍后重试，或联系托管支持。"
 }

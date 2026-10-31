@@ -32,7 +32,10 @@ test("parses the closed version-selection contract and rejects anything else", (
     assert.equal(parseBuildOptions(options(), SERVER_ID).options.length, 2);
     assert.throws(() => parseBuildOptions({ ...options(), extra: true }, SERVER_ID));
     assert.throws(() => parseBuildOptions(options(), "44444444-4444-4444-8444-444444444444"));
-    assert.throws(() => parseBuildOptions({ ...options(), options: [option("latest")] }, SERVER_ID));
+    // A tag this website cannot select is skipped alone; the other versions stay offered.
+    const mixed = parseBuildOptions({ ...options(), options: [option("v0.1.9"), option("v1234567.0.0"), option("latest")] }, SERVER_ID);
+    assert.deepEqual(mixed.options.map((entry) => entry.buildId), ["v0.1.9"]);
+    assert.throws(() => parseBuildOptions({ ...options(), options: [{ ...option("v0.1.9"), extra: 1 }, option("v0.1.8")] }, SERVER_ID));
     assert.throws(() => parseBuildOptions({ ...options(), options: [option("v0.1.9"), option("v0.1.9")] }, SERVER_ID));
     assert.throws(() => parseBuildOptions({ ...options(), selectable: false }, SERVER_ID));
     assert.deepEqual(parseBuildOptions({ ...options(), selectable: false, unavailableReason: "nightly-channel", options: [] }, SERVER_ID).options, []);

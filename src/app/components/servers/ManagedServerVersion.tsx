@@ -89,6 +89,8 @@ export function ManagedServerVersion({ serverId, expectedUpdatedAt, canEdit }: {
     if (!canEdit || options === null || (!options.selectable && shownJob === null)) return null;
 
     const latest = options.latestVersion;
+    // Latest is selectable only while the control plane offers it as an installable option.
+    const latestOffered = options.options.some(option => option.isLatest);
     const installed = options.installedVersion;
     const currentChoice: Choice = options.pinnedVersion ?? LATEST;
     const versions = options.options.filter(option => !option.isLatest || option.isPinned);
@@ -150,7 +152,7 @@ export function ManagedServerVersion({ serverId, expectedUpdatedAt, canEdit }: {
                 : <p role="status" className={workspaceNoticeClass}>{t("serverVersion.automaticUpdatesArePausedThisServerStaysOnVersionUntilYou", { version: options.pinnedVersion })}</p>}
             {options.selectable && <fieldset disabled={busy || pending} className="space-y-2">
                 <legend className="mb-2 text-sm font-semibold text-foreground">{t("serverVersion.publicVersions")}</legend>
-                {latest !== null && <VersionChoice name={groupId} value={LATEST} checked={selected === LATEST} onChoose={choose}
+                {latest !== null && <VersionChoice name={groupId} value={LATEST} checked={selected === LATEST} onChoose={choose} disabled={!latestOffered}
                     title={t("serverVersion.latestVersion", { version: latest })} description={t("serverVersion.followTheNewestPublicReleaseAutomaticUpdatesApplyToFuture")}
                     badges={[installed === latest ? t("serverVersion.runningNow") : null, options.pinnedVersion === null ? t("serverVersion.selected") : null]} />}
                 {versions.map(option => <VersionChoice key={option.buildId} name={groupId} value={option.buildId} checked={selected === option.buildId} onChoose={choose}
@@ -195,11 +197,11 @@ export function ManagedServerVersion({ serverId, expectedUpdatedAt, canEdit }: {
 }
 
 /** One selectable version: a radio row whose badges name what is running, selected or latest. */
-function VersionChoice({ name, value, checked, onChoose, title, description, note, badges }: {
-    name: string; value: Choice; checked: boolean; onChoose: (value: Choice) => void; title: string; description: string; note?: string; badges: (string | null)[];
+function VersionChoice({ name, value, checked, onChoose, title, description, note, badges, disabled = false }: {
+    name: string; value: Choice; checked: boolean; onChoose: (value: Choice) => void; title: string; description: string; note?: string; badges: (string | null)[]; disabled?: boolean;
 }) {
     return <label className={`flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5 has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50 hover:border-gold/40 ${checked ? "border-gold/50 bg-gold/5" : "border-white/15"}`}>
-        <input type="radio" name={name} value={value} checked={checked} onChange={() => onChoose(value)} className="mt-1 accent-gold" />
+        <input type="radio" name={name} value={value} checked={checked} disabled={disabled} onChange={() => onChoose(value)} className="mt-1 accent-gold" />
         <span className="min-w-0">
             <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">{title}{badges.filter((badge): badge is string => badge !== null).map(badge => <span key={badge} className={workspaceBadgeClass}>{badge}</span>)}</span>
             <span className="mt-0.5 block text-xs leading-5 text-foreground-muted">{description}</span>

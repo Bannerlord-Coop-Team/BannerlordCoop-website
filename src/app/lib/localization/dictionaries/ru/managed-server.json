@@ -1055,5 +1055,6 @@
   "serverVersion.working": "Выполняется…",
   "serverVersion.yourCampaignWasLastSavedByVersionHasNotBeenVerifiedToRead": "Ваша кампания в последний раз была сохранена версией {current}. Возможность прочитать её в версии {version} не проверена, поэтому игра может её не загрузить, а прогресс может быть потерян.",
   "serverVersion.installVersionQuestion": "Установить {version}?",
-  "serverVersion.stayOnVersionQuestion": "Остаться на {version}?"
+  "serverVersion.stayOnVersionQuestion": "Остаться на {version}?",
+  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "Сейчас для этого сервера нельзя менять версию. Повторите попытку позже или обратитесь в службу поддержки хостинга."
 }

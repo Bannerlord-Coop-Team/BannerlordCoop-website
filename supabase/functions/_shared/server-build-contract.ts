@@ -102,16 +102,20 @@ export function parseBuildOptions(value: unknown, serverId: string): BuildOption
         || !nullable(isVersion, value.installedVersion) || !nullable(isVersion, value.pinnedVersion) || !nullable(isVersion, value.latestVersion)
         || !Array.isArray(value.options) || value.options.length > MAXIMUM_OPTIONS) throw invalid("build options");
     const seen = new Set<string>();
+    const kept: unknown[] = [];
     for (const option of value.options as unknown[]) {
+        // One tag this website cannot select is skipped on its own; it must not hide every other version.
+        if (isRecord(option) && typeof option.buildId === "string" && !PUBLIC_VERSION_TAG.test(option.buildId)) continue;
         if (!isRecord(option) || !hasExactKeys(option, ["buildId", "direction", "isInstalled", "isLatest", "isPinned", "requiresSaveAcknowledgement", "saveCompatibility", "version"])
             || typeof option.buildId !== "string" || !PUBLIC_VERSION_TAG.test(option.buildId) || seen.has(option.buildId) || !isVersion(option.version)
             || typeof option.isLatest !== "boolean" || typeof option.isInstalled !== "boolean" || typeof option.isPinned !== "boolean"
             || !oneOf(["newer", "older", "same"] as const, option.direction) || !oneOf(["verified", "unverified"] as const, option.saveCompatibility)
             || typeof option.requiresSaveAcknowledgement !== "boolean") throw invalid("build option");
         seen.add(option.buildId);
+        kept.push(option);
     }
     if (!value.selectable && value.options.length !== 0) throw invalid("build options");
-    return value as BuildOptions;
+    return { ...value, options: kept } as BuildOptions;
 }
 
 export function parseBuildStatus(value: unknown, serverId: string): BuildStatus {

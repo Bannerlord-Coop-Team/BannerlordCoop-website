@@ -167,6 +167,17 @@ it("returns to Latest from a pin and resumes automatic updates without asking ab
     expect(actions.change).toHaveBeenCalledWith(expect.objectContaining({ buildId: null, acknowledgeSaveRisk: false }));
 });
 
+it("disables Latest when the latest tag is not an installable option", async () => {
+    actions.options.mockResolvedValue(options({ installedVersion: "v0.1.9", pinnedVersion: "v0.1.9", latestVersion: "v0.1.11",
+        options: [option("v0.1.9", { isInstalled: true, isPinned: true, direction: "same", requiresSaveAcknowledgement: false }), option("v0.1.8")] }));
+    await render();
+    expect(radio("latest").disabled).toBe(true);
+    expect(radio("v0.1.8").disabled).toBe(false);
+    await choose("latest");
+    expect(container.querySelector('[role="group"]')).toBeNull();
+    expect(actions.change).not.toHaveBeenCalled();
+});
+
 it("pins the running version without a restart and refreshes at once", async () => {
     actions.options.mockResolvedValue(options({ latestVersion: "v0.1.11", options: [option("v0.1.11", { isLatest: true, direction: "newer", requiresSaveAcknowledgement: false }), option("v0.1.10", { isInstalled: true, direction: "same", requiresSaveAcknowledgement: false })] }));
     actions.change.mockResolvedValue({ ok: true, outcome: "pinned", jobId: null, message: "v0.1.10 is now selected. Automatic updates are paused until you select Latest." });

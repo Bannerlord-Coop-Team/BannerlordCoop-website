@@ -1052,5 +1052,6 @@
   "serverVersion.working": "処理中…",
   "serverVersion.yourCampaignWasLastSavedByVersionHasNotBeenVerifiedToRead": "キャンペーンは最後に {current} で保存されました。{version} で読み込めることは確認されていないため、ゲームがキャンペーンを読み込めず、進行状況が失われる可能性があります。",
   "serverVersion.installVersionQuestion": "{version} をインストールしますか?",
-  "serverVersion.stayOnVersionQuestion": "{version} のままにしますか?"
+  "serverVersion.stayOnVersionQuestion": "{version} のままにしますか?",
+  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "このサーバーでは現在、バージョンの変更を利用できません。しばらくしてからもう一度お試しいただくか、ホスティングサポートにお問い合わせください。"
 }

@@ -1053,5 +1053,6 @@
   "serverVersion.working": "Working…",
   "serverVersion.yourCampaignWasLastSavedByVersionHasNotBeenVerifiedToRead": "Your campaign was last saved by {current}. {version} has not been verified to read it, so the game might not load it and progress could be lost.",
   "serverVersion.installVersionQuestion": "Install {version}?",
-  "serverVersion.stayOnVersionQuestion": "Stay on {version}?"
+  "serverVersion.stayOnVersionQuestion": "Stay on {version}?",
+  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "Version changes are not available for this server right now. Try again later or contact hosting support."
 }

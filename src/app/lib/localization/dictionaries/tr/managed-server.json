@@ -1053,5 +1053,6 @@
   "serverVersion.working": "Çalışıyor…",
   "serverVersion.yourCampaignWasLastSavedByVersionHasNotBeenVerifiedToRead": "Seferiniz en son {current} sürümüyle kaydedildi. {version} sürümünün bu seferi okuyabildiği doğrulanmadı; bu nedenle oyun seferi yükleyemeyebilir ve ilerleme kaybolabilir.",
   "serverVersion.installVersionQuestion": "{version} sürümü kurulsun mu?",
-  "serverVersion.stayOnVersionQuestion": "{version} sürümünde kalınsın mı?"
+  "serverVersion.stayOnVersionQuestion": "{version} sürümünde kalınsın mı?",
+  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "Bu sunucu için sürüm değişiklikleri şu anda kullanılamıyor. Daha sonra tekrar deneyin veya barındırma desteğiyle iletişime geçin."
 }

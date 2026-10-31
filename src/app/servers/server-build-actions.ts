@@ -60,6 +60,9 @@ export async function changeServerBuild(value: unknown): Promise<ServerBuildChan
             operation_in_progress: t("serverBuild.anotherServerOperationIsRunningTryAgainWhenItFinishes"),
             request_conflict: t("serverBuild.anotherServerOperationIsRunningTryAgainWhenItFinishes"),
             settings_unchanged: t("serverBuild.thatVersionIsAlreadySelected"),
+            operation_unavailable: t("serverBuild.versionChangesAreNotAvailableForThisServerRightNow"),
+            native_game_maintenance_unsupported: t("serverBuild.versionChangesAreNotAvailableForThisServerRightNow"),
+            game_maintenance_state_unknown: t("serverBuild.versionChangesAreNotAvailableForThisServerRightNow"),
             no_update_available: t("serverBuild.thisServerAlreadyFollowsTheLatestPublicVersion"),
         };
         const refusal = !Object.hasOwn(messages, code) ? ownerRefusalMessage(error, t) : null;
