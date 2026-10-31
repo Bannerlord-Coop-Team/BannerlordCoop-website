@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Targets Chinese, Japanese and Korean pages, whose glyphs fill the em box and collide under tight leading. */
+@custom-variant cjk (&:is(:lang(ja), :lang(ko), :lang(zh)));
+
 :root {
   --background: #070806;
   --surface: #0c0d0b;
