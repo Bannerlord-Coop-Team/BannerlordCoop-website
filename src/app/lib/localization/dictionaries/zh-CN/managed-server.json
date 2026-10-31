@@ -434,6 +434,7 @@
   "page.gameState": "游戏状态",
   "page.lifecycle": "生命周期",
   "page.releaseChannel": "版本通道",
+  "page.installedVersion": "版本",
   "page.serverControls": "服务器控制",
   "page.loadingSavesConfigsAndBackups": "正在加载存档、配置和备份",
   "page.loadingServerManagement": "正在加载服务器管理",

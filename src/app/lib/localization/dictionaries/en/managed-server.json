@@ -444,6 +444,7 @@
   "page.gameState": "Game state",
   "page.lifecycle": "Lifecycle",
   "page.releaseChannel": "Release channel",
+  "page.installedVersion": "Version",
   "page.serverControls": "Server controls",
   "page.loadingSavesConfigsAndBackups": "Loading saves, configs and backups",
   "page.loadingServerManagement": "Loading server management",

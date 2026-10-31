@@ -173,6 +173,22 @@ it.each([
     expect(mocks.backupStatus).toHaveBeenCalledWith("token", managedId);
 });
 
+it.each([
+    ["0.1.6", "v0.1.6"],
+    ["v0.1.6", "v0.1.6"],
+    [null, null],
+    [undefined, null],
+] as const)("shows installed version %j beside the release channel as %j", async (installedVersion, shown) => {
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, installedVersion });
+    const tree = await page(managedId);
+    const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+    const status = (workspace!.props as unknown as { status: ReactElement<{ children: ReactElement }> }).status.props.children;
+    const html = renderToStaticMarkup(<>{await (status.type as (props: unknown) => Promise<ReactNode>)(status.props)}</>);
+    expect(html).toContain(`Release channel</dt><dd class="font-medium text-foreground">Public`);
+    if (shown === null) expect(html).not.toContain("Version</dt>");
+    else expect(html).toContain(`Version</dt><dd class="font-medium text-foreground">${shown}`);
+});
+
 // Resolve the page's server components, leaving client components for React to render.
 function findServerElement(node: ReactNode, name: "ServerManagementWorkspace"): Promise<ReactElement<{ visibility: ReactElement<ComponentProps<typeof ServerVisibilitySetting>> }> | null>;
 function findServerElement(node: ReactNode, name: "ServerSettingsPanel"): Promise<ReactElement<ComponentProps<typeof ServerSettingsPanel>> | null>;

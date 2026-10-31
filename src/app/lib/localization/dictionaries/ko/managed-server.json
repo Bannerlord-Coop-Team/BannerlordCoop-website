@@ -434,6 +434,7 @@
   "page.gameState": "게임 상태",
   "page.lifecycle": "수명 주기",
   "page.releaseChannel": "릴리스 채널",
+  "page.installedVersion": "버전",
   "page.serverControls": "서버 제어",
   "page.loadingSavesConfigsAndBackups": "저장 파일, 설정 및 백업 불러오는 중",
   "page.loadingServerManagement": "서버 관리 불러오는 중",

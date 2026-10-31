@@ -434,6 +434,7 @@
   "page.gameState": "ゲームの状態",
   "page.lifecycle": "ライフサイクル",
   "page.releaseChannel": "リリースチャンネル",
+  "page.installedVersion": "バージョン",
   "page.serverControls": "サーバー操作",
   "page.loadingSavesConfigsAndBackups": "セーブデータ、設定、バックアップを読み込んでいます",
   "page.loadingServerManagement": "サーバー管理を読み込んでいます",
