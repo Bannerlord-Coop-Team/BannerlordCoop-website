@@ -57,9 +57,9 @@ export async function getMyServerSummary(accessToken: string, serverId: string, 
     return value as MyServerSummary;
 }
 
-/** Accepts a missing install as null and otherwise a short printable version string. */
+/** Accepts a missing install as null and otherwise the control plane's printable 1-64 character version. */
 function isInstalledVersion(value: unknown) {
-    return value === null || (typeof value === "string" && value.length >= 1 && value.length <= 64 && !/[\p{Cc}\p{Cf}\s]/u.test(value));
+    return value === null || (typeof value === "string" && value.length >= 1 && value.length <= 64 && !/[\p{Cc}\p{Cf}]/u.test(value));
 }
 
 /** Accepts old responses without the field; present hold data must match the closed contract. */

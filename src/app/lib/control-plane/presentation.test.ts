@@ -297,6 +297,7 @@ test("nightly names use the client version label with one v prefix", () => {
 test("client versions display with exactly one leading v", () => {
     assert.equal(clientVersionLabel("0.1.6"), "v0.1.6");
     assert.equal(clientVersionLabel("v0.1.6"), "v0.1.6");
+    assert.equal(clientVersionLabel("V0.1.6"), "v0.1.6");
 });
 
 test("overview statistic cards fill the final row evenly", () => {

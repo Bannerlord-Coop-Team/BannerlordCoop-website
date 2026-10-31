@@ -30,7 +30,7 @@ export function releaseVersion(build: ReleaseBuild) {
 
 /** Displays a client mod version with exactly one leading "v", whether or not the source included one. */
 export function clientVersionLabel(version: string) {
-    return `v${version.replace(/^v/, "")}`;
+    return `v${version.replace(/^v/i, "")}`;
 }
 
 /** Displays channel names without changing their transport values. */

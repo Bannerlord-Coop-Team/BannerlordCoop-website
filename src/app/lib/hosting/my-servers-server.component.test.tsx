@@ -352,9 +352,11 @@ it.each(["server_not_found", "forbidden", "invalid_request"])("propagates %s wit
     expect(fetch).toHaveBeenCalledTimes(code === "invalid_request" ? 3 : 2);
 });
 
-it.each([null, "v0.1.6"])("accepts the installed client version %j beside summaries without the field", async installedVersion => {
-    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...summary, installedVersion }));
-    expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual({ ...summary, installedVersion });
+it.each([null, "v0.1.6", "0.1.6 hotfix"])("accepts installedVersion %j when present, alone and beside runtime insight", async installedVersion => {
+    for (const result of [{ ...summary, installedVersion }, { ...summary, installedVersion, runtimeInsight }]) {
+        vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), result));
+        expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual(result);
+    }
 });
 
 it.each([
