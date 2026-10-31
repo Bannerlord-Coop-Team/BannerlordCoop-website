@@ -1,4 +1,5 @@
 import { parseReleaseMutation, parseReleaseStatus, type ReleaseMutation } from "../../../../supabase/functions/_shared/server-release-contract";
+import { parseBuildChangeResult, parseBuildMutation, parseBuildOptions, parseBuildStatus, type BuildChangeResult, type BuildMutation, type BuildOptions, type BuildStatus } from "../../../../supabase/functions/_shared/server-build-contract";
 import { parseSaveDeletionStatus } from "../../../../supabase/functions/_shared/server-save-deletion-contract";
 import { parseOwnerSettingsMutation, parseOwnerSettingsResult, type OwnerSettingsMutation } from "../../../../supabase/functions/_shared/server-settings-contract";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "../../../../supabase/functions/_shared/server-visibility-contract";
@@ -324,6 +325,35 @@ export async function requestMyServerRelease(accessToken: string, input: Release
         || !["enqueued", "existing"].includes(String(result.outcome)) || result.action !== "update"
         || typeof result.jobId !== "string" || !RESOURCE_ID.test(result.jobId)) throw invalidResponse();
     return result as MyServerUpdateResult;
+}
+
+/** Reads the public versions this owner's server can install, with the pinned and latest ones named. */
+export async function getMyServerBuildOptions(accessToken: string, serverId: string): Promise<BuildOptions> {
+    if (!RESOURCE_ID.test(serverId)) throw new MyServersApiError("invalid_request", "Invalid server ID.");
+    return parseBuildOptions(await requestMyServersApi(accessToken, {
+        method: "GET", configureEndpoint(endpoint) {
+            endpoint.searchParams.set("resource", "build-options");
+            endpoint.searchParams.set("serverId", serverId);
+        },
+    }), serverId);
+}
+
+/** Reads the phase-by-phase state of the server's current or latest update job. */
+export async function getMyServerBuildStatus(accessToken: string, serverId: string): Promise<BuildStatus> {
+    if (!RESOURCE_ID.test(serverId)) throw new MyServersApiError("invalid_request", "Invalid server ID.");
+    return parseBuildStatus(await requestMyServersApi(accessToken, {
+        method: "GET", configureEndpoint(endpoint) {
+            endpoint.searchParams.set("resource", "build-status");
+            endpoint.searchParams.set("serverId", serverId);
+        },
+    }), serverId);
+}
+
+/** Installs the chosen public version, or returns the server to the latest one (build null). */
+export async function requestMyServerBuildChange(accessToken: string, input: BuildMutation, requestId: string): Promise<BuildChangeResult> {
+    if (!REQUEST_ID.test(requestId)) throw new MyServersApiError("invalid_request", "Invalid request ID.");
+    const result = await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify(parseBuildMutation(input)), requestId });
+    try { return parseBuildChangeResult(result); } catch { throw invalidResponse(); }
 }
 
 export async function requestMyServerUpdate(
