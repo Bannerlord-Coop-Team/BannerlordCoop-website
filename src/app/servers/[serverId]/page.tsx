@@ -4,7 +4,7 @@ import { LocalizationProvider } from "@/app/lib/localization/client";
 import { localizedRegionLabel } from "@/app/lib/hosting/region-labels";
 import { getLocale, getMessages, getTranslations } from "@/app/lib/localization/server";
 import { ManagedServerCommands } from "@/app/components/servers/ManagedServerCommands";
-import { clientVersionLabel, releaseChannelLabel } from "@/app/lib/control-plane/presentation";
+import { publicVersionLabel, releaseChannelLabel } from "@/app/lib/control-plane/presentation";
 import { ServerSettingsPanel } from "@/app/components/servers/ServerSettingsPanel";
 import { ManagedServerVersion } from "@/app/components/servers/ManagedServerVersion";
 import { ServerSaveConfigPanels } from "@/app/components/servers/ServerSaveConfigPanels";
@@ -376,7 +376,7 @@ async function ManagedServerStatus({ accessToken, server, move, checkBackup }: {
         [t("page.lifecycle"), isMoveInProgress(move) ? t(move.state === "returning" ? "move.lifecycleReturning" : "move.lifecycleMoving")
             : backup !== null ? t("page.backingUp") : (isColdSleeping(server.operationState, server.runtimeInsight?.desiredState) && !server.subscriptionHold ? t("state.sleeping") : formatManagedValue(server.operationState, t))],
         [t("page.releaseChannel"), releaseChannelLabel(server.releaseChannel, { stable: t("page.releaseStable"), nightly: t("page.releaseNightly") })],
-        ...(server.installedVersion ? [[t("page.installedVersion"), clientVersionLabel(server.installedVersion)]] : []),
+        ...(server.installedVersion ? [[t("page.installedVersion"), publicVersionLabel(server.installedVersion)]] : []),
     ];
     const initializing = INITIALIZING_SERVER_STATES.has(server.operationState);
     return <div className="space-y-3">

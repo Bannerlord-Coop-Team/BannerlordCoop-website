@@ -1,8 +1,20 @@
 import { hasExactKeys, isRecord } from "./dto-validation.ts";
 import { REQUEST_ID } from "./server-visibility-contract.ts";
 
-/** A public Stable version tag; the only build identity an owner request may carry. */
-export const PUBLIC_VERSION_TAG = /^v(?:0|[1-9]\d{0,5})\.(?:0|[1-9]\d{0,5})\.(?:0|[1-9]\d{0,5})$/u;
+/** A bare public semantic version ("0.1.6"), the only build identity an owner request may carry. */
+export const PUBLIC_VERSION = /^(?:0|[1-9]\d{0,5})\.(?:0|[1-9]\d{0,5})\.(?:0|[1-9]\d{0,5})$/u;
+
+/** Customers see "0.1.6", never "v0.1.6" or a build id; the registry tag spelling is accepted and stripped. */
+export function bareVersion(value: string): string {
+    return value.startsWith("v") || value.startsWith("V") ? value.slice(1) : value;
+}
+
+/** The bare public version of a bare or "v"-prefixed spelling, or null when it is no public version. */
+export function publicVersion(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    const bare = bareVersion(value);
+    return PUBLIC_VERSION.test(bare) ? bare : null;
+}
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const CONTROL_OR_FORMAT = /[\p{Cc}\p{Cf}]/u;
 const SAFE_CODE = /^[a-z][a-z0-9_-]{0,63}$/u;
@@ -89,8 +101,9 @@ export function parseBuildMutation(value: unknown): BuildMutation {
     if (!isRecord(value) || !hasExactKeys(value, ["acknowledgeSaveRisk", "action", "buildId", "expectedUpdatedAt", "serverId"])
         || value.action !== "set-server-build" || !isId(value.serverId) || !isTime(value.expectedUpdatedAt)
         || typeof value.acknowledgeSaveRisk !== "boolean"
-        || !(value.buildId === null || (typeof value.buildId === "string" && PUBLIC_VERSION_TAG.test(value.buildId)))) throw invalid("version change");
-    return value as BuildMutation;
+        || !(value.buildId === null || publicVersion(value.buildId) !== null)) throw invalid("version change");
+    // Either spelling names the same version; the bare one is what is sent on.
+    return { ...value, buildId: value.buildId === null ? null : publicVersion(value.buildId) } as BuildMutation;
 }
 
 export function parseBuildOptions(value: unknown, serverId: string): BuildOptions {
@@ -105,17 +118,19 @@ export function parseBuildOptions(value: unknown, serverId: string): BuildOption
     const kept: unknown[] = [];
     for (const option of value.options as unknown[]) {
         // One tag this website cannot select is skipped on its own; it must not hide every other version.
-        if (isRecord(option) && typeof option.buildId === "string" && !PUBLIC_VERSION_TAG.test(option.buildId)) continue;
+        if (isRecord(option) && typeof option.buildId === "string" && publicVersion(option.buildId) === null) continue;
         if (!isRecord(option) || !hasExactKeys(option, ["buildId", "direction", "isInstalled", "isLatest", "isPinned", "requiresSaveAcknowledgement", "saveCompatibility", "version"])
-            || typeof option.buildId !== "string" || !PUBLIC_VERSION_TAG.test(option.buildId) || seen.has(option.buildId) || !isVersion(option.version)
+            || publicVersion(option.buildId) === null || seen.has(publicVersion(option.buildId) as string) || !isVersion(option.version)
             || typeof option.isLatest !== "boolean" || typeof option.isInstalled !== "boolean" || typeof option.isPinned !== "boolean"
             || !oneOf(["newer", "older", "same"] as const, option.direction) || !oneOf(["verified", "unverified"] as const, option.saveCompatibility)
             || typeof option.requiresSaveAcknowledgement !== "boolean") throw invalid("build option");
-        seen.add(option.buildId);
-        kept.push(option);
+        const version = publicVersion(option.buildId) as string;
+        seen.add(version);
+        kept.push({ ...option, buildId: version, version: bareVersion(option.version as string) });
     }
     if (!value.selectable && value.options.length !== 0) throw invalid("build options");
-    return { ...value, options: kept } as BuildOptions;
+    const show = (version: unknown) => typeof version === "string" ? bareVersion(version) : null;
+    return { ...value, installedVersion: show(value.installedVersion), pinnedVersion: show(value.pinnedVersion), latestVersion: show(value.latestVersion), options: kept } as BuildOptions;
 }
 
 export function parseBuildStatus(value: unknown, serverId: string): BuildStatus {
@@ -136,7 +151,8 @@ export function parseBuildStatus(value: unknown, serverId: string): BuildStatus 
     (job.steps as unknown[]).forEach((step, index) => {
         if (!isRecord(step) || !hasExactKeys(step, ["id", "state"]) || step.id !== BUILD_STEP_IDS[index] || !oneOf(BUILD_STEP_STATES, step.state)) throw invalid("build step");
     });
-    return value as BuildStatus;
+    const shown = (version: unknown) => typeof version === "string" ? bareVersion(version) : null;
+    return { ...value, job: { ...job, targetVersion: shown(job.targetVersion), previousVersion: shown(job.previousVersion) } } as BuildStatus;
 }
 
 export function parseBuildChangeResult(value: unknown): BuildChangeResult {

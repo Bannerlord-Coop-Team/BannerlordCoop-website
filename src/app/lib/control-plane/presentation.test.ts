@@ -6,6 +6,7 @@ import {
     adminActionOptionValue,
     applyControlPlaneOperationDefaults,
     clientVersionLabel,
+    publicVersionLabel,
     createServerProviderOptions,
     createServerRegionOptions,
     fieldRequirementLabel,
@@ -413,4 +414,10 @@ test("release selectors load the same full catalog as the Releases view", async 
     assert.match(operations, /operation: "overview", input: \{ operations: true \}/u);
     assert.match(operations, /loadReleaseCatalog\(token, signal, identity\)/u);
     assert.match(operations, /stableBuilds: releases.stable, nightlyBuilds: releases.nightly/u);
+});
+
+test("shows a public version without the registry's leading v", () => {
+    assert.equal(publicVersionLabel("v0.1.6"), "0.1.6");
+    assert.equal(publicVersionLabel("V0.1.6"), "0.1.6");
+    assert.equal(publicVersionLabel("0.1.6"), "0.1.6");
 });

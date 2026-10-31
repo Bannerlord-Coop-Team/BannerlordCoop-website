@@ -174,8 +174,9 @@ it.each([
 });
 
 it.each([
-    ["0.1.6", "v0.1.6"],
-    ["v0.1.6", "v0.1.6"],
+    ["0.1.6", "0.1.6"],
+    ["v0.1.6", "0.1.6"],
+    ["V0.1.6", "0.1.6"],
     [null, null],
     [undefined, null],
 ] as const)("shows installed version %j beside the release channel as %j", async (installedVersion, shown) => {

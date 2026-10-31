@@ -639,7 +639,7 @@ test("version selection reads and choices cross the Edge boundary through the cl
     const requests: Request[] = [];
     const jobId = "55555555-5555-4555-8555-555555555555";
     const options = { serverId: FIRST_SERVER.serverId, updatedAt: "2026-10-30T12:00:00.000Z", releaseChannel: "stable", selectable: true, unavailableReason: null,
-        installedVersion: "v0.1.10", pinnedVersion: null, latestVersion: "v0.1.10", options: [{ buildId: "v0.1.9", version: "v0.1.9", isLatest: false, isInstalled: false,
+        installedVersion: "0.1.10", pinnedVersion: null, latestVersion: "0.1.10", options: [{ buildId: "0.1.9", version: "0.1.9", isLatest: false, isInstalled: false,
             isPinned: false, direction: "older", saveCompatibility: "unverified", requiresSaveAcknowledgement: true }] };
     let result: unknown = options;
     const handler = createMyServersHandler({
@@ -658,10 +658,10 @@ test("version selection reads and choices cross the Edge boundary through the cl
         result = { serverId: FIRST_SERVER.serverId, job: null };
         assert.deepEqual(await getMyServerBuildStatus(TOKEN, FIRST_SERVER.serverId), { serverId: FIRST_SERVER.serverId, job: null });
         result = { outcome: "enqueued", jobId, action: "update" };
-        const change = { action: "set-server-build" as const, serverId: FIRST_SERVER.serverId, buildId: "v0.1.9", expectedUpdatedAt: "2026-10-30T12:00:00.000Z", acknowledgeSaveRisk: true };
+        const change = { action: "set-server-build" as const, serverId: FIRST_SERVER.serverId, buildId: "0.1.9", expectedUpdatedAt: "2026-10-30T12:00:00.000Z", acknowledgeSaveRisk: true };
         assert.deepEqual(await requestMyServerBuildChange(TOKEN, change, "11111111-1111-4111-8111-111111111111"), { outcome: "enqueued", jobId, action: "update" });
         assert.deepEqual(await requests[2]?.json(), { version: 1, requestId: "11111111-1111-4111-8111-111111111111", operation: "set-server-build",
-            input: { serverId: FIRST_SERVER.serverId, buildId: "v0.1.9", expectedUpdatedAt: "2026-10-30T12:00:00.000Z", acknowledgeSaveRisk: true } });
+            input: { serverId: FIRST_SERVER.serverId, buildId: "0.1.9", expectedUpdatedAt: "2026-10-30T12:00:00.000Z", acknowledgeSaveRisk: true } });
         result = { outcome: "unpinned", jobId: null, action: "update" };
         assert.equal((await requestMyServerBuildChange(TOKEN, { ...change, buildId: null }, "11111111-1111-4111-8111-111111111111")).jobId, null);
         // A malformed request never leaves the website, and a malformed answer is not accepted.

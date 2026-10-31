@@ -19,7 +19,7 @@ vi.mock("@/app/lib/localization/server", () => ({
 
 const serverId = "11111111-1111-4111-8111-111111111111";
 const jobId = "33333333-3333-4333-8333-333333333333";
-const input = { serverId, buildId: "v0.1.9", expectedUpdatedAt: "2026-10-01T00:00:00.000Z", acknowledgeSaveRisk: true, requestId: "22222222-2222-4222-8222-222222222222" };
+const input = { serverId, buildId: "0.1.9", expectedUpdatedAt: "2026-10-01T00:00:00.000Z", acknowledgeSaveRisk: true, requestId: "22222222-2222-4222-8222-222222222222" };
 
 beforeEach(() => {
     vi.resetAllMocks();
@@ -31,13 +31,21 @@ beforeEach(() => {
 it("submits the verified owner's choice with the caller's request identity and revalidates the page", async () => {
     expect(await changeServerBuild(input)).toEqual({ ok: true, outcome: "enqueued", jobId, message: "Version change queued. Follow its progress below." });
     expect(mocks.change).toHaveBeenCalledExactlyOnceWith("verified-token",
-        { action: "set-server-build", serverId, buildId: "v0.1.9", expectedUpdatedAt: input.expectedUpdatedAt, acknowledgeSaveRisk: true }, input.requestId);
+        { action: "set-server-build", serverId, buildId: "0.1.9", expectedUpdatedAt: input.expectedUpdatedAt, acknowledgeSaveRisk: true }, input.requestId);
     expect(mocks.revalidate).toHaveBeenCalledWith(`/servers/${serverId}`);
+});
+
+it("sends the bare version whichever spelling the page used", async () => {
+    for (const buildId of ["0.1.9", "v0.1.9", "V0.1.9"]) {
+        mocks.change.mockClear();
+        await changeServerBuild({ ...input, buildId });
+        expect(mocks.change.mock.calls[0]![1]).toMatchObject({ buildId: "0.1.9" });
+    }
 });
 
 it("reports a pin-only change and a return to Latest without a job", async () => {
     mocks.change.mockResolvedValueOnce({ action: "update", jobId: null, outcome: "pinned" });
-    expect(await changeServerBuild(input)).toMatchObject({ ok: true, outcome: "pinned", jobId: null, message: "v0.1.9 is now selected. Automatic updates are paused until you select Latest." });
+    expect(await changeServerBuild(input)).toMatchObject({ ok: true, outcome: "pinned", jobId: null, message: "0.1.9 is now selected. Automatic updates are paused until you select Latest." });
     mocks.change.mockResolvedValueOnce({ action: "update", jobId: null, outcome: "unpinned" });
     expect(await changeServerBuild({ ...input, buildId: null })).toMatchObject({ ok: true, outcome: "unpinned", message: "Automatic updates are on again for future releases." });
 });

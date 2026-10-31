@@ -33,6 +33,11 @@ export function clientVersionLabel(version: string) {
     return `v${version.replace(/^v/i, "")}`;
 }
 
+/** Displays a public version as customers know it, "0.1.6", whether or not the source carried the registry's "v". */
+export function publicVersionLabel(version: string) {
+    return version.replace(/^v/i, "");
+}
+
 /** Displays channel names without changing their transport values. */
 export function releaseChannelLabel(channel: string, labels = { stable: "Public", nightly: "Nightly" }) {
     if (channel === "stable") return labels.stable;

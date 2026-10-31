@@ -16,14 +16,14 @@ const option = (buildId: string, extra: Record<string, unknown> = {}) => ({
 });
 const options = () => ({
     serverId: SERVER_ID, updatedAt: UPDATED_AT, releaseChannel: "stable", selectable: true, unavailableReason: null,
-    installedVersion: "v0.1.10", pinnedVersion: null, latestVersion: "v0.1.10",
-    options: [option("v0.1.10", { isLatest: true, isInstalled: true, direction: "same", requiresSaveAcknowledgement: false }), option("v0.1.9")],
+    installedVersion: "0.1.10", pinnedVersion: null, latestVersion: "0.1.10",
+    options: [option("0.1.10", { isLatest: true, isInstalled: true, direction: "same", requiresSaveAcknowledgement: false }), option("0.1.9")],
 });
 const steps = (states: string[]) => ["queued", "stopping", "backup", "installing", "starting", "verifying"].map((id, index) => ({ id, state: states[index] }));
 const job = (extra: Record<string, unknown> = {}) => ({
     jobId: JOB_ID, state: "running", initiatedBy: "owner", ownerSelected: true, phase: "backup",
     steps: steps(["done", "done", "active", "pending", "pending", "pending"]), completedSteps: 2, totalSteps: 6,
-    targetVersion: "v0.1.9", previousVersion: "v0.1.10", progress: "Creating a safe restore point", backup: null, rolledBack: false,
+    targetVersion: "0.1.9", previousVersion: "0.1.10", progress: "Creating a safe restore point", backup: null, rolledBack: false,
     failureCode: null, failureMessage: null, nextStep: null, attemptCount: 1, maximumAttempts: 3, nextRetryAt: null,
     createdAt: UPDATED_AT, updatedAt: UPDATED_AT, completedAt: null, ...extra,
 });
@@ -33,15 +33,15 @@ test("parses the closed version-selection contract and rejects anything else", (
     assert.throws(() => parseBuildOptions({ ...options(), extra: true }, SERVER_ID));
     assert.throws(() => parseBuildOptions(options(), "44444444-4444-4444-8444-444444444444"));
     // A tag this website cannot select is skipped alone; the other versions stay offered.
-    const mixed = parseBuildOptions({ ...options(), options: [option("v0.1.9"), option("v1234567.0.0"), option("latest")] }, SERVER_ID);
-    assert.deepEqual(mixed.options.map((entry) => entry.buildId), ["v0.1.9"]);
+    const mixed = parseBuildOptions({ ...options(), options: [option("0.1.9"), option("1234567.0.0"), option("latest")] }, SERVER_ID);
+    assert.deepEqual(mixed.options.map((entry) => entry.buildId), ["0.1.9"]);
     // The bound is six digits per component on both sides: the largest such tag is kept, one digit more is skipped.
-    assert.deepEqual(parseBuildOptions({ ...options(), options: [option("v999999.999999.999999"), option("v1000000.0.0")] }, SERVER_ID).options.map((entry) => entry.buildId), ["v999999.999999.999999"]);
-    assert.throws(() => parseBuildOptions({ ...options(), options: [{ ...option("v0.1.9"), extra: 1 }, option("v0.1.8")] }, SERVER_ID));
-    assert.throws(() => parseBuildOptions({ ...options(), options: [option("v0.1.9"), option("v0.1.9")] }, SERVER_ID));
+    assert.deepEqual(parseBuildOptions({ ...options(), options: [option("999999.999999.999999"), option("1000000.0.0")] }, SERVER_ID).options.map((entry) => entry.buildId), ["999999.999999.999999"]);
+    assert.throws(() => parseBuildOptions({ ...options(), options: [{ ...option("0.1.9"), extra: 1 }, option("0.1.8")] }, SERVER_ID));
+    assert.throws(() => parseBuildOptions({ ...options(), options: [option("0.1.9"), option("0.1.9")] }, SERVER_ID));
     assert.throws(() => parseBuildOptions({ ...options(), selectable: false }, SERVER_ID));
     assert.deepEqual(parseBuildOptions({ ...options(), selectable: false, unavailableReason: "nightly-channel", options: [] }, SERVER_ID).options, []);
-    assert.throws(() => parseBuildOptions({ ...options(), options: [{ ...option("v0.1.9"), extra: 1 }] }, SERVER_ID));
+    assert.throws(() => parseBuildOptions({ ...options(), options: [{ ...option("0.1.9"), extra: 1 }] }, SERVER_ID));
 
     assert.equal(parseBuildStatus({ serverId: SERVER_ID, job: null }, SERVER_ID).job, null);
     assert.equal(parseBuildStatus({ serverId: SERVER_ID, job: job() }, SERVER_ID).job?.phase, "backup");
@@ -56,12 +56,27 @@ test("parses the closed version-selection contract and rejects anything else", (
     assert.throws(() => parseBuildChangeResult({ outcome: "enqueued", jobId: null, action: "update" }));
     assert.throws(() => parseBuildChangeResult({ outcome: "pinned", jobId: JOB_ID, action: "update" }));
 
-    const mutation = { action: "set-server-build", serverId: SERVER_ID, buildId: "v0.1.9", expectedUpdatedAt: UPDATED_AT, acknowledgeSaveRisk: true };
-    assert.equal(parseBuildMutation(mutation).buildId, "v0.1.9");
+    const mutation = { action: "set-server-build", serverId: SERVER_ID, buildId: "0.1.9", expectedUpdatedAt: UPDATED_AT, acknowledgeSaveRisk: true };
+    assert.equal(parseBuildMutation(mutation).buildId, "0.1.9");
     assert.equal(parseBuildMutation({ ...mutation, buildId: null }).buildId, null);
     for (const bad of [{ buildId: "latest" }, { buildId: "v1.2" }, { buildId: "ghcr-stable-" + "a".repeat(64) }, { acknowledgeSaveRisk: "yes" }, { expectedUpdatedAt: "yesterday" }, { extra: 1 }]) {
         assert.throws(() => parseBuildMutation({ ...mutation, ...bad }));
     }
+});
+
+test("customers see bare versions; either spelling is accepted and names the same version", () => {
+    // The control plane may still spell versions with the registry's v; the website shows and sends 0.1.6 only.
+    const tagged = parseBuildOptions({ ...options(), installedVersion: "v0.1.10", latestVersion: "V0.1.10", pinnedVersion: "v0.1.9",
+        options: [option("v0.1.10", { isLatest: true, isInstalled: true, version: "v0.1.10" }), option("0.1.9", { isPinned: true })] }, SERVER_ID);
+    assert.deepEqual([tagged.installedVersion, tagged.latestVersion, tagged.pinnedVersion], ["0.1.10", "0.1.10", "0.1.9"]);
+    assert.deepEqual(tagged.options.map((entry) => [entry.buildId, entry.version]), [["0.1.10", "0.1.10"], ["0.1.9", "0.1.9"]]);
+    // A spelling collision is one version offered twice, which is refused.
+    assert.throws(() => parseBuildOptions({ ...options(), options: [option("v0.1.9"), option("0.1.9")] }, SERVER_ID));
+    const status = parseBuildStatus({ serverId: SERVER_ID, job: job({ targetVersion: "v0.1.9", previousVersion: "v0.1.10" }) }, SERVER_ID);
+    assert.deepEqual([status.job?.targetVersion, status.job?.previousVersion], ["0.1.9", "0.1.10"]);
+    const mutation = { action: "set-server-build", serverId: SERVER_ID, expectedUpdatedAt: UPDATED_AT, acknowledgeSaveRisk: false };
+    for (const spelling of ["0.1.9", "v0.1.9", "V0.1.9"]) assert.equal(parseBuildMutation({ ...mutation, buildId: spelling }).buildId, "0.1.9");
+    for (const bad of ["v", "0.1", "vv0.1.9", "0.1.9-rc1", " 0.1.9", "1234567.0.0"]) assert.throws(() => parseBuildMutation({ ...mutation, buildId: bad }), bad);
 });
 
 test("relays the build reads through their fixed routes and validates the responses", async () => {
@@ -87,10 +102,10 @@ test("relays a version choice with the caller's request ID and refuses malformed
     const calls: { body: unknown }[] = [];
     let result: unknown = { outcome: "enqueued", jobId: JOB_ID, action: "update" };
     const handler = createHandler(async (_url, init) => { calls.push({ body: JSON.parse(String(init?.body)) }); return successEnvelope(result); });
-    const input = { action: "set-server-build", serverId: SERVER_ID, buildId: "v0.1.9", expectedUpdatedAt: UPDATED_AT, acknowledgeSaveRisk: true };
+    const input = { action: "set-server-build", serverId: SERVER_ID, buildId: "0.1.9", expectedUpdatedAt: UPDATED_AT, acknowledgeSaveRisk: true };
     assert.equal((await handler(operationRequest(input))).status, 200);
     assert.deepEqual(calls[0].body, { version: 1, requestId: REQUEST_ID, operation: "set-server-build",
-        input: { serverId: SERVER_ID, buildId: "v0.1.9", expectedUpdatedAt: UPDATED_AT, acknowledgeSaveRisk: true } });
+        input: { serverId: SERVER_ID, buildId: "0.1.9", expectedUpdatedAt: UPDATED_AT, acknowledgeSaveRisk: true } });
     // Latest is an explicit null, never an omitted field.
     assert.equal((await handler(operationRequest({ ...input, buildId: null, acknowledgeSaveRisk: false }))).status, 200);
     assert.equal((calls[1].body as { input: { buildId: unknown } }).input.buildId, null);
