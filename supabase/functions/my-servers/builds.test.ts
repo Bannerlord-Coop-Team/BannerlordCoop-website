@@ -35,6 +35,8 @@ test("parses the closed version-selection contract and rejects anything else", (
     // A tag this website cannot select is skipped alone; the other versions stay offered.
     const mixed = parseBuildOptions({ ...options(), options: [option("v0.1.9"), option("v1234567.0.0"), option("latest")] }, SERVER_ID);
     assert.deepEqual(mixed.options.map((entry) => entry.buildId), ["v0.1.9"]);
+    // The bound is six digits per component on both sides: the largest such tag is kept, one digit more is skipped.
+    assert.deepEqual(parseBuildOptions({ ...options(), options: [option("v999999.999999.999999"), option("v1000000.0.0")] }, SERVER_ID).options.map((entry) => entry.buildId), ["v999999.999999.999999"]);
     assert.throws(() => parseBuildOptions({ ...options(), options: [{ ...option("v0.1.9"), extra: 1 }, option("v0.1.8")] }, SERVER_ID));
     assert.throws(() => parseBuildOptions({ ...options(), options: [option("v0.1.9"), option("v0.1.9")] }, SERVER_ID));
     assert.throws(() => parseBuildOptions({ ...options(), selectable: false }, SERVER_ID));
