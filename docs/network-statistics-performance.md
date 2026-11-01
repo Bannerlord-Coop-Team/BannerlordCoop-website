@@ -57,7 +57,7 @@ index without disabling sequential scans.
 The old heartbeat RPC updated every column of `server_statistics` once per
 minute. That table mixes immutable session metadata with the mutable player
 count and freshness timestamp, so the primary key and `updated_at` index were
-maintained for every heartbeat. Migration `20261101000100` adds
+maintained for every heartbeat. Migration `20261101200000` adds
 `server_telemetry_sessions` for insert-once metadata and a narrow
 `server_presence` row keyed by a stable installation id. The old RPC remains
 available for older game builds, but writes a `legacy:<session>` presence key
@@ -69,7 +69,16 @@ directory.
 reads `server_presence.last_seen_at`. A fresh-row backfill at migration time
 avoids an empty homepage during the handoff. Older sessions remain in
 `server_statistics` for rollback and history, but they are no longer on the
-minute-by-minute write path. Battle-count reporting is unchanged.
+minute-by-minute write path. Battle-count reporting is unchanged. The protected
+release keeps the prior game and website available for a short rollback window
+before this migration is applied; after the presence cutover commits, the old
+`updated_at` btree or BRIN index is dead and both names are dropped by this
+migration.
+
+`prune_server_presence()` removes presence rows older than seven days and
+unreferenced session metadata older than 30 days. Each hourly run deletes at
+most 1,000 rows, and installs a `pg_cron` schedule only when that extension is
+available.
 
 A local PGlite fixture with 10,000 servers measured an average mutable row of
 64 bytes for presence versus 128 bytes for the current mixed row. The indexed

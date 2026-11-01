@@ -27,6 +27,8 @@ test("presence migration keeps fresh counts and removes heartbeat writes from th
                 ('active-session', '1.0.0', 'abc', now(), 3, now(), now()),
                 ('old-session', '1.0.0', 'abc', now() - interval '1 day', 50,
                  now() - interval '1 day', now() - interval '1 day');
+            create index server_statistics_updated_at_idx on public.server_statistics(updated_at);
+            create index server_statistics_updated_at_brin_idx on public.server_statistics(updated_at);
             create or replace function public.report_server_statistics(
                 text, text, text, timestamptz, integer
             ) returns text language sql as $$ select $1 $$;
@@ -36,7 +38,7 @@ test("presence migration keeps fresh counts and removes heartbeat writes from th
         `);
 
         const migration = await readFile(
-            "supabase/migrations/20261101000100_server_presence_telemetry.sql",
+            "supabase/migrations/20261101200000_server_presence_telemetry.sql",
             "utf8",
         );
         await db.exec(migration);
@@ -49,6 +51,14 @@ test("presence migration keeps fresh counts and removes heartbeat writes from th
         assert.deepEqual(
             (await db.query("select count(*)::integer as total from public.server_statistics")).rows,
             [{ total: 2 }],
+        );
+        assert.deepEqual(
+            (await db.query("select to_regclass('public.server_statistics_updated_at_idx') is null as btree, to_regclass('public.server_statistics_updated_at_brin_idx') is null as brin")).rows,
+            [{ btree: true, brin: true }],
+        );
+        assert.deepEqual(
+            (await db.query("select count(*)::integer as total from public.server_telemetry_sessions where created_at is not null")).rows,
+            [{ total: 1 }],
         );
 
         await db.query(
@@ -63,18 +73,59 @@ test("presence migration keeps fresh counts and removes heartbeat writes from th
             "select public.report_server_presence($1, $2, $3, $4, $5::timestamptz, $6)",
             ["stable-server", "old-session", "1.0.0", "abc", "2026-10-01T00:00:00Z", 99],
         );
+        await db.query(
+            "select public.report_server_presence($1, $2, $3, $4, now() + interval '1 day', $5)",
+            ["future-server", "future-session", "1.1.0", "def", 8],
+        );
+
+        await db.exec(`
+            insert into public.server_telemetry_sessions (
+                session_id, server_id, mod_version, commit_hash, started_at, created_at
+            ) values (
+                'expired-session', 'expired-server', '1.0.0', 'abc',
+                now() - interval '31 days', now() - interval '31 days'
+            );
+            insert into public.server_presence (
+                server_id, session_id, session_started_at, player_count, last_seen_at
+            ) values (
+                'expired-server', 'expired-session', now() - interval '31 days', 2,
+                now() - interval '8 days'
+            );
+        `);
 
         assert.deepEqual(
             (await db.query("select server_id, session_id, player_count from public.server_presence order by server_id")).rows,
             [
+                { server_id: "expired-server", session_id: "expired-session", player_count: 2 },
+                { server_id: "future-server", session_id: "future-session", player_count: 8 },
                 { server_id: "legacy:active-session", session_id: "active-session", player_count: 3 },
                 { server_id: "legacy:legacy-session", session_id: "legacy-session", player_count: 4 },
                 { server_id: "stable-server", session_id: "new-session", player_count: 7 },
             ],
         );
         assert.deepEqual(
+            (await db.query("select count(*)::integer as total from public.server_telemetry_sessions where session_id = 'legacy-session'")).rows,
+            [{ total: 0 }],
+        );
+        assert.deepEqual(
+            (await db.query("select session_started_at <= now() as clamped from public.server_presence where server_id = 'future-server'")).rows,
+            [{ clamped: true }],
+        );
+        assert.equal(
+            ((await db.query("select public.prune_server_presence() as deleted")).rows[0] as { deleted?: number } | undefined)?.deleted,
+            2,
+        );
+        assert.deepEqual(
+            (await db.query("select count(*)::integer as total from public.server_presence where server_id = 'expired-server'")).rows,
+            [{ total: 0 }],
+        );
+        assert.deepEqual(
+            (await db.query("select count(*)::integer as total from public.server_telemetry_sessions where session_id = 'expired-session'")).rows,
+            [{ total: 0 }],
+        );
+        assert.deepEqual(
             (await db.query("select * from public.get_network_stats()")).rows,
-            [{ server_count: 3, player_count: 14 }],
+            [{ server_count: 4, player_count: 22 }],
         );
         assert.deepEqual(
             (await db.query(
