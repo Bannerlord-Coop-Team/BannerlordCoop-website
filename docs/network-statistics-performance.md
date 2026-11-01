@@ -38,24 +38,32 @@ those separately on the deployed Cloudflare adapter before quantifying gains.
 freshness window. Migration `20261101180000_server_statistics_updated_at_brin.sql`
 replaces the large B-tree with a BRIN summary index without changing the RPC,
 grants, rows, or freshness rule. Production correlation for `updated_at` was
-0.9994, so BRIN fits the current heap order. The migration uses 32-page ranges
-and creates BRIN before dropping the B-tree; a restored-copy latency check is
-required because BRIN can inspect false-positive heap ranges.
+0.9994, so BRIN fits the current heap order. It uses PostgreSQL's default
+`pages_per_range` and creates BRIN before dropping the B-tree; a restored-copy
+latency check is required because BRIN can inspect false-positive heap ranges.
+PostgreSQL 16 explicitly allows HOT updates when only BRIN-indexed columns are
+updated ([release note](https://www.postgresql.org/docs/16/release-16.html#RELEASE-16-CHANGES)),
+but page free space and fillfactor still limit HOT, so the production check
+measures the HOT counter together with relation sizes and database growth.
 Production statistics later showed that neither `last_seen_at` index had a
 reader while every heartbeat maintained both. Migration `202609200001` drops
 those two indexes. The two timestamp columns can differ, so the freshness
 contract remains unchanged.
 
-Apply through the reviewed Supabase migration workflow. The transaction has a
-five-second lock timeout and a sixty-second statement timeout; a failed change
-rolls back and can be retried during a quieter window. No production migration
-is implied by a source change. The membership migration inventory remains a
-frozen snapshot of its original release; this later migration is tested separately.
+Apply through the reviewed Supabase migration workflow. The two index commands
+run concurrently outside a transaction, each with a five-second lock timeout
+and a sixty-second statement timeout; a `55P03` refusal is retryable and leaves
+the old B-tree in place. The migration ledger records the file only after both
+commands finish. No production migration is implied by a source change. The
+membership migration inventory remains a frozen snapshot of its original
+release; this later migration is tested separately.
 
 The regression uses 20,000 historical sessions and mismatched timestamp rows,
-checks unchanged counts and replay, and confirms the BRIN index is available
-for the freshness query in the small local fixture. Production verification
-must use the real query plan and latency before and after the index swap.
+checks unchanged counts and replay, and confirms the BRIN catalog shape in the
+small local fixture. It deliberately does not force `enable_seqscan=off` or
+claim that a small fixture predicts the planner's default choice. Production
+verification must capture `EXPLAIN (ANALYZE, BUFFERS)` with default planner
+settings and compare latency before and after the index swap.
 
 ## Shared migration history
 

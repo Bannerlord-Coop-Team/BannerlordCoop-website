@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 
-test("network statistics index preserves updated_at freshness and uses an indexed range", async () => {
+test("network statistics index preserves updated_at freshness and swaps the index", async () => {
     const db = new PGlite();
     try {
         await db.exec(`create table public.server_statistics (
@@ -28,12 +28,18 @@ test("network statistics index preserves updated_at freshness and uses an indexe
         await db.exec(cleanup);
         await db.exec(cleanup);
         const brin = await readFile("supabase/migrations/20261101180000_server_statistics_updated_at_brin.sql", "utf8");
-        await db.exec(brin);
-        await db.exec(brin);
+        // PGlite wraps db.exec in a transaction and therefore cannot execute
+        // CONCURRENTLY. Assert the shipped syntax below, then run the same
+        // idempotent DDL without that keyword to exercise the resulting shape.
+        await db.exec(brin.replace(/\s+concurrently/giu, ""));
+        await db.exec(brin.replace(/\s+concurrently/giu, ""));
         await db.exec('analyze public.server_statistics');
         assert.deepEqual((await db.query(query)).rows,before);
-        await db.exec('set enable_seqscan = off');
-        assert.match(JSON.stringify((await db.query(`explain (format json) ${query}`)).rows), /server_statistics_updated_at_brin_idx/);
+        assert.match(brin, /create\s+index\s+concurrently/iu);
+        assert.match(brin, /drop\s+index\s+concurrently/iu);
+        assert.doesNotMatch(brin, /enable_seqscan/iu);
+        assert.doesNotMatch(brin, /^\s*begin\s*;/imu);
+        assert.doesNotMatch(brin, /^\s*commit\s*;/imu);
         assert.deepEqual((await db.query(`select
             to_regclass('public.server_statistics_updated_at_brin_idx') is not null as updated_at_brin,
             to_regclass('public.server_statistics_updated_at_idx') is null as updated_at_btree,
