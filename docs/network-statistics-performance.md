@@ -52,6 +52,32 @@ The regression uses 20,000 historical sessions and mismatched timestamp rows,
 checks unchanged counts and replay, and confirms PostgreSQL chooses the new
 index without disabling sequential scans.
 
+## One-minute presence storage
+
+The old heartbeat RPC updated every column of `server_statistics` once per
+minute. That table mixes immutable session metadata with the mutable player
+count and freshness timestamp, so the primary key and `updated_at` index were
+maintained for every heartbeat. Migration `20261101000100` adds
+`server_telemetry_sessions` for insert-once metadata and a narrow
+`server_presence` row keyed by a stable installation id. The old RPC remains
+available for older game builds, but writes a `legacy:<session>` presence key
+instead of updating `server_statistics`; the new game build uses
+`report_server_presence` and persists its installation id under the server data
+directory.
+
+`get_network_stats()` keeps the existing two-minute freshness window and now
+reads `server_presence.last_seen_at`. A fresh-row backfill at migration time
+avoids an empty homepage during the handoff. Older sessions remain in
+`server_statistics` for rollback and history, but they are no longer on the
+minute-by-minute write path. Battle-count reporting is unchanged.
+
+A local PGlite fixture with 10,000 servers measured an average mutable row of
+64 bytes for presence versus 128 bytes for the current mixed row. The indexed
+freshness aggregate cost fell from 520.98 to 326.65, and updating all rows
+generated 3.16 MB of WAL for presence versus 3.81 MB for the current table.
+These are local estimates, not production savings; verify the live write and
+disk series after the protected migration and game rollout.
+
 ## Shared migration history
 
 `202609100001_control_plane_web_admin_principals.sql` is an exact mirror of the applied
