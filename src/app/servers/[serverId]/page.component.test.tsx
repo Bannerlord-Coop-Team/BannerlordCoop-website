@@ -9,6 +9,7 @@ import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
+import { ManagedServerUnavailable } from "@/app/components/servers/ManagedServerUnavailable";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import ServerPage, { generateMetadata } from "./page";
 import { createTranslator } from "@/app/lib/localization/translator";
@@ -425,16 +426,41 @@ it("places managed password configuration in Settings rather than the Console wo
     expect(await findServerElement(consolePanel, "ManagedServerPassword")).toBeNull();
 });
 
-it("surfaces an unexpected single-server read failure instead of treating the server as missing", async () => {
+it("degrades a transient single-server read failure and offers a refresh", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-        const failure = new Error("Unavailable");
+        const failure = new MyServersApiError("control_plane_unavailable", "Unavailable", true);
         mocks.managedServers.mockRejectedValueOnce(failure);
-        await expect(page()).rejects.toThrow("Unavailable");
+        const tree = await page();
+        const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+        expect((workspace?.props as { banner?: ReactElement }).banner?.type).toBe(ManagedServerUnavailable);
         expect(error).toHaveBeenCalledExactlyOnceWith("Managed server detail failed to load", failure);
     } finally { error.mockRestore(); }
     expect(mocks.backups).not.toHaveBeenCalled();
     expect(mocks.files).not.toHaveBeenCalled();
+});
+
+it("refreshes the server page when the temporary-unavailable retry is pressed", async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerUnavailable /></TestLocalization>));
+        await act(async () => container.querySelector("button")?.click());
+        expect(mocks.refresh).toHaveBeenCalledOnce();
+    } finally {
+        await act(async () => root.unmount());
+    }
+});
+
+it("still surfaces an unclassified single-server read failure", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+        const failure = new Error("Unexpected");
+        mocks.managedServers.mockRejectedValueOnce(failure);
+        await expect(page()).rejects.toThrow("Unexpected");
+        expect(error).toHaveBeenCalledExactlyOnceWith("Managed server detail failed to load", failure);
+    } finally { error.mockRestore(); }
 });
 
 it.each(["server_not_found", "forbidden"])("returns to discovery without managed controls when the single-server read returns %s", async code => {
