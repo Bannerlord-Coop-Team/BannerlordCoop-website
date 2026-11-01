@@ -35,12 +35,16 @@ those separately on the deployed Cloudflare adapter before quantifying gains.
 ## Query index
 
 `get_network_stats()` uses `server_statistics.updated_at` for its two-minute
-freshness window. Migration `202609100011_network_stats_updated_at_index.sql`
-indexes that column without changing the RPC, grants, rows, or freshness rule.
+freshness window. Migration `20261101180000_server_statistics_updated_at_brin.sql`
+replaces the large B-tree with a BRIN summary index without changing the RPC,
+grants, rows, or freshness rule. Production correlation for `updated_at` was
+0.9994, so BRIN fits the current heap order. The migration uses 32-page ranges
+and creates BRIN before dropping the B-tree; a restored-copy latency check is
+required because BRIN can inspect false-positive heap ranges.
 Production statistics later showed that neither `last_seen_at` index had a
 reader while every heartbeat maintained both. Migration `202609200001` drops
-those two indexes and retains `server_statistics_updated_at_idx`; the two
-timestamp columns can differ, so the freshness contract remains unchanged.
+those two indexes. The two timestamp columns can differ, so the freshness
+contract remains unchanged.
 
 Apply through the reviewed Supabase migration workflow. The transaction has a
 five-second lock timeout and a sixty-second statement timeout; a failed change
@@ -49,8 +53,9 @@ is implied by a source change. The membership migration inventory remains a
 frozen snapshot of its original release; this later migration is tested separately.
 
 The regression uses 20,000 historical sessions and mismatched timestamp rows,
-checks unchanged counts and replay, and confirms PostgreSQL chooses the new
-index without disabling sequential scans.
+checks unchanged counts and replay, and confirms the BRIN index is available
+for the freshness query in the small local fixture. Production verification
+must use the real query plan and latency before and after the index swap.
 
 ## Shared migration history
 
@@ -63,5 +68,6 @@ network-statistics index remains a separate pending migration.
 
 Pending CP migration `202609100010_control_plane_monitor_indexes.sql` is also
 mirrored byte-for-byte so both repositories have the coordinated release union.
-Apply 202609100010 then 202609100011 through the protected CP release workflow;
-do not run an independent website migration writer concurrently.
+Apply the reviewed network-statistics migrations through the protected CP
+release workflow; do not run an independent website migration writer
+concurrently.
