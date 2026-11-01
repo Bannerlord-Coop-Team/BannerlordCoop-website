@@ -35,10 +35,11 @@ import { listServerManagers, type ServerManager } from "@/app/lib/hosting/server
 import { isMoveInProgress } from "@/app/lib/hosting/server-move";
 import { SubscriptionHoldNotice } from "@/app/components/servers/SubscriptionHoldNotice";
 import { ManagedServerNoticeBanner } from "@/app/components/servers/ManagedServerNoticeBanner";
+import { ManagedServerUnavailable } from "@/app/components/servers/ManagedServerUnavailable";
 import { ManagedServerMoveProvider, ManagedServerMoveStatus } from "@/app/components/servers/ManagedServerMoveStatus";
 import { getServerForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
-import { Container, HardDrive, MemoryStick, Server } from "lucide-react";
+import { HardDrive, MemoryStick, Server } from "lucide-react";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { cache, Suspense } from "react";
@@ -89,6 +90,19 @@ async function AuthorizedServerPage({ params, searchParams }: ServerPageProps) {
         const unknownServer = error instanceof MyServersApiError && ["invalid_request", "server_not_found", "forbidden"].includes(error.code);
         if (!unknownServer) {
             console.error("Managed server detail failed to load", error);
+            const retryable = error instanceof MyServersApiError
+                && (error.retryable || ["server_api_unavailable", "control_plane_unavailable"].includes(error.code));
+            if (retryable) {
+                return <ServerManagementWorkspace
+                    name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{t("action.actions.thisServerIsUnavailableOrYourAccessWasRemoved")}</h1>}
+                    summary={t("action.config.theHostingServiceCouldNotBeReachedTryAgain")}
+                    banner={<ManagedServerUnavailable />}
+                    initialSection={rememberedSection}
+                >
+                    <ServerWorkspacePanel section="Console"><ServerConsoleWorkspace><UnavailableServerConsole /></ServerConsoleWorkspace></ServerWorkspacePanel>
+                    <UnavailableFileWorkspaces />
+                </ServerManagementWorkspace>;
+            }
             throw error;
         }
     }
