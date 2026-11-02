@@ -52,11 +52,15 @@ contract remains unchanged.
 
 Apply through the reviewed Supabase migration workflow. The two index commands
 run concurrently outside a transaction, each with a five-second lock timeout
-and a sixty-second statement timeout; a `55P03` refusal is retryable and leaves
-the old B-tree in place. The migration ledger records the file only after both
-commands finish. No production migration is implied by a source change. The
-membership migration inventory remains a frozen snapshot of its original
-release; this later migration is tested separately.
+and a sixty-second statement timeout. The migration checks `pg_index.indisvalid`
+before dropping the B-tree, so a failed concurrent build stops before the drop;
+a `55P03` refusal is retryable and leaves the old B-tree in place. If a failed
+build leaves an invalid BRIN index, drop that invalid index concurrently in the
+protected release recovery window, then re-run the exact pending migration
+check and push. The migration ledger records the file only after both commands
+finish. No production migration is implied by a source change. The membership
+migration inventory remains a frozen snapshot of its original release; these
+later migrations are tested separately.
 
 The regression uses 20,000 historical sessions and mismatched timestamp rows,
 checks unchanged counts and replay, and confirms the BRIN catalog shape in the
@@ -72,10 +76,10 @@ control-plane migration from commit
 `d3e7fa40738d80ad7b1f15d3eccf7e7dd6fd6651` (PR 95). Its SHA-256 is
 `daa012cbf71ef62906493512a8f1ac13992e8f3a238b4af6b158fa6af2ab8c37`. It aligns the website's local shared-project
 history with production. Do not replay or edit this already-applied SQL. The
-network-statistics index remains a separate pending migration.
+network-statistics migrations remain a separate pending suffix.
 
 Pending CP migration `202609100010_control_plane_monitor_indexes.sql` is also
 mirrored byte-for-byte so both repositories have the coordinated release union.
-Apply the reviewed network-statistics migrations through the protected CP
-release workflow; do not run an independent website migration writer
-concurrently.
+The network-statistics migrations remain a separate pending suffix. Apply them
+through the protected CP release workflow; do not run an independent website
+migration writer concurrently.

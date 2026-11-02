@@ -37,6 +37,8 @@ test("network statistics index preserves updated_at freshness and swaps the inde
         assert.deepEqual((await db.query(query)).rows,before);
         assert.match(brin, /create\s+index\s+concurrently/iu);
         assert.match(brin, /drop\s+index\s+concurrently/iu);
+        assert.match(brin, /indisvalid/iu);
+        assert.match(brin, /server_statistics_updated_at_brin_idx is missing or invalid/iu);
         assert.doesNotMatch(brin, /enable_seqscan/iu);
         assert.doesNotMatch(brin, /^\s*begin\s*;/imu);
         assert.doesNotMatch(brin, /^\s*commit\s*;/imu);
@@ -46,6 +48,10 @@ test("network statistics index preserves updated_at freshness and swaps the inde
             to_regclass('public.server_statistics_last_seen_at_idx') is null as last_seen_at,
             to_regclass('public.server_statistics_last_seen_at_session_id_idx') is null as last_seen_at_session_id`)).rows,
         [{updated_at_brin:true,updated_at_btree:true,last_seen_at:true,last_seen_at_session_id:true}]);
+        assert.deepEqual((await db.query(`select i.indisvalid
+            from pg_index i join pg_class c on c.oid = i.indexrelid
+            where c.oid = 'public.server_statistics_updated_at_brin_idx'::regclass`)).rows,
+        [{indisvalid:true}]);
         assert.deepEqual((await db.query('select count(*)::integer as total from public.server_statistics')).rows,[{total:20002}]);
     } finally { await db.close(); }
 });
