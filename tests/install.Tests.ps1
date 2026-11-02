@@ -18,6 +18,19 @@ try {
     Remove-Item Env:BANNERLORDCOOP_INSTALLER_TEST -ErrorAction SilentlyContinue
 }
 
+$crcSupport = @(Get-InstallationSupportLines '7-Zip failed to extract C:\\temp\\server-base.7z.')
+if ($crcSupport -match 'GoodbyeDPI') {
+    throw 'A 7-Zip integrity failure received the unrelated DNS-tool hint.'
+}
+if (-not ($crcSupport -match '7-Zip integrity checks')) {
+    throw 'A 7-Zip integrity failure did not receive archive-specific guidance.'
+}
+
+$downloadSupport = @(Get-InstallationSupportLines 'dedicated server download did not match the published SHA-256 hash.')
+if (-not ($downloadSupport -match 'GoodbyeDPI')) {
+    throw 'A download integrity failure lost the network troubleshooting hint.'
+}
+
 $sampleClient = 'C:\Games\Mount & Blade II Bannerlord\Modules\Coop'
 $sampleServer = 'C:\BannerlordCoop Server'
 $clientSummary = (Show-InstallationComplete -ClientPath $sampleClient -NoWait 6>&1 | Out-String)

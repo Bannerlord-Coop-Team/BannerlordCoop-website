@@ -2158,7 +2158,11 @@ function Get-InstallationSupportLines {
     $lines = @()
     if ($FailureMessage -match 'The nightly authorization token is invalid') {
         $lines += 'If Discord desktop did not complete verification, run the installer again and open its verification link in a web browser.'
-    } elseif ($FailureMessage -notmatch 'GoodbyeDPI|zapret|ByeDPI|SpoofDPI|PowerTunnel|GreenTunnel|youtubeUnblock|Cloudflare WARP|HTTPS scanning|DNS for the nightly|hostname could not be resolved|network filter replaced|Cloudflare challenged|internal_error|HTTP 50|not available yet|#nightly-releases|could not validate') {
+    } elseif ($FailureMessage -match '(?i)7-Zip failed to extract|CRC Failed') {
+        $lines += 'The downloaded archive failed 7-Zip integrity checks. Run the installer again; if it repeats, copy this exact message when asking for help.'
+    } elseif ([string]::IsNullOrWhiteSpace($FailureMessage) -or
+        (($FailureMessage -match '(?i)download|HTTP|gateway|DNS|network|proxy|hash|incomplete|authorization') -and
+            $FailureMessage -notmatch 'GoodbyeDPI|zapret|ByeDPI|SpoofDPI|PowerTunnel|GreenTunnel|youtubeUnblock|Cloudflare WARP|HTTPS scanning|DNS for the nightly|hostname could not be resolved|network filter replaced|Cloudflare challenged|internal_error|HTTP 50|not available yet|#nightly-releases|could not validate')) {
         $lines += 'If a DNS tool such as GoodbyeDPI is interfering, try Cloudflare WARP or turn that tool off, then run the installer again.'
     }
     $lines += 'If you need help, copy this message and ask in the Bannerlord Co-op Discord.'
