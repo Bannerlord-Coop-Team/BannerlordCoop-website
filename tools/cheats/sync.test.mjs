@@ -88,6 +88,20 @@ ${sample("both")}`;
         assert.equal(interpolated.summary, "Up to 1023.");
         assert.deepEqual(interpolated.arguments, [{ name: "level", description: "Level 0 to 1023.", required: true }]);
         writeFileSync(sourcePath, `public class Limits {
+    private const int Max = 10;
+    ${sample("escaped", "Both", '$"Use {{value}} \\"up\\" to {Max}."', 'new[] { new ExpectedArgs("value", $@"Path ""C:\\{{x}}"" {Max}.") }')}
+}`);
+        git("add", "."); git("commit", "-m", "escaped braces, verbatim and implicit array");
+        const escaped = extract(git("rev-parse", "HEAD")).commands.find(c => c.name === "escaped");
+        assert.equal(escaped.summary, 'Use {value} "up" to 10.');
+        assert.deepEqual(escaped.arguments, [{ name: "value", description: 'Path "C:\\{x}" 10.', required: true }]);
+        writeFileSync(sourcePath, `public class Limits {
+    private const int Max = 10;
+    ${sample("raw", "Both", '$$"""Use {value} up to {{Max}}."""')}
+}`);
+        git("add", "."); git("commit", "-m", "raw interpolated string");
+        assert.throws(() => extract(git("rev-parse", "HEAD")), /Unsupported metadata expression/);
+        writeFileSync(sourcePath, `public class Limits {
     private const int Max = 1023;
     ${sample("interpolated", "Both", '$"Up to {Max:N0}."')}
 }`);

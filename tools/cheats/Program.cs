@@ -53,6 +53,7 @@ foreach (var declaration in release.Values)
     {
         CollectionExpressionSyntax collection => collection.Elements.Select(e => e is ExpressionElementSyntax item ? item.Expression : null),
         ArrayCreationExpressionSyntax { Initializer: not null } array => array.Initializer.Expressions,
+        ImplicitArrayCreationExpressionSyntax implicitArray => implicitArray.Initializer.Expressions,
         InitializerExpressionSyntax initializer when initializer.IsKind(SyntaxKind.ArrayInitializerExpression) => initializer.Expressions,
         _ => null,
     };
@@ -157,10 +158,25 @@ static string Literal(ExpressionSyntax expression, ClassDeclarationSyntax declar
 static string Interpolated(InterpolatedStringExpressionSyntax interpolated, ClassDeclarationSyntax declaration) =>
     string.Concat(interpolated.Contents.Select(content => content switch
     {
-        InterpolatedStringTextSyntax text => text.TextToken.ValueText,
+        InterpolatedStringTextSyntax text => InterpolatedText(interpolated, text),
         InterpolationSyntax { AlignmentClause: null, FormatClause: null } hole => Constant(hole.Expression, declaration),
         _ => throw new InvalidOperationException($"Unsupported metadata expression: {interpolated}"),
     }));
+// Decodes a text part of a regular or verbatim interpolated string, including {{ and }}; raw strings fail closed.
+static string InterpolatedText(InterpolatedStringExpressionSyntax interpolated, InterpolatedStringTextSyntax text)
+{
+    var quote = interpolated.StringStartToken.Kind() switch
+    {
+        SyntaxKind.InterpolatedStringStartToken => "\"",
+        SyntaxKind.InterpolatedVerbatimStringStartToken => "@\"",
+        _ => throw new InvalidOperationException($"Unsupported metadata expression: {interpolated}"),
+    };
+    var source = quote + text.TextToken.Text.Replace("{{", "{").Replace("}}", "}") + "\"";
+    var token = SyntaxFactory.ParseToken(source);
+    if (!token.IsKind(SyntaxKind.StringLiteralToken) || token.ContainsDiagnostics || token.Text != source)
+        throw new InvalidOperationException($"Unsupported metadata expression: {interpolated}");
+    return token.ValueText;
+}
 // Resolves an interpolation hole to its text, allowing integer constants alongside string metadata forms.
 static string Constant(ExpressionSyntax expression, ClassDeclarationSyntax declaration)
 {
