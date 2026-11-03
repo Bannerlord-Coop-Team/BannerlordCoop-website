@@ -101,6 +101,14 @@ ${sample("both")}`;
 }`);
         git("add", "."); git("commit", "-m", "raw interpolated string");
         assert.throws(() => extract(git("rev-parse", "HEAD")), /Unsupported metadata expression/);
+        for (const raw of ['$"""{Max}"""', '$$"""{{Max}}"""']) {
+            writeFileSync(sourcePath, `public class Limits {
+    private const int Max = 10;
+    ${sample("raw", "Both", raw)}
+}`);
+            git("add", "."); git("commit", "-m", "raw interpolated string with only holes");
+            assert.throws(() => extract(git("rev-parse", "HEAD")), /Unsupported metadata expression/, raw);
+        }
         writeFileSync(sourcePath, `public class Limits {
     private const int Max = 1023;
     ${sample("interpolated", "Both", '$"Up to {Max:N0}."')}

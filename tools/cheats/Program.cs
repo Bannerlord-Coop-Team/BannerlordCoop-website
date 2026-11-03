@@ -154,23 +154,22 @@ static string Literal(ExpressionSyntax expression, ClassDeclarationSyntax declar
     }
     throw new InvalidOperationException($"Unsupported metadata expression: {expression}");
 }
-// Renders an interpolated string whose holes are unformatted constants (string or integer literals).
-static string Interpolated(InterpolatedStringExpressionSyntax interpolated, ClassDeclarationSyntax declaration) =>
-    string.Concat(interpolated.Contents.Select(content => content switch
+// Renders a regular or verbatim interpolated string whose holes are unformatted string/integer constants; raw strings fail closed.
+static string Interpolated(InterpolatedStringExpressionSyntax interpolated, ClassDeclarationSyntax declaration)
+{
+    if (!interpolated.StringStartToken.IsKind(SyntaxKind.InterpolatedStringStartToken) && !interpolated.StringStartToken.IsKind(SyntaxKind.InterpolatedVerbatimStringStartToken))
+        throw new InvalidOperationException($"Unsupported metadata expression: {interpolated}");
+    return string.Concat(interpolated.Contents.Select(content => content switch
     {
         InterpolatedStringTextSyntax text => InterpolatedText(interpolated, text),
         InterpolationSyntax { AlignmentClause: null, FormatClause: null } hole => Constant(hole.Expression, declaration),
         _ => throw new InvalidOperationException($"Unsupported metadata expression: {interpolated}"),
     }));
-// Decodes a text part of a regular or verbatim interpolated string, including {{ and }}; raw strings fail closed.
+}
+// Decodes a text part of a regular or verbatim interpolated string, collapsing {{ and }} before Roslyn decodes escapes.
 static string InterpolatedText(InterpolatedStringExpressionSyntax interpolated, InterpolatedStringTextSyntax text)
 {
-    var quote = interpolated.StringStartToken.Kind() switch
-    {
-        SyntaxKind.InterpolatedStringStartToken => "\"",
-        SyntaxKind.InterpolatedVerbatimStringStartToken => "@\"",
-        _ => throw new InvalidOperationException($"Unsupported metadata expression: {interpolated}"),
-    };
+    var quote = interpolated.StringStartToken.IsKind(SyntaxKind.InterpolatedVerbatimStringStartToken) ? "@\"" : "\"";
     var source = quote + text.TextToken.Text.Replace("{{", "{").Replace("}}", "}") + "\"";
     var token = SyntaxFactory.ParseToken(source);
     if (!token.IsKind(SyntaxKind.StringLiteralToken) || token.ContainsDiagnostics || token.Text != source)
