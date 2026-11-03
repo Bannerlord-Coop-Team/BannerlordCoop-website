@@ -270,9 +270,20 @@ test("leaves unknown, malformed, or mid-line control records as ordinary stdout"
     ]) assert.equal(parseConsoleControlLine(line), null, line);
 });
 
-test("caps the initial reconnect backoff before steady retries", () => {
-    assert.deepEqual(CONSOLE_RECONNECT_DELAYS.map((_, attempt) => consoleReconnectDelay(attempt)), [2_000, 5_000, 10_000, 30_000, 60_000]);
-    assert.equal(consoleReconnectDelay(CONSOLE_RECONNECT_DELAYS.length), null);
+test("jitters each initial backoff within twenty-five percent of its base delay", () => {
+    for (const [attempt, base] of CONSOLE_RECONNECT_DELAYS.entries()) {
+        assert.equal(consoleReconnectDelay(attempt, () => 0), base * 0.75);
+        assert.equal(consoleReconnectDelay(attempt, () => 0.5), base);
+        assert.equal(consoleReconnectDelay(attempt, () => 1), base * 1.25);
+    }
+});
+
+test("uses full jitter up to sixty seconds for every steady retry", () => {
+    for (const attempt of [CONSOLE_RECONNECT_DELAYS.length, CONSOLE_RECONNECT_DELAYS.length + 1, 50]) {
+        assert.equal(consoleReconnectDelay(attempt, () => 0), 0);
+        assert.equal(consoleReconnectDelay(attempt, () => 0.5), 30_000);
+        assert.equal(consoleReconnectDelay(attempt, () => 1), 60_000);
+    }
 });
 
 test("follows output only while the reader is at the bottom", () => {

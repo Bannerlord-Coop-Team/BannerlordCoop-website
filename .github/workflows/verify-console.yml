@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'src/app/components/servers/ManagedServerConsole*'
+      - 'src/app/api/servers/*/console/route.ts'
       - 'src/app/lib/console/**'
       - 'package.json'
       - 'package-lock.json'

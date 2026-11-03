@@ -13,7 +13,7 @@ const MAXIMUM_LINES = 2_000;
 // A full 8 KiB console line can roughly double when the control plane JSON-escapes it into an event.
 const MAXIMUM_SSE_FRAME_BYTES = 64 * 1_024;
 const MAXIMUM_STATE_DETAIL_CHARACTERS = 500;
-/** Initial reconnect waits; longer interruptions keep the final one-minute interval. */
+/** Initial backoff bases; retries jitter these waits and then use full jitter up to one minute. */
 export const CONSOLE_RECONNECT_DELAYS = [2_000, 5_000, 10_000, 30_000, 60_000] as const;
 /** A stream open this long counts as healthy, so its end starts a fresh backoff. */
 const STABLE_CONNECTION_MILLISECONDS = 60_000;
@@ -26,7 +26,7 @@ const GAME_PHASES = new Set<ManagedGamePhase>(["boot", "loading", "serving", "st
 /** Optional timestamp written before a control record, such as "[12:00:01] " or "2026-10-04T12:00:01Z ". */
 const TIMESTAMP_PREFIX = /^[\d\s[\]:.,/TZ+-]{0,48}$/u;
 
-type ConsoleState = "connecting" | "connected" | "reconnecting" | "stopped" | "idle" | "unavailable";
+type ConsoleState = "connecting" | "connected" | "reconnecting" | "stopped" | "idle";
 type ConsoleRun = "running" | "active" | "inactive";
 type StreamHandle = { reconnect: () => void; activate: () => void; deactivate: () => void };
 
@@ -114,9 +114,11 @@ export function isScrolledToBottom(scrollTop: number, scrollHeight: number, clie
     return scrollHeight - scrollTop - clientHeight <= tolerance;
 }
 
-/** Returns the initial backoff wait, or null once the steady retry interval applies. */
-export function consoleReconnectDelay(failedAttempts: number): number | null {
-    return CONSOLE_RECONNECT_DELAYS[failedAttempts] ?? null;
+/** Spreads recovery after shared outages: +/-25% initially, then a uniform wait up to sixty seconds. */
+export function consoleReconnectDelay(failedAttempts: number, random = Math.random): number {
+    const base = CONSOLE_RECONNECT_DELAYS[failedAttempts];
+    const jitter = random();
+    return Math.round(base === undefined ? 60_000 * jitter : base * (0.75 + 0.5 * jitter));
 }
 
 /** Classifies whether the server has a game run whose output can be streamed. */
@@ -297,7 +299,9 @@ function useConsoleStream(serverId: string, run: ConsoleRun, outputChannel?: Com
                 signals?.publish({ type: "unavailable", serverId });
                 return;
             }
-            const delay = consoleReconnectDelay(failures) ?? 60_000;
+            // Preserve restart guidance after the initial retries while the console keeps recovering.
+            if (failures === CONSOLE_RECONNECT_DELAYS.length) signals?.publish({ type: "unavailable", serverId });
+            const delay = consoleReconnectDelay(failures);
             failures += 1;
             setState("reconnecting");
             timer = setTimeout(() => reconnectWhenVisible("retry"), delay);
@@ -323,6 +327,7 @@ function useConsoleStream(serverId: string, run: ConsoleRun, outputChannel?: Com
 
         handleRef.current = {
             reconnect() {
+                if (streaming) return;
                 lastActiveAt = Date.now();
                 failures = 0;
                 idleRenewals = 0;
@@ -380,14 +385,12 @@ export function ManagedServerConsole({ serverId, operationState = "running", obs
         reconnecting: t("console.reconnectingToLiveOutput"),
         stopped: moving ? t("move.consoleMoving") : t("console.theServerIsStoppedOutputWillAppearHereWhenIt"),
         idle: t("console.liveOutputPausedWhileThisPageWasIdleReconnectToKeepWatching"),
-        unavailable: t("console.liveOutputIsnTAvailableRightNow"),
     };
     const loading = observedGameState === "starting";
     if (loading) {
         const explanation = `${t("console.serverStatusLoadingCampaign")} — ${t("console.liveOutputIsnTAvailableRightNow")}`;
         consoleStateMessages.connecting = explanation;
         consoleStateMessages.reconnecting = explanation;
-        consoleStateMessages.unavailable = explanation;
         consoleStateMessages.stopped = explanation;
     } else if (operationState === "failed" || observedGameState === "failed" || observedGameState === "unknown") {
         consoleStateMessages.stopped = t("console.liveOutputIsnTAvailableRightNow");
@@ -434,7 +437,7 @@ export function ManagedServerConsole({ serverId, operationState = "running", obs
                 {!following && text && <button type="button" onClick={jumpToLatest} className="absolute right-4 bottom-4 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-gold/40 bg-surface/95 px-3 py-1.5 text-xs font-medium text-gold shadow-lg hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-gold">
                     <ArrowDown className="size-3.5" aria-hidden="true" />{t("console.jumpToLatest")}</button>}
             </div>
-            {(state === "unavailable" || state === "idle") && <div className="flex justify-end border-t border-white/10 px-4 py-2">
+            {state === "idle" && <div className="flex justify-end border-t border-white/10 px-4 py-2">
                 <button type="button" onClick={reconnect} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-gold/40 bg-gold/10 px-3 py-2 text-sm text-gold focus-visible:outline-2 focus-visible:outline-gold">
                     <RotateCw className="size-4" aria-hidden="true" />{t("console.reconnect")}</button>
             </div>}
