@@ -11,7 +11,7 @@ node --test tools/cheats/sync.test.mjs
 npx tsx --test src/app/cheats/locale.test.ts src/app/cheats/CheatsDirectory.test.tsx
 ```
 
-The commit must already exist locally. These commands neither fetch nor check out nor modify the mod repository. They regenerate `src/app/cheats/commands.json` and `src/app/cheats/locales/zh-CN.commands.json`; `--check` compares without writing. CRLF checkouts are supported. Review the diff before publishing a newer pin.
+The commit must already exist locally. These commands neither fetch nor check out nor modify the mod repository. They regenerate `src/app/cheats/commands.json`; `--check` compares without writing. CRLF checkouts are supported. Review the diff before publishing a newer pin.
 
 ## Extraction contract
 
@@ -29,10 +29,24 @@ Categories are editorial group mappings in `sync.mjs`. The existing inspect/acti
 
 ## Localization and validation
 
-`zh-CN.json` is the reviewed English-to-Simplified-Chinese translation memory for exact descriptions and argument help. It is not machine-generated at sync time. Any new or changed source text without a translation aborts generation before either output is written. Some upstream descriptions are generic (for example, “Runs the … debug operation.”); the website now shows those actual descriptions, including on Featured, rather than overriding them with older behavioral claims. Update `featured.ts` and localized documentation examples explicitly if command names change.
+The page's text lives in the shared `cheats` namespace, `src/app/lib/localization/dictionaries/<locale>/cheats.json`. Every locale has the same keys:
 
-Snapshot: **488 release registrations → 426 published commands**, excluding **62 fixture-named commands**. The scanned assemblies also contain **149 DEBUG-only declarations**, recorded as exclusions. There are **41 categories**, **509 argument entries** (213 distinct help strings), and complete Chinese coverage for all 426 commands. Sides: **153 Server, 66 Client, 207 Both**.
+- `ui.*`: page, metadata, accessibility, filter, action and empty-state messages.
+- `category.<lowercase_underscore_id>`: labels for the category URL identifiers.
+- `command.<command-id>.summary`: the command description, shown and searched.
+- `command.<command-id>.argument.<argument-name>`: the argument help.
+- `hostingOffer.*`: the managed-hosting offer beside the directory. `{amount}` is the locale-formatted USD price and `{tier}` the Patreon tier name; tier names (Veteran, Elite, Noble) stay untranslated.
+
+Do not translate command names, usage, argument names, category query values, code slots or source metadata. Command names come straight from the catalog in English, matching the server, so there are no command-name keys.
+
+The sync does not touch the dictionaries. When repinning, add or update the `command.*` keys in `en` and every other locale for each new or changed description. A missing key falls back to the catalog's English text at runtime, and `locale.test.ts` fails if the English summaries no longer cover every published command.
+
+The server page passes the browser only `command`, `name`, `category`, `summary`, `usage`, `side`, `kind`, `aliases` and argument `name`/`required`/`description`, plus `sourceSearch` (the English text, so English searches still match) for translated views. Producer `source` and `group` stay server-side. Keep this projection when adding producer metadata; `localization.component.test.tsx` checks it.
+
+Some upstream descriptions are generic (for example, “Runs the … debug operation.”); the website now shows those actual descriptions, including on Featured, rather than overriding them with older behavioral claims. Update `featured.ts` and localized documentation examples explicitly if command names change.
+
+Snapshot: **488 release registrations → 426 published commands**, excluding **62 fixture-named commands**. The scanned assemblies also contain **149 DEBUG-only declarations**, recorded as exclusions. There are **41 categories**, **509 argument entries** (213 distinct help strings), and every locale's dictionary covers all 426 commands. Sides: **153 Server, 66 Client, 207 Both**.
 
 Relative to the previous 414-command pin (`2ac901f9`), 12 commands are new and none were removed: `coop.debug.hero_developer.set_skill`/`social_parameter`, `coop.debug.hero.kill_npc`, `coop.debug.map_event.route_enemies`, `coop.debug.settlements.list_notables`, and setup/state helpers for the Army Needs Supplies, Scout Enemy Garrisons and The Conquest of Settlement issues (grouped under **Issues**). Most hero, settlement, party, clan and kingdom arguments now accept a name or id. `coop.debug.hero.id` remains registered with the exact argument spelling `<heroName>`. Featured names, usage, examples and search use current registered keys only.
 
-The checks cover source parsing, transitive interface discovery across files/assemblies, alias resolution, ambiguous/cyclic inheritance rejection, conditional exclusion, exact side extraction, constant/helper metadata, pinning versus dirty checkout, fail-closed unknown expressions, deterministic generation, translation coverage, rendered argument help, translated search, side filters and share-link round trips. Browser clipboard/game execution still need an interactive smoke test; no game commands are executed by the tests.
+The checks cover source parsing, transitive interface discovery across files/assemblies, alias resolution, ambiguous/cyclic inheritance rejection, conditional exclusion, exact side extraction, constant/helper metadata, pinning versus dirty checkout, fail-closed unknown expressions, deterministic generation, dictionary parity, rendered argument help, translated search, side filters and share-link round trips. Browser clipboard/game execution still need an interactive smoke test; no game commands are executed by the tests.

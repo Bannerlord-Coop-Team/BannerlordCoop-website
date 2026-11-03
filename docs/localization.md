@@ -16,9 +16,9 @@ One cookie, `blcoop-locale`, remembers explicit selections (`path=/`, `SameSite=
 
 Each `locales/<locale>.ts` independently owns activation and imports only its locale's dictionaries. Foundation registers all modules once, initially disabled except English. Language PRs change only their own dictionary directory and activation file, never shared registry or page code. Enabled dictionaries must pass exact namespace/key and placeholder checks; do not hide incomplete translations behind English fallback.
 
-### Existing Chinese cheats compatibility
+### Cheats share links
 
-`/cheats?lang=zh-CN` and existing Chinese aliases remain explicit cheats-content overrides while global Chinese is disabled. Resolve overrides in the cheats page and its metadata; apply content-scoped lang. Site chrome still follows the shared cookie. Keep existing vetted Chinese command translations for migration by the Chinese lane. Remove the old cheats selector and localStorage/cookie preference writes. Do not introduce a localization proxy or redirect bridge. Changing the site selector on a cheats URL must update or remove `lang` to match the new selection while preserving all filters/query/hash. Without an override, cheats follows the global locale; explicit share links remain supported after activation.
+`/cheats?lang=<locale>` sets the cheats content language for any enabled locale without writing the cookie. Simplified Chinese also accepts the older aliases `zh`, `zh_hans`, `zh-hans-cn` and `cn` (case-insensitive, underscores accepted). Resolve overrides in the cheats page and its metadata; apply content-scoped lang. Site chrome still follows the shared cookie. Do not introduce a localization proxy or redirect bridge. Changing the site selector on a cheats URL must update or remove `lang` to match the new selection while preserving all filters/query/hash. Without an override, cheats follows the global locale.
 
 ## Exclusive namespace and source ownership
 
@@ -30,7 +30,7 @@ The foundation is multi-seam. Each worker owns an isolated worktree; the foundat
 | home `/` / `home` | home: `page.tsx`, `components/home/**` except DownloadModal, `lib/roadmap.ts`; `lib/youtube.ts` and directly affected homepage-media helpers/types/tests for injected generated fallback/thumbnail labels (preserve external content and fetch/cache semantics); narrow additive `supabase/migrations` migrations assigning nullable stable translation keys to known roadmap milestone/item seed prose and the three website-authored editorial fields on the known Twitch homepage-video seed, with focused migration tests |
 | account `/account` / `account` | account: `account/**` including account action presentation |
 | changelog `/changelog` / `changelog` | changelog: `changelog/**`; external release bodies remain source text |
-| cheats `/cheats` / `cheats` | cheats: `cheats/**`, all published command descriptions/argument prose and categories; command names stay in source English, existing Chinese compatibility data |
+| cheats `/cheats` / `cheats` | cheats: `cheats/**`, all published command descriptions/argument prose and categories; command names stay in source English |
 | login `/login` / `login` | login: `login/**`, `components/auth/LoginForm.tsx`, `auth/callback/route.ts` website fallback only when provider `error_description` is absent, `lib/supabase/client.ts` optional injected configuration-error text and focused tests; preserve raw provider errors, singleton/auth behavior, redirect/query/error semantics |
 | servers `/servers` / `servers` | servers: `servers/page.tsx`, `servers/loading.tsx`, `servers/onboarding-actions.ts`, `components/servers/{AllServersDirectory,ServerDirectoryTable,ServerOnboarding,MembershipNextStep}.tsx` |
 | managed-server `/servers/[serverId]` / `managed-server`, `server-common` | managed-server: `servers/[serverId]/**`, `components/servers/ManagedServer*.tsx`, `components/servers/{ServerControlPanel,ServerSettingsPanel,ServerSaveConfigPanels,ServerVisibilitySetting,ServerManagementWorkspace,CopyJoinButton,DownloadServerLogButton}.tsx`, `components/servers/managed-server-backup-policy.ts`, `servers/managed-server-*.ts`, `servers/{server-notice-actions,server-release-actions,server-settings-actions,server-visibility-actions}.ts`, user-facing parts of `lib/control-plane/{presentation,explanations}.ts` through injected translator/default-English compatibility rather than changing admin behavior |
@@ -92,7 +92,7 @@ There are **2,467 messages in 12 English namespaces**. Each later locale supplie
 | support | 35 | support |
 | not-found | 7 | not-found |
 
-Add `dictionaries/<locale>/<namespace>.json`; populate that locale's existing `locales/<locale>.ts` lazy namespace imports and set `enabled: true` only after all twelve dictionaries pass `runtime.component.test.tsx`. No shared registry/page rewrites. Chinese translators should consult `cheats/locales/zh-CN.json` and its README for vetted legacy catalog prose; the completed locale's authoritative data still belongs under its localization dictionary directory. Do not claim native proofreading unless performed. Preserve newline segmentation used by home headlines and all named rich slots. Command syntax, product names and user/source values remain immutable.
+Add `dictionaries/<locale>/<namespace>.json`; populate that locale's existing `locales/<locale>.ts` lazy namespace imports and set `enabled: true` only after all twelve dictionaries pass `runtime.component.test.tsx`. No shared registry/page rewrites. Do not claim native proofreading unless performed. Preserve newline segmentation used by home headlines and all named rich slots. Command syntax, product names and user/source values remain immutable.
 
 ### Deployed-content migration and maintenance
 

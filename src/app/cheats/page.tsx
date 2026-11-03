@@ -29,9 +29,7 @@ export async function generateMetadata({ searchParams }: CheatsPageProps): Promi
         alternates: {
             canonical,
             languages: Object.fromEntries(
-                [...new Set([...getEnabledLocales().map((option) => option.locale), "zh-CN"])].map(
-                    (language) => [language, `/cheats?lang=${language}`],
-                ),
+                getEnabledLocales().map(({ locale: language }) => [language, `/cheats?lang=${language}`]),
             ),
         },
         openGraph: {

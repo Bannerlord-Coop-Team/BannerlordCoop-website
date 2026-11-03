@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import test from "node:test";
-import { buildCatalog, buildTranslations } from "./sync.mjs";
+import { buildCatalog } from "./sync.mjs";
 
 const sample = (name, side = "Both", description = '"Description with \\"quotes\\"."', args = "System.Array.Empty<IExpectedArgs>()") => `
 public sealed class ${name}Command : ICoopCommand {
@@ -110,7 +110,7 @@ ${sample("both")}`;
     }
 });
 
-test("catalog generation applies publication rules, exact usages, counts and translation fail-closed", () => {
+test("catalog generation applies publication rules, exact usages and counts", () => {
     const command = { command: "coop.debug.hero.list", name: "list", group: "coop.debug.hero", summary: "Lists heroes.", side: "either", arguments: [{ name: "prefix", description: "Optional prefix.", required: false }] };
     const raw = { commit: "abc", commands: [command, { ...command, name: "fixture", command: "coop.debug.hero.fixture" }], debugOnly: ["coop.debug.hero.debug_only"] };
     const catalog = buildCatalog(raw);
@@ -119,14 +119,4 @@ test("catalog generation applies publication rules, exact usages, counts and tra
     assert.equal(catalog.source.excludedFixtureCount, 1);
     assert.equal(catalog.commands[0].usage, "coop.debug.hero.list [<prefix>]");
     assert.deepEqual(catalog.commands[0].aliases, []);
-    assert.throws(() => buildTranslations(catalog, {}), /Missing zh-CN translation/);
-    const zh = buildTranslations(catalog, { "Lists heroes.": "列出英雄。", "Optional prefix.": "可选前缀。" });
-    assert.equal(zh[command.command].arguments.prefix, "可选前缀。");
-});
-
-test("checked-in locale output is generated from exact current source descriptions", () => {
-    const catalog = JSON.parse(readFileSync("src/app/cheats/commands.json", "utf8"));
-    const translations = JSON.parse(readFileSync("tools/cheats/zh-CN.json", "utf8"));
-    const overlays = JSON.parse(readFileSync("src/app/cheats/locales/zh-CN.commands.json", "utf8"));
-    assert.deepEqual(buildTranslations(catalog, translations), overlays);
 });

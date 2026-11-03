@@ -5,7 +5,7 @@ import { CheatsDirectory, type CheatCommand } from "./CheatsDirectory";
 import data from "./commands.json";
 import { LocalizationProvider } from "../lib/localization/client";
 import en from "../lib/localization/dictionaries/en/cheats.json";
-import zh from "./locales/zh-CN.json";
+import zh from "../lib/localization/dictionaries/zh-CN/cheats.json";
 import { parseCheatsQuery } from "./query";
 
 /** Renders the real directory with its route-scoped dictionary for source/translated regressions. */

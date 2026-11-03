@@ -6,8 +6,7 @@ import { featuredCommandNames } from "./featured";
 import { parseCheatsLocale } from "./locale";
 import { locales } from "../lib/localization/types";
 import en from "../lib/localization/dictionaries/en/cheats.json";
-import zh from "./locales/zh-CN.json";
-import chineseSource from "./locales/zh-CN.commands.json";
+import zh from "../lib/localization/dictionaries/zh-CN/cheats.json";
 import { assertDictionaryParity } from "../lib/localization/integrity";
 import { createTranslator } from "../lib/localization/translator";
 import { buildCheatsPath, parseCheatsQuery } from "./query";
@@ -43,7 +42,7 @@ test("keeps bare cheats navigation and retains every explicit share locale", () 
 
 /** Existing dictionary entries win; newly synced catalog entries keep their English fallback. */
 test("preserves command names, translated prose, and missing-translation catalog fallbacks", () => {
-    assertDictionaryParity(en, zh, "legacy.zh-CN.cheats");
+    assertDictionaryParity(en, zh, "zh-CN.cheats");
     for (const { name } of commandsData.categories) {
         const key = `category.${name.toLowerCase().replaceAll(" ", "_")}`;
         assert.equal(translateCheat(english.t, key, name), name);
@@ -55,9 +54,6 @@ test("preserves command names, translated prose, and missing-translation catalog
         assert.equal(Object.hasOwn(zh, `${key}.name`), false);
         assert.equal(translateCheat(english.t, `${key}.summary`, command.summary),
             (en as Record<string, unknown>)[`${key}.summary`] ?? command.summary);
-        const original = chineseSource[command.command as keyof typeof chineseSource];
-        assert.ok(original.summary.trim());
-        assert.deepEqual(Object.keys(original.arguments).sort(), command.arguments.map(argument => argument.name).sort());
         assert.equal(translateCheat(chinese.t, `${key}.summary`, command.summary),
             (zh as Record<string, unknown>)[`${key}.summary`] ?? command.summary);
         for (const argument of command.arguments) {
