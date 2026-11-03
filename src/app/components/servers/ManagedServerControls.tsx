@@ -365,7 +365,7 @@ export function ManagedServerControls({
         || (trackingRestart && !watchingAcceptedRestart) || stateIsTransitional || (pollingSession !== null && !restartPolling) || moving;
     const confirmedLocalStart = startStatus?.state === "succeeded" && expectedUpdatedAt === startRevision;
     // The cancelled receipt may remain in this render until the refreshed server summary arrives.
-    const cancelledReceipt = cancelledStart.current !== null && cancelledStart.current === receiptId;
+    const cancelledReceipt = cancelledStart.current !== null && cancelledStart.current === receiptId && runtimeInsight?.start?.state === "queued";
     const allowed = confirmedLocalStart ? ["stop", "restart-game"] : cancelledReceipt ? undefined : runtimeInsight?.allowedActions;
     const canStart = allowed ? allowed.includes("start") : ["stopped", "failed", "degraded"].includes(operationState) && ["stopped", "failed", "awaiting-save"].includes(observedGameState);
     const canStop = allowed ? allowed.includes("stop") : ["running", "starting", "failed", "degraded"].includes(operationState) && ["running", "starting", "stopping"].includes(observedGameState);

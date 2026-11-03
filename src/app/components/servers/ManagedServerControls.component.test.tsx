@@ -404,6 +404,10 @@ it.each(["cancelled", "claimed"] as const)("explains an unclaimed Start and hand
         if (outcome === "cancelled") {
             expect(container.textContent).toContain("Start cancelled");
             expect(buttons().find(button => button.textContent === "Start")?.disabled).toBe(false);
+            // A fresh summary can impose another operation's fence; cancellation must not bypass it.
+            await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} operationState="stopped" observedGameState="stopped"
+                runtimeInsight={{ ...insight, start: { ...receipt, state: "cancelled", phase: "cancelled", stoppedRetrying: true } }} /></TestLocalization>));
+            expect(buttons().find(button => button.textContent === "Start")?.disabled).toBe(true);
         } else {
             expect(container.textContent).not.toContain("Start cancelled");
             expect(buttons().find(button => button.textContent?.startsWith("Start"))?.disabled).toBe(true);
