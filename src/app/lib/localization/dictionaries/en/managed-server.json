@@ -1,4 +1,13 @@
 {
+  "controls.cancelStart": "Cancel Start",
+  "controls.cancellingStart": "Cancelling Start…",
+  "controls.startCancellationUnconfirmed": "Cancellation could not be confirmed. The Start may already have begun; refreshing its progress.",
+  "controls.startWaiting.scheduled": "Your Start is scheduled to begin later.",
+  "controls.startWaiting.server-recovery": "Your server is waiting for an earlier operation to be safely resolved.",
+  "controls.startWaiting.host-maintenance": "Your server is waiting for hosting maintenance to finish.",
+  "controls.startWaiting.capacity": "Your Start is waiting for available processing capacity.",
+  "controls.startWaiting.host-busy": "Your Start is waiting for another operation on this host to finish.",
+  "controls.startWaiting.worker": "Your Start is queued and waiting for a worker to pick it up.",
   "action.serverUpdating": "Your server is updating. Try again in a minute.",
   "mods.error.uploadStatusUnavailable": "The install of {id} could not be confirmed because the server is suspended. Refresh the mod list when access is restored to check its outcome.",
   "action.refusal.serverSuspended": "This server is suspended. The request was refused and no change was made.",

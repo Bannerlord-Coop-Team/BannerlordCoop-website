@@ -1,4 +1,13 @@
 {
+  "controls.cancelStart": "起動をキャンセル",
+  "controls.cancellingStart": "起動をキャンセル中…",
+  "controls.startCancellationUnconfirmed": "キャンセルを確認できませんでした。すでに起動処理が始まっている可能性があります。進行状況を更新します。",
+  "controls.startWaiting.scheduled": "起動は後で開始するように予約されています。",
+  "controls.startWaiting.server-recovery": "以前の操作が安全に解決されるまで待機しています。",
+  "controls.startWaiting.host-maintenance": "ホスティングのメンテナンス完了を待機しています。",
+  "controls.startWaiting.capacity": "利用可能な処理容量を待機しています。",
+  "controls.startWaiting.host-busy": "このホスト上の別の操作の完了を待機しています。",
+  "controls.startWaiting.worker": "起動はキューに登録され、処理の開始を待機しています。",
   "action.serverUpdating": "サーバーを更新しています。1分ほど待ってからもう一度お試しください。",
   "mods.error.uploadStatusUnavailable": "サーバーが停止措置中のため、{id} のインストール結果を確認できませんでした。アクセスが復旧したら Mod 一覧を更新して結果を確認してください。",
   "action.refusal.serverSuspended": "このサーバーは停止措置中です。リクエストは拒否され、変更は行われませんでした。",

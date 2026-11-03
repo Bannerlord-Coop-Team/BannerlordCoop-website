@@ -1,4 +1,5 @@
 import "server-only";
+import { isStartQueueDetails, type StartQueueDetails } from "../../../../supabase/functions/_shared/server-start-queue-contract";
 import { isOwnerRuntimeInsight, isOwnerStartInsight, START_INSIGHT_KEYS, type OwnerStartInsight } from "./owner-runtime-insight";
 import { isIP } from "node:net";
 import type { MyServerMove, MyServerNotice, MyServerSummary } from "@/app/lib/control-plane/types";
@@ -112,6 +113,7 @@ export type ManagedStartStatus = Partial<Omit<OwnerStartInsight, "jobId" | "stat
     state: "queued" | "running" | "retry-wait" | "succeeded" | "failed" | "cancelled";
     phase: OwnerStartInsight["phase"];
     progress: string;
+    queue?: StartQueueDetails;
     /** Only on a failed Start whose enabled mod did not load; `progress` then holds the control plane's English copy. */
     modLoadFailure?: ModLoadFailure;
 };
@@ -124,17 +126,26 @@ export async function getMyServerStartStatus(accessToken: string, serverId: stri
     if (!uuid.test(serverId) || !uuid.test(jobId)) throw new MyServersApiError("invalid_request", "Invalid Start reference.");
     const signal = ownerReadSignal(accessToken, AbortSignal.timeout(10_000));
     let result: unknown;
-    try { result = await readOwner(accessToken, { operation: "server-start-status", input: { serverId, jobId, includeRuntimeInsight: true } }, signal); }
+    try { result = await readOwner(accessToken, { operation: "server-start-status", input: { serverId, jobId, includeRuntimeInsight: true, includeQueueDetails: true } }, signal); }
     catch (error) {
         if (!(error instanceof MyServersApiError) || error.code !== "invalid_request") throw error;
-        result = await readOwner(accessToken, { operation: "server-start-status", input: { serverId, jobId } }, signal);
+        try { result = await readOwner(accessToken, { operation: "server-start-status", input: { serverId, jobId, includeRuntimeInsight: true } }, signal); }
+        catch (legacyError) {
+            if (!(legacyError instanceof MyServersApiError) || legacyError.code !== "invalid_request") throw legacyError;
+            result = await readOwner(accessToken, { operation: "server-start-status", input: { serverId, jobId } }, signal);
+        }
     }
     if (!result || typeof result !== "object" || Array.isArray(result)) throw new MyServersApiError("invalid_response", "Invalid Start status.");
     const value = result as Record<string, unknown>;
     const diagnosed = Object.hasOwn(value, "modLoadFailure");
     const insight = Object.hasOwn(value, "attemptCount");
-    const keys = insight ? ["serverId", ...START_INSIGHT_KEYS] : START_STATUS_KEYS;
+    const queue = Object.hasOwn(value, "queue");
+    const keys = [...(insight ? ["serverId", ...START_INSIGHT_KEYS] : START_STATUS_KEYS), ...(queue ? ["queue"] : [])];
     if (!hasExactKeys(value, diagnosed ? [...keys, "modLoadFailure"] : keys)
+        || (queue && (!isStartQueueDetails(value.queue)
+            || (value.queue.canCancel && (!insight || value.state !== "queued" || value.attemptCount !== 0
+                || !["start", "provision"].includes(value.action as string)))
+            || (value.queue.waitingReason !== null && (value.state !== "queued" || value.attemptCount !== 0))))
         || (insight && !isOwnerStartInsight(Object.fromEntries(START_INSIGHT_KEYS.map(key => [key, value[key]]))))
         || (diagnosed && (value.state !== "failed" || !isModLoadFailure(value.modLoadFailure)))
         || value.serverId !== serverId || value.jobId !== jobId
@@ -299,7 +310,7 @@ async function readOwner(accessToken: string, request:
     | { operation: "server-summary"; input: { serverId: string; includeRuntimeInsight?: boolean } }
     | OnboardingSummaryRequest
     | { operation: "server-deletion-status"; input: { serverId: string } }
-    | { operation: "server-start-status"; input: { serverId: string; jobId: string; includeRuntimeInsight?: boolean } }
+    | { operation: "server-start-status"; input: { serverId: string; jobId: string; includeRuntimeInsight?: boolean; includeQueueDetails?: boolean } }
     | { operation: "server-resources"; input: { serverId: string } }
     | { operation: "server-notices"; input: { serverId: string } }
     | { operation: "server-move-status"; input: { serverId: string } }

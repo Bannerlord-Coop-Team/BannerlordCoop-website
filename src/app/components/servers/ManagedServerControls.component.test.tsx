@@ -14,6 +14,7 @@ import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insigh
 
 const { revealAddress } = vi.hoisted(() => ({ revealAddress: vi.fn() }));
 const { backupStatus, deletionStatus } = vi.hoisted(() => ({ backupStatus: vi.fn(), deletionStatus: vi.fn() }));
+const { cancelStart } = vi.hoisted(() => ({ cancelStart: vi.fn() }));
 vi.mock("./ServerManagementWorkspace", async original => ({
     ...await original<typeof import("./ServerManagementWorkspace")>(), useRevealServerAddress: () => revealAddress,
 }));
@@ -70,6 +71,7 @@ vi.mock("@/app/lib/hosting/my-servers", async (original) => ({
     requestMyServerOperation: request,
     requestMyServerUpdate: requestUpdate,
     requestMyServerPassword: requestPassword,
+    cancelMyServerStart: cancelStart,
     getMyServerBackupStatus: backupStatus,
 }));
 vi.mock("@/app/servers/managed-server-move-actions", () => ({ readManagedServerMoveStatus: async () => ({ ok: false }) }));
@@ -369,6 +371,70 @@ it.each(["admin", "support"] as const)("keeps %s controls read-only while showin
         expect(container.textContent).toContain(insight.failureMessage);
         expect(container.textContent).toContain("Read-only access");
         expect([...container.querySelectorAll("button")].some(button => ["Start", "Stop", "Restart", "Update now"].includes(button.textContent ?? ""))).toBe(false);
+    } finally { await act(async () => root.unmount()); }
+});
+
+it.each(["cancelled", "claimed"] as const)("explains an unclaimed Start and handles cancellation when %s wins", async outcome => {
+    const receipt = { action: "start" as const, jobId: progressJobId, state: "queued" as const, phase: "queued" as const,
+        progress: "Waiting to begin. Attempt 0 of 5.", attemptCount: 0, maximumAttempts: 5, nextRetryAt: null,
+        stoppedRetrying: false, failureCode: null, recommendedAction: null };
+    const queue = { waitingReason: "server-recovery", canCancel: true, updatedAt: progressProps.expectedUpdatedAt };
+    const insight: OwnerRuntimeInsight = { desiredState: "stopped", observedAt: null, allowedActions: [], crashLoopDetected: false,
+        failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: receipt };
+    startStatus.mockReset().mockResolvedValue({ serverId: progressServerId, ...receipt, queue });
+    cancelStart.mockReset().mockImplementation(async () => {
+        if (outcome === "claimed") {
+            startStatus.mockResolvedValue({ serverId: progressServerId, ...receipt, state: "running", phase: "preparing",
+                attemptCount: 1, queue: { ...queue, waitingReason: null, canCancel: false } });
+            throw new MyServersApiError("conflict", "Already claimed");
+        }
+        return { serverId: progressServerId, jobId: progressJobId, state: "cancelled" };
+    });
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} operationState="stopped" observedGameState="stopped" runtimeInsight={insight} /></TestLocalization>));
+        expect(container.textContent).toContain("Your server is waiting for an earlier operation to be safely resolved.");
+        const buttons = () => [...container.querySelectorAll("button")];
+        expect(buttons().find(button => button.textContent?.startsWith("Start"))?.disabled).toBe(true);
+        const cancel = buttons().find(button => button.textContent === "Cancel Start")!;
+        expect(cancel.disabled).toBe(false);
+        await act(async () => cancel.click());
+        expect(cancelStart).toHaveBeenCalledExactlyOnceWith("token", { serverId: progressServerId, jobId: progressJobId,
+            expectedUpdatedAt: queue.updatedAt }, expect.any(String));
+        if (outcome === "cancelled") {
+            expect(container.textContent).toContain("Start cancelled");
+            expect(buttons().find(button => button.textContent === "Start")?.disabled).toBe(false);
+        } else {
+            expect(container.textContent).not.toContain("Start cancelled");
+            expect(buttons().find(button => button.textContent?.startsWith("Start"))?.disabled).toBe(true);
+        }
+        expect(buttons().some(button => button.textContent === "Cancel Start")).toBe(false);
+        expect(request).not.toHaveBeenCalled();
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("ignores an older progress response after cancellation succeeds", async () => {
+    vi.useFakeTimers();
+    const receipt = { action: "start" as const, jobId: progressJobId, state: "queued" as const, phase: "queued" as const,
+        progress: "Waiting to begin. Attempt 0 of 5.", attemptCount: 0, maximumAttempts: 5, nextRetryAt: null,
+        stoppedRetrying: false, failureCode: null, recommendedAction: null };
+    const queue = { waitingReason: "worker", canCancel: true, updatedAt: progressProps.expectedUpdatedAt };
+    const insight: OwnerRuntimeInsight = { desiredState: "stopped", observedAt: null, allowedActions: [], crashLoopDetected: false,
+        failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: receipt };
+    let completeOldRead!: (value: unknown) => void;
+    startStatus.mockReset().mockResolvedValueOnce({ serverId: progressServerId, ...receipt, queue })
+        .mockImplementationOnce(() => new Promise(resolve => { completeOldRead = resolve; }));
+    cancelStart.mockReset().mockResolvedValue({ serverId: progressServerId, jobId: progressJobId, state: "cancelled" });
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} operationState="stopped" observedGameState="stopped" runtimeInsight={insight} /></TestLocalization>));
+        await act(async () => { vi.advanceTimersByTime(2_000); });
+        expect(startStatus).toHaveBeenCalledTimes(2);
+        await act(async () => [...container.querySelectorAll("button")].find(button => button.textContent === "Cancel Start")!.click());
+        await act(async () => completeOldRead({ serverId: progressServerId, ...receipt, state: "running", phase: "starting",
+            attemptCount: 1, queue: { ...queue, waitingReason: null, canCancel: false } }));
+        expect(container.textContent).toContain("Start cancelled");
+        expect([...container.querySelectorAll("button")].find(button => button.textContent === "Start")?.disabled).toBe(false);
     } finally { await act(async () => root.unmount()); }
 });
 

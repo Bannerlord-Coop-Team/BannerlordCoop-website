@@ -1,4 +1,13 @@
 {
+  "controls.cancelStart": "Cancelar início",
+  "controls.cancellingStart": "Cancelando início…",
+  "controls.startCancellationUnconfirmed": "Não foi possível confirmar o cancelamento. O início pode já ter começado; atualizando o progresso.",
+  "controls.startWaiting.scheduled": "O início está agendado para mais tarde.",
+  "controls.startWaiting.server-recovery": "Seu servidor aguarda a resolução segura de uma operação anterior.",
+  "controls.startWaiting.host-maintenance": "Seu servidor aguarda o fim da manutenção da hospedagem.",
+  "controls.startWaiting.capacity": "O início aguarda capacidade de processamento disponível.",
+  "controls.startWaiting.host-busy": "O início aguarda o fim de outra operação neste host.",
+  "controls.startWaiting.worker": "O início está na fila, aguardando processamento.",
   "action.serverUpdating": "Seu servidor está sendo atualizado. Tente novamente em um minuto.",
   "mods.error.uploadStatusUnavailable": "Não foi possível confirmar a instalação de {id} porque o servidor está suspenso. Atualize a lista de mods quando o acesso for restabelecido para verificar o resultado.",
   "action.refusal.serverSuspended": "Este servidor está suspenso. A solicitação foi recusada e nenhuma alteração foi feita.",

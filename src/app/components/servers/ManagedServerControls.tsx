@@ -11,7 +11,7 @@ import {
     useManagedServerStatusSlot,
     type ManagedConsoleSignal,
 } from "@/app/components/servers/ManagedServerPollingProvider";
-import { operateManagedServer, readManagedServerStartStatus, setManagedServerPassword } from "@/app/servers/managed-server-actions";
+import { cancelManagedServerStart, operateManagedServer, readManagedServerStartStatus, setManagedServerPassword } from "@/app/servers/managed-server-actions";
 import { useRouter } from "next/navigation";
 import type { ManagedStartStatus } from "@/app/lib/hosting/my-servers-server";
 import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
@@ -47,7 +47,7 @@ const RESTART_WATCH_MILLISECONDS = 5 * 60_000;
 /** An unconfirmed request is checked for at least this long before the observed state is reported. */
 const VERIFY_WINDOW_MILLISECONDS = 20_000;
 
-type StartProgressStatus = Pick<ManagedStartStatus, "action" | "state" | "phase" | "progress" | "modLoadFailure" | "stoppedRetrying" | "failureCode">;
+type StartProgressStatus = Pick<ManagedStartStatus, "action" | "state" | "phase" | "progress" | "modLoadFailure" | "stoppedRetrying" | "failureCode" | "queue">;
 
 type Operation = "start" | "stop" | "restart-game" | "update-now";
 
@@ -144,6 +144,9 @@ export function ManagedServerControls({
     const [startRevision, setStartRevision] = useState(expectedUpdatedAt);
     const [startJobId, setStartJobId] = useState<string | null>(() => ["owner", "manager"].includes(accessRole) && runtimeInsight?.start && ["queued", "running", "retry-wait"].includes(runtimeInsight.start.state) ? runtimeInsight.start.jobId : null);
     const [startStatus, setStartStatus] = useState<StartProgressStatus | null>(null);
+    const cancelledStart = useRef<string | null>(null);
+    const startPollVersion = useRef(0);
+    const [cancellingStart, setCancellingStart] = useState(false);
     const [locallyRequested, setLocallyRequested] = useState(false);
     const receiptId = runtimeInsight?.start?.jobId ?? null;
     const [startProgressIdentity, setStartProgressIdentity] = useState(receiptId ?? "initial");
@@ -265,13 +268,14 @@ export function ManagedServerControls({
     useEffect(() => {
         if (!canOperate || startJobId === null) return;
         let cancelled = false;
+        const version = ++startPollVersion.current;
         let timeout: ReturnType<typeof setTimeout>;
         const deadline = Date.now() + 15 * 60_000;
         // Refreshes existing operation progress and reports localized connection feedback.
         async function poll() {
             try {
                 const result = await readManagedServerStartStatus(serverId, startJobId!);
-                if (cancelled) return;
+                if (cancelled || version !== startPollVersion.current) return;
                 if (result.ok) {
                     setStartStatus(result.status);
                     setMessage("");
@@ -281,7 +285,7 @@ export function ManagedServerControls({
                     if (!result.retryable) { setProgressPaused(true); return; }
                 }
             } catch {
-                if (cancelled) return;
+                if (cancelled || version !== startPollVersion.current) return;
                 setMessage(t("controls.reconnectingToServerProgressYourStartRequestIsStillBeing"));
             }
             if (Date.now() >= deadline) {
@@ -360,7 +364,9 @@ export function ManagedServerControls({
     const busy = isPending || trackingStart || (trackingStop && !stopCheckPaused)
         || (trackingRestart && !watchingAcceptedRestart) || stateIsTransitional || (pollingSession !== null && !restartPolling) || moving;
     const confirmedLocalStart = startStatus?.state === "succeeded" && expectedUpdatedAt === startRevision;
-    const allowed = confirmedLocalStart ? ["stop", "restart-game"] : runtimeInsight?.allowedActions;
+    // The cancelled receipt may remain in this render until the refreshed server summary arrives.
+    const cancelledReceipt = cancelledStart.current !== null && cancelledStart.current === receiptId;
+    const allowed = confirmedLocalStart ? ["stop", "restart-game"] : cancelledReceipt ? undefined : runtimeInsight?.allowedActions;
     const canStart = allowed ? allowed.includes("start") : ["stopped", "failed", "degraded"].includes(operationState) && ["stopped", "failed", "awaiting-save"].includes(observedGameState);
     const canStop = allowed ? allowed.includes("stop") : ["running", "starting", "failed", "degraded"].includes(operationState) && ["running", "starting", "stopping"].includes(observedGameState);
     const canRestart = allowed ? allowed.includes("restart-game") : ["running", "degraded"].includes(operationState) && observedGameState === "running";
@@ -370,6 +376,39 @@ export function ManagedServerControls({
         "restart-game": t("controls.restart"),
         "update-now": t("controls.updateNow"),
     };
+
+    function cancelQueuedStart() {
+        const jobId = startJobId;
+        const queue = startStatus?.queue;
+        if (jobId === null || !queue?.canCancel || isPending) return;
+        setCancellingStart(true);
+        startTransition(async () => {
+            try {
+                const result = await cancelManagedServerStart({ serverId, jobId, expectedUpdatedAt: queue.updatedAt });
+                if (result.ok) {
+                    // Invalidate a concurrent read before publishing cancellation locally.
+                    ++startPollVersion.current;
+                    cancelledStart.current = jobId;
+                    seenReceipt.current = jobId;
+                    setLocallyRequested(true);
+                    setStartJobId(null);
+                    setStartStatus(current => current && { ...current, state: "cancelled", phase: "cancelled",
+                        progress: t("controls.startCancelled"), stoppedRetrying: true,
+                        queue: { ...queue, canCancel: false, waitingReason: null } });
+                    setProgressPaused(false);
+                    endPolling(serverId);
+                } else {
+                    setMessage(result.message);
+                    setPollRun(current => current + 1);
+                }
+                router.refresh();
+            } catch {
+                setMessage(t("controls.startCancellationUnconfirmed"));
+                setPollRun(current => current + 1);
+                router.refresh();
+            } finally { setCancellingStart(false); }
+        });
+    }
 
     /** Follows an accepted Restart through live console phases, or explains the wait when they are unavailable. */
     function followRestart() {
@@ -482,6 +521,11 @@ export function ManagedServerControls({
     const statusArea = showStart || restart !== null || progressPaused || stopCheckPaused || (message && !updateMessageInSlot) ? (
         <div className="flex w-full flex-col items-start gap-2">
             {showStart && <StartProgress key={`${serverId}:${startProgressIdentity}`} status={displayedStartStatus} paused={progressPaused} />}
+            {startJobId !== null && startStatus?.queue?.canCancel && <button type="button"
+                className="min-h-10 rounded-md border border-gold/40 px-3 text-sm text-gold focus-visible:outline-2 focus-visible:outline-gold"
+                disabled={isPending || moving} onClick={cancelQueuedStart}>
+                {t(cancellingStart ? "controls.cancellingStart" : "controls.cancelStart")}
+            </button>}
             {restart !== null && <RestartProgressCard progress={restart} />}
             {progressPaused && <div className="max-w-xl text-sm leading-6 text-foreground-muted">
                 <p>{t("controls.automaticProgressUpdatesArePausedReadinessHasNotBeenConfirmed")}</p>
@@ -624,7 +668,8 @@ function StartProgress({ status, paused }: { status: StartProgressStatus | null;
             : failed ? status.progress
             : status?.state === "retry-wait" ? t("controls.waitingToRetrySafelyProgress", { progress: status.progress })
                 : status?.state === "succeeded" ? <>{status.progress ?? t("controls.yourServerIsReadyToJoin")} <span className="mt-1 block">{t("controls.connectWithIpAddress")}</span></>
-                    : status?.progress ?? t("controls.waitingForTheHostingServiceToAcceptYourRequest")}
+                    : status?.queue?.waitingReason ? <>{status.progress}<span className="mt-1 block">{t(`controls.startWaiting.${status.queue.waitingReason}`)}</span></>
+                        : status?.progress ?? t("controls.waitingForTheHostingServiceToAcceptYourRequest")}
     />;
 }
 

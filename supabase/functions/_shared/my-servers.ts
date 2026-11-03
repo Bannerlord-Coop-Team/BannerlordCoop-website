@@ -11,6 +11,7 @@ import { MAXIMUM_CAMPAIGN_LIMIT, parseCampaignMutation, parseCampaignPage, parse
 import { requesterFromToken, type RegionFullEvent, type RegionRequestedEvent } from "./region-alerts.ts";
 import { hasExactKeys, isRecord } from "./dto-validation.ts";
 import { parseSaveDeletionStatus } from "./server-save-deletion-contract.ts";
+import { parseStartCancellationInput, parseStartCancellationResult, type StartCancellationInput } from "./server-start-queue-contract.ts";
 import { errorResponse, isControlPlaneEnvelope, readBoundedText, RequestTooLargeError, type ControlPlaneEnvelope } from "./edge-http.ts";
 import { createModsForwarder, isModsEdgeRequest } from "./my-servers-mods.ts";
 
@@ -46,6 +47,7 @@ export type MyServersHandlerOptions = {
 };
 
 type UpstreamRequest =
+    | { operation: "cancel-server-start"; input: StartCancellationInput }
     | { operation: "delete-save-status"; input: { serverId: string; jobId: string } }
     | { operation: "save-server-settings"; input: OwnerSettingsMutation }
     | { operation: "console-command"; input: ConsoleSubmission }
@@ -279,6 +281,10 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
             if (isDirectCommand || isConfigurationFile) responseBody = JSON.stringify(normalized);
             const envelope = checkedEnvelope(normalized, requestId, upstream.ok);
             if (envelope.ok) {
+                if (upstreamRequest.operation === "cancel-server-start") {
+                    const result = parseStartCancellationResult(envelope.result);
+                    if (result.serverId !== upstreamRequest.input.serverId || result.jobId !== upstreamRequest.input.jobId) throw new Error("Mismatched Start cancellation");
+                }
                 if (upstreamRequest.operation === "my-server-latest-log") {
                     throw new Error("Expected a binary log response");
                 }
@@ -489,6 +495,10 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
     if (value.action === "save-server-settings") {
         const { action, ...input } = value;
         return { operation: action, input: parseOwnerSettingsMutation(input) };
+    }
+    if (value.action === "cancel-server-start") {
+        const { action, ...input } = value;
+        return { operation: action, input: parseStartCancellationInput(input) };
     }
     if (value.action === "save-config") {
         const input: Record<string, unknown> = { ...value };

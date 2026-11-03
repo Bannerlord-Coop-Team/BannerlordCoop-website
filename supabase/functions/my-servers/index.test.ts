@@ -67,6 +67,25 @@ test("routes a direct restart with only serverId and verified bearer identity", 
     assert.deepEqual(await response.json(), { version: 1, requestId: REQUEST_ID, ok: true, result: { exitCode: 0 } });
 });
 
+test("cancels only the bound unclaimed Start through the owner operation", async () => {
+    const input = { serverId: "22222222-2222-4222-8222-222222222222", jobId: "33333333-3333-4333-8333-333333333333",
+        expectedUpdatedAt: "2026-11-03T11:30:50.000Z" };
+    let calls = 0;
+    const handler = createHandler(async (url, init) => {
+        calls++;
+        assert.equal(String(url), "https://control-plane.example.test/v1/user/control-plane");
+        assert.deepEqual(JSON.parse(String(init?.body)), { version: 1, requestId: REQUEST_ID, operation: "cancel-server-start", input });
+        return successEnvelope({ serverId: input.serverId, jobId: input.jobId, state: "cancelled" });
+    });
+    assert.equal((await handler(operationRequest({ action: "cancel-server-start", ...input }))).status, 200);
+    for (const invalid of [{ ...input, roleIds: ["admin"] }, { ...input, jobId: "bad" }, { ...input, expectedUpdatedAt: "yesterday" }]) {
+        assert.equal((await handler(operationRequest({ action: "cancel-server-start", ...invalid }))).status, 400);
+    }
+    assert.equal(calls, 1);
+    const mismatch = createHandler(async () => successEnvelope({ serverId: input.serverId, jobId: REQUEST_ID, state: "cancelled" }));
+    assert.equal((await mismatch(operationRequest({ action: "cancel-server-start", ...input }))).status, 502);
+});
+
 test("passes a save-in-progress refusal of direct Stop and Restart through unchanged", async () => {
     const error = { code: "save_in_progress", message: "The game is saving right now. Wait a few seconds for the save to finish, then try again.", retryable: true };
     const handler = createHandler(async () => Response.json({ ok: false, error }, { status: 409 }));
