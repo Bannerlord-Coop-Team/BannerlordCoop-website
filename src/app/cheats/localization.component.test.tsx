@@ -8,7 +8,7 @@ import { localeDefinitions } from "../lib/localization/registry";
 import { getLocale } from "../lib/localization/server";
 import common from "../lib/localization/dictionaries/en/common.json";
 import english from "../lib/localization/dictionaries/en/cheats.json";
-import chinese from "./locales/zh-CN.json";
+import chinese from "../lib/localization/dictionaries/zh-CN/cheats.json";
 import commandsData from "./commands.json";
 import * as cheatsView from "./CheatsView";
 import { isPublishedCheat } from "./debugOnly";
@@ -29,15 +29,12 @@ vi.mock("@/app/components/layout/Footer", () => ({ Footer: () => null }));
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 const initialRu = localeDefinitions.ru;
-const initialZh = localeDefinitions["zh-CN"];
 beforeEach(() => {
     localeDefinitions.ru = { ...initialRu, enabled: false };
-    localeDefinitions["zh-CN"] = { ...initialZh, enabled: false };
 });
 afterEach(() => {
     request.cookie = undefined;
     localeDefinitions.ru = initialRu;
-    localeDefinitions["zh-CN"] = initialZh;
     vi.restoreAllMocks();
     vi.clearAllMocks();
     window.history.replaceState(null, "", "/");
@@ -96,20 +93,26 @@ it.each(["en", "zh-CN"])("projects only browser catalog fields for %s without ch
 });
 
 it.each(["en", "zh-CN"])("keeps missing-translation summary and argument fallbacks in %s client props", async (lang) => {
-    const command = commandsData.commands.find(command => isPublishedCheat(command)
-        && !Object.hasOwn(english, `command.${command.command}.summary`)
-        && command.arguments.some(argument => !Object.hasOwn(english, `command.${command.command}.argument.${argument.name}`)))!;
+    const command = commandsData.commands.find(command => isPublishedCheat(command) && command.arguments.length > 0)!;
     expect(command).toBeDefined();
-    const container = document.createElement("div");
-    container.innerHTML = renderToStaticMarkup(await pageTree({ lang, tab: "all", q: command.command }));
-    const card = container.querySelector(`[id="cheat-${command.command}"]`)!;
-    expect(card).not.toBeNull();
-    expect(card.textContent).toContain(command.summary);
-    for (const argument of command.arguments) expect(card.textContent).toContain(argument.description);
+    // The synced dictionaries are complete, so simulate a newly synced command without translations.
+    const keys = [`command.${command.command}.summary`, ...command.arguments.map(argument => `command.${command.command}.argument.${argument.name}`)];
+    const dictionaries = [english, chinese] as Record<string, unknown>[];
+    const saved = dictionaries.map(dictionary => ({ ...dictionary }));
+    try {
+        for (const dictionary of dictionaries) for (const key of keys) delete dictionary[key];
+        const container = document.createElement("div");
+        container.innerHTML = renderToStaticMarkup(await pageTree({ lang, tab: "all", q: command.command }));
+        const card = container.querySelector(`[id="cheat-${command.command}"]`)!;
+        expect(card).not.toBeNull();
+        expect(card.textContent).toContain(command.summary);
+        for (const argument of command.arguments) expect(card.textContent).toContain(argument.description);
+    } finally {
+        dictionaries.forEach((dictionary, index) => Object.assign(dictionary, saved[index]));
+    }
 });
 
-it("keeps all legacy Chinese aliases as content and metadata overrides while Chinese is globally disabled", async () => {
-    expect(localeDefinitions["zh-CN"].enabled).toBe(false);
+it("resolves every Chinese share-link alias to the Chinese content and metadata", async () => {
     for (const lang of ["zh", "zh-CN", "zh_hans", "zh-hans-cn", "cn"]) {
         const binding = await getCheatsLocalization(lang);
         expect(binding.locale).toBe("zh-CN");
@@ -123,7 +126,7 @@ it("keeps all legacy Chinese aliases as content and metadata overrides while Chi
 });
 
 it("ignores the retired cheats cookie, disabled/invalid global choices, and invalid overrides", async () => {
-    for (const cookie of [undefined, "invalid", "zh-CN", "en"]) {
+    for (const cookie of [undefined, "invalid", "ru", "en"]) {
         request.cookie = cookie;
         for (const lang of [undefined, "invalid", "ru"]) {
             expect((await getCheatsLocalization(lang)).locale).toBe("en");
@@ -148,8 +151,6 @@ it("uses activated dictionaries for cookie and explicit links with no page-code 
     const metadata = await generateMetadata({ searchParams: Promise.resolve({ lang: "ru" }) });
     expect(metadata.openGraph).toMatchObject({ locale: "ru_RU", title: "Команды" });
     expect(metadata.alternates?.languages).toMatchObject({ en: "/cheats?lang=en", "zh-CN": "/cheats?lang=zh-CN", ru: "/cheats?lang=ru" });
-    localeDefinitions["zh-CN"] = { ...initialZh, enabled: true, dictionaries: { cheats: async () => ({ default: { ...chinese, "ui.title": "Activated Chinese" } }) } };
-    expect((await getCheatsLocalization("cn")).translator.t("ui.title")).toBe("Activated Chinese");
 });
 
 /** Copied English command/search links must override the recipient's non-English cookie. */
@@ -228,7 +229,7 @@ it("preserves English search compatibility, translated argument search, and immu
     const container = document.createElement("div");
     const root = createRoot(container);
     try {
-        for (const q of ["exact hero display name", "包含多个词的值需加双引号"]) {
+        for (const q of ["Hero name or id", "英雄名称或 ID；含空格的名称请加引号"]) {
             window.history.replaceState(null, "", `/cheats?lang=zh-CN&tab=all&q=${encodeURIComponent(q)}`);
             const tree = await pageTree({ lang: "zh-CN", tab: "all", q });
             await act(async () => root.render(<div key={q}>{tree}</div>));

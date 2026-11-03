@@ -6,8 +6,7 @@ import { featuredCommandNames } from "./featured";
 import { parseCheatsLocale } from "./locale";
 import { locales } from "../lib/localization/types";
 import en from "../lib/localization/dictionaries/en/cheats.json";
-import zh from "./locales/zh-CN.json";
-import chineseSource from "./locales/zh-CN.commands.json";
+import zh from "../lib/localization/dictionaries/zh-CN/cheats.json";
 import { assertDictionaryParity } from "../lib/localization/integrity";
 import { createTranslator } from "../lib/localization/translator";
 import { buildCheatsPath, parseCheatsQuery } from "./query";
@@ -43,7 +42,7 @@ test("keeps bare cheats navigation and retains every explicit share locale", () 
 
 /** Existing dictionary entries win; newly synced catalog entries keep their English fallback. */
 test("preserves command names, translated prose, and missing-translation catalog fallbacks", () => {
-    assertDictionaryParity(en, zh, "legacy.zh-CN.cheats");
+    assertDictionaryParity(en, zh, "zh-CN.cheats");
     for (const { name } of commandsData.categories) {
         const key = `category.${name.toLowerCase().replaceAll(" ", "_")}`;
         assert.equal(translateCheat(english.t, key, name), name);
@@ -55,9 +54,6 @@ test("preserves command names, translated prose, and missing-translation catalog
         assert.equal(Object.hasOwn(zh, `${key}.name`), false);
         assert.equal(translateCheat(english.t, `${key}.summary`, command.summary),
             (en as Record<string, unknown>)[`${key}.summary`] ?? command.summary);
-        const original = chineseSource[command.command as keyof typeof chineseSource];
-        assert.ok(original.summary.trim());
-        assert.deepEqual(Object.keys(original.arguments).sort(), command.arguments.map(argument => argument.name).sort());
         assert.equal(translateCheat(chinese.t, `${key}.summary`, command.summary),
             (zh as Record<string, unknown>)[`${key}.summary`] ?? command.summary);
         for (const argument of command.arguments) {
@@ -71,7 +67,7 @@ test("preserves command names, translated prose, and missing-translation catalog
             }
         }
     }
-    assert.equal(Object.keys(en).filter((key) => key.endsWith(".summary")).length, 400);
+    assert.equal(Object.keys(en).filter((key) => key.endsWith(".summary")).length, commandsData.count);
 });
 
 test("does not catalog debug-only commands", () => {
@@ -87,9 +83,9 @@ test("keeps featured commands publishable", () => {
 });
 
 test("catalog preserves the current producer metadata, usage and argument coverage", () => {
-    assert.equal(commandsData.source.commit, "2ac901f91e8a852cbe59357333a3e6a2def78c39");
+    assert.equal(commandsData.source.commit, "c8233b09b18550561338b44d12b761d96af2d81c");
     assert.equal(commandsData.count, commands.length);
-    assert.equal(commandsData.count, 414);
+    assert.equal(commandsData.count, 426);
     assert.equal(new Set(commands.map(c => c.command)).size, commandsData.count);
     assert.equal(commandsData.categories.reduce((sum, c) => sum + c.count, 0), commandsData.count);
     for (const command of commands) {
@@ -107,7 +103,7 @@ test("catalog preserves the current producer metadata, usage and argument covera
     assert.equal(chinese.t(`command.${heroId.command}.argument.heroName`), "要查找的英雄的完整显示名称。包含多个词的值需加双引号。");
     const gold = commands.find(c => c.command === "coop.debug.hero.set_gold")!;
     assert.equal(gold.side, "server");
-    assert.equal(gold.summary, "Sets gold for every hero with an exact display name on the server.");
+    assert.equal(gold.summary, "Sets gold for a hero by display name or registered id on the server.");
     assert.equal(commands.find(c => c.command === "coop.debug.hero.list")!.side, "either");
     assert.equal(commands.find(c => c.command === "coop.delete_player")!.side, "client");
     assert.equal(english.t("ui.sideEither"), "Both");
