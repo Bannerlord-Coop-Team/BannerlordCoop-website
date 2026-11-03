@@ -1,5 +1,6 @@
 import { MAXIMUM_CONSOLE_RESPONSE_BYTES, parseConsoleSubmission, parseConsoleReference, parseConsoleReceipt, parseConsoleResult, parseConsoleAcknowledgement, type ConsoleSubmission, type ConsoleReference } from "./server-console-contract.ts";
 import { parseReleaseMutation, parseReleaseStatus, type ReleaseMutation } from "./server-release-contract.ts";
+import { parseBuildChangeResult, parseBuildMutation, parseBuildOptions, parseBuildStatus, type BuildMutation } from "./server-build-contract.ts";
 import { parseOwnerSettingsMutation, parseOwnerSettingsResult, type OwnerSettingsMutation } from "./server-settings-contract.ts";
 import { serverLogDownloadHeaders } from "./server-log-contract.ts";
 import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseOwnerFileMutation, parseOwnerFileStatus, parseOwnerFileResult, parseOwnerFileDownload, requireUuid, type OwnerFileMutation } from "./server-file-contract.ts";
@@ -51,6 +52,8 @@ type UpstreamRequest =
     | { operation: "console-command-result" | "acknowledge-console-command"; input: ConsoleReference }
     | { operation: "set-release-channel"; input: Omit<ReleaseMutation, "action"> }
     | { operation: "server-update-status"; input: { serverId: string } }
+    | { operation: "server-build-options" | "server-build-status"; input: { serverId: string } }
+    | { operation: "set-server-build"; input: Omit<BuildMutation, "action"> }
     | { operation: "server-files" | "my-server-latest-log"; input: { serverId: string } }
     | { operation: "file-transfer-status" | "download-save-export"; input: { serverId: string; transferRequestId: string } }
     | { operation: "file-transfer"; input: OwnerFileMutation }
@@ -172,7 +175,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                     ? await operationRequest(request)
                     : (() => { throw new MethodNotAllowedError(); })();
             // Durable mutations must retain the caller's UUID for exactly-once handling.
-            if (upstreamRequest.operation === "delete-server" || upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "set-server-manager" || upstreamRequest.operation === "update-server" || upstreamRequest.operation === "restore-save-generation" || upstreamRequest.operation === "select-save" || upstreamRequest.operation === "reset-campaign" || upstreamRequest.operation === "dismiss-server-notice") {
+            if (upstreamRequest.operation === "delete-server" || upstreamRequest.operation === "save-server-settings" || upstreamRequest.operation === "set-release-channel" || upstreamRequest.operation === "console-command" || upstreamRequest.operation === "file-transfer" || upstreamRequest.operation === "save-configuration-file" || upstreamRequest.operation === "create-server" || upstreamRequest.operation === "request-region" || upstreamRequest.operation === "set-server-visibility" || upstreamRequest.operation === "set-server-manager" || upstreamRequest.operation === "update-server" || upstreamRequest.operation === "set-server-build" || upstreamRequest.operation === "restore-save-generation" || upstreamRequest.operation === "select-save" || upstreamRequest.operation === "reset-campaign" || upstreamRequest.operation === "dismiss-server-notice") {
                 if (!REQUEST_ID.test(request.headers.get("x-request-id") ?? "")) {
                     throw new Error("A mutation request ID is required");
                 }
@@ -285,6 +288,9 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 if (upstreamRequest.operation === "delete-server") parseServerDeletionResult(envelope.result);
                 if (upstreamRequest.operation === "set-password" && (!isRecord(envelope.result) || !hasExactKeys(envelope.result, ["changed", "restartQueued"]) || envelope.result.changed !== true || typeof envelope.result.restartQueued !== "boolean")) throw new Error("Invalid password response");
                 if (upstreamRequest.operation === "server-update-status") parseReleaseStatus(envelope.result, upstreamRequest.input.serverId);
+                if (upstreamRequest.operation === "server-build-options") parseBuildOptions(envelope.result, upstreamRequest.input.serverId);
+                if (upstreamRequest.operation === "server-build-status") parseBuildStatus(envelope.result, upstreamRequest.input.serverId);
+                if (upstreamRequest.operation === "set-server-build") parseBuildChangeResult(envelope.result);
                 if (upstreamRequest.operation === "delete-save-status") parseSaveDeletionStatus(envelope.result, upstreamRequest.input.serverId, upstreamRequest.input.jobId);
                 if (upstreamRequest.operation === "server-deletion-status") parseServerDeletionStatus(envelope.result, upstreamRequest.input.serverId);
                 if (upstreamRequest.operation === "save-server-settings") parseOwnerSettingsResult(envelope.result, upstreamRequest.input.serverId);
@@ -423,6 +429,11 @@ function listRequest(request: Request): UpstreamRequest {
         return { operation: "server-update-status", input: { serverId: readServerId(url) } };
     }
 
+    if (resource === "build-options" || resource === "build-status") {
+        assertQueryParameters(url, ["resource", "serverId"]);
+        return { operation: resource === "build-options" ? "server-build-options" : "server-build-status", input: { serverId: readServerId(url) } };
+    }
+
     if (resource === "delete-save-status") {
         assertQueryParameters(url, ["resource", "serverId", "jobId"]);
         const jobId = url.searchParams.get("jobId");
@@ -487,6 +498,10 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
     if (value.action === "set-release-channel") {
         const parsed = parseReleaseMutation(value);
         return { operation: "set-release-channel", input: { serverId: parsed.serverId, releaseChannel: parsed.releaseChannel, expectedUpdatedAt: parsed.expectedUpdatedAt } };
+    }
+    if (value.action === "set-server-build") {
+        const parsed = parseBuildMutation(value);
+        return { operation: "set-server-build", input: { serverId: parsed.serverId, buildId: parsed.buildId, expectedUpdatedAt: parsed.expectedUpdatedAt, acknowledgeSaveRisk: parsed.acknowledgeSaveRisk } };
     }
     if (value.action === "set-server-visibility") {
         const parsed = parseVisibilityMutation(value);

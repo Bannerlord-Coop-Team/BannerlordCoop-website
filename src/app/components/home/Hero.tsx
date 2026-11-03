@@ -36,7 +36,7 @@ export async function Hero() {
 
                         <h1
                             id="hero-heading"
-                            className="mt-5 font-display text-4xl font-semibold leading-[0.8] tracking-tight text-foreground min-[380px]:text-5xl sm:mt-6 sm:text-6xl md:text-7xl lg:text-6xl xl:text-7xl"
+                            className="mt-5 font-display text-4xl font-semibold leading-[0.8] tracking-tight cjk:leading-[1.15] text-foreground min-[380px]:text-5xl sm:mt-6 sm:text-6xl md:text-7xl lg:text-6xl xl:text-7xl"
                         >
                             {t("hero.heading").split("\n").map((line, index, lines) => (
                                 <span key={index} className={index === lines.length - 1 ? "block text-crimson" : "block"}>{line}</span>

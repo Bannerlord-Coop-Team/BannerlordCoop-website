@@ -5,6 +5,8 @@ import type { ReleaseBuild } from "./types";
 import {
     adminActionOptionValue,
     applyControlPlaneOperationDefaults,
+    clientVersionLabel,
+    publicVersionLabel,
     createServerProviderOptions,
     createServerRegionOptions,
     fieldRequirementLabel,
@@ -293,6 +295,12 @@ test("nightly names use the client version label with one v prefix", () => {
     assert.equal(releaseVersion(build("historical-nightly", "validated", "a".repeat(40))), "historical-nightly");
 });
 
+test("client versions display with exactly one leading v", () => {
+    assert.equal(clientVersionLabel("0.1.6"), "v0.1.6");
+    assert.equal(clientVersionLabel("v0.1.6"), "v0.1.6");
+    assert.equal(clientVersionLabel("V0.1.6"), "v0.1.6");
+});
+
 test("overview statistic cards fill the final row evenly", () => {
     assert.equal(overviewStatRowClass(1), "grid-cols-1");
     assert.match(overviewStatRowClass(2), /sm:grid-cols-2/u);
@@ -406,4 +414,10 @@ test("release selectors load the same full catalog as the Releases view", async 
     assert.match(operations, /operation: "overview", input: \{ operations: true \}/u);
     assert.match(operations, /loadReleaseCatalog\(token, signal, identity\)/u);
     assert.match(operations, /stableBuilds: releases.stable, nightlyBuilds: releases.nightly/u);
+});
+
+test("shows a public version without the registry's leading v", () => {
+    assert.equal(publicVersionLabel("v0.1.6"), "0.1.6");
+    assert.equal(publicVersionLabel("V0.1.6"), "0.1.6");
+    assert.equal(publicVersionLabel("0.1.6"), "0.1.6");
 });

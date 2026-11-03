@@ -7,6 +7,9 @@ import {
     getMyServerSaveDeletionStatus,
     dismissServerNotice,
     getMyServerBackupStatus,
+    getMyServerBuildOptions,
+    getMyServerBuildStatus,
+    requestMyServerBuildChange,
     getMyServerDeletionStatus,
     getMyServerSaveGenerations,
     listAllMyServerBackups,
@@ -628,6 +631,47 @@ test("owner updates cross the Edge boundary as one stale-safe durable request", 
             operation: "update-server",
             input: { serverId: FIRST_SERVER.serverId, expectedUpdatedAt: "2026-09-20T12:00:00.000Z" },
         });
+    } finally { restoreEnvironment(); }
+});
+
+test("version selection reads and choices cross the Edge boundary through the closed contract", async () => {
+    configureEnvironment();
+    const requests: Request[] = [];
+    const jobId = "55555555-5555-4555-8555-555555555555";
+    const options = { serverId: FIRST_SERVER.serverId, updatedAt: "2026-10-30T12:00:00.000Z", releaseChannel: "stable", selectable: true, unavailableReason: null,
+        installedVersion: "0.1.10", pinnedVersion: null, latestVersion: "0.1.10", options: [{ buildId: "0.1.9", version: "0.1.9", isLatest: false, isInstalled: false,
+            isPinned: false, direction: "older", saveCompatibility: "unverified", requiresSaveAcknowledgement: true }] };
+    let result: unknown = options;
+    const handler = createMyServersHandler({
+        allowedOrigins: ["https://bannerlordcoop.com"],
+        controlPlaneUrl: "https://control-plane.example.test",
+        waitUntil: () => {},
+        fetchImplementation: async (input, init) => {
+            requests.push(new Request(input, init));
+            return Response.json({ version: 1, requestId: requests.at(-1)?.headers.get("x-request-id"), ok: true, result });
+        },
+    });
+    globalThis.fetch = async (input, init) => handler(new Request(input, init));
+    try {
+        assert.deepEqual(await getMyServerBuildOptions(TOKEN, FIRST_SERVER.serverId), options);
+        assert.deepEqual(await requests[0]?.json(), { version: 1, requestId: requests[0]?.headers.get("x-request-id"), operation: "server-build-options", input: { serverId: FIRST_SERVER.serverId } });
+        result = { serverId: FIRST_SERVER.serverId, job: null };
+        assert.deepEqual(await getMyServerBuildStatus(TOKEN, FIRST_SERVER.serverId), { serverId: FIRST_SERVER.serverId, job: null });
+        result = { outcome: "enqueued", jobId, action: "update" };
+        const change = { action: "set-server-build" as const, serverId: FIRST_SERVER.serverId, buildId: "0.1.9", expectedUpdatedAt: "2026-10-30T12:00:00.000Z", acknowledgeSaveRisk: true };
+        assert.deepEqual(await requestMyServerBuildChange(TOKEN, change, "11111111-1111-4111-8111-111111111111"), { outcome: "enqueued", jobId, action: "update" });
+        assert.deepEqual(await requests[2]?.json(), { version: 1, requestId: "11111111-1111-4111-8111-111111111111", operation: "set-server-build",
+            input: { serverId: FIRST_SERVER.serverId, buildId: "0.1.9", expectedUpdatedAt: "2026-10-30T12:00:00.000Z", acknowledgeSaveRisk: true } });
+        result = { outcome: "unpinned", jobId: null, action: "update" };
+        assert.equal((await requestMyServerBuildChange(TOKEN, { ...change, buildId: null }, "11111111-1111-4111-8111-111111111111")).jobId, null);
+        // A malformed request never leaves the website, and a malformed answer is not accepted.
+        const sent = requests.length;
+        await assert.rejects(requestMyServerBuildChange(TOKEN, { ...change, buildId: "latest" }, "11111111-1111-4111-8111-111111111111"));
+        await assert.rejects(requestMyServerBuildChange(TOKEN, change, "not-a-uuid"), MyServersApiError);
+        await assert.rejects(getMyServerBuildOptions(TOKEN, "not-a-server"), MyServersApiError);
+        assert.equal(requests.length, sent);
+        result = { outcome: "pinned", jobId, action: "update" };
+        await assert.rejects(requestMyServerBuildChange(TOKEN, change, "11111111-1111-4111-8111-111111111111"));
     } finally { restoreEnvironment(); }
 });
 

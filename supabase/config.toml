@@ -57,3 +57,7 @@ verify_jwt = false
 # Hourly pg_cron owner removal warning; authenticates with the Patreon scheduler secret.
 [functions.subscription-grace-alert]
 verify_jwt = false
+
+# Called anonymously by the mod; abuse is limited by the network-id blacklist and upload size caps.
+[functions.create-github-issue-bug-report]
+verify_jwt = false

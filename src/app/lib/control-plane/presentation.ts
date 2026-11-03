@@ -23,9 +23,19 @@ export function installableBuilds(builds: readonly ReleaseBuild[]) {
 /** Displays nightly client versions while preserving registry and historical fallbacks. */
 export function releaseVersion(build: ReleaseBuild) {
     if (build.channel === "nightly" && build.requiredClientModVersion) {
-        return `v${build.requiredClientModVersion.replace(/^v/, "")}`;
+        return clientVersionLabel(build.requiredClientModVersion);
     }
     return build.registryMetadata?.versionTag ?? build.version;
+}
+
+/** Displays a client mod version with exactly one leading "v", whether or not the source included one. */
+export function clientVersionLabel(version: string) {
+    return `v${version.replace(/^v/i, "")}`;
+}
+
+/** Displays a public version as customers know it, "0.1.6", whether or not the source carried the registry's "v". */
+export function publicVersionLabel(version: string) {
+    return version.replace(/^v/i, "");
 }
 
 /** Displays channel names without changing their transport values. */
