@@ -270,7 +270,7 @@ test("leaves unknown, malformed, or mid-line control records as ordinary stdout"
     ]) assert.equal(parseConsoleControlLine(line), null, line);
 });
 
-test("backs off reconnects and then stops retrying automatically", () => {
+test("caps the initial reconnect backoff before steady retries", () => {
     assert.deepEqual(CONSOLE_RECONNECT_DELAYS.map((_, attempt) => consoleReconnectDelay(attempt)), [2_000, 5_000, 10_000, 30_000, 60_000]);
     assert.equal(consoleReconnectDelay(CONSOLE_RECONNECT_DELAYS.length), null);
 });

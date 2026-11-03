@@ -178,10 +178,14 @@ it("waits for the tab to be shown again before renewing an expired session", asy
     expect(output()).toContain("Reconnecting to live output");
 });
 
-it("retries failures with a capped backoff, then offers Reconnect", async () => {
+it("recovers after an outage longer than the initial backoff without refreshing", async () => {
     vi.useFakeTimers();
-    fetchMock.mockImplementation(async () => new Response(null, { status: 503 }));
+    const first = liveStream();
+    const recovered = liveStream();
+    fetchMock.mockResolvedValueOnce(first.response).mockImplementation(async () => new Response(null, { status: 503 }));
     await renderConsole();
+    await first.send("Before the interruption");
+    await first.end("ended");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(output()).toContain("Reconnecting to live output");
     for (const [index, delay] of [2_000, 5_000, 10_000, 30_000, 60_000].entries()) {
@@ -190,13 +194,45 @@ it("retries failures with a capped backoff, then offers Reconnect", async () => 
         await advance(1);
         expect(fetchMock).toHaveBeenCalledTimes(index + 2);
     }
-    expect(output()).toContain("Live output isn’t available right now.");
-    expect(output()).not.toContain("Reload");
-    await advance(30 * 60_000);
-    expect(fetchMock).toHaveBeenCalledTimes(6);
-    await act(async () => button("Reconnect")!.click());
-    expect(fetchMock).toHaveBeenCalledTimes(7);
     expect(output()).toContain("Reconnecting to live output");
+    expect(output()).toContain("Before the interruption");
+    await advance(59_999);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    fetchMock.mockResolvedValueOnce(recovered.response);
+    await advance(1);
+    expect(fetchMock).toHaveBeenCalledTimes(7);
+    await recovered.send("After the interruption");
+    expect(output()).toBe("Before the interruption\nAfter the interruption\n");
+});
+
+it("pauses failed reconnects after half an hour without activity and resumes on activity", async () => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementation(async () => new Response(null, { status: 503 }));
+    await renderConsole();
+    await advance(31 * 60_000);
+    expect(output()).toContain("Live output paused while this page was idle.");
+    const attempts = fetchMock.mock.calls.length;
+    await advance(30 * 60_000);
+    expect(fetchMock).toHaveBeenCalledTimes(attempts);
+    await act(async () => window.dispatchEvent(new Event("pointerdown")));
+    expect(fetchMock).toHaveBeenCalledTimes(attempts + 1);
+    expect(output()).toContain("Reconnecting to live output");
+});
+
+it("keeps slow recovery suspended in a hidden tab and cancels it on unmount", async () => {
+    vi.useFakeTimers();
+    fetchMock.mockImplementation(async () => new Response(null, { status: 503 }));
+    await renderConsole();
+    await advance(107_000);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    await setVisibility("hidden");
+    await advance(60_000);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
+    await setVisibility("visible");
+    expect(fetchMock).toHaveBeenCalledTimes(7);
+    await act(async () => root.render(null));
+    await advance(60_000);
+    expect(fetchMock).toHaveBeenCalledTimes(7);
 });
 
 it("retries hidden-tab failures only after the tab is shown", async () => {

@@ -1,0 +1,34 @@
+name: Verify console recovery
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/app/components/servers/ManagedServerConsole*'
+      - 'src/app/lib/console/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vitest.config.ts'
+      - 'tsconfig.json'
+      - '.github/workflows/verify-console.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Linux console verification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx next typegen
+      - run: npx tsc --noEmit
+      - run: npx eslint src/app/components/servers/ManagedServerConsole.tsx src/app/components/servers/ManagedServerConsole.component.test.tsx
+      - run: npx tsx --test src/app/components/servers/ManagedServerConsole.test.ts
+      - run: npm run test:components -- src/app/components/servers/ManagedServerConsole.component.test.tsx

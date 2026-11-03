@@ -13,12 +13,13 @@ const MAXIMUM_LINES = 2_000;
 // A full 8 KiB console line can roughly double when the control plane JSON-escapes it into an event.
 const MAXIMUM_SSE_FRAME_BYTES = 64 * 1_024;
 const MAXIMUM_STATE_DETAIL_CHARACTERS = 500;
-/** Waits between failed reconnects; once these run out the console offers a manual Reconnect. */
+/** Initial reconnect waits; longer interruptions keep the final one-minute interval. */
 export const CONSOLE_RECONNECT_DELAYS = [2_000, 5_000, 10_000, 30_000, 60_000] as const;
 /** A stream open this long counts as healthy, so its end starts a fresh backoff. */
 const STABLE_CONNECTION_MILLISECONDS = 60_000;
 /** Five-minute sessions renew automatically for about half an hour without page activity, then pause. */
 export const MAXIMUM_IDLE_CONSOLE_RENEWALS = 6;
+const MAXIMUM_IDLE_RECONNECT_MILLISECONDS = MAXIMUM_IDLE_CONSOLE_RENEWALS * 5 * 60_000;
 /** Logging the container host writes before the game's own output, such as podman cgroup warnings. */
 const HOST_LOG_LINE = /^time="[^"]*" level=(?:debug|info|warning|warn) msg="/u;
 const GAME_PHASES = new Set<ManagedGamePhase>(["boot", "loading", "serving", "stopping", "fatal"]);
@@ -113,7 +114,7 @@ export function isScrolledToBottom(scrollTop: number, scrollHeight: number, clie
     return scrollHeight - scrollTop - clientHeight <= tolerance;
 }
 
-/** Returns the wait before the next reconnect attempt, or null once automatic attempts are used up. */
+/** Returns the initial backoff wait, or null once the steady retry interval applies. */
 export function consoleReconnectDelay(failedAttempts: number): number | null {
     return CONSOLE_RECONNECT_DELAYS[failedAttempts] ?? null;
 }
@@ -189,6 +190,7 @@ function useConsoleStream(serverId: string, run: ConsoleRun, outputChannel?: Com
         let waitingForVisibility = false;
         let idleRenewals = 0;
         let idle = false;
+        let lastActiveAt = Date.now();
 
         // Opens a fresh stream; streams carry only new output, so reconnects append to what is shown.
         async function connect(mode: "initial" | "retry" | "renew") {
@@ -287,14 +289,15 @@ function useConsoleStream(serverId: string, run: ConsoleRun, outputChannel?: Com
             void connect(mode);
         }
 
-        // Retries after a bounded delay, then stops and offers a manual Reconnect.
+        // Keep recovering through longer restarts without polling an unattended page indefinitely.
         function scheduleRetry() {
-            const delay = consoleReconnectDelay(failures);
-            if (delay === null) {
-                setState("unavailable");
+            if (Date.now() - lastActiveAt >= MAXIMUM_IDLE_RECONNECT_MILLISECONDS) {
+                idle = true;
+                setState("idle");
                 signals?.publish({ type: "unavailable", serverId });
                 return;
             }
+            const delay = consoleReconnectDelay(failures) ?? 60_000;
             failures += 1;
             setState("reconnecting");
             timer = setTimeout(() => reconnectWhenVisible("retry"), delay);
@@ -302,19 +305,25 @@ function useConsoleStream(serverId: string, run: ConsoleRun, outputChannel?: Com
 
         // Resumes a reconnect that was deferred while the tab was hidden.
         function resumeWhenVisible() {
-            if (document.visibilityState === "visible" && waitingForVisibility) void connect("retry");
+            if (document.visibilityState === "visible" && waitingForVisibility) {
+                lastActiveAt = Date.now();
+                void connect("retry");
+            }
         }
 
         // Owner activity restarts the idle allowance and resumes a stream paused for inactivity.
         function markActive() {
+            lastActiveAt = Date.now();
             idleRenewals = 0;
             if (!idle) return;
             idle = false;
+            failures = 0;
             if (runRef.current !== "inactive") void connect("retry");
         }
 
         handleRef.current = {
             reconnect() {
+                lastActiveAt = Date.now();
                 failures = 0;
                 idleRenewals = 0;
                 idle = false;
