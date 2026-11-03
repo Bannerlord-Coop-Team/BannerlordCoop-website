@@ -4,6 +4,7 @@ import { createMyServersHandler } from "../../../../supabase/functions/_shared/m
 import { connectionAddress } from "./connection-address";
 import {
     deleteMyServerSave,
+    cancelMyServerStart,
     getMyServerSaveDeletionStatus,
     dismissServerNotice,
     getMyServerBackupStatus,
@@ -826,6 +827,37 @@ test("restores an earlier autosave across the Edge as one durable, request-scope
             { ...input, expectedUpdatedAt: "2026-10-16T11:58:00.000+02:00" }]) {
             await assert.rejects(requestMyServerBackupOperation(TOKEN, invalid as typeof input, requestId), { code: "invalid_request" });
         }
+        assert.equal(requests.length, sent);
+    } finally { restoreEnvironment(); }
+});
+
+test("cancels the exact Start through Edge and rejects malformed or mismatched acknowledgements", async () => {
+    configureEnvironment();
+    const requestId = "11111111-1111-4111-8111-111111111111";
+    const input = { serverId: FIRST_SERVER.serverId, jobId: "66666666-6666-4666-8666-666666666666", expectedUpdatedAt: FIRST_SERVER.updatedAt };
+    let result: unknown = { serverId: input.serverId, jobId: input.jobId, state: "cancelled" };
+    const requests: Request[] = [];
+    const handler = createMyServersHandler({ allowedOrigins: ["https://bannerlordcoop.com"],
+        controlPlaneUrl: "https://control-plane.example.test", waitUntil: () => {},
+        fetchImplementation: async (url, init) => {
+            requests.push(new Request(url, init));
+            return Response.json({ version: 1, requestId, ok: true, result });
+        } });
+    globalThis.fetch = async (url, init) => handler(new Request(url, init));
+    try {
+        assert.deepEqual(await cancelMyServerStart(TOKEN, input, requestId), result);
+        assert.deepEqual(await requests[0]!.json(), { version: 1, requestId, operation: "cancel-server-start", input });
+        for (const malformed of [{ serverId: input.serverId, jobId: requestId, state: "cancelled" },
+            { serverId: input.serverId, jobId: input.jobId, state: "running" },
+            { serverId: input.serverId, jobId: input.jobId, state: "cancelled", privatePath: "hidden" }]) {
+            result = malformed;
+            await assert.rejects(cancelMyServerStart(TOKEN, input, requestId), { code: "invalid_response" });
+        }
+        const sent = requests.length;
+        for (const invalid of [{ ...input, jobId: "bad" }, { ...input, expectedUpdatedAt: "yesterday" }, { ...input, roleIds: ["admin"] }]) {
+            await assert.rejects(cancelMyServerStart(TOKEN, invalid as typeof input, requestId), { code: "invalid_request" });
+        }
+        await assert.rejects(cancelMyServerStart(TOKEN, input, "bad"), { code: "invalid_request" });
         assert.equal(requests.length, sent);
     } finally { restoreEnvironment(); }
 });

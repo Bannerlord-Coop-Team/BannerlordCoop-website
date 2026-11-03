@@ -1,4 +1,13 @@
 {
+  "controls.cancelStart": "Отменить запуск",
+  "controls.cancellingStart": "Отмена запуска…",
+  "controls.startCancellationUnconfirmed": "Не удалось подтвердить отмену. Возможно, запуск уже начался; обновляем сведения о ходе выполнения.",
+  "controls.startWaiting.scheduled": "Запуск запланирован на более позднее время.",
+  "controls.startWaiting.server-recovery": "Сервер ожидает безопасного разрешения предыдущей операции.",
+  "controls.startWaiting.host-maintenance": "Сервер ожидает завершения обслуживания хостинга.",
+  "controls.startWaiting.capacity": "Запуск ожидает свободных вычислительных ресурсов.",
+  "controls.startWaiting.host-busy": "Запуск ожидает завершения другой операции на этом хосте.",
+  "controls.startWaiting.worker": "Запуск поставлен в очередь и ожидает обработки.",
   "action.serverUpdating": "Ваш сервер обновляется. Повторите попытку через минуту.",
   "mods.error.uploadStatusUnavailable": "Не удалось подтвердить установку {id}, так как работа сервера приостановлена. После восстановления доступа обновите список модов, чтобы проверить результат.",
   "action.refusal.serverSuspended": "Работа этого сервера приостановлена. Запрос отклонён, изменения не внесены.",

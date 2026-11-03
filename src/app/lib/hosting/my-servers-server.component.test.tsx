@@ -299,15 +299,46 @@ it.each(["server-summary", "server-start-status"])("falls back only after an old
     const inputs: unknown[] = [];
     vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => {
         const request = input(init); inputs.push(request.input);
-        if (inputs.length === 1) return Response.json({ version: 1, requestId: request.requestId, ok: false,
+        if ("includeRuntimeInsight" in request.input) return Response.json({ version: 1, requestId: request.requestId, ok: false,
             error: { code: "invalid_request", message: "Invalid request", retryable: false } }, { status: 400 });
         expect(request.input).not.toHaveProperty("includeRuntimeInsight");
         return accepted(request, operation === "server-summary" ? summary : startStatus);
     });
     if (operation === "server-summary") expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual(summary);
     else expect(await getMyServerStartStatus(TOKEN, server.serverId, startJobId)).toEqual(startStatus);
-    expect(inputs).toHaveLength(2);
+    expect(inputs).toHaveLength(operation === "server-summary" ? 2 : 3);
     expect(inputs[0]).toHaveProperty("includeRuntimeInsight", true);
+});
+
+it("keeps runtime insight when only queue details are unsupported", async () => {
+    const inputs: unknown[] = [];
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const request = input(init); inputs.push(request.input);
+        if ("includeQueueDetails" in request.input) return Response.json({ version: 1, requestId: request.requestId, ok: false,
+            error: { code: "invalid_request", message: "Invalid request", retryable: false } }, { status: 400 });
+        expect(request.input).toHaveProperty("includeRuntimeInsight", true);
+        return accepted(request, { serverId: server.serverId, ...failedStartInsight });
+    });
+    expect(await getMyServerStartStatus(TOKEN, server.serverId, startJobId)).toEqual({ serverId: server.serverId, ...failedStartInsight });
+    expect(inputs).toHaveLength(2);
+});
+
+const queuedStart = { serverId: server.serverId, ...failedStartInsight, state: "queued", phase: "queued", attemptCount: 0,
+    progress: "Waiting to begin. Attempt 0 of 5.", failureCode: null, recommendedAction: null, stoppedRetrying: false };
+it("accepts only closed queue details and never falls back on malformed admission data", async () => {
+    const queue = { waitingReason: "capacity", canCancel: true, updatedAt: server.updatedAt };
+    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...queuedStart, queue }));
+    vi.stubGlobal("fetch", fetch);
+    expect(await getMyServerStartStatus(TOKEN, server.serverId, startJobId)).toMatchObject({ queue });
+    for (const invalid of [{ ...queue, otherTenant: "private" }, { ...queue, waitingReason: "raw-diagnostics" },
+        { ...queue, updatedAt: "yesterday" }, { ...queue, canCancel: "true" }]) {
+        fetch.mockClear().mockImplementation(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...queuedStart, queue: invalid }));
+        await expect(getMyServerStartStatus(TOKEN, server.serverId, startJobId)).rejects.toMatchObject({ code: "invalid_response" });
+        expect(fetch).toHaveBeenCalledOnce();
+    }
+    fetch.mockImplementation(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...queuedStart,
+        state: "running", phase: "preparing", attemptCount: 1, queue: { ...queue, waitingReason: null } }));
+    await expect(getMyServerStartStatus(TOKEN, server.serverId, startJobId)).rejects.toMatchObject({ code: "invalid_response" });
 });
 
 it.each([{ ...runtimeInsight, allowedActions: ["start", "stop"] }, { ...runtimeInsight, privatePath: "extra" },

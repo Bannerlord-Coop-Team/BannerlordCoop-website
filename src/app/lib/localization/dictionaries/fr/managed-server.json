@@ -1,4 +1,13 @@
 {
+  "controls.cancelStart": "Annuler le démarrage",
+  "controls.cancellingStart": "Annulation du démarrage…",
+  "controls.startCancellationUnconfirmed": "L’annulation n’a pas pu être confirmée. Le démarrage a peut-être déjà commencé ; actualisation de sa progression.",
+  "controls.startWaiting.scheduled": "Le démarrage est prévu pour plus tard.",
+  "controls.startWaiting.server-recovery": "Votre serveur attend la résolution sûre d’une opération précédente.",
+  "controls.startWaiting.host-maintenance": "Votre serveur attend la fin de la maintenance de l’hébergement.",
+  "controls.startWaiting.capacity": "Le démarrage attend une capacité de traitement disponible.",
+  "controls.startWaiting.host-busy": "Le démarrage attend la fin d’une autre opération sur cet hôte.",
+  "controls.startWaiting.worker": "Le démarrage est en file d’attente, en attente de traitement.",
   "action.serverUpdating": "Votre serveur est en cours de mise à jour. Réessayez dans une minute.",
   "mods.error.uploadStatusUnavailable": "L’installation de {id} n’a pas pu être confirmée car le serveur est suspendu. Actualisez la liste des mods une fois l’accès rétabli pour vérifier le résultat.",
   "action.refusal.serverSuspended": "Ce serveur est suspendu. La demande a été refusée et aucune modification n’a été effectuée.",

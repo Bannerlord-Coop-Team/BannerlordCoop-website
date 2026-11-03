@@ -1,6 +1,7 @@
 import { parseReleaseMutation, parseReleaseStatus, type ReleaseMutation } from "../../../../supabase/functions/_shared/server-release-contract";
 import { parseBuildChangeResult, parseBuildMutation, parseBuildOptions, parseBuildStatus, type BuildChangeResult, type BuildMutation, type BuildOptions, type BuildStatus } from "../../../../supabase/functions/_shared/server-build-contract";
 import { parseSaveDeletionStatus } from "../../../../supabase/functions/_shared/server-save-deletion-contract";
+import { parseStartCancellationInput, parseStartCancellationResult, type StartCancellationInput } from "../../../../supabase/functions/_shared/server-start-queue-contract";
 import { parseOwnerSettingsMutation, parseOwnerSettingsResult, type OwnerSettingsMutation } from "../../../../supabase/functions/_shared/server-settings-contract";
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "../../../../supabase/functions/_shared/server-visibility-contract";
 import { parseSaveGenerationList, parseSaveGenerationRestoreMutation, parseSaveGenerationRestoreResult, type RestorableSaveGeneration } from "../../../../supabase/functions/_shared/server-save-generation-contract";
@@ -66,6 +67,20 @@ export async function requestMyServerDeletion(accessToken: string, intent: Serve
 }
 
 export type MyServerOperation = "start" | "stop" | "restart-game";
+
+export async function cancelMyServerStart(accessToken: string, input: StartCancellationInput, requestId: string) {
+    if (!REQUEST_ID.test(requestId)) throw new MyServersApiError("invalid_request", "Invalid Start cancellation request ID.");
+    let parsed: StartCancellationInput;
+    try { parsed = parseStartCancellationInput(input); }
+    catch { throw new MyServersApiError("invalid_request", "Invalid Start cancellation."); }
+    const value = await requestMyServersApi(accessToken, { method: "POST", requestId,
+        body: JSON.stringify({ action: "cancel-server-start", ...parsed }) });
+    try {
+        const result = parseStartCancellationResult(value);
+        if (result.serverId !== parsed.serverId || result.jobId !== parsed.jobId) throw invalidResponse();
+        return result;
+    } catch { throw invalidResponse(); }
+}
 export type MyServerBackupOperation = "create-backup" | "restore-backup" | "restore-save-generation";
 
 export type MyServerOperationResult = { exitCode: 0 };

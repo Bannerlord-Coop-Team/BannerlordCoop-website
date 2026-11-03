@@ -174,6 +174,17 @@ only after a confirmed pre-enqueue stale rejection and retains its command/reque
 UUID; uncertain delivery and accepted Start use their existing recovery paths.
 The compact accepted-Start read remains `server-start-status`.
 
+Accepted-Start polling opts into `includeQueueDetails` to display a closed waiting
+reason (server recovery, host maintenance, capacity, a busy host,
+scheduling or worker availability). Older control planes retain their existing
+progress display. An owner or manager can use **Cancel Start** only while the
+control plane reports an owner-requested Start with zero attempts and no dispatch
+evidence. The exact job revision crosses the authenticated `my-servers` Edge
+relay as `cancel-server-start`; if a worker already claimed it, the page refreshes
+and continues following progress. Cancellation does not send Stop or change the
+server's desired state. Deploy the matching additive control-plane API and
+updated `my-servers` Edge function before this website. No runner update is needed.
+
 The server-rendered onboarding summary also reads the closed `server-onboarding`
 operation directly after account synchronization, with its strict DTO and 64 KiB
 response bound. Browser reads, console commands and mutations retain the Edge route.

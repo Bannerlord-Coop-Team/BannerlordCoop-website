@@ -1,4 +1,13 @@
 {
+  "controls.cancelStart": "Başlatmayı iptal et",
+  "controls.cancellingStart": "Başlatma iptal ediliyor…",
+  "controls.startCancellationUnconfirmed": "İptal doğrulanamadı. Başlatma işlemi başlamış olabilir; ilerleme yenileniyor.",
+  "controls.startWaiting.scheduled": "Başlatma daha sonraki bir zamana planlandı.",
+  "controls.startWaiting.server-recovery": "Sunucunuz önceki bir işlemin güvenli şekilde çözümlenmesini bekliyor.",
+  "controls.startWaiting.host-maintenance": "Sunucunuz barındırma bakımının bitmesini bekliyor.",
+  "controls.startWaiting.capacity": "Başlatma, kullanılabilir işlem kapasitesini bekliyor.",
+  "controls.startWaiting.host-busy": "Başlatma, bu ana makinedeki başka bir işlemin bitmesini bekliyor.",
+  "controls.startWaiting.worker": "Başlatma sıraya alındı ve işlenmeyi bekliyor.",
   "action.serverUpdating": "Sunucunuz güncelleniyor. Bir dakika sonra tekrar deneyin.",
   "mods.error.uploadStatusUnavailable": "Sunucu askıya alındığı için {id} kurulumunun sonucu doğrulanamadı. Erişim yeniden sağlandığında sonucu kontrol etmek için mod listesini yenileyin.",
   "action.refusal.serverSuspended": "Bu sunucu askıya alınmış. İstek reddedildi ve hiçbir değişiklik yapılmadı.",

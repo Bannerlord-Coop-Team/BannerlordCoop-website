@@ -7,6 +7,7 @@ import { modLoadFailureMessage } from "@/app/components/servers/server-mods-mess
 
 import {
     getMyServerBackupStatus,
+    cancelMyServerStart,
     MyServersApiError,
     requestMyServerOperation,
     requestMyServerUpdate,
@@ -17,6 +18,7 @@ import { getMyServerDeletionStatus, getMyServerResources, getMyServerStartStatus
 import { serverResourceUsage, type ServerResourceUsage } from "@/app/lib/hosting/server-resource-usage";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { revalidatePath } from "next/cache";
+import { parseStartCancellationInput, type StartCancellationInput } from "../../../supabase/functions/_shared/server-start-queue-contract";
 
 const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const OPERATIONS = new Set<MyServerOperation>(["start", "stop", "restart-game"]);
@@ -202,6 +204,25 @@ export async function setManagedServerPassword(input: { serverId: string; expect
         const refusal = ownerRefusalMessage(error, t);
         if (refusal !== null) return { ok: false, message: refusal };
         return { ok: false, checkStatus: true, message: t("controls.weCouldnTConfirmThePasswordChangeSoWeRefreshed") };
+    }
+}
+
+/** Reauthenticates cancellation; the control plane rechecks ownership and the unstarted job. */
+export async function cancelManagedServerStart(input: StartCancellationInput): Promise<ManagedServerActionResult> {
+    const { t } = await getTranslations("managed-server");
+    let parsed: StartCancellationInput;
+    try { parsed = parseStartCancellationInput(input); }
+    catch { return { ok: false, message: t("action.actions.theStartReferenceIsInvalid") }; }
+    try {
+        const supabase = await getSupabaseServerClient();
+        const [{ data: { user } }, { data: { session } }] = await Promise.all([supabase.auth.getUser(), supabase.auth.getSession()]);
+        if (!user || !session) return { ok: false, message: t("action.actions.signInAgainToFollowServerProgress") };
+        await cancelMyServerStart(session.access_token, parsed, crypto.randomUUID());
+        revalidatePath(`/servers/${parsed.serverId}`);
+        revalidatePath("/servers");
+        return { ok: true, message: t("controls.startCancelled") };
+    } catch {
+        return { ok: false, refresh: true, message: t("controls.startCancellationUnconfirmed") };
     }
 }
 

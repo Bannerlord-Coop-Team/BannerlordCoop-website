@@ -1,4 +1,13 @@
 {
+  "controls.cancelStart": "取消启动",
+  "controls.cancellingStart": "正在取消启动…",
+  "controls.startCancellationUnconfirmed": "无法确认取消。启动可能已开始，正在刷新进度。",
+  "controls.startWaiting.scheduled": "启动已安排在稍后进行。",
+  "controls.startWaiting.server-recovery": "服务器正在等待之前的操作得到安全处理。",
+  "controls.startWaiting.host-maintenance": "服务器正在等待托管维护完成。",
+  "controls.startWaiting.capacity": "启动正在等待可用的处理容量。",
+  "controls.startWaiting.host-busy": "启动正在等待此主机上的另一项操作完成。",
+  "controls.startWaiting.worker": "启动已排队，正在等待处理。",
   "action.serverUpdating": "服务器正在更新。请稍等一分钟后重试。",
   "mods.error.uploadStatusUnavailable": "由于服务器已被暂停使用，无法确认 {id} 的安装结果。访问恢复后，请刷新模组列表以查看结果。",
   "action.refusal.serverSuspended": "此服务器已被暂停使用。请求已被拒绝，未进行任何更改。",
