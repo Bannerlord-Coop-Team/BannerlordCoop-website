@@ -53,6 +53,7 @@ foreach (var declaration in release.Values)
     {
         CollectionExpressionSyntax collection => collection.Elements.Select(e => e is ExpressionElementSyntax item ? item.Expression : null),
         ArrayCreationExpressionSyntax { Initializer: not null } array => array.Initializer.Expressions,
+        ImplicitArrayCreationExpressionSyntax implicitArray => implicitArray.Initializer.Expressions,
         InitializerExpressionSyntax initializer when initializer.IsKind(SyntaxKind.ArrayInitializerExpression) => initializer.Expressions,
         _ => null,
     };
@@ -153,14 +154,28 @@ static string Literal(ExpressionSyntax expression, ClassDeclarationSyntax declar
     }
     throw new InvalidOperationException($"Unsupported metadata expression: {expression}");
 }
-// Renders an interpolated string whose holes are unformatted constants (string or integer literals).
-static string Interpolated(InterpolatedStringExpressionSyntax interpolated, ClassDeclarationSyntax declaration) =>
-    string.Concat(interpolated.Contents.Select(content => content switch
+// Renders a regular or verbatim interpolated string whose holes are unformatted string/integer constants; raw strings fail closed.
+static string Interpolated(InterpolatedStringExpressionSyntax interpolated, ClassDeclarationSyntax declaration)
+{
+    if (!interpolated.StringStartToken.IsKind(SyntaxKind.InterpolatedStringStartToken) && !interpolated.StringStartToken.IsKind(SyntaxKind.InterpolatedVerbatimStringStartToken))
+        throw new InvalidOperationException($"Unsupported metadata expression: {interpolated}");
+    return string.Concat(interpolated.Contents.Select(content => content switch
     {
-        InterpolatedStringTextSyntax text => text.TextToken.ValueText,
+        InterpolatedStringTextSyntax text => InterpolatedText(interpolated, text),
         InterpolationSyntax { AlignmentClause: null, FormatClause: null } hole => Constant(hole.Expression, declaration),
         _ => throw new InvalidOperationException($"Unsupported metadata expression: {interpolated}"),
     }));
+}
+// Decodes a text part of a regular or verbatim interpolated string, collapsing {{ and }} before Roslyn decodes escapes.
+static string InterpolatedText(InterpolatedStringExpressionSyntax interpolated, InterpolatedStringTextSyntax text)
+{
+    var quote = interpolated.StringStartToken.IsKind(SyntaxKind.InterpolatedVerbatimStringStartToken) ? "@\"" : "\"";
+    var source = quote + text.TextToken.Text.Replace("{{", "{").Replace("}}", "}") + "\"";
+    var token = SyntaxFactory.ParseToken(source);
+    if (!token.IsKind(SyntaxKind.StringLiteralToken) || token.ContainsDiagnostics || token.Text != source)
+        throw new InvalidOperationException($"Unsupported metadata expression: {interpolated}");
+    return token.ValueText;
+}
 // Resolves an interpolation hole to its text, allowing integer constants alongside string metadata forms.
 static string Constant(ExpressionSyntax expression, ClassDeclarationSyntax declaration)
 {

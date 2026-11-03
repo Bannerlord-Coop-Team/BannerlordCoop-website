@@ -37,34 +37,16 @@ export function buildCatalog(raw) {
     };
 }
 
-export function buildTranslations(catalog, translations) {
-    const translate = text => {
-        const value = translations[text];
-        if (!value?.trim()) throw new Error(`Missing zh-CN translation: ${text}`);
-        return value;
-    };
-    return Object.fromEntries(catalog.commands.map(c => [c.command, {
-        name: translate(c.summary), summary: translate(c.summary),
-        arguments: Object.fromEntries(c.arguments.map(a => [a.name, translate(a.description)])),
-    }]));
-}
-
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
     const [repo, commit, mode] = process.argv.slice(2);
     if (!repo || !/^[a-f0-9]{40}$/.test(commit ?? "") || (mode && mode !== "--check"))
         throw new Error("Usage: node tools/cheats/sync.mjs <mod-repo> <40-character-commit> [--check]");
     const raw = JSON.parse(execFileSync("dotnet", ["run", "--project", "tools/cheats", "--", repo, commit], { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 }));
     const catalog = buildCatalog(raw);
-    const translations = JSON.parse(readFileSync("tools/cheats/zh-CN.json", "utf8"));
-    const outputs = {
-        "src/app/cheats/commands.json": catalog,
-        "src/app/cheats/locales/zh-CN.commands.json": buildTranslations(catalog, translations),
-    };
-    for (const [path, data] of Object.entries(outputs)) {
-        const content = JSON.stringify(data, null, 2) + "\n";
-        if (mode === "--check") {
-            if (readFileSync(path, "utf8").replace(/\r\n/g, "\n") !== content) throw new Error(`Outdated catalog: ${path}`);
-        } else writeFileSync(path, content);
-    }
+    const path = "src/app/cheats/commands.json";
+    const content = JSON.stringify(catalog, null, 2) + "\n";
+    if (mode === "--check") {
+        if (readFileSync(path, "utf8").replace(/\r\n/g, "\n") !== content) throw new Error(`Outdated catalog: ${path}`);
+    } else writeFileSync(path, content);
     console.log(`${catalog.count} published commands, ${raw.commands.length} release registrations, ${raw.debugOnly.length} DEBUG-only commands.`);
 }
