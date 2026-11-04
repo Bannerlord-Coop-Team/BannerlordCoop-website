@@ -24,7 +24,7 @@ const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[
 const OPERATIONS = new Set<MyServerOperation>(["start", "stop", "restart-game"]);
 
 /** `checkStatus` asks the page to follow server status; `refresh` asks it to reload status once. */
-export type ManagedServerActionResult = { ok: boolean; message: string; operationId?: string; checkStatus?: boolean; refresh?: boolean };
+export type ManagedServerActionResult = { ok: boolean; message: string; operationId?: string; updateJobId?: string; checkStatus?: boolean; refresh?: boolean };
 
 // Authenticates and submits lifecycle operations with localized result presentation.
 export async function operateManagedServer(input: unknown): Promise<ManagedServerActionResult> {
@@ -69,7 +69,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
                 expectedUpdatedAt,
             }, crypto.randomUUID());
             revalidatePath("/servers");
-            return { ok: true, message: update.outcome === "existing"
+            return { ok: true, updateJobId: update.jobId, message: update.outcome === "existing"
                 ? t("action.actions.anUpdateIsAlreadyQueuedForThisServer")
                 : t("action.actions.updateQueuedABackupWillBeTakenBeforeTheSelected") };
         } else {
