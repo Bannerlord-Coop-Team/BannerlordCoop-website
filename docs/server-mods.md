@@ -106,6 +106,12 @@ the website's side of it.
 
 ## Transport
 
+The website verifies the Supabase user/session before reading a mod request
+body, including the 8 MiB raw chunk body. Signed-out, mismatched and failed
+forced-refresh sessions receive `401` without buffering or forwarding it. The
+existing body bounds still apply to authenticated requests. These transport
+checks do not scan DLLs or certify uploaded code as safe.
+
 ```
 browser ─► /api/servers/<id>/mods?route=<route>       (POST, JSON)  ┐ website route handlers
 browser ─► /api/servers/<id>/mods/chunk?uploadId&index (PUT, bytes) ┘ (same origin, session revalidated)
