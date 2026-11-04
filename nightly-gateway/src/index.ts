@@ -22,6 +22,7 @@ import {
     mintSecretsEqual,
     pinClientObjectKey,
     rewriteManifestArtifactUrls,
+    validateNightlyPublicationManifest,
     verifySponsorFormToken,
 } from "./core";
 import { databaseForRequest } from "./database";
@@ -136,7 +137,7 @@ async function route(request: Request, env: Env): Promise<Response> {
         return servePinManifest(request, env);
     }
     if (request.method === "GET" && url.pathname === "/v1/manifests/client") {
-        return serveManifest(request, env, "nightly/client.json");
+        return serveManifest(request, env, "nightly/release.json");
     }
     if (request.method === "GET" && url.pathname === "/v1/manifests/release") {
         return serveManifest(request, env, "nightly/release.json");
@@ -816,8 +817,16 @@ async function serveManifest(request: Request, env: Env, key: string): Promise<R
     await requireNightlyDownloadSession(request, env);
     const object = await env.RELEASES.get(key);
     if (object === null || object.size > MAXIMUM_MANIFEST_BYTES) throw new GatewayError(404, "manifest_unavailable");
-    const parsed = JSON.parse(await object.text()) as unknown;
-    const rewritten = rewriteManifestArtifactUrls(parsed, env.PUBLIC_ORIGIN, env.LEGACY_R2_ORIGIN);
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(await object.text()) as unknown;
+    } catch {
+        throw new GatewayError(503, "manifest_unavailable");
+    }
+    const validated = key === "nightly/release.json"
+        ? validateNightlyPublicationManifest(parsed, env.LEGACY_R2_ORIGIN)
+        : parsed;
+    const rewritten = rewriteManifestArtifactUrls(validated, env.PUBLIC_ORIGIN, env.LEGACY_R2_ORIGIN);
     return json(rewritten);
 }
 

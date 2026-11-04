@@ -37,7 +37,12 @@ server; Linux testers run those files through Wine or Proton. Run
 packaging.
 
 `installer/install.ps1` is the authority for nightly release metadata, Discord
-authorization decisions, and incremental server update behavior. Keep the Linux
+authorization decisions, and incremental server update behavior. Both installers
+read `/v1/manifests/release`, which is backed by the single
+`bannerlordcoop-patron-nightlies/nightly/release.json` marker. The gateway rejects
+that marker unless it contains the client, Windows server artifacts, workflow
+identities, and the immutable GHCR image identity. A client-only choice therefore
+waits for the same complete publication as a server choice. Keep the Linux
 implementation aligned when those contracts change, including downloading the
 validated client `publicUrl` rather than the mutable legacy URL. Linux-specific
 Steam discovery and Wine/Proton handling remain in `install-linux.sh`.
@@ -88,7 +93,7 @@ Linux and checks that the packaged Linux scripts match their canonical sources.
 8. Optionally set `PIN_MINT_SECRET` with `wrangler secret put` to the same
    value as Bot_UP's `NIGHTLY_GATEWAY_PIN_SECRET` (at least 32 characters).
    Nightly Discord OAuth and `/v1/manifests/client` keep working when this
-   secret is absent. When it is set, `/create-build` can mint a one-time
+    secret is absent. When it is set, `/create-build` can mint a one-time
    installer pin. Apply D1 migration `0002_installer_pins.sql`, and add a
    one-day `pins/` lifecycle rule on `bannerlordcoop-patron-nightlies`. Do not
    require this secret at Worker start.
