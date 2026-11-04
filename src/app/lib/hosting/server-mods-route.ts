@@ -49,6 +49,8 @@ export function createServerModsJsonHandler(dependencies: ServerModsRouteDepende
         const route = url.searchParams.getAll("route");
         if ([...url.searchParams.keys()].length !== 1 || route.length !== 1 || !isModJsonRoute(route[0])) return new Response("Not found.", { status: 404 });
         if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) return failure("invalid_content_type", false);
+        const token = await currentAccessToken(dependencies, request);
+        if (token === null) return failure("unauthenticated", false);
         let parsed: ModsRequest;
         try {
             parsed = parseModsRequest(route[0], JSON.parse(await readBoundedText(request, MAXIMUM_MODS_REQUEST_BYTES)));
@@ -56,8 +58,6 @@ export function createServerModsJsonHandler(dependencies: ServerModsRouteDepende
             return failure(error instanceof RequestTooLargeError ? "request_too_large" : "invalid_request", false);
         }
         if ("serverId" in parsed.body && parsed.body.serverId.toLowerCase() !== serverId.toLowerCase()) return failure("invalid_request", false);
-        const token = await currentAccessToken(dependencies, request);
-        if (token === null) return failure("unauthenticated", false);
         return relay(() => dependencies.api.request(token, parsed));
     };
 }
@@ -77,6 +77,8 @@ export function createServerModChunkHandler(dependencies: ServerModsRouteDepende
             return failure("invalid_request", false);
         }
         if (request.headers.get("content-type")?.toLowerCase().split(";")[0]?.trim() !== "application/octet-stream") return failure("invalid_content_type", false);
+        const token = await currentAccessToken(dependencies, request);
+        if (token === null) return failure("unauthenticated", false);
         let bytes: Uint8Array<ArrayBuffer>;
         try {
             bytes = await readBoundedBytes(request, MOD_UPLOAD_CHUNK_BYTES);
@@ -84,8 +86,6 @@ export function createServerModChunkHandler(dependencies: ServerModsRouteDepende
             return failure(error instanceof RequestTooLargeError ? "request_too_large" : "invalid_request", false);
         }
         if (bytes.byteLength === 0) return failure("invalid_request", false);
-        const token = await currentAccessToken(dependencies, request);
-        if (token === null) return failure("unauthenticated", false);
         try {
             return await relay(() => dependencies.api.putChunk(token, { ...target, sha256, bytes }));
         } finally {

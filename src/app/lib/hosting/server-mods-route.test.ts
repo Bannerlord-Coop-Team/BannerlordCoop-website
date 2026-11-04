@@ -140,7 +140,7 @@ test("relays a chunk end to end with its exact bytes, digest and query", async (
     assert.deepEqual(upstream, [{ url: `https://control-plane.example.test/api/v1/mods/uploads/chunk?uploadId=${UPLOAD_ID}&index=0`, digest: "e".repeat(64), bytes: [7, 8, 9] }]);
 });
 
-test("refuses cross-site, unknown-route and malformed requests before authenticating", async () => {
+test("refuses cross-site, unknown-route and malformed requests without forwarding", async () => {
     const { api, calls } = recordingApi();
     const { json, chunk } = handlers(api);
     const list = { serverId: SERVER_ID };
@@ -162,6 +162,24 @@ test("refuses cross-site, unknown-route and malformed requests before authentica
     ];
     for (const [response, status] of cases) assert.equal((await response).status, status);
     assert.equal(calls.length, 0);
+});
+
+test("rejects signed-out and mismatched sessions before reading JSON or chunk bytes", async () => {
+    for (const user of [null, "someone-else"]) {
+        const { api, calls } = recordingApi();
+        const { json, chunk } = handlers(api, authClient({ user }));
+        const requests = [
+            [json, jsonRequest("uploads", {})],
+            [chunk, chunkRequest(new Uint8Array([1]))],
+        ] as const;
+        for (const [handler, [request, context]] of requests) {
+            assert.equal(request.bodyUsed, false);
+            const response = await handler(request, context);
+            assert.equal(response.status, 401);
+            assert.equal(request.bodyUsed, false);
+        }
+        assert.equal(calls.length, 0);
+    }
 });
 
 test("refreshes a session near expiry or on the forced retry, and fails closed when the forced refresh fails", async () => {

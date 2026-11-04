@@ -1,0 +1,34 @@
+name: Verify mod upload
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/app/lib/hosting/server-mods-route*'
+      - 'supabase/functions/_shared/my-servers-mods.ts'
+      - 'supabase/functions/_shared/server-mods-contract*'
+      - 'supabase/functions/my-servers/mods.test.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/verify-mod-upload.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Node.js 22 verification
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npx next typegen
+      - run: npx tsc --noEmit
+      - run: npx eslint src/app/lib/hosting/server-mods-route.ts src/app/lib/hosting/server-mods-route.test.ts
+      - run: npx tsx --test src/app/lib/hosting/server-mods-route.test.ts supabase/functions/my-servers/mods.test.ts supabase/functions/_shared/server-mods-contract.test.ts
