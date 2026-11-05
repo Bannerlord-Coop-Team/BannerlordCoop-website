@@ -261,6 +261,54 @@ test("$50 allocation policy checks provider amounts and versions for OAuth and w
 });
 
 
+test("a former patron holding only a free tier has confirmed paid-access loss", async () => {
+    const freeTier = { type: "tier", id: "21", attributes: { amount_cents: 0 }, relationships: { campaign: { data: { type: "campaign", id: "10" } } } };
+    // Builds one creator-read member holding the given tiers, after their last paid charge.
+    const member = (patronStatus: string, entitledCents: number, tierIds: string[], lastChargeStatus = "Paid") => {
+        const body = identity();
+        const attributes = body.included[0].attributes as Record<string, unknown>;
+        attributes.patron_status = patronStatus;
+        attributes.last_charge_status = lastChargeStatus;
+        attributes.currently_entitled_amount_cents = entitledCents;
+        const tiers = body.included[0].relationships?.currently_entitled_tiers;
+        assert.ok(tiers);
+        tiers.data = tierIds.map((id) => ({ type: "tier", id }));
+        return { data: body.included[0], included: [...body.included.slice(1), freeTier] };
+    };
+    const read = (body: ReturnType<typeof member>) => verifyPatreonAllocation(body, policy, now);
+
+    const ended = await read(member("former_patron", 0, ["21"]));
+    assert.equal(ended.verification, "nonqualifying");
+    assert.equal(ended.paidAccessEndedAt, now);
+    assert.deepEqual(ended.tierIds, []); // The reader and SQL gate both require no remaining tiers.
+    assert.equal(ended.paidThroughAt, null);
+
+    // A paid tier or amount still remaining is a cancellation that retains benefits, never loss.
+    const retained = await read(member("former_patron", 2000, ["20", "21"]));
+    assert.equal(retained.paidAccessEndedAt, undefined);
+    assert.equal(retained.verification, "review_required");
+    assert.deepEqual(retained.tierIds, ["20", "21"]);
+    const amountRemains = await read(member("former_patron", 500, ["21"]));
+    assert.equal(amountRemains.paidAccessEndedAt, undefined);
+    assert.deepEqual(amountRemains.tierIds, ["21"]);
+
+    // Only an explicit former patron with a paid charge history is confirmed.
+    for (const [status, charge] of [["active_patron", "Paid"], ["declined_patron", "Paid"], ["former_patron", "Refunded"], ["former_patron", "Declined"], ["former_patron", "Fraud"]] as const) {
+        const other = await read(member(status, 0, ["21"], charge));
+        assert.equal(other.paidAccessEndedAt, undefined);
+        assert.deepEqual(other.tierIds, ["21"]);
+    }
+
+    // OAuth identity reads never confirm loss, even for the same member.
+    const oauth = member("former_patron", 0, ["21"]);
+    const linked = identity();
+    linked.included[0] = oauth.data;
+    linked.included.push(freeTier as never);
+    const identityRead = await verifyPatreonMembership(linked, policy, now);
+    assert.equal(identityRead.evidence.paidAccessEndedAt, undefined);
+    assert.deepEqual(identityRead.evidence.tierIds, ["21"]);
+});
+
 test("confirmed former membership with no remaining benefits emits loss, never cancellation or ambiguity alone", async () => {
     const fifty: Policy = { ...policy, minimumCents: 5000, policyVersion: "patreon-paid-usd50-v1" };
     const body = identity();
