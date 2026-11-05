@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { validateNightlyPublicationPointer } from "./core";
+import { validateLegacyNightlyClientManifest, validateNightlyPublicationPointer } from "./core";
 import { NIGHTLY_POINTER_URL, readNightlyPublication } from "./publication";
 import worker from "./index";
 
@@ -161,6 +161,26 @@ test("client route falls back to the validated legacy manifest while release sta
     assert.ok(logs.some((line) => line.includes('"event":"nightly_publication_read_failed"')));
     assert.ok(logs.some((line) => line.includes('"event":"nightly_legacy_client_fallback_served"')));
     assert.deepEqual(objects, [value.pointer.manifest.key, "nightly/client.json", value.pointer.manifest.key]);
+});
+
+test("client fallback accepts the producer's null baseSha legacy shape", async () => {
+    const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+    const legacy = {
+        version: 1,
+        releaseDate: "2026-11-04",
+        headSha: "a".repeat(40),
+        baseSha: null,
+        workflowRunId: 42007050452,
+        builtAt: "2026-11-05T10:04:43Z",
+        client: {
+            fileName: "Coop 11-04-2026.7z",
+            key: `nightly/clients/${"a".repeat(40)}/${"c".repeat(64)}/Coop.7z`,
+            bytes: 10,
+            sha256: "c".repeat(64),
+            publicUrl: `${gateway}/v1/artifacts/nightly/clients/${"a".repeat(40)}/${"c".repeat(64)}/Coop.7z`,
+        },
+    };
+    assert.doesNotThrow(() => validateLegacyNightlyClientManifest(legacy, origin, gateway));
 });
 
 test("gateway rejects a private manifest whose bytes or image digest differ from the public pointer", async () => {

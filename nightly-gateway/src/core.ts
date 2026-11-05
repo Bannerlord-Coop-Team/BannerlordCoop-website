@@ -300,7 +300,7 @@ export function validateLegacyNightlyClientManifest(
     if (!isRecord(input) || input.version !== 1 || typeof input.releaseDate !== "string"
         || !NIGHTLY_PUBLICATION_DATE.test(input.releaseDate)
         || typeof input.headSha !== "string" || !NIGHTLY_PUBLICATION_COMMIT.test(input.headSha)
-        || typeof input.baseSha !== "string" || !NIGHTLY_PUBLICATION_COMMIT.test(input.baseSha)
+        || (input.baseSha !== null && (typeof input.baseSha !== "string" || !NIGHTLY_PUBLICATION_COMMIT.test(input.baseSha)))
         || typeof input.workflowRunId !== "number" || !Number.isSafeInteger(input.workflowRunId)
         || input.workflowRunId <= 0 || typeof input.builtAt !== "string"
         || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/.test(input.builtAt)) {
