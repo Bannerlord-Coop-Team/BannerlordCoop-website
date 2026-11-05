@@ -154,6 +154,9 @@ function Get-NightlyFailureDetailSuffix {
     if ($null -ne $ErrorRecord) { $statusCode = Get-HttpStatusCode $ErrorRecord }
     $body = Get-NightlyErrorRecordText $ErrorRecord
     $errorCode = Get-NightlyGatewayErrorCode $SessionResponse
+    if (-not $errorCode -and $null -ne $ErrorRecord) {
+        try { $errorCode = Get-NightlyGatewayErrorCode $ErrorRecord.Exception.Response } catch { }
+    }
     if (-not $errorCode) { $errorCode = Get-NightlyGatewayErrorCodeFromText $body }
     $parts = @()
     if ($statusCode -gt 0) { $parts += "HTTP $statusCode" }
@@ -176,6 +179,18 @@ function Add-NightlyDiagnosisDetails {
     $Diagnosis.Message = [string]$Diagnosis.Message + (Get-NightlyFailureDetailSuffix `
         -SessionResponse $SessionResponse -ErrorRecord $ErrorRecord -Kind $Kind)
     return $Diagnosis
+}
+
+function Get-NightlyGatewayFailureMessage {
+    param(
+        [Parameter(Mandatory = $true)][string]$Operation,
+        $ErrorRecord,
+        $Response = $null
+    )
+
+    $details = Get-NightlyFailureDetailSuffix -SessionResponse $Response -ErrorRecord $ErrorRecord -Kind 'gateway'
+    if ($details) { return "$Operation failed.$details" }
+    return "$Operation failed. The gateway returned no diagnostic details."
 }
 
 function Test-NightlyAccessTokenResponse {
@@ -980,12 +995,14 @@ function Get-NightlyAccessToken {
     while ([datetimeoffset]::UtcNow -lt $deadline) {
         Start-Sleep -Seconds ([Math]::Max($script:NightlyTokenPollMinimumSeconds, [int]$session.interval))
         $decision = $null
+        $pollError = $null
         try {
             $token = Invoke-RestMethod -Method Post -Uri "$($script:NightlyGatewayUri)/v1/device/token" `
                 -ContentType 'application/x-www-form-urlencoded' `
                 -Body @{ device_code = [string]$session.device_code }
             $decision = Get-NightlyTokenPollDecision -Response $token
         } catch {
+            $pollError = $_
             $decision = Get-NightlyTokenPollDecision -ErrorRecord $_
         }
         if ($decision.Action -eq 'Continue') { continue }
@@ -994,7 +1011,7 @@ function Get-NightlyAccessToken {
             return [string]$decision.Token
         }
         if ($decision.Action -eq 'Fail') { throw $decision.Message }
-        throw
+        throw (Get-NightlyGatewayFailureMessage -Operation 'Nightly authorization token request' -ErrorRecord $pollError)
     }
     throw 'Discord verification timed out. Run the installer again when you are ready to authorize it.'
 }
@@ -1083,17 +1100,19 @@ function Get-CreateBuildPinAccessToken {
     Write-Host 'Create-build installer' -ForegroundColor Cyan
     Write-Host 'Redeeming the one-time installer link for this exact client and dedicated-server pair.'
     $decision = $null
+    $pinError = $null
     try {
         $response = Invoke-RestMethod -Method Post -Uri "$($script:NightlyGatewayUri)/v1/pins/token" `
             -ContentType 'application/x-www-form-urlencoded' `
             -Body @{ pin = $Pin }
         $decision = Get-CreateBuildPinRedeemDecision -Response $response
     } catch {
+        $pinError = $_
         $decision = Get-CreateBuildPinRedeemDecision -ErrorRecord $_
     }
     if ($decision.Action -eq 'Accept') { return [string]$decision.Token }
     if ($decision.Action -eq 'Fail') { throw $decision.Message }
-    throw
+    throw (Get-NightlyGatewayFailureMessage -Operation 'Create-build installer token request' -ErrorRecord $pinError)
 }
 
 function Get-NormalizedPath {
@@ -1329,7 +1348,7 @@ function Get-ReleaseManifest {
         if ($statusCode -eq 404) {
             throw (Get-UnpublishedNightlyMessage $ClientOnly)
         }
-        throw
+        throw (Get-NightlyGatewayFailureMessage -Operation 'Nightly release manifest request' -ErrorRecord $_)
     }
     if ($manifest.version -ne 1 -or
         [string]$manifest.releaseDate -notmatch '^\d{4}-\d{2}-\d{2}$' -or
@@ -1420,7 +1439,7 @@ function Get-PinManifest {
         if ($statusCode -eq 401 -or $statusCode -eq 403) {
             throw 'The create-build installer session expired. Ask staff for a new /create-build link.'
         }
-        throw
+        throw (Get-NightlyGatewayFailureMessage -Operation 'Create-build release manifest request' -ErrorRecord $_)
     }
     $clientBytes = 0L
     $serverBytes = 0L
@@ -1985,7 +2004,7 @@ function Install-ServerIncremental {
                         Copy-Item -LiteralPath $backupTarget -Destination $target -Recurse -Force
                     }
                 }
-                throw
+                throw $_.Exception
             }
             Unblock-Installation $ServerPath
             Write-Host 'Dedicated server updated without downloading the unchanged engine and assets.' -ForegroundColor Green
@@ -2007,7 +2026,7 @@ function Install-ServerIncremental {
         if (Test-Path -LiteralPath $ServerPath) { Move-Item -LiteralPath $ServerPath -Destination $previous }
         try { Move-Item -LiteralPath $stage -Destination $ServerPath } catch {
             if (Test-Path -LiteralPath $previous) { Move-Item -LiteralPath $previous -Destination $ServerPath }
-            throw
+            throw $_.Exception
         }
         Unblock-Installation $ServerPath
         Write-Host 'Dedicated server installed with an incremental-update base.' -ForegroundColor Green
@@ -2179,6 +2198,6 @@ if ($env:BANNERLORDCOOP_INSTALLER_TEST -ne '1') {
             Write-Host $line -ForegroundColor Yellow
         }
         if ($env:BANNERLORDCOOP_INSTALLER_LAUNCHER -eq '1') { exit 1 }
-        throw
+        throw $_.Exception
     }
 }

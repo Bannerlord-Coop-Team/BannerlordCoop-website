@@ -19,7 +19,13 @@ import {
     rewriteManifestArtifactUrls,
     verifySponsorFormToken,
 } from "./core";
-import { completeOAuth, nightlyAccessPage, page } from "./index";
+import {
+    completeOAuth,
+    lookupDiscordMember,
+    nightlyAccessPage,
+    page,
+    resetDiscordAlertStateForTests,
+} from "./index";
 
 const legacy = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
@@ -62,6 +68,7 @@ function testEnvironment(options: TestDatabaseOptions = {}): { env: Env; stateme
     return {
         env: {
             DB: database,
+            DISCORD_ALERT_USER_ID: "123456789012345678",
             DISCORD_BOT_TOKEN: "B".repeat(59),
             DISCORD_CLIENT_ID: "1537575576745803799",
             DISCORD_CLIENT_SECRET: "test-secret",
@@ -113,6 +120,108 @@ function discordOAuthFetchWithoutRoles(input: string | URL | Request): Promise<R
     return discordOAuthFetch(input);
 }
 
+test("Discord member infrastructure errors fail open and alert once per error kind", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalError = console.error;
+    const { env } = testEnvironment();
+    const requests: Array<{ url: string; init?: RequestInit }> = [];
+    let memberStatus = 401;
+    resetDiscordAlertStateForTests();
+    console.error = () => undefined;
+    globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        requests.push({ url, init });
+        if (/\/guilds\/\d+\/members\/\d+$/.test(url)) {
+            return Promise.resolve(Response.json({ message: "Unauthorized" }, { status: memberStatus }));
+        }
+        if (url.endsWith("/users/@me/channels")) {
+            return Promise.resolve(Response.json({ id: "987654321098765432" }));
+        }
+        if (url.endsWith("/messages")) return Promise.resolve(Response.json({ id: "123456789012345678" }));
+        throw new Error(`Unexpected test request: ${url}`);
+    };
+    try {
+        const first = await lookupDiscordMember(env, "bot", "987654321098765432", "poll_device_session");
+        const second = await lookupDiscordMember(env, "bot", "987654321098765432", "poll_device_session");
+        assert.equal(first.decision, "fail_open");
+        assert.equal(second.decision, "fail_open");
+        assert.equal(requests.filter(({ url }) => url.endsWith("/users/@me/channels")).length, 1);
+        assert.equal(requests.filter(({ url }) => url.endsWith("/messages")).length, 1);
+        const message = JSON.parse(String(requests.find(({ url }) => url.endsWith("/messages"))?.init?.body));
+        assert.match(message.content, /error_kind=discord_bot_token_rejected/);
+        assert.match(message.content, /discord_status=401/);
+        assert.match(message.content, /first_occurrence_at=/);
+        assert.match(message.content, /count=1/);
+        assert.doesNotMatch(message.content, /B{10,}/);
+        memberStatus = 429;
+        const rateLimited = await lookupDiscordMember(env, "bot", "987654321098765432", "poll_device_session");
+        assert.equal(rateLimited.decision, "fail_open");
+        assert.equal(requests.filter(({ url }) => url.endsWith("/users/@me/channels")).length, 2);
+    } finally {
+        globalThis.fetch = originalFetch;
+        console.error = originalError;
+        resetDiscordAlertStateForTests();
+    }
+});
+
+test("Discord member lookup keeps definite membership answers closed", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalError = console.error;
+    const { env } = testEnvironment();
+    console.error = () => undefined;
+    globalThis.fetch = ((input: string | URL | Request) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        if (/\/guilds\/\d+\/members\/\d+$/.test(url)) {
+            return Promise.resolve(Response.json({ message: "Unknown Member" }, { status: 404 }));
+        }
+        throw new Error(`Unexpected test request: ${url}`);
+    }) as typeof fetch;
+    resetDiscordAlertStateForTests();
+    try {
+        const lookup = await lookupDiscordMember(env, "bot", "987654321098765432", "poll_device_session");
+        assert.equal(lookup.decision, "not_in_guild");
+        assert.equal(lookup.member, null);
+    } finally {
+        globalThis.fetch = originalFetch;
+        console.error = originalError;
+        resetDiscordAlertStateForTests();
+    }
+});
+
+for (const [label, recipient, reason] of [
+    ["unset", undefined, "unset"],
+    ["invalid", "not-a-snowflake", "invalid"],
+] as const) {
+    test(`fail-open continues when the alert recipient is ${label}`, async () => {
+        const originalFetch = globalThis.fetch;
+        const originalError = console.error;
+        const { env } = testEnvironment();
+        const requests: string[] = [];
+        const errors: string[] = [];
+        env.DISCORD_ALERT_USER_ID = recipient;
+        resetDiscordAlertStateForTests();
+        console.error = (message?: unknown) => errors.push(String(message));
+        globalThis.fetch = ((input: string | URL | Request) => {
+            const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+            requests.push(url);
+            return Promise.resolve(Response.json({ message: "Discord unavailable" }, { status: 503 }));
+        }) as typeof fetch;
+        try {
+            const lookup = await lookupDiscordMember(env, "bot", "987654321098765432", "poll_device_session");
+            assert.equal(lookup.decision, "fail_open");
+            assert.deepEqual(requests, ["https://discord.com/api/v10/guilds/709516043332354119/members/987654321098765432"]);
+            assert.ok(errors.some((line) => {
+                const value = JSON.parse(line) as { event?: string; reason?: string };
+                return value.event === "alert_recipient_unconfigured" && value.reason === reason;
+            }));
+        } finally {
+            globalThis.fetch = originalFetch;
+            console.error = originalError;
+            resetDiscordAlertStateForTests();
+        }
+    });
+}
+
 test("Discord server membership is optional when claiming a sponsored seat", async () => {
     const originalFetch = globalThis.fetch;
     const { env, statements } = testEnvironment();
@@ -130,16 +239,46 @@ test("Discord server membership is optional when claiming a sponsored seat", asy
     }
 });
 
+test("OAuth member lookup failures approve the installer and record the fail-open path", async () => {
+    const originalFetch = globalThis.fetch;
+    const originalError = console.error;
+    const { env, statements } = testEnvironment();
+    const requests: string[] = [];
+    resetDiscordAlertStateForTests();
+    console.error = () => undefined;
+    globalThis.fetch = ((input: string | URL | Request) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        requests.push(url);
+        if (url.includes("/users/@me/guilds/") && url.endsWith("/member")) {
+            return Promise.resolve(Response.json({ message: "Discord unavailable" }, { status: 503 }));
+        }
+        if (url.endsWith("/users/@me/channels")) return Promise.resolve(Response.json({ id: "987654321098765432" }));
+        if (url.endsWith("/messages")) return Promise.resolve(Response.json({ id: "123456789012345678" }));
+        return discordOAuthFetch(input);
+    }) as typeof fetch;
+    try {
+        const response = await completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${"H".repeat(43)}`), env);
+        assert.equal(response.status, 200);
+        assert.match(await response.text(), /Access approved/);
+        assert.ok(statements.some((sql) => sql.includes("status = 'approved'")));
+        assert.ok(requests.some((url) => url.endsWith("/users/@me/channels")));
+        assert.ok(requests.some((url) => url.endsWith("/messages")));
+    } finally {
+        globalThis.fetch = originalFetch;
+        console.error = originalError;
+        resetDiscordAlertStateForTests();
+    }
+});
+
 test("Discord server membership remains required to manage sponsor seats", async () => {
     const originalFetch = globalThis.fetch;
     const { env } = testEnvironment({ portalLogin: true });
     globalThis.fetch = installerOAuthFetch() as typeof fetch;
     try {
         const state = "B".repeat(43);
-        await assert.rejects(
-            completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env),
-            /discord_membership_required/,
-        );
+        const response = await completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env);
+        assert.equal(response.status, 403);
+        assert.match(await response.text(), /A Staff, Tester, Patreon, Boosty, or Afdian role is required/);
     } finally {
         globalThis.fetch = originalFetch;
     }

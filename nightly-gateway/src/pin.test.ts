@@ -182,6 +182,7 @@ function pinEnvironment(): {
                     };
                 },
             },
+            DISCORD_ALERT_USER_ID: "123456789012345678",
             DISCORD_BOT_TOKEN: "B".repeat(59),
             DISCORD_CLIENT_ID: "1537575576745803799",
             DISCORD_CLIENT_SECRET: "test-secret-value-that-is-long-enough",

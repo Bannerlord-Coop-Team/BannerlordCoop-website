@@ -448,6 +448,15 @@ $statusPending = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 
 if ($statusPending.Action -cne 'Continue') {
     throw 'An HTTP 428 token poll did not continue waiting for Discord.'
 }
+$gatewayFailure = Get-NightlyGatewayFailureMessage -Operation 'Nightly authorization token request' -ErrorRecord (New-GatewayWebError 502 'internal_error')
+if ($gatewayFailure -notmatch 'HTTP 502' -or $gatewayFailure -notmatch 'error=internal_error' -or
+    $gatewayFailure -match 'ScriptHalted') {
+    throw 'A gateway failure did not retain its HTTP status and error code.'
+}
+$installerSource = Get-Content -LiteralPath $installer -Raw
+if ($installerSource -match '(?m)^\s*throw\s*$') {
+    throw 'The installer still contains a bare throw that hides gateway diagnostics.'
+}
 $invalid = Get-NightlyTokenPollDecision -Response ([pscustomobject]@{ token_type = 'Basic'; access_token = 'nope' })
 if ($invalid.Action -cne 'Fail' -or $invalid.Message -cne 'The nightly authorization token is invalid. Details: response=invalid; bearer=false; token_length=4') {
     throw 'A malformed success body did not keep the invalid-token message.'

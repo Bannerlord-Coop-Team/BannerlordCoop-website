@@ -3,6 +3,7 @@
 // the generated HYPERDRIVE binding from wrangler.jsonc.
 interface Env {
     DB: import("./src/database").GatewayDatabase;
+    DISCORD_ALERT_USER_ID?: string;
     DISCORD_BOT_TOKEN: string;
     DISCORD_CLIENT_SECRET: string;
     TOKEN_ENCRYPTION_KEY: string;

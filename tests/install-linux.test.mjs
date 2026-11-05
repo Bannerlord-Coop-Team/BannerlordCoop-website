@@ -15,6 +15,14 @@ test("published Linux installers match the canonical scripts", () => {
     }
 });
 
+test("Linux gateway failures retain HTTP status and error codes", () => {
+    const installer = readFileSync(new URL("../installer/install-linux.sh", import.meta.url), "utf8");
+    assert.match(installer, /gateway_failure_detail/);
+    assert.match(installer, /HTTP %s; error=%s/);
+    assert.match(installer, /The nightly authorization service returned an error/);
+    assert.match(installer, /Could not read the release manifest/);
+});
+
 test("Linux installer handles Windows release contracts and failure recovery", {
     skip: process.platform !== "linux" && "Run npm run test:installer-linux on Linux or WSL.",
 }, () => {
