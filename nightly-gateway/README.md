@@ -78,6 +78,19 @@ no client/server archive keys, URLs, sizes, commits, workflow runs, or credentia
 The existing private `RELEASES` binding and public R2 origin are sufficient;
 no new Worker binding or secret is required.
 
+### Publication read failures and compatibility fallback
+
+`GET /v1/manifests/release` remains fail closed when the hash-bound publication
+cannot be read or validated, because a client/server pair must never be
+invented from partial metadata. `GET /v1/manifests/client` emits a structured
+`nightly_publication_read_failed` operator event and falls back to the bounded,
+validated `nightly/client.json` object in the same `RELEASES` bucket. The
+fallback accepts only the content-addressed client key and a gateway or fixed
+R2 artifact URL; it rewrites the response through the normal artifact route.
+Successful fallback emits `nightly_legacy_client_fallback_served`, while a
+missing or invalid compatibility object remains a 503. These events are
+Worker observability alerts and contain no credentials or archive bytes.
+
 For a Windows authorization failure, ask for the complete **Session diagnostics
 v2** block from the installer. It records both PowerShell attempts and the curl
 fallback, with response type, field lengths and validation results, HTTP status
