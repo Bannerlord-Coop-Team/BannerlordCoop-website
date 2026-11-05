@@ -293,6 +293,26 @@ class LinuxInstallerTests(unittest.TestCase):
         self.run_installer()
         self.assertFalse(sentinel.exists())
 
+    def test_client_above_the_old_limit_installs(self):
+        # Stored random bytes keep this ZIP above the old 25 MiB check.
+        large = self.archive("client", {
+            "Coop/SubModule.xml": "module", COOP_DLL: "new-client", "Coop/padding.bin": os.urandom(26214401),
+        })
+        self.assertGreater(large["bytes"], 26214400)
+        self.client.update(large)
+        del self.config["artifacts"][self.client["publicUrl"]]
+        self.set_client_url(GATEWAY + f"/v1/artifacts/nightly/clients/{HEAD}/{large['sha256']}/Coop.7z")
+        self.configure_server()
+        self.run_installer()
+        self.assertEqual((self.modules / COOP_DLL).read_text(), "new-client")
+
+    def test_non_positive_client_size_is_rejected(self):
+        self.configure_server()
+        self.client["bytes"] = 0
+        output = self.run_installer(success=False)
+        self.assertIn("nightly client release metadata is invalid", output)
+        self.assertFalse((self.modules / COOP_DLL).exists())
+
     def test_size_and_hash_failures_preserve_existing_client(self):
         target = self.modules / COOP_DLL
         target.parent.mkdir(parents=True)

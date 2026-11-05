@@ -180,6 +180,37 @@ function Invoke-RestMethod {
 $script:ManifestResponse = $validManifest
 $script:NightlyAccessToken = 't' * 43
 $result = Get-ReleaseManifest
+# The client archive has no upper limit; the positive size check and the server limit stay.
+foreach ($clientBytes in @(8388609L, 26214401L, 1073741824L)) {
+    $largeClientManifest = $validManifest.PSObject.Copy()
+    $largeClientManifest.client = $validManifest.client.PSObject.Copy()
+    $largeClientManifest.client.bytes = $clientBytes
+    $script:ManifestResponse = $largeClientManifest
+    if ((Get-ReleaseManifest).client.bytes -ne $clientBytes) {
+        throw "A $clientBytes byte nightly client was rejected."
+    }
+}
+foreach ($clientBytes in @(0, -1, 'not-a-number')) {
+    $invalidClientManifest = $validManifest.PSObject.Copy()
+    $invalidClientManifest.client = $validManifest.client.PSObject.Copy()
+    $invalidClientManifest.client.bytes = $clientBytes
+    $script:ManifestResponse = $invalidClientManifest
+    $rejected = $false
+    try { Get-ReleaseManifest | Out-Null } catch { $rejected = $true }
+    if (-not $rejected) {
+        throw "A nightly client with bytes '$clientBytes' was accepted."
+    }
+}
+$oversizedServerManifest = $validManifest.PSObject.Copy()
+$oversizedServerManifest.server = $validManifest.server.PSObject.Copy()
+$oversizedServerManifest.server.bytes = 8589934593L
+$script:ManifestResponse = $oversizedServerManifest
+$rejected = $false
+try { Get-ReleaseManifest | Out-Null } catch { $rejected = $true }
+if (-not $rejected) {
+    throw 'A nightly server above its limit was accepted.'
+}
+$script:ManifestResponse = $validManifest
 if ($result.releaseDate -ne '2026-08-03') {
     throw 'A valid release manifest was rejected.'
 }
@@ -931,6 +962,22 @@ $script:NightlyAccessToken = 'p' * 43
 $pinManifest = Get-PinManifest
 if ($pinManifest.kind -cne 'create-build-pin' -or $pinManifest.client.publicUrl -cne $pinClientUri) {
     throw 'A valid create-build pin manifest was rejected.'
+}
+$largePinManifest = $validPinManifest.PSObject.Copy()
+$largePinManifest.client = $validPinManifest.client.PSObject.Copy()
+$largePinManifest.client.bytes = 8388609L
+$script:PinManifestResponse = $largePinManifest
+if ((Get-PinManifest).client.bytes -ne 8388609L) {
+    throw 'A create-build pin client above 8 MiB was rejected.'
+}
+$zeroPinManifest = $validPinManifest.PSObject.Copy()
+$zeroPinManifest.client = $validPinManifest.client.PSObject.Copy()
+$zeroPinManifest.client.bytes = 0
+$script:PinManifestResponse = $zeroPinManifest
+$rejectedPin = $false
+try { Get-PinManifest | Out-Null } catch { $rejectedPin = $true }
+if (-not $rejectedPin) {
+    throw 'A create-build pin client with no bytes was accepted.'
 }
 $script:PinManifestResponse = $validPinManifest.PSObject.Copy()
 $script:PinManifestResponse.client = $validPinManifest.client.PSObject.Copy()

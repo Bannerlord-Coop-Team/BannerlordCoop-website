@@ -259,7 +259,7 @@ export function validateNightlyPublicationManifest(input: unknown, legacyOrigin:
     }
     const client = recordField(value, "client");
     const clientSha = stringField(client, "sha256", NIGHTLY_PUBLICATION_SHA256);
-    validateArtifact(client, legacyOrigin, `nightly/clients/${value.headSha}/${clientSha}/Coop.7z`, NIGHTLY_PUBLICATION_FILE, 8 * 1024 * 1024);
+    validateArtifact(client, legacyOrigin, `nightly/clients/${value.headSha}/${clientSha}/Coop.7z`, NIGHTLY_PUBLICATION_FILE);
     const server = recordField(value, "server");
     const serverSha = stringField(value, "serverSha", NIGHTLY_PUBLICATION_COMMIT);
     const serverSha256 = stringField(server, "sha256", NIGHTLY_PUBLICATION_SHA256);
@@ -308,11 +308,11 @@ function validateArtifact(
     legacyOrigin: string,
     key: string,
     filePattern: RegExp,
-    maximumBytes: number,
+    maximumBytes?: number,
 ): void {
     if (typeof value.fileName !== "string" || !filePattern.test(value.fileName)
         || value.key !== key || typeof value.bytes !== "number" || !Number.isSafeInteger(value.bytes)
-        || value.bytes <= 0 || value.bytes > maximumBytes
+        || value.bytes <= 0 || (maximumBytes !== undefined && value.bytes > maximumBytes)
         || typeof value.sha256 !== "string" || !NIGHTLY_PUBLICATION_SHA256.test(value.sha256)
         || typeof value.publicUrl !== "string" || value.publicUrl !== `${legacyOrigin}/${key}`
         || !NIGHTLY_PUBLICATION_KEY.test(key)) {

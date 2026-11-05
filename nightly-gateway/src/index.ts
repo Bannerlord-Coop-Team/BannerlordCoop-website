@@ -36,8 +36,6 @@ const JSON_HEADERS = Object.freeze({
 });
 const DEVICE_SECRET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const USER_CODE_PATTERN = /^[A-Z2-9]{4}-[A-Z2-9]{4}$/;
-const MAXIMUM_PIN_CLIENT_BYTES = 8 * 1024 * 1024;
-const MAXIMUM_PIN_MINT_BYTES = MAXIMUM_PIN_CLIENT_BYTES + 16 * 1024;
 const MAXIMUM_PIN_SERVER_BYTES = 6 * 1024 * 1024 * 1024;
 const MANUAL_SERVER_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/;
 const PUBLIC_MANUAL_SERVER_ORIGIN = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
@@ -478,7 +476,7 @@ export async function mintCreateBuildPin(request: Request, env: Env): Promise<Re
     const contentLength = request.headers.get("content-length");
     if (contentLength !== null) {
         const declared = Number(contentLength);
-        if (!Number.isSafeInteger(declared) || declared <= 0 || declared > MAXIMUM_PIN_MINT_BYTES) {
+        if (!Number.isSafeInteger(declared) || declared <= 0) {
             throw new GatewayError(413, "request_too_large");
         }
     }
@@ -495,7 +493,7 @@ export async function mintCreateBuildPin(request: Request, env: Env): Promise<Re
         throw new GatewayError(400, "invalid_request");
     }
     const parsed = parseCreateBuildPinMetadata(metadata, env);
-    if (clientFile.size !== parsed.client.bytes || clientFile.size > MAXIMUM_PIN_CLIENT_BYTES) {
+    if (clientFile.size !== parsed.client.bytes) {
         throw new GatewayError(400, "invalid_request");
     }
     const clientBytes = new Uint8Array(await clientFile.arrayBuffer());
@@ -694,7 +692,6 @@ function parseCreateBuildPinMetadata(value: CreateBuildPinMetadata, env: Env): C
         || value.client.fileName !== "Coop.7z"
         || !Number.isSafeInteger(value.client.bytes)
         || value.client.bytes <= 0
-        || value.client.bytes > MAXIMUM_PIN_CLIENT_BYTES
         || !isSha256Hex(value.client.sha256)
         || !MANUAL_SERVER_FILE.test(value.server.fileName)
         || !isAllowedManualServerKey(value.server.key, value.buildId)

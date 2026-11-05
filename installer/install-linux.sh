@@ -9,7 +9,6 @@ set -u
 GATEWAY='https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev'
 CLIENT_ARCHIVE_URI="$GATEWAY/v1/artifacts/nightly/Coop.7z"
 SERVER_ARCHIVE_URI="$GATEWAY/v1/artifacts/nightly/BannerlordCoop-DedicatedServer-Win64.7z"
-MAX_CLIENT=26214400
 MAX_SERVER=8589934592
 MAX_BASE=8589934592
 MAX_UPDATE=536870912
@@ -471,7 +470,7 @@ printf 'Latest nightly: %s (%s)\n' "$(display_date "$REL_DATE" "$BUILT_AT")" "$(
 
 check_client_url
 is_hex64 "$CLIENT_SHA" || die "The nightly client release metadata is invalid."
-is_num "$CLIENT_BYTES" && [ "$CLIENT_BYTES" -gt 0 ] && [ "$CLIENT_BYTES" -le "$MAX_CLIENT" ] \
+is_num "$CLIENT_BYTES" && [ "$CLIENT_BYTES" -gt 0 ] \
     || die "The nightly client release metadata is invalid."
 [[ $CLIENT_NAME =~ ^[A-Za-z0-9][A-Za-z0-9\ ._-]{0,199}\.7z$ ]] \
     || die "The nightly client release metadata is invalid."

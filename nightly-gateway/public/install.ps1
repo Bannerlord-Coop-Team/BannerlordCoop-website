@@ -1374,7 +1374,7 @@ function Get-ReleaseManifest {
         throw 'The nightly container publication identity is invalid.'
     }
     $expected = @(
-        @{ Name = 'client'; Uri = $script:ClientArchiveUri; Maximum = 26214400L },
+        @{ Name = 'client'; Uri = $script:ClientArchiveUri },
         @{ Name = 'server'; Uri = $script:ServerArchiveUri; Maximum = 8589934592L }
     )
     foreach ($entry in $expected) {
@@ -1395,7 +1395,7 @@ function Get-ReleaseManifest {
         }
         if (-not $validUri -or
             [string]$release.sha256 -notmatch '^[a-f0-9]{64}$' -or
-            -not $validBytes -or $bytes -le 0 -or $bytes -gt $entry.Maximum -or
+            -not $validBytes -or $bytes -le 0 -or ($null -ne $entry.Maximum -and $bytes -gt $entry.Maximum) -or
             [string]$release.fileName -cnotmatch '^[A-Za-z0-9][A-Za-z0-9 ._-]{0,199}\.7z$') {
             throw "The nightly $($entry.Name) release metadata is invalid."
         }
@@ -1478,7 +1478,7 @@ function Get-PinManifest {
         [string]$manifest.headSha -cne [string]$manifest.clientSha -or
         -not (Test-PinClientArtifactUri ([string]$manifest.client.publicUrl)) -or
         [string]$manifest.client.sha256 -notmatch '^[a-f0-9]{64}$' -or
-        -not $validClientBytes -or $clientBytes -le 0 -or $clientBytes -gt 8388608L -or
+        -not $validClientBytes -or $clientBytes -le 0 -or
         [string]$manifest.client.fileName -cne 'Coop.7z' -or
         -not (Test-PinServerArtifactUri ([string]$manifest.server.publicUrl)) -or
         [string]$manifest.server.sha256 -notmatch '^[a-f0-9]{64}$' -or
