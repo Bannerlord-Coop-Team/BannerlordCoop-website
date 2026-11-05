@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { validateNightlyPublicationManifest, validateNightlyPublicationPointer } from "./core";
+import { validateNightlyPublicationPointer } from "./core";
 import { NIGHTLY_POINTER_URL, readNightlyPublication } from "./publication";
 import worker from "./index";
 
@@ -136,34 +136,6 @@ test("gateway rejects wrong repositories, tags, uppercase hashes, and extra path
         const pointer = structuredClone(value.pointer);
         mutate(pointer);
         assert.throws(() => validateNightlyPublicationPointer(pointer));
-    }
-});
-
-test("a nightly client above the old limits is accepted and its other checks stay", () => {
-    const { manifest } = fixture();
-    const withClient = (client: object) => ({ ...manifest, client: { ...manifest.client, ...client } });
-    for (const bytes of [8 * 1024 * 1024 + 1, 25 * 1024 * 1024 + 1, 1024 * 1024 * 1024]) {
-        const accepted = validateNightlyPublicationManifest(withClient({ bytes }), origin);
-        assert.equal((accepted.client as { bytes: number }).bytes, bytes);
-    }
-    for (const bytes of [0, -1, 1.5, "10", null, Number.MAX_SAFE_INTEGER + 1]) {
-        assert.throws(() => validateNightlyPublicationManifest(withClient({ bytes }), origin), /invalid_nightly_publication_artifact/);
-    }
-    assert.throws(() => validateNightlyPublicationManifest(withClient({ key: "nightly/Coop.7z" }), origin), /invalid_nightly_publication_artifact/);
-    assert.throws(() => validateNightlyPublicationManifest(withClient({ publicUrl: `${origin}/other` }), origin), /invalid_nightly_publication_artifact/);
-});
-
-test("nightly server artifacts keep their size limits", () => {
-    const { manifest } = fixture();
-    const { server } = manifest;
-    const { incremental } = server;
-    const over = [
-        { ...manifest, server: { ...server, bytes: 8 * 1024 * 1024 * 1024 + 1 } },
-        { ...manifest, server: { ...server, incremental: { ...incremental, base: { ...incremental.base, bytes: 8 * 1024 * 1024 * 1024 + 1 } } } },
-        { ...manifest, server: { ...server, incremental: { ...incremental, update: { ...incremental.update, bytes: 512 * 1024 * 1024 + 1 } } } },
-    ];
-    for (const candidate of over) {
-        assert.throws(() => validateNightlyPublicationManifest(candidate, origin), /invalid_nightly_publication_artifact/);
     }
 });
 

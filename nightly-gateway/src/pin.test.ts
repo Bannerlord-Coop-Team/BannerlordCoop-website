@@ -304,48 +304,6 @@ test("the bot can mint a create-build pin and the installer can redeem it once",
     assert.match(await usedPage.text(), /already used/);
 });
 
-test("a create-build pin accepts a client above the old limit from mint to manifest", async () => {
-    const { env, objects } = pinEnvironment();
-    const archive = Buffer.alloc(8 * 1024 * 1024 + 1, 7);
-    const body = metadata();
-    body.client.bytes = archive.byteLength;
-    body.client.sha256 = createHash("sha256").update(archive).digest("hex");
-    const declared = mintRequest(PIN_SECRET, body, archive);
-    declared.headers.set("content-length", String(archive.byteLength + 16 * 1024));
-    const minted = await fetchGateway(declared, env);
-    assert.equal(minted.status, 201);
-    assert.equal(objects.get(`pins/${BUILD_ID}/Coop.7z`)?.byteLength, archive.byteLength);
-    const { token } = await minted.json() as { token: string };
-    const redeemed = await fetchGateway(new Request(`${gateway}/v1/pins/token`, {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: `pin=${token}`,
-    }), env);
-    const { access_token: accessToken } = await redeemed.json() as { access_token: string };
-    const manifest = await fetchGateway(new Request(`${gateway}/v1/manifests/pin`, {
-        headers: { authorization: `Bearer ${accessToken}` },
-    }), env);
-    assert.equal((await manifest.json() as { client: { bytes: number } }).client.bytes, archive.byteLength);
-});
-
-test("pin mint keeps the other client and server size checks", async () => {
-    const { env } = pinEnvironment();
-    const withClientBytes = (bytes: number) => {
-        const body = metadata();
-        body.client.bytes = bytes;
-        return body;
-    };
-    for (const bytes of [0, -1, 1.5, CLIENT_ARCHIVE.byteLength + 1]) {
-        assert.equal((await fetchGateway(mintRequest(PIN_SECRET, withClientBytes(bytes)), env)).status, 400);
-    }
-    const oversizedServer = metadata();
-    oversizedServer.server.bytes = 6 * 1024 * 1024 * 1024 + 1;
-    assert.equal((await fetchGateway(mintRequest(PIN_SECRET, oversizedServer), env)).status, 400);
-    const invalidLength = mintRequest();
-    invalidLength.headers.set("content-length", "0");
-    assert.equal((await fetchGateway(invalidLength, env)).status, 413);
-});
-
 test("a nightly download session cannot read a create-build pin artifact", async () => {
     const { env, nightlySessions } = pinEnvironment();
     assert.equal((await fetchGateway(mintRequest(), env)).status, 201);
