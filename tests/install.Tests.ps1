@@ -179,10 +179,51 @@ function Invoke-RestMethod {
 }
 $script:ManifestResponse = $validManifest
 $script:NightlyAccessToken = 't' * 43
+$nightlyHeaders = Get-NightlyHeaders
+if ([string]$nightlyHeaders[$script:NightlyManifestVersionHeader] -cne '2') {
+    throw 'The nightly installer did not request the v2 manifest explicitly.'
+}
 $result = Get-ReleaseManifest
 if ($result.releaseDate -ne '2026-08-03') {
     throw 'A valid release manifest was rejected.'
 }
+$legacyClientSha = 'b' * 64
+$legacyClientKey = "nightly/clients/$($validManifest.headSha)/$legacyClientSha/Coop.7z"
+$legacyManifest = [pscustomobject]@{
+    version = 1
+    releaseDate = '2026-08-03'
+    builtAt = '2026-08-04T05:30:00Z'
+    headSha = $validManifest.headSha
+    client = [pscustomobject]@{
+        fileName = 'Coop 08-03-2026.7z'
+        key = $legacyClientKey
+        bytes = 7000000
+        sha256 = $legacyClientSha
+        publicUrl = "$($script:NightlyGatewayUri)/v1/artifacts/$legacyClientKey"
+    }
+    server = [pscustomobject]@{
+        fileName = 'BannerlordCoop-DedicatedServer-Win64-2026-08-03-coop-aaaaaaa.7z'
+        bytes = 4380000000
+        sha256 = 'c' * 64
+        publicUrl = $script:ServerArchiveUri
+        incremental = $validManifest.server.incremental
+    }
+}
+$script:ManifestResponse = $legacyManifest
+$legacyResult = Get-ReleaseManifest
+if ($legacyResult.version -ne 1 -or $legacyResult.headSha -cne $legacyManifest.headSha) {
+    throw 'A valid legacy v1 release manifest was rejected.'
+}
+$legacyBad = $legacyManifest.PSObject.Copy()
+$legacyBad.server = $legacyManifest.server.PSObject.Copy()
+$legacyBad.server.publicUrl = 'https://example.invalid/server.7z'
+$script:ManifestResponse = $legacyBad
+$rejected = $false
+try { Get-ReleaseManifest | Out-Null } catch { $rejected = $true }
+if (-not $rejected) {
+    throw 'A legacy v1 release manifest containing an untrusted server URL was accepted.'
+}
+$script:ManifestResponse = $validManifest
 $clientOnlyManifest = $validManifest.PSObject.Copy()
 $clientOnlyManifest.PSObject.Properties.Remove('server')
 $script:ManifestResponse = $clientOnlyManifest
