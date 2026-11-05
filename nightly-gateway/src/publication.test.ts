@@ -105,7 +105,7 @@ test("both authenticated manifest routes select the same pointer and keep privat
     context.mock.method(globalThis, "fetch", value.fetcher);
     const headers = {
         authorization: `Bearer ${"n".repeat(43)}`,
-        "x-bannerlordcoop-nightly-version": "2",
+        "x-bannerlord-coop-nightly-version": "2",
     };
     for (const path of ["client", "release"]) {
         const response = await worker.fetch(new Request(`${gateway}/v1/manifests/${path}`, { headers }), env);
@@ -217,7 +217,7 @@ test("client and release routes fall back only to a validated legacy pair", asyn
     context.mock.method(globalThis, "fetch", value.fetcher);
     const headers = {
         authorization: `Bearer ${"n".repeat(43)}`,
-        "x-bannerlordcoop-nightly-version": "2",
+        "x-bannerlord-coop-nightly-version": "2",
     };
     const client = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, { headers }), env);
     assert.equal(client.status, 200);
@@ -314,7 +314,7 @@ test("legacy v1 is the default while an explicit version header selects v2", asy
         assert.equal(manifest.headSha, legacyRelease.headSha);
     }
     const v2 = await worker.fetch(new Request(`${gateway}/v1/manifests/release`, {
-        headers: { authorization, "x-bannerlordcoop-nightly-version": "2" },
+            headers: { authorization, "x-bannerlord-coop-nightly-version": "2" },
     }), env);
     assert.equal(v2.status, 200);
     assert.equal((await v2.json() as { version: number }).version, 2);

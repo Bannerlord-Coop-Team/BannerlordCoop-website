@@ -37,7 +37,7 @@ const JSON_HEADERS = Object.freeze({
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
 });
-const NIGHTLY_PUBLICATION_VERSION_HEADER = "x-bannerlordcoop-nightly-version";
+const NIGHTLY_PUBLICATION_VERSION_HEADER = "x-bannerlord-coop-nightly-version";
 const DEVICE_SECRET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const USER_CODE_PATTERN = /^[A-Z2-9]{4}-[A-Z2-9]{4}$/;
 const MAXIMUM_PIN_CLIENT_BYTES = 8 * 1024 * 1024;

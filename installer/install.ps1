@@ -1343,13 +1343,21 @@ function Test-NightlyLegacyServerArtifactUri {
     return $Uri -ceq $script:ServerArchiveUri
 }
 
+function Test-NightlyBuiltAt {
+    param([Parameter(Mandatory = $true)]$Value)
+
+    if ($Value -is [DateTime]) { return $Value.Kind -eq [DateTimeKind]::Utc }
+    if ($Value -is [DateTimeOffset]) { return $Value.Offset -eq [TimeSpan]::Zero }
+    return ([string]$Value -match '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$')
+}
+
 function Assert-LegacyNightlyReleaseManifest {
     param([Parameter(Mandatory = $true)]$Manifest)
 
     if ($null -eq $Manifest -or $Manifest.version -ne 1 -or
         [string]$Manifest.releaseDate -notmatch '^\d{4}-\d{2}-\d{2}$' -or
         [string]$Manifest.headSha -notmatch '^[a-f0-9]{40}$' -or
-        [string]$Manifest.builtAt -notmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$') {
+        -not (Test-NightlyBuiltAt $Manifest.builtAt)) {
         throw 'The legacy nightly release manifest is invalid.'
     }
     $client = $Manifest.client
