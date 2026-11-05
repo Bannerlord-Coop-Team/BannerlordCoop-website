@@ -128,10 +128,14 @@ try {
 }
 
 $validManifest = [pscustomobject]@{
-    version = 1
+    version = 2
+    kind = 'bannerlordcoop-nightly-publication'
     releaseDate = '2026-08-03'
     builtAt = '2026-08-04T05:30:00Z'
     headSha = 'a' * 40
+    serverSha = '1' * 40
+    clientRunId = '12345678901'
+    serverRunId = '12345678902'
     client = [pscustomobject]@{
         fileName = 'Coop 08-03-2026.7z'
         bytes = 7000000
@@ -142,7 +146,7 @@ $validManifest = [pscustomobject]@{
         fileName = 'BannerlordCoop-DedicatedServer-Win64-2026-08-03-coop-aaaaaaa.7z'
         bytes = 4380000000
         sha256 = 'c' * 64
-        publicUrl = $script:ServerArchiveUri
+        publicUrl = "$($script:NightlyGatewayUri)/v1/artifacts/nightly/windows/full/$('a' * 40)/$('1' * 40)/$('c' * 64)/BannerlordCoop-DedicatedServer-Win64.7z"
         incremental = [pscustomobject]@{
             version = 1
             layout = 'base-overlay-v1'
@@ -162,6 +166,12 @@ $validManifest = [pscustomobject]@{
             }
         }
     }
+    container = [pscustomobject]@{
+        repository = 'ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server'
+        manifestDigest = 'sha256:' + ('9' * 64)
+        digestReference = 'ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server@sha256:' + ('9' * 64)
+        immutableReference = 'ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server:nightly-' + ('1' * 12) + '-' + ('a' * 12) + '-' + ('9' * 64)
+    }
 }
 function Invoke-RestMethod {
     param($Method, $Uri, $Headers)
@@ -176,9 +186,10 @@ if ($result.releaseDate -ne '2026-08-03') {
 $clientOnlyManifest = $validManifest.PSObject.Copy()
 $clientOnlyManifest.PSObject.Properties.Remove('server')
 $script:ManifestResponse = $clientOnlyManifest
-$clientResult = Get-ReleaseManifest $true
-if ($clientResult.client.publicUrl -ne $script:ClientArchiveUri) {
-    throw 'A valid standalone client manifest was rejected.'
+$rejected = $false
+try { Get-ReleaseManifest $true | Out-Null } catch { $rejected = $true }
+if (-not $rejected) {
+    throw 'A client-only nightly manifest was accepted.'
 }
 $immutableManifest = $validManifest.PSObject.Copy()
 $immutableManifest.client = $validManifest.client.PSObject.Copy()

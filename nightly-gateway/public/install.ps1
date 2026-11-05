@@ -1316,11 +1316,31 @@ function Test-NightlyClientArtifactUri {
     return $parsed.AbsolutePath -ceq "/v1/artifacts/nightly/clients/$HeadSha/$Sha256/Coop.7z"
 }
 
+function Test-NightlyServerArtifactUri {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uri,
+        [Parameter(Mandatory = $true)][string]$HeadSha,
+        [Parameter(Mandatory = $true)][string]$ServerSha,
+        [Parameter(Mandatory = $true)][string]$Sha256
+    )
+
+    if ($HeadSha -notmatch '^[a-f0-9]{40}$' -or $ServerSha -notmatch '^[a-f0-9]{40}$' -or $Sha256 -notmatch '^[a-f0-9]{64}$') {
+        return $false
+    }
+    try { $parsed = [Uri]$Uri } catch { return $false }
+    if ($parsed.Scheme -cne 'https' -or
+        $parsed.Authority -cne 'bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev' -or
+        -not [string]::IsNullOrEmpty($parsed.Query) -or
+        -not [string]::IsNullOrEmpty($parsed.Fragment)) { return $false }
+    return $parsed.AbsolutePath -ceq "/v1/artifacts/nightly/windows/full/$HeadSha/$ServerSha/$Sha256/BannerlordCoop-DedicatedServer-Win64.7z"
+}
+
 function Get-ReleaseManifest {
     param([bool]$ClientOnly = $false)
 
     $headers = Get-NightlyHeaders
-    $manifestUri = if ($ClientOnly) { $script:ClientManifestUri } else { $script:ReleaseManifestUri }
+    # Client-only installs use the same complete publication marker as server installs.
+    $manifestUri = $script:ReleaseManifestUri
     Write-Host 'Checking the latest completed nightly release...'
     try {
         $manifest = Invoke-RestMethod -Method Get -Uri $manifestUri -Headers $headers
@@ -1331,15 +1351,32 @@ function Get-ReleaseManifest {
         }
         throw
     }
-    if ($manifest.version -ne 1 -or
+    if ($manifest.version -ne 2 -or
+        [string]$manifest.kind -cne 'bannerlordcoop-nightly-publication' -or
         [string]$manifest.releaseDate -notmatch '^\d{4}-\d{2}-\d{2}$' -or
-        [string]$manifest.headSha -notmatch '^[a-f0-9]{40}$') {
+        [string]$manifest.headSha -notmatch '^[a-f0-9]{40}$' -or
+        [string]$manifest.serverSha -notmatch '^[a-f0-9]{40}$' -or
+        [string]$manifest.clientRunId -notmatch '^[1-9]\d{0,19}$' -or
+        [string]$manifest.serverRunId -notmatch '^[1-9]\d{0,19}$') {
         throw 'The nightly release manifest is invalid.'
     }
-    $expected = @(@{ Name = 'client'; Uri = $script:ClientArchiveUri; Maximum = 26214400L })
-    if (-not $ClientOnly) {
-        $expected += @{ Name = 'server'; Uri = $script:ServerArchiveUri; Maximum = 8589934592L }
+    $container = $manifest.container
+    $digest = if ($null -eq $container) { '' } else { [string]$container.manifestDigest }
+    $serverPrefix = ([string]$manifest.serverSha).Substring(0, 12)
+    $clientPrefix = ([string]$manifest.headSha).Substring(0, 12)
+    $digestHex = if ($digest.Length -ge 7) { $digest.Substring(7) } else { '' }
+    $expectedImmutable = "ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server:nightly-$serverPrefix-$clientPrefix-$digestHex"
+    if ($null -eq $container -or
+        [string]$container.repository -cne 'ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server' -or
+        $digest -notmatch '^sha256:[a-f0-9]{64}$' -or
+        [string]$container.digestReference -cne "ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server@$digest" -or
+        [string]$container.immutableReference -cne $expectedImmutable) {
+        throw 'The nightly container publication identity is invalid.'
     }
+    $expected = @(
+        @{ Name = 'client'; Uri = $script:ClientArchiveUri; Maximum = 26214400L },
+        @{ Name = 'server'; Uri = $script:ServerArchiveUri; Maximum = 8589934592L }
+    )
     foreach ($entry in $expected) {
         $release = $manifest.($entry.Name)
         $bytes = 0L
@@ -1350,7 +1387,11 @@ function Get-ReleaseManifest {
                 -HeadSha ([string]$manifest.headSha) `
                 -Sha256 ([string]$release.sha256)
         } else {
-            [string]$release.publicUrl -ceq $entry.Uri
+            Test-NightlyServerArtifactUri `
+                -Uri ([string]$release.publicUrl) `
+                -HeadSha ([string]$manifest.headSha) `
+                -ServerSha ([string]$manifest.serverSha) `
+                -Sha256 ([string]$release.sha256)
         }
         if (-not $validUri -or
             [string]$release.sha256 -notmatch '^[a-f0-9]{64}$' -or
@@ -1359,7 +1400,10 @@ function Get-ReleaseManifest {
             throw "The nightly $($entry.Name) release metadata is invalid."
         }
     }
-    if (-not $ClientOnly -and $null -ne $manifest.server.incremental) {
+    if ($null -eq $manifest.server.incremental) {
+        throw 'The incremental Windows server release metadata is invalid.'
+    }
+    if ($null -ne $manifest.server.incremental) {
         $incremental = $manifest.server.incremental
         if ($incremental.version -ne 1 -or
             [string]$incremental.layout -cne 'base-overlay-v1' -or

@@ -200,8 +200,125 @@ export function artifactKeyFromUrl(value: unknown, legacyOrigin: string): string
     return isAllowedArtifactKey(key) ? key : null;
 }
 
-type JsonObject = { [key: string]: JsonValue };
+export type JsonObject = { [key: string]: JsonValue };
 type JsonValue = null | boolean | number | string | JsonValue[] | JsonObject;
+
+const NIGHTLY_PUBLICATION_COMMIT = /^[a-f0-9]{40}$/;
+const NIGHTLY_PUBLICATION_SHA256 = /^[a-f0-9]{64}$/;
+const NIGHTLY_PUBLICATION_DIGEST = /^sha256:[a-f0-9]{64}$/;
+const NIGHTLY_PUBLICATION_RUN_ID = /^[1-9][0-9]{0,19}$/;
+const NIGHTLY_PUBLICATION_FILE = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,199}\.7z$/;
+const NIGHTLY_PUBLICATION_KEY = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,1023}$/;
+const NIGHTLY_PUBLICATION_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const NIGHTLY_PUBLICATION_REPOSITORY = "ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server";
+
+export type NightlyPublicationPointer = {
+    version: 1;
+    kind: "bannerlordcoop-nightly-pointer";
+    manifest: { key: string; sha256: string };
+    container: { repository: string; manifestDigest: string; digestReference: string };
+};
+
+/** The public selection record contains hashes and a private metadata pointer only. */
+export function validateNightlyPublicationPointer(input: unknown): NightlyPublicationPointer {
+    if (!isRecord(input) || !exactKeys(input, ["version", "kind", "manifest", "container"])
+        || input.version !== 1 || input.kind !== "bannerlordcoop-nightly-pointer") {
+        throw new Error("invalid_nightly_pointer");
+    }
+    const manifest = recordField(input, "manifest");
+    const container = recordField(input, "container");
+    const sha256 = stringField(manifest, "sha256", NIGHTLY_PUBLICATION_SHA256);
+    const digest = stringField(container, "manifestDigest", NIGHTLY_PUBLICATION_DIGEST);
+    if (!exactKeys(manifest, ["key", "sha256"])
+        || !exactKeys(container, ["repository", "manifestDigest", "digestReference"])
+        || manifest.key !== `nightly/publications/${sha256}/release.json`
+        || container.repository !== NIGHTLY_PUBLICATION_REPOSITORY
+        || container.digestReference !== `${NIGHTLY_PUBLICATION_REPOSITORY}@${digest}`) {
+        throw new Error("invalid_nightly_pointer");
+    }
+    return input as unknown as NightlyPublicationPointer;
+}
+
+function exactKeys(value: JsonObject, keys: string[]): boolean {
+    return Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+}
+
+/** Validates the final marker before returning any nightly manifest projection. */
+export function validateNightlyPublicationManifest(input: unknown, legacyOrigin: string): JsonObject {
+    if (!isRecord(input)) throw new Error("invalid_nightly_publication");
+    const value = structuredClone(input) as JsonObject;
+    if (value.version !== 2 || value.kind !== "bannerlordcoop-nightly-publication"
+        || typeof value.releaseDate !== "string" || !NIGHTLY_PUBLICATION_DATE.test(value.releaseDate)
+        || typeof value.builtAt !== "string"
+        || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/.test(value.builtAt)
+        || typeof value.headSha !== "string" || !NIGHTLY_PUBLICATION_COMMIT.test(value.headSha)
+        || typeof value.serverSha !== "string" || !NIGHTLY_PUBLICATION_COMMIT.test(value.serverSha)
+        || typeof value.clientRunId !== "string" || !NIGHTLY_PUBLICATION_RUN_ID.test(value.clientRunId)
+        || typeof value.serverRunId !== "string" || !NIGHTLY_PUBLICATION_RUN_ID.test(value.serverRunId)) {
+        throw new Error("invalid_nightly_publication");
+    }
+    const client = recordField(value, "client");
+    const clientSha = stringField(client, "sha256", NIGHTLY_PUBLICATION_SHA256);
+    validateArtifact(client, legacyOrigin, `nightly/clients/${value.headSha}/${clientSha}/Coop.7z`, NIGHTLY_PUBLICATION_FILE, 8 * 1024 * 1024);
+    const server = recordField(value, "server");
+    const serverSha = stringField(value, "serverSha", NIGHTLY_PUBLICATION_COMMIT);
+    const serverSha256 = stringField(server, "sha256", NIGHTLY_PUBLICATION_SHA256);
+    const serverKey = `nightly/windows/full/${value.headSha}/${serverSha}/${serverSha256}/BannerlordCoop-DedicatedServer-Win64.7z`;
+    validateArtifact(server, legacyOrigin, serverKey, /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/, 8 * 1024 * 1024 * 1024);
+    const incremental = recordField(server, "incremental");
+    if (incremental.version !== 1 || incremental.layout !== "base-overlay-v1"
+        || typeof incremental.baseFingerprint !== "string"
+        || !NIGHTLY_PUBLICATION_SHA256.test(incremental.baseFingerprint)
+        || !Array.isArray(incremental.compatibleBaseFingerprints)
+        || incremental.compatibleBaseFingerprints.length > 16
+        || incremental.compatibleBaseFingerprints.some((fingerprint) => typeof fingerprint !== "string" || !NIGHTLY_PUBLICATION_SHA256.test(fingerprint))) {
+        throw new Error("invalid_nightly_publication_incremental");
+    }
+    const base = recordField(incremental, "base");
+    const update = recordField(incremental, "update");
+    const baseSha = stringField(base, "sha256", NIGHTLY_PUBLICATION_SHA256);
+    const updateSha = stringField(update, "sha256", NIGHTLY_PUBLICATION_SHA256);
+    validateArtifact(base, legacyOrigin, `windows/base/v1/${incremental.baseFingerprint}/${baseSha}/server-base.7z`, /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/, 8 * 1024 * 1024 * 1024);
+    validateArtifact(update, legacyOrigin, `nightly/windows/updates/${value.headSha}/${serverSha}/${updateSha}/server-update.7z`, /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/, 512 * 1024 * 1024);
+    const container = recordField(value, "container");
+    const digest = stringField(container, "manifestDigest", NIGHTLY_PUBLICATION_DIGEST);
+    const expectedImmutable = `${NIGHTLY_PUBLICATION_REPOSITORY}:nightly-${value.serverSha.slice(0, 12)}-${value.headSha.slice(0, 12)}-${digest.slice(7)}`;
+    if (container.repository !== NIGHTLY_PUBLICATION_REPOSITORY
+        || container.digestReference !== `${NIGHTLY_PUBLICATION_REPOSITORY}@${digest}`
+        || container.immutableReference !== expectedImmutable) {
+        throw new Error("invalid_nightly_publication_container");
+    }
+    return value;
+}
+
+function recordField(value: JsonObject, field: string): JsonObject {
+    const result = value[field];
+    if (!isRecord(result)) throw new Error("invalid_nightly_publication_field");
+    return result;
+}
+
+function stringField(value: JsonObject, field: string, pattern: RegExp): string {
+    const result = value[field];
+    if (typeof result !== "string" || !pattern.test(result)) throw new Error("invalid_nightly_publication_field");
+    return result;
+}
+
+function validateArtifact(
+    value: JsonObject,
+    legacyOrigin: string,
+    key: string,
+    filePattern: RegExp,
+    maximumBytes: number,
+): void {
+    if (typeof value.fileName !== "string" || !filePattern.test(value.fileName)
+        || value.key !== key || typeof value.bytes !== "number" || !Number.isSafeInteger(value.bytes)
+        || value.bytes <= 0 || value.bytes > maximumBytes
+        || typeof value.sha256 !== "string" || !NIGHTLY_PUBLICATION_SHA256.test(value.sha256)
+        || typeof value.publicUrl !== "string" || value.publicUrl !== `${legacyOrigin}/${key}`
+        || !NIGHTLY_PUBLICATION_KEY.test(key)) {
+        throw new Error("invalid_nightly_publication_artifact");
+    }
+}
 
 export function rewriteManifestArtifactUrls(
     input: unknown,
