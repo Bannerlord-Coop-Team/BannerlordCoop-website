@@ -37,10 +37,46 @@ server; Linux testers run those files through Wine or Proton. Run
 packaging.
 
 `installer/install.ps1` is the authority for nightly release metadata, Discord
-authorization decisions, and incremental server update behavior. Keep the Linux
+authorization decisions, and incremental server update behavior. Both installers
+read `/v1/manifests/release`. The gateway first reads the public
+`bannerlordcoop-nightly-releases/nightly/release.json` pointer, which contains only
+the GHCR digest and the hash-bound key of the private
+`bannerlordcoop-patron-nightlies/nightly/publications/<sha256>/release.json`
+manifest. It then validates that complete private marker before returning any
+artifact URL. A client-only choice therefore waits for the same complete
+publication as a server choice. Keep the Linux
 implementation aligned when those contracts change, including downloading the
-validated client `publicUrl` rather than the mutable legacy URL. Linux-specific
+validated client and immutable Windows server `publicUrl` values rather than
+mutable legacy URLs. Linux-specific
 Steam discovery and Wine/Proton handling remain in `install-linux.sh`.
+
+### Delay-safe publication cutover
+
+The client workflow invalidates the old `nightly/client.json` object before it
+publishes a new immutable client archive. This makes an old gateway's
+`/v1/manifests/client` route fail closed during the cutover instead of returning
+a stale client-only build. The new gateway accepts only a digest-only public
+pointer followed by a complete v2 private marker; an old full marker in either
+bucket fails closed. Old installers reject v2, so they cannot consume the new
+client by accident.
+
+Roll out the marker-aware Control Plane before dispatching the dedicated-server
+publisher, then deploy this gateway and both installers, and only then dispatch
+the server workflow with the exact client run and head. The publisher writes
+immutable client/server objects, an immutable private manifest, and an immutable
+GHCR image first, and flips the one public `nightly/release.json` pointer last.
+It leaves the mutable GHCR `nightly` alias at the previous complete release. A
+delayed gateway, installer, Control Plane, or publisher therefore leaves the
+previous complete publication or fails closed.
+
+The pointer is an unauthenticated GET at
+`https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev/nightly/release.json`, bounded
+to 4 KiB. Resolving its private manifest is bounded to 128 KiB; the whole read has
+a five-second deadline. Hash and image mismatches fail closed. There is no
+fallback to the private mutable `nightly/release.json` object. The pointer reveals
+no client/server archive keys, URLs, sizes, commits, workflow runs, or credentials.
+The existing private `RELEASES` binding and public R2 origin are sufficient;
+no new Worker binding or secret is required.
 
 For a Windows authorization failure, ask for the complete **Session diagnostics
 v2** block from the installer. It records both PowerShell attempts and the curl
@@ -88,7 +124,7 @@ Linux and checks that the packaged Linux scripts match their canonical sources.
 8. Optionally set `PIN_MINT_SECRET` with `wrangler secret put` to the same
    value as Bot_UP's `NIGHTLY_GATEWAY_PIN_SECRET` (at least 32 characters).
    Nightly Discord OAuth and `/v1/manifests/client` keep working when this
-   secret is absent. When it is set, `/create-build` can mint a one-time
+    secret is absent. When it is set, `/create-build` can mint a one-time
    installer pin. Apply D1 migration `0002_installer_pins.sql`, and add a
    one-day `pins/` lifecycle rule on `bannerlordcoop-patron-nightlies`. Do not
    require this secret at Worker start.
