@@ -69,14 +69,50 @@ It leaves the mutable GHCR `nightly` alias at the previous complete release. A
 delayed gateway, installer, Control Plane, or publisher therefore leaves the
 previous complete publication or fails closed.
 
-The pointer is an unauthenticated GET at
-`https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev/nightly/release.json`, bounded
-to 4 KiB. Resolving its private manifest is bounded to 128 KiB; the whole read has
-a five-second deadline. Hash and image mismatches fail closed. There is no
-fallback to the private mutable `nightly/release.json` object. The pointer reveals
-no client/server archive keys, URLs, sizes, commits, workflow runs, or credentials.
-The existing private `RELEASES` binding and public R2 origin are sufficient;
-no new Worker binding or secret is required.
+The pointer is published at the unauthenticated
+`https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev/nightly/release.json` URL and
+is also read directly from the `PUBLIC_RELEASES` R2 binding. The direct binding
+read avoids Workers redirect/runtime differences while retaining the public URL
+for CP and other readers. The pointer is bounded to 4 KiB. Resolving its private
+manifest is bounded to 128 KiB; the whole read has a five-second deadline. Hash
+and image mismatches fail closed. There is no fallback to the private mutable
+`nightly/release.json` object for the publication path. The pointer reveals no
+client/server archive keys, URLs, sizes, commits, workflow runs, or credentials.
+`PUBLIC_RELEASES` is a read-only public pointer bucket; `RELEASES` remains the
+private Patron marker and legacy-artifact bucket. Neither binding adds a secret or
+permits caller-chosen object keys.
+
+### Manifest-version compatibility during rollout
+
+`/v1/manifests/client` and `/v1/manifests/release` return the validated legacy
+v1 object by default, preserving compatibility with the 14b9e61c gateway and
+older installers. A request that sends
+`X-Bannerlord-Coop-Nightly-Version: 2` opts into the complete v2 publication;
+the header is the only representation switch and does not select an object key.
+The current Windows and Linux installers send that header and accept either v2
+or the validated v1 response, so a session can cross a gradual Worker rollout
+without a manifest-version failure. Client-only `/client` requests without the
+header remain v1.
+
+### Publication read failures and compatibility fallback
+
+`GET /v1/manifests/release` emits the same structured failure event and falls
+back only when both legacy `nightly/release.json` and `nightly/client.json`
+objects validate and agree on release date, client commit, client key, and
+client checksum. This keeps Server and Both on one validated legacy pair during
+a transient publication read failure; missing, malformed, or mismatched legacy
+objects remain a 503. `GET /v1/manifests/client` falls back to the bounded,
+validated `nightly/client.json` compatibility object in the same `RELEASES`
+bucket. A Client installer can continue with that validated legacy client. The
+fallback accepts only fixed artifact origins and content-addressed client keys,
+then rewrites responses through the normal artifact route.
+
+The failure event records the route, exact stage (`pointer`, `private_read`,
+`checksum`, `manifest`, or `container`), the pointer HTTP/R2 status when one
+exists, and the bounded exception class. Successful fallback emits
+`nightly_legacy_client_fallback_served` or
+`nightly_legacy_release_fallback_served`. These events are Worker observability
+alerts and contain no credentials or archive bytes.
 
 For a Windows authorization failure, ask for the complete **Session diagnostics
 v2** block from the installer. It records both PowerShell attempts and the curl
@@ -129,14 +165,15 @@ Linux and checks that the packaged Linux scripts match their canonical sources.
    one-day `pins/` lifecycle rule on `bannerlordcoop-patron-nightlies`. Do not
    require this secret at Worker start.
 9. Create and bind a private R2 bucket named
-   `bannerlordcoop-patron-nightlies`. Do not enable its `r2.dev` URL or attach a
-   public custom domain. The Worker is exposed through the existing
-   `garrett-luskey.workers.dev` account subdomain, so Squarespace DNS is not
-   involved.
-10. Keep `/create-build` output in the separate public
-   `bannerlordcoop-nightly-releases` bucket. Its copyable links remain valid
-   until Bot_UP's existing 24-hour expiry cleanup; never disable public access
-   on that bucket as part of the Patron-nightly rollout.
+   `bannerlordcoop-patron-nightlies` as `RELEASES`. Do not enable its `r2.dev`
+   URL or attach a public custom domain. The Worker is exposed through the
+   existing `garrett-luskey.workers.dev` account subdomain, so Squarespace DNS
+   is not involved.
+10. Keep `/create-build` output and the public publication pointer in the
+   separate `bannerlordcoop-nightly-releases` bucket, bound as `PUBLIC_RELEASES`.
+   Its copyable links remain valid until Bot_UP's existing 24-hour expiry
+   cleanup; never disable public access on that bucket as part of the
+   Patron-nightly rollout.
 11. Migrate Bot_UP/Managed Hosting to scoped R2 S3 reads from the private Patron
    bucket. Machine-to-machine hosting downloads do not use Discord OAuth.
 12. Deploy the updated client, dedicated-server, and website publishers and

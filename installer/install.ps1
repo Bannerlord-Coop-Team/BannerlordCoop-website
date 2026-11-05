@@ -8,6 +8,7 @@ $script:InstallerUri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.wo
 $script:NightlyGatewayUri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev'
 $script:ClientManifestUri = "$($script:NightlyGatewayUri)/v1/manifests/client"
 $script:ReleaseManifestUri = "$($script:NightlyGatewayUri)/v1/manifests/release"
+$script:NightlyManifestVersionHeader = 'X-Bannerlord-Coop-Nightly-Version'
 $script:ClientArchiveUri = "$($script:NightlyGatewayUri)/v1/artifacts/nightly/Coop.7z"
 $script:ServerArchiveUri = "$($script:NightlyGatewayUri)/v1/artifacts/nightly/BannerlordCoop-DedicatedServer-Win64.7z"
 $script:NightlyAccessToken = $null
@@ -1005,6 +1006,7 @@ function Get-NightlyHeaders {
     }
     return @{
         Authorization = "Bearer $($script:NightlyAccessToken)"
+        $script:NightlyManifestVersionHeader = '2'
         'Cache-Control' = 'no-cache'
         Pragma = 'no-cache'
     }
@@ -1335,6 +1337,79 @@ function Test-NightlyServerArtifactUri {
     return $parsed.AbsolutePath -ceq "/v1/artifacts/nightly/windows/full/$HeadSha/$ServerSha/$Sha256/BannerlordCoop-DedicatedServer-Win64.7z"
 }
 
+function Test-NightlyLegacyServerArtifactUri {
+    param([Parameter(Mandatory = $true)][string]$Uri)
+
+    return $Uri -ceq $script:ServerArchiveUri
+}
+
+function Test-NightlyBuiltAt {
+    param([Parameter(Mandatory = $true)]$Value)
+
+    if ($Value -is [DateTime]) { return $Value.Kind -eq [DateTimeKind]::Utc }
+    if ($Value -is [DateTimeOffset]) { return $Value.Offset -eq [TimeSpan]::Zero }
+    return ([string]$Value -match '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$')
+}
+
+function Assert-LegacyNightlyReleaseManifest {
+    param([Parameter(Mandatory = $true)]$Manifest)
+
+    if ($null -eq $Manifest -or $Manifest.version -ne 1 -or
+        [string]$Manifest.releaseDate -notmatch '^\d{4}-\d{2}-\d{2}$' -or
+        [string]$Manifest.headSha -notmatch '^[a-f0-9]{40}$' -or
+        -not (Test-NightlyBuiltAt $Manifest.builtAt)) {
+        throw 'The legacy nightly release manifest is invalid.'
+    }
+    $client = $Manifest.client
+    $clientBytes = 0L
+    $validClientBytes = [long]::TryParse([string]$client.bytes, [ref]$clientBytes)
+    $clientSha = [string]$client.sha256
+    if ($null -eq $client -or
+        [string]$client.fileName -cnotmatch '^[A-Za-z0-9][A-Za-z0-9 ._-]{0,199}\.7z$' -or
+        [string]$client.key -cne "nightly/clients/$($Manifest.headSha)/$clientSha/Coop.7z" -or
+        $clientSha -notmatch '^[a-f0-9]{64}$' -or
+        -not $validClientBytes -or $clientBytes -le 0 -or $clientBytes -gt 8388608L -or
+        -not (Test-NightlyClientArtifactUri ([string]$client.publicUrl) $Manifest.headSha $clientSha)) {
+        throw 'The legacy nightly client release metadata is invalid.'
+    }
+    $server = $Manifest.server
+    $serverBytes = 0L
+    $validServerBytes = [long]::TryParse([string]$server.bytes, [ref]$serverBytes)
+    if ($null -eq $server -or
+        [string]$server.fileName -cnotmatch '^[A-Za-z0-9][A-Za-z0-9 ._-]{0,199}\.7z$' -or
+        [string]$server.sha256 -notmatch '^[a-f0-9]{64}$' -or
+        -not $validServerBytes -or $serverBytes -le 0 -or $serverBytes -gt 8589934592L -or
+        -not (Test-NightlyLegacyServerArtifactUri ([string]$server.publicUrl))) {
+        throw 'The legacy nightly server release metadata is invalid.'
+    }
+    $incremental = $server.incremental
+    if ($null -eq $incremental -or $incremental.version -ne 1 -or
+        [string]$incremental.layout -cne 'base-overlay-v1' -or
+        [string]$incremental.baseFingerprint -notmatch '^[a-f0-9]{64}$') {
+        throw 'The legacy incremental Windows server release metadata is invalid.'
+    }
+    $compatibleFingerprints = @($incremental.compatibleBaseFingerprints | Where-Object { $null -ne $_ })
+    if ($compatibleFingerprints.Count -gt 16 -or
+        @($compatibleFingerprints | Where-Object { [string]$_ -notmatch '^[a-f0-9]{64}$' }).Count -gt 0 -or
+        @($compatibleFingerprints | Select-Object -Unique).Count -ne $compatibleFingerprints.Count) {
+        throw 'The legacy incremental Windows server compatibility metadata is invalid.'
+    }
+    foreach ($partName in @('base', 'update')) {
+        $part = $incremental.$partName
+        $partBytes = 0L
+        $validPartBytes = [long]::TryParse([string]$part.bytes, [ref]$partBytes)
+        $maximum = if ($partName -eq 'base') { 8589934592L } else { 536870912L }
+        if ($null -eq $part -or
+            [string]$part.fileName -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$' -or
+            [string]$part.sha256 -notmatch '^[a-f0-9]{64}$' -or
+            -not $validPartBytes -or $partBytes -le 0 -or $partBytes -gt $maximum -or
+            -not (Test-PublicArtifactUri ([string]$part.publicUrl) $partName)) {
+            throw "The legacy incremental Windows server $partName metadata is invalid."
+        }
+    }
+    return $Manifest
+}
+
 function Get-ReleaseManifest {
     param([bool]$ClientOnly = $false)
 
@@ -1350,6 +1425,9 @@ function Get-ReleaseManifest {
             throw (Get-UnpublishedNightlyMessage $ClientOnly)
         }
         throw
+    }
+    if ($manifest.version -eq 1) {
+        return (Assert-LegacyNightlyReleaseManifest $manifest)
     }
     if ($manifest.version -ne 2 -or
         [string]$manifest.kind -cne 'bannerlordcoop-nightly-publication' -or

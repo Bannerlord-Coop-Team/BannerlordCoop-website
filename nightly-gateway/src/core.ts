@@ -291,6 +291,154 @@ export function validateNightlyPublicationManifest(input: unknown, legacyOrigin:
     return value;
 }
 
+/** Validates the bounded v1 client manifest retained as a compatibility fallback. */
+export function validateLegacyNightlyClientManifest(
+    input: unknown,
+    legacyOrigin: string,
+    gatewayOrigin: string,
+): JsonObject {
+    if (!isRecord(input) || input.version !== 1 || typeof input.releaseDate !== "string"
+        || !NIGHTLY_PUBLICATION_DATE.test(input.releaseDate)
+        || typeof input.headSha !== "string" || !NIGHTLY_PUBLICATION_COMMIT.test(input.headSha)
+        || (input.baseSha !== null && (typeof input.baseSha !== "string" || !NIGHTLY_PUBLICATION_COMMIT.test(input.baseSha)))
+        || typeof input.workflowRunId !== "number" || !Number.isSafeInteger(input.workflowRunId)
+        || input.workflowRunId <= 0 || typeof input.builtAt !== "string"
+        || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/.test(input.builtAt)) {
+        throw new Error("invalid_legacy_nightly_client_manifest");
+    }
+    const client = recordField(input, "client");
+    if (!exactKeys(client, ["fileName", "key", "bytes", "sha256", "publicUrl"])
+        || typeof client.fileName !== "string" || !NIGHTLY_PUBLICATION_FILE.test(client.fileName)
+        || typeof client.key !== "string" || client.key !== `nightly/clients/${input.headSha}/${client.sha256}/Coop.7z`
+        || !isAllowedArtifactKey(client.key) || typeof client.bytes !== "number"
+        || !Number.isSafeInteger(client.bytes) || client.bytes <= 0 || client.bytes > 8 * 1024 * 1024
+        || typeof client.sha256 !== "string" || !NIGHTLY_PUBLICATION_SHA256.test(client.sha256)
+        || typeof client.publicUrl !== "string") {
+        throw new Error("invalid_legacy_nightly_client_manifest");
+    }
+    const parsed = new URL(client.publicUrl);
+    const legacyPath = `/${client.key}`;
+    const gatewayPath = `/v1/artifacts/${client.key}`;
+    if (parsed.search || parsed.hash
+        || (parsed.origin === legacyOrigin && parsed.pathname !== legacyPath)
+        || (parsed.origin === gatewayOrigin && parsed.pathname !== gatewayPath)
+        || (parsed.origin !== legacyOrigin && parsed.origin !== gatewayOrigin)) {
+        throw new Error("invalid_legacy_nightly_client_manifest");
+    }
+    return input;
+}
+
+/** Validates the bounded v1 release pair retained for a safe Server/Both fallback. */
+export function validateLegacyNightlyReleaseManifest(
+    input: unknown,
+    legacyOrigin: string,
+    gatewayOrigin: string,
+): JsonObject {
+    if (!isRecord(input) || !exactKeys(input, ["version", "releaseDate", "headSha", "builtAt", "client", "server"])
+        || input.version !== 1 || typeof input.releaseDate !== "string"
+        || !NIGHTLY_PUBLICATION_DATE.test(input.releaseDate)
+        || typeof input.headSha !== "string" || !NIGHTLY_PUBLICATION_COMMIT.test(input.headSha)
+        || typeof input.builtAt !== "string"
+        || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/.test(input.builtAt)) {
+        throw new Error("invalid_legacy_nightly_release_manifest");
+    }
+    validateLegacyReleaseArtifact(
+        recordField(input, "client"),
+        legacyOrigin,
+        gatewayOrigin,
+        `nightly/clients/${input.headSha}/${stringField(recordField(input, "client"), "sha256", NIGHTLY_PUBLICATION_SHA256)}/Coop.7z`,
+        NIGHTLY_PUBLICATION_FILE,
+        8 * 1024 * 1024,
+        true,
+    );
+    const server = recordField(input, "server");
+    if (!exactKeys(server, ["fileName", "bytes", "sha256", "publicUrl", "incremental"])) {
+        throw new Error("invalid_legacy_nightly_release_manifest");
+    }
+    const serverArtifact = { ...server };
+    delete serverArtifact.incremental;
+    validateLegacyReleaseArtifact(
+        serverArtifact,
+        legacyOrigin,
+        gatewayOrigin,
+        "nightly/BannerlordCoop-DedicatedServer-Win64.7z",
+        /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/,
+        8 * 1024 * 1024 * 1024,
+    );
+    const incremental = recordField(server, "incremental");
+    if (!exactKeys(incremental, ["version", "layout", "baseFingerprint", "compatibleBaseFingerprints", "base", "update"])
+        || incremental.version !== 1 || incremental.layout !== "base-overlay-v1"
+        || typeof incremental.baseFingerprint !== "string"
+        || !NIGHTLY_PUBLICATION_SHA256.test(incremental.baseFingerprint)
+        || !Array.isArray(incremental.compatibleBaseFingerprints)
+        || incremental.compatibleBaseFingerprints.length > 16
+        || incremental.compatibleBaseFingerprints.some((fingerprint) => typeof fingerprint !== "string" || !NIGHTLY_PUBLICATION_SHA256.test(fingerprint))) {
+        throw new Error("invalid_legacy_nightly_release_incremental");
+    }
+    const base = recordField(incremental, "base");
+    const baseSha = stringField(base, "sha256", NIGHTLY_PUBLICATION_SHA256);
+    validateLegacyReleaseArtifact(
+        base,
+        legacyOrigin,
+        gatewayOrigin,
+        `windows/base/v1/${incremental.baseFingerprint}/${baseSha}/server-base.7z`,
+        /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/,
+        8 * 1024 * 1024 * 1024,
+        true,
+    );
+    const update = recordField(incremental, "update");
+    const updateSha = stringField(update, "sha256", NIGHTLY_PUBLICATION_SHA256);
+    if (typeof update.publicUrl !== "string") throw new Error("invalid_legacy_nightly_release_artifact");
+    let updateKey: string;
+    try {
+        const parsed = new URL(update.publicUrl);
+        updateKey = decodeURIComponent(parsed.pathname.slice(1));
+    } catch {
+        throw new Error("invalid_legacy_nightly_release_artifact");
+    }
+    if (!new RegExp(`^nightly/windows/updates/${input.headSha}/[a-f0-9]{40}/${updateSha}/server-update\\.7z$`).test(updateKey)) {
+        throw new Error("invalid_legacy_nightly_release_artifact");
+    }
+    validateLegacyReleaseArtifact(
+        update,
+        legacyOrigin,
+        gatewayOrigin,
+        updateKey,
+        /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/,
+        512 * 1024 * 1024,
+        true,
+    );
+    return input;
+}
+
+function validateLegacyReleaseArtifact(
+    value: JsonObject,
+    legacyOrigin: string,
+    gatewayOrigin: string,
+    key: string,
+    filePattern: RegExp,
+    maximumBytes: number,
+    allowKey = false,
+): void {
+    if (!exactKeys(value, allowKey ? ["fileName", "key", "bytes", "sha256", "publicUrl"] : ["fileName", "bytes", "sha256", "publicUrl"])
+        || typeof value.fileName !== "string" || !filePattern.test(value.fileName)
+        || (allowKey && value.key !== key)
+        || typeof value.bytes !== "number" || !Number.isSafeInteger(value.bytes)
+        || value.bytes <= 0 || value.bytes > maximumBytes
+        || typeof value.sha256 !== "string" || !NIGHTLY_PUBLICATION_SHA256.test(value.sha256)
+        || typeof value.publicUrl !== "string") {
+        throw new Error("invalid_legacy_nightly_release_artifact");
+    }
+    const parsed = new URL(value.publicUrl);
+    if (parsed.search || parsed.hash
+        || (parsed.origin === legacyOrigin && parsed.pathname !== `/${key}`)
+        || (parsed.origin === gatewayOrigin && parsed.pathname !== `/v1/artifacts/${key}`)
+        || (parsed.origin !== legacyOrigin && parsed.origin !== gatewayOrigin)
+        || !isAllowedArtifactKey(key)) {
+        throw new Error("invalid_legacy_nightly_release_artifact");
+    }
+}
+
 function recordField(value: JsonObject, field: string): JsonObject {
     const result = value[field];
     if (!isRecord(result)) throw new Error("invalid_nightly_publication_field");
