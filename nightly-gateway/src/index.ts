@@ -22,10 +22,10 @@ import {
     mintSecretsEqual,
     pinClientObjectKey,
     rewriteManifestArtifactUrls,
-    validateNightlyPublicationManifest,
     verifySponsorFormToken,
 } from "./core";
 import { databaseForRequest } from "./database";
+import { readNightlyPublication } from "./publication";
 
 const DISCORD_API = "https://discord.com/api/v10";
 const DISCORD_AUTHORIZE = "https://discord.com/oauth2/authorize";
@@ -36,7 +36,6 @@ const JSON_HEADERS = Object.freeze({
 });
 const DEVICE_SECRET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const USER_CODE_PATTERN = /^[A-Z2-9]{4}-[A-Z2-9]{4}$/;
-const MAXIMUM_MANIFEST_BYTES = 128 * 1024;
 const MAXIMUM_PIN_CLIENT_BYTES = 8 * 1024 * 1024;
 const MAXIMUM_PIN_MINT_BYTES = MAXIMUM_PIN_CLIENT_BYTES + 16 * 1024;
 const MAXIMUM_PIN_SERVER_BYTES = 6 * 1024 * 1024 * 1024;
@@ -137,10 +136,10 @@ async function route(request: Request, env: Env): Promise<Response> {
         return servePinManifest(request, env);
     }
     if (request.method === "GET" && url.pathname === "/v1/manifests/client") {
-        return serveManifest(request, env, "nightly/release.json");
+        return serveManifest(request, env);
     }
     if (request.method === "GET" && url.pathname === "/v1/manifests/release") {
-        return serveManifest(request, env, "nightly/release.json");
+        return serveManifest(request, env);
     }
     if (request.method === "GET" && url.pathname.startsWith("/v1/artifacts/")) {
         return serveArtifact(request, env, url.pathname.slice("/v1/artifacts/".length));
@@ -813,19 +812,14 @@ async function sha256Bytes(bytes: Uint8Array): Promise<string> {
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function serveManifest(request: Request, env: Env, key: string): Promise<Response> {
+async function serveManifest(request: Request, env: Env): Promise<Response> {
     await requireNightlyDownloadSession(request, env);
-    const object = await env.RELEASES.get(key);
-    if (object === null || object.size > MAXIMUM_MANIFEST_BYTES) throw new GatewayError(404, "manifest_unavailable");
-    let parsed: unknown;
+    let validated;
     try {
-        parsed = JSON.parse(await object.text()) as unknown;
+        validated = await readNightlyPublication((key) => env.RELEASES.get(key));
     } catch {
         throw new GatewayError(503, "manifest_unavailable");
     }
-    const validated = key === "nightly/release.json"
-        ? validateNightlyPublicationManifest(parsed, env.LEGACY_R2_ORIGIN)
-        : parsed;
     const rewritten = rewriteManifestArtifactUrls(validated, env.PUBLIC_ORIGIN, env.LEGACY_R2_ORIGIN);
     return json(rewritten);
 }
