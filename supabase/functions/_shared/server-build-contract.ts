@@ -58,7 +58,8 @@ export type BuildChangeJob = {
     initiatedBy: "owner" | "administrator" | "automatic";
     ownerSelected: boolean;
     phase: BuildPhase;
-    steps: { id: BuildStepId; state: BuildStepState }[];
+    /** Durable receipt times are additive so older control planes remain readable. */
+    steps: { id: BuildStepId; state: BuildStepState; startedAt?: string | null; completedAt?: string | null }[];
     completedSteps: number;
     totalSteps: number;
     targetVersion: string | null;
@@ -148,11 +149,17 @@ export function parseBuildStatus(value: unknown, serverId: string): BuildStatus 
         || !nullable(isTime, job.nextRetryAt) || !isTime(job.createdAt) || !isTime(job.updatedAt) || !nullable(isTime, job.completedAt)
         || !(job.backup === null || (isRecord(job.backup) && hasExactKeys(job.backup, ["backupId"]) && isId(job.backup.backupId)))
         || !Array.isArray(job.steps) || job.steps.length !== BUILD_STEP_IDS.length) throw invalid("build change");
-    (job.steps as unknown[]).forEach((step, index) => {
-        if (!isRecord(step) || !hasExactKeys(step, ["id", "state"]) || step.id !== BUILD_STEP_IDS[index] || !oneOf(BUILD_STEP_STATES, step.state)) throw invalid("build step");
+    const steps = (job.steps as unknown[]).map((step, index) => {
+        if (!isRecord(step) || !(hasExactKeys(step, ["id", "state"])
+            || hasExactKeys(step, ["completedAt", "id", "startedAt", "state"]))
+            || step.id !== BUILD_STEP_IDS[index] || !oneOf(BUILD_STEP_STATES, step.state)) throw invalid("build step");
+        const startedAt = step.startedAt === undefined ? null : step.startedAt;
+        const completedAt = step.completedAt === undefined ? null : step.completedAt;
+        if (!nullable(isTime, startedAt) || !nullable(isTime, completedAt)) throw invalid("build step timestamp");
+        return { ...step, startedAt, completedAt };
     });
     const shown = (version: unknown) => typeof version === "string" ? bareVersion(version) : null;
-    return { ...value, job: { ...job, targetVersion: shown(job.targetVersion), previousVersion: shown(job.previousVersion) } } as BuildStatus;
+    return { ...value, job: { ...job, steps, targetVersion: shown(job.targetVersion), previousVersion: shown(job.previousVersion) } } as BuildStatus;
 }
 
 export function parseBuildChangeResult(value: unknown): BuildChangeResult {
