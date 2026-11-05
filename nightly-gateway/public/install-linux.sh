@@ -99,13 +99,17 @@ for item in data:
 
 gateway_failure_detail() {
     local status=${1:-unknown} response=${2:-} error=''
+    [[ $status =~ ^[1-5][0-9]{2}$ ]] || status=unknown
     if [ -n "$response" ] && [ -f "$response" ]; then
-        error=$(json_get error < "$response" 2>/dev/null) || error=''
+        # Preserve trailing newlines until after validation; command substitution
+        # alone would strip them and could turn a hostile value into a code.
+        error=$(json_get error < "$response" 2>/dev/null && printf '.') || error=''
+        error=${error%.}
     fi
-    if [ -n "$error" ]; then
+    if [[ $error =~ ^[a-z0-9_]{1,64}$ ]]; then
         printf 'HTTP %s; error=%s' "$status" "$error"
     else
-        printf 'HTTP %s' "$status"
+        printf 'HTTP %s; gateway error unavailable' "$status"
     fi
 }
 

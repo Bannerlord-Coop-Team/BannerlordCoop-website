@@ -24,6 +24,7 @@ import {
     verifySponsorFormToken,
 } from "./core";
 import { databaseForRequest } from "./database";
+import { claimDiscordAlert } from "./alerts";
 
 const DISCORD_API = "https://discord.com/api/v10";
 const DISCORD_AUTHORIZE = "https://discord.com/oauth2/authorize";
@@ -42,7 +43,6 @@ const MANUAL_SERVER_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/;
 const PUBLIC_MANUAL_SERVER_ORIGIN = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const SPONSOR_SESSION_SECONDS = 24 * 60 * 60;
 const OAUTH_STATE_SECONDS = 10 * 60;
-const DISCORD_ALERT_COOLDOWN_MS = 60 * 60 * 1000;
 const DISCORD_ALERT_MESSAGE_LIMIT = 2000;
 const DISCORD_REQUEST_TIMEOUT_MS = 15_000;
 const SITE_HERO_IMAGE = "https://raw.githubusercontent.com/Bannerlord-Coop-Team/BannerlordCoop-website/07491ba62e3b038b16458402b4cc92dccf71b985/public/images/singleleader.png";
@@ -80,19 +80,11 @@ type DiscordFailure = {
     status: number | null;
 };
 
-type DiscordAlertState = {
-    firstOccurrenceAt: number;
-    count: number;
-    lastSentAt: number;
-};
-
-const discordAlertState = new Map<string, DiscordAlertState>();
-
 export default {
-    async fetch(request: Request, env: Env): Promise<Response> {
+    async fetch(request: Request, env: Env, context?: ExecutionContext): Promise<Response> {
         try {
             const database = await databaseForRequest(env);
-            return await route(request, { ...env, DB: database });
+            return await route(request, { ...env, DB: database, ALERT_CONTEXT: context });
         } catch (error) {
             console.error(JSON.stringify({
                 event: "nightly_gateway_request_failed",
@@ -987,13 +979,43 @@ function discordAuthorizationUrl(env: Env, state: string): string {
     return url.toString();
 }
 
-async function discordFetch(input: string, init: RequestInit): Promise<Response> {
+class DiscordRequestError extends Error {
+    constructor(readonly status: number | null) { super("discord_request_failed"); }
+}
+
+// The same deadline covers headers and the entire bounded body read.
+async function discordFetch(input: string, init: RequestInit, maximum: number) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), DISCORD_REQUEST_TIMEOUT_MS);
+    let response: Response | undefined;
     try {
-        return await fetch(input, { ...init, signal: controller.signal });
+        response = await untilAborted(fetch(input, { ...init, signal: controller.signal }), controller.signal);
+        if (!response.ok) {
+            // Status alone is authoritative for a definite 404. Do not let an
+            // unnecessary error-body read turn that answer into fail-open.
+            void response.body?.cancel().catch(() => undefined);
+            return { ok: false, status: response.status, text: "" };
+        }
+        const text = await boundedText(response, maximum, controller.signal);
+        return { ok: true, status: response.status, text };
+    } catch {
+        throw new DiscordRequestError(response?.status ?? null);
     } finally {
         clearTimeout(timeout);
+    }
+}
+
+async function untilAborted<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
+    if (signal.aborted) throw new Error("discord_request_aborted");
+    let abort: () => void = () => undefined;
+    const deadline = new Promise<never>((_resolve, reject) => {
+        abort = () => reject(new Error("discord_request_aborted"));
+        signal.addEventListener("abort", abort, { once: true });
+    });
+    try {
+        return await Promise.race([pending, deadline]);
+    } finally {
+        signal.removeEventListener("abort", abort);
     }
 }
 
@@ -1012,8 +1034,8 @@ async function discordTokenRequest(env: Env, form: URLSearchParams): Promise<Dis
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body: form,
-    });
-    const text = await boundedText(response, 16 * 1024);
+    }, 16 * 1024);
+    const text = response.text;
     if (!response.ok) throw new GatewayError(502, "discord_authorization_failed");
     const value = JSON.parse(text) as Partial<DiscordToken>;
     if (value.token_type !== "Bearer" || typeof value.access_token !== "string"
@@ -1027,8 +1049,8 @@ async function discordTokenRequest(env: Env, form: URLSearchParams): Promise<Dis
 async function discordGet<T>(path: string, accessToken: string): Promise<T> {
     const response = await discordFetch(`${DISCORD_API}${path}`, {
         headers: { authorization: `Bearer ${accessToken}`, "user-agent": "BannerlordCoop-Nightly-Gateway/1" },
-    });
-    const text = await boundedText(response, 64 * 1024);
+    }, 64 * 1024);
+    const text = response.text;
     if (!response.ok) throw new GatewayError(response.status === 404 ? 403 : 502, "discord_membership_required");
     return JSON.parse(text) as T;
 }
@@ -1067,14 +1089,14 @@ export async function lookupDiscordMember(
             authorization: `Bearer ${credential}`,
             "user-agent": "BannerlordCoop-Nightly-Gateway/1",
         };
-    let response: Response;
+    let response: Awaited<ReturnType<typeof discordFetch>>;
     try {
-        response = await discordFetch(`${DISCORD_API}${endpoint}`, { headers });
-    } catch {
+        response = await discordFetch(`${DISCORD_API}${endpoint}`, { headers }, 64 * 1024);
+    } catch (error) {
         await recordDiscordFailure(env, {
             kind: source === "bot" ? "discord_bot_member_lookup_failed" : "discord_oauth_member_lookup_failed",
             path,
-            status: null,
+            status: error instanceof DiscordRequestError ? error.status : null,
         });
         return { member: null, decision: "fail_open" };
     }
@@ -1089,9 +1111,9 @@ export async function lookupDiscordMember(
         });
         return { member: null, decision: "fail_open" };
     }
-    let text: string;
+    let member: unknown;
     try {
-        text = await boundedText(response, 64 * 1024);
+        member = JSON.parse(response.text);
     } catch {
         await recordDiscordFailure(env, {
             kind: source === "bot" ? "discord_bot_member_response_invalid" : "discord_oauth_member_response_invalid",
@@ -1100,18 +1122,8 @@ export async function lookupDiscordMember(
         });
         return { member: null, decision: "fail_open" };
     }
-    let member: Partial<DiscordMember>;
-    try {
-        member = JSON.parse(text) as Partial<DiscordMember>;
-    } catch {
-        await recordDiscordFailure(env, {
-            kind: source === "bot" ? "discord_bot_member_response_invalid" : "discord_oauth_member_response_invalid",
-            path,
-            status: response.status,
-        });
-        return { member: null, decision: "fail_open" };
-    }
-    if (!Array.isArray(member.roles) || !member.roles.every((role): role is string => typeof role === "string")) {
+    if (typeof member !== "object" || member === null || !("roles" in member)
+        || !Array.isArray(member.roles) || !member.roles.every((role): role is string => typeof role === "string")) {
         await recordDiscordFailure(env, {
             kind: source === "bot" ? "discord_bot_member_response_invalid" : "discord_oauth_member_response_invalid",
             path,
@@ -1130,37 +1142,14 @@ export async function lookupDiscordMember(
 }
 
 async function recordDiscordFailure(env: Env, failure: DiscordFailure): Promise<void> {
-    const now = Date.now();
-    const previous = discordAlertState.get(failure.kind);
-    const withinWindow = previous !== undefined && now - previous.lastSentAt < DISCORD_ALERT_COOLDOWN_MS;
-    const state: DiscordAlertState = withinWindow && previous
-        ? { ...previous, count: previous.count + 1 }
-        : { firstOccurrenceAt: now, count: 1, lastSentAt: 0 };
-    const shouldSend = state.lastSentAt === 0 || now - state.lastSentAt >= DISCORD_ALERT_COOLDOWN_MS;
-    if (shouldSend) state.lastSentAt = now;
-    discordAlertState.set(failure.kind, state);
     const status = failure.status === null ? "network_error" : String(failure.status);
-    const firstOccurrence = new Date(state.firstOccurrenceAt).toISOString();
     console.error(JSON.stringify({
         event: "nightly_gateway_eligibility_fail_open",
         decision: "fail_open",
         error_kind: failure.kind,
         discord_status: status,
         path: failure.path,
-        first_occurrence_at: firstOccurrence,
-        count: state.count,
     }));
-    if (!shouldSend) return;
-    await sendDiscordFailureAlert(env, failure, state, status, firstOccurrence);
-}
-
-async function sendDiscordFailureAlert(
-    env: Env,
-    failure: DiscordFailure,
-    state: DiscordAlertState,
-    status: string,
-    firstOccurrence: string,
-): Promise<void> {
     if (!isDiscordSnowflake(env.DISCORD_ALERT_USER_ID)) {
         console.error(JSON.stringify({
             event: "alert_recipient_unconfigured",
@@ -1170,13 +1159,44 @@ async function sendDiscordFailureAlert(
         }));
         return;
     }
+    let claim: Awaited<ReturnType<typeof claimDiscordAlert>>;
+    try {
+        claim = await claimDiscordAlert(env.LEGACY_DB, failure.kind);
+    } catch {
+        console.error(JSON.stringify({
+            event: "nightly_gateway_alert_claim_failed",
+            error_kind: failure.kind,
+            path: failure.path,
+        }));
+        return; // No local fallback: an unavailable claim store must not spam.
+    }
+    console.error(JSON.stringify({
+        event: "nightly_gateway_alert_claim",
+        error_kind: failure.kind,
+        claimed: claim.claimed,
+        first_occurrence_at: claim.firstOccurrence,
+        count: claim.count,
+    }));
+    if (!claim.claimed) return;
+    const delivery = sendDiscordFailureAlert(env, failure, claim, status);
+    // Keep delivery alive after responding, without delaying installation.
+    if (env.ALERT_CONTEXT) env.ALERT_CONTEXT.waitUntil(delivery);
+    else await delivery;
+}
+
+async function sendDiscordFailureAlert(
+    env: Env,
+    failure: DiscordFailure,
+    claim: Awaited<ReturnType<typeof claimDiscordAlert>>,
+    status: string,
+): Promise<void> {
     const message = [
         "Nightly gateway eligibility entered fail-open mode.",
         `error_kind=${failure.kind}`,
         `discord_status=${status}`,
         `path=${failure.path}`,
-        `first_occurrence_at=${firstOccurrence}`,
-        `count=${state.count}`,
+        `first_occurrence_at=${claim.firstOccurrence}`,
+        `count=${claim.count}`,
     ].join("\n").slice(0, DISCORD_ALERT_MESSAGE_LIMIT);
     try {
         const channelResponse = await discordFetch(`${DISCORD_API}/users/@me/channels`, {
@@ -1187,7 +1207,7 @@ async function sendDiscordFailureAlert(
                 "user-agent": "BannerlordCoop-Nightly-Gateway/1",
             },
             body: JSON.stringify({ recipient_id: env.DISCORD_ALERT_USER_ID }),
-        });
+        }, 16 * 1024);
         if (!channelResponse.ok) {
             console.error(JSON.stringify({
                 event: "nightly_gateway_alert_failed",
@@ -1199,7 +1219,7 @@ async function sendDiscordFailureAlert(
         }
         let channel: { id?: unknown };
         try {
-            channel = await channelResponse.json() as { id?: unknown };
+            channel = JSON.parse(channelResponse.text) as { id?: unknown };
         } catch {
             console.error(JSON.stringify({
                 event: "nightly_gateway_alert_failed",
@@ -1224,7 +1244,7 @@ async function sendDiscordFailureAlert(
                 "user-agent": "BannerlordCoop-Nightly-Gateway/1",
             },
             body: JSON.stringify({ content: message }),
-        });
+        }, 16 * 1024);
         if (!messageResponse.ok) {
             console.error(JSON.stringify({
                 event: "nightly_gateway_alert_failed",
@@ -1241,10 +1261,6 @@ async function sendDiscordFailureAlert(
             error_type: error instanceof Error ? error.name : "unknown",
         }));
     }
-}
-
-export function resetDiscordAlertStateForTests(): void {
-    discordAlertState.clear();
 }
 
 async function encryptRefreshToken(env: Env, plaintext: string): Promise<{ ciphertext: string; nonce: string }> {
@@ -1266,22 +1282,29 @@ async function readForm(request: Request): Promise<URLSearchParams> {
     return new URLSearchParams(await boundedText(request, 4096));
 }
 
-async function boundedText(response: Response | Request, maximum: number): Promise<string> {
+async function boundedText(response: Response | Request, maximum: number, signal?: AbortSignal): Promise<string> {
     const declared = Number(response.headers.get("content-length") ?? 0);
-    if (!Number.isSafeInteger(declared) || declared > maximum) throw new GatewayError(502, "response_too_large");
+    if (!Number.isSafeInteger(declared) || declared > maximum) {
+        void response.body?.cancel().catch(() => undefined);
+        throw new GatewayError(502, "response_too_large");
+    }
     if (response.body === null) return "";
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
     let total = 0;
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        total += value.byteLength;
-        if (total > maximum) {
-            await reader.cancel();
-            throw new GatewayError(502, "response_too_large");
+    let completed = false;
+    try {
+        while (true) {
+            const pending = reader.read();
+            const { done, value } = await (signal ? untilAborted(pending, signal) : pending);
+            if (done) { completed = true; break; }
+            total += value.byteLength;
+            if (total > maximum) throw new GatewayError(502, "response_too_large");
+            chunks.push(value);
         }
-        chunks.push(value);
+    } finally {
+        if (!completed) void reader.cancel().catch(() => undefined);
+        reader.releaseLock();
     }
     const bytes = new Uint8Array(total);
     let offset = 0;

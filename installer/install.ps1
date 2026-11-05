@@ -84,7 +84,7 @@ function Get-NightlyGatewayErrorCode {
     if ($null -eq $Response) { return '' }
     try {
         $code = [string]$Response.error
-        if ($code -match '^[a-z_]+$') { return $code }
+        if ($code -cmatch '\A[a-z0-9_]{1,64}\z') { return $code }
     } catch { }
     return ''
 }
@@ -117,7 +117,7 @@ function Get-NightlyGatewayErrorCodeFromText {
 
     if ([string]::IsNullOrWhiteSpace($Text)) { return '' }
     try { return Get-NightlyGatewayErrorCode ($Text | ConvertFrom-Json) } catch { }
-    if ($Text -match '"error"\s*:\s*"([a-z_]+)"') { return $Matches[1] }
+    if ($Text -cmatch '"error"\s*:\s*"([a-z0-9_]{1,64})"') { return $Matches[1] }
     return ''
 }
 
@@ -160,7 +160,7 @@ function Get-NightlyFailureDetailSuffix {
     if (-not $errorCode) { $errorCode = Get-NightlyGatewayErrorCodeFromText $body }
     $parts = @()
     if ($statusCode -gt 0) { $parts += "HTTP $statusCode" }
-    if ($errorCode) { $parts += "error=$errorCode" }
+    if ($errorCode) { $parts += "error=$errorCode" } else { $parts += 'gateway error unavailable' }
     if ($Kind -and $Kind -cne 'empty') { $parts += "kind=$Kind" }
     if ($null -ne $SessionResponse) { $parts += "shape=$(Get-NightlyDeviceSessionShape $SessionResponse)" }
     if ($null -ne $ErrorRecord) { $parts += "exception=$(Get-NightlyExceptionShape $ErrorRecord)" }

@@ -32,7 +32,12 @@ timeout. A missing guild member, missing eligible role, expired session, and
 used session remain denied. Each fail-open event is logged with its decision
 path and sent to Andrew by a bot DM at most once per error kind per hour; the
 message contains only the error kind, Discord status, first occurrence, and
-count.
+count. The cooldown and counters are stored by one atomic conditional D1 write
+in `discord_alerts`, using the existing `LEGACY_DB` binding. A failed claim store
+logs `nightly_gateway_alert_claim_failed` and skips the DM. The claim is retained
+even if DM delivery fails, so retries and fresh isolates cannot create a storm.
+Each Discord request has one 15-second deadline covering headers and its bounded
+body (64 KiB for member responses, 16 KiB for DM responses).
 
 If `DISCORD_ALERT_USER_ID` is unset or is not a Discord snowflake, the gateway
 still takes the fail-open path and writes `alert_recipient_unconfigured`; it
@@ -78,13 +83,14 @@ Linux and checks that the packaged Linux scripts match their canonical sources.
    login and the Supabase PostgreSQL connection. Replace the all-zero
    Hyperdrive ID in `wrangler.jsonc` before a real deployment. The Worker never
    receives a Supabase service-role key or a general database owner credential.
-3. Keep the existing D1 binding during the migration window only. With no
+3. Keep the existing D1 binding for global alert claims after account migration.
+   Apply `0003_discord_alerts.sql` before deploying this version. With no
    `DATABASE_BACKEND` secret, the post-cutover release uses PostgreSQL. Select
    `legacy-d1` explicitly before deploying a bridge release to an unmigrated
    environment. Follow
    `SUPABASE_CUTOVER.md` to lock writes, import one consistent snapshot, switch
-   to PostgreSQL, verify, and unlock. Remove the D1 binding after the rollback
-   window closes.
+   to PostgreSQL, verify, and unlock. Account data uses PostgreSQL; `discord_alerts`
+   remains in D1 regardless of the account backend.
 4. Register exactly
    `https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/oauth/callback`
    as a Discord OAuth2
@@ -94,7 +100,7 @@ Linux and checks that the packaged Linux scripts match their canonical sources.
    `wrangler secret put`. That bot is already in the Bannerlord Co-op guild and
    can look up one member's current roles without Server Members Intent. Do not
    create or invite a second bot for this. The installer OAuth app stays
-   separate; only the role check uses Bot_UP.
+   separate; the role checks and alert DMs use Bot_UP.
 7. Confirm Andrew's Discord user ID with him, then set that value as
    `DISCORD_ALERT_USER_ID` with `wrangler secret put`. Keep it as a secret
    configuration value; never hardcode it in the Worker. The gateway sends a
@@ -142,5 +148,5 @@ you want to refresh the generated types for editor use.
 
 The dry run is intentionally non-deploying. Deployment also requires the real
 Hyperdrive ID, Discord application ID, secrets, private Patron bucket, and the
-Garrett Cloudflare account configured in `wrangler.jsonc`. D1 remains bound
-only for the controlled cutover and short rollback window.
+Garrett Cloudflare account configured in `wrangler.jsonc`. Keep D1 bound for
+alert claims even after the account-data rollback window closes.

@@ -24,21 +24,42 @@ import {
     lookupDiscordMember,
     nightlyAccessPage,
     page,
-    resetDiscordAlertStateForTests,
 } from "./index";
+import gatewayWorker from "./index";
 
 const legacy = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
 
-type TestDatabaseOptions = { portalLogin?: boolean; existingSponsorId?: string };
+type TestDatabaseOptions = { portalLogin?: boolean; existingSponsorId?: string; deviceStatus?: string; deviceExpired?: boolean };
 
 function testEnvironment(options: TestDatabaseOptions = {}): { env: Env; statements: string[] } {
     const statements: string[] = [];
+    const alertRows = new Map<string, { first_occurrence_at: number; occurrence_count: number; claim_id: string }>();
+    const alertDatabase = {
+        prepare() {
+            return { bind(kind: string, claimId: string) {
+                return { async first() {
+                    const previous = alertRows.get(kind);
+                    const row = previous ? { ...previous, occurrence_count: previous.occurrence_count + 1 }
+                        : { first_occurrence_at: Math.floor(Date.now() / 1000), occurrence_count: 1, claim_id: claimId };
+                    alertRows.set(kind, row);
+                    return row;
+                } };
+            } };
+        },
+    };
     const database = {
         prepare(sql: string) {
             const statement = {
                 bind() { return statement; },
                 async first<T>() {
+                    if (sql.includes("FROM device_sessions WHERE device_secret_hash")) {
+                        return {
+                            id: "device-id", status: options.deviceStatus ?? "approved",
+                            discord_user_id: "123456789012345678", sponsor_discord_user_id: "987654321098765432",
+                            expires_at: Math.floor(Date.now() / 1000) + (options.deviceExpired ? -60 : 60),
+                        } as T;
+                    }
                     if (sql.includes("FROM oauth_states")) {
                         return (options.portalLogin ? { state_hash: "state" } : null) as T | null;
                     }
@@ -54,7 +75,7 @@ function testEnvironment(options: TestDatabaseOptions = {}): { env: Env; stateme
                 },
                 async run() {
                     statements.push(sql);
-                    return { success: true };
+                    return { success: true, meta: { changes: 1 } };
                 },
             };
             return statement;
@@ -68,12 +89,14 @@ function testEnvironment(options: TestDatabaseOptions = {}): { env: Env; stateme
     return {
         env: {
             DB: database,
+            LEGACY_DB: alertDatabase,
             DISCORD_ALERT_USER_ID: "123456789012345678",
             DISCORD_BOT_TOKEN: "B".repeat(59),
             DISCORD_CLIENT_ID: "1537575576745803799",
-            DISCORD_CLIENT_SECRET: "test-secret",
+            DISCORD_CLIENT_SECRET: "test-secret-value-that-is-long-enough",
             TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString("base64url"),
             PUBLIC_ORIGIN: gateway,
+            LEGACY_R2_ORIGIN: legacy,
         } as unknown as Env,
         statements,
     };
@@ -120,13 +143,17 @@ function discordOAuthFetchWithoutRoles(input: string | URL | Request): Promise<R
     return discordOAuthFetch(input);
 }
 
+async function flushAlertDelivery(): Promise<void> {
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+}
+
 test("Discord member infrastructure errors fail open and alert once per error kind", async () => {
     const originalFetch = globalThis.fetch;
     const originalError = console.error;
     const { env } = testEnvironment();
     const requests: Array<{ url: string; init?: RequestInit }> = [];
     let memberStatus = 401;
-    resetDiscordAlertStateForTests();
     console.error = () => undefined;
     globalThis.fetch = (input: string | URL | Request, init?: RequestInit) => {
         const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -143,6 +170,7 @@ test("Discord member infrastructure errors fail open and alert once per error ki
     try {
         const first = await lookupDiscordMember(env, "bot", "987654321098765432", "poll_device_session");
         const second = await lookupDiscordMember(env, "bot", "987654321098765432", "poll_device_session");
+        await flushAlertDelivery();
         assert.equal(first.decision, "fail_open");
         assert.equal(second.decision, "fail_open");
         assert.equal(requests.filter(({ url }) => url.endsWith("/users/@me/channels")).length, 1);
@@ -155,12 +183,12 @@ test("Discord member infrastructure errors fail open and alert once per error ki
         assert.doesNotMatch(message.content, /B{10,}/);
         memberStatus = 429;
         const rateLimited = await lookupDiscordMember(env, "bot", "987654321098765432", "poll_device_session");
+        await flushAlertDelivery();
         assert.equal(rateLimited.decision, "fail_open");
         assert.equal(requests.filter(({ url }) => url.endsWith("/users/@me/channels")).length, 2);
     } finally {
         globalThis.fetch = originalFetch;
         console.error = originalError;
-        resetDiscordAlertStateForTests();
     }
 });
 
@@ -176,7 +204,6 @@ test("Discord member lookup keeps definite membership answers closed", async () 
         }
         throw new Error(`Unexpected test request: ${url}`);
     }) as typeof fetch;
-    resetDiscordAlertStateForTests();
     try {
         const lookup = await lookupDiscordMember(env, "bot", "987654321098765432", "poll_device_session");
         assert.equal(lookup.decision, "not_in_guild");
@@ -184,9 +211,157 @@ test("Discord member lookup keeps definite membership answers closed", async () 
     } finally {
         globalThis.fetch = originalFetch;
         console.error = originalError;
-        resetDiscordAlertStateForTests();
     }
 });
+
+for (const source of ["bot", "oauth"] as const) {
+    test(`a Discord 403 ${source} member lookup explicitly fails open`, async (t) => {
+        const { env } = testEnvironment();
+        const logs: string[] = [];
+        t.mock.method(console, "error", (line: string) => logs.push(line));
+        env.DISCORD_ALERT_USER_ID = undefined;
+        t.mock.method(globalThis, "fetch", async () => Response.json({ message: "Forbidden" }, { status: 403 }));
+        const result = await lookupDiscordMember(env, source, "987654321098765432", "poll_device_session");
+        assert.equal(result.decision, "fail_open");
+        assert.ok(logs.some((line) => {
+            const event = JSON.parse(line);
+            return event.event === "nightly_gateway_eligibility_fail_open" && event.discord_status === "403";
+        }));
+    });
+}
+
+test("the approved device-token route issues a token during a Discord 403 outage", async (t) => {
+    const { env, statements } = testEnvironment();
+    env.DISCORD_ALERT_USER_ID = undefined;
+    t.mock.method(console, "error", () => undefined);
+    t.mock.method(globalThis, "fetch", async () => Response.json({ message: "Forbidden" }, { status: 403 }));
+    const response = await gatewayWorker.fetch(new Request(`${gateway}/v1/device/token`, {
+        method: "POST", body: new URLSearchParams({ device_code: "A".repeat(43) }),
+    }), env);
+    assert.equal(response.status, 200);
+    const token = await response.json() as { access_token: string; token_type: string };
+    assert.match(token.access_token, /^[A-Za-z0-9_-]{43}$/);
+    assert.equal(token.token_type, "Bearer");
+    assert.ok(statements.some((sql) => sql.includes("status = 'consumed'")));
+    assert.ok(!statements.some((sql) => sql.includes("DELETE FROM supporter_grants")));
+});
+
+for (const [options, status] of [
+    [{ deviceExpired: true }, 400], [{ deviceStatus: "consumed" }, 403],
+    [{ deviceStatus: "denied" }, 403], [{ deviceStatus: "pending" }, 428],
+] as const) {
+    test(`device validation stays closed during an outage: ${JSON.stringify(options)}`, async (t) => {
+        const { env } = testEnvironment(options);
+        t.mock.method(console, "error", () => undefined);
+        const discord = t.mock.method(globalThis, "fetch", async () => Response.json({}, { status: 403 }));
+        const response = await gatewayWorker.fetch(new Request(`${gateway}/v1/device/token`, {
+            method: "POST", body: new URLSearchParams({ device_code: "A".repeat(43) }),
+        }), env);
+        assert.equal(response.status, status);
+        assert.equal(discord.mock.callCount(), 0);
+    });
+}
+
+for (const stage of ["member", "create_channel", "send_message"] as const) {
+    test(`a stalled ${stage} body is bounded and preserves fail-open`, async (t) => {
+        const { env } = testEnvironment();
+        const background: Promise<unknown>[] = [];
+        env.ALERT_CONTEXT = { waitUntil(promise) { background.push(promise); } };
+        const logs: string[] = [];
+        t.mock.method(console, "error", (line: string) => logs.push(line));
+        t.mock.timers.enable({ apis: ["setTimeout"] });
+        let bodyStarted: () => void = () => undefined;
+        const started = new Promise<void>((resolve) => { bodyStarted = resolve; });
+        let requestSignal: AbortSignal | null | undefined;
+        let canceled = false;
+        t.mock.method(globalThis, "fetch", async (input: string, init: RequestInit) => {
+            const current = input.endsWith("/messages") ? "send_message"
+                : input.endsWith("/users/@me/channels") ? "create_channel" : "member";
+            if (stage === current) {
+                requestSignal = init.signal;
+                return new Response(new ReadableStream({
+                    pull() { bodyStarted(); return new Promise(() => undefined); },
+                    cancel() { canceled = true; },
+                }));
+            }
+            if (current === "member") return Response.json({ message: "Unauthorized" }, { status: 401 });
+            return Response.json({ id: "987654321098765432" });
+        });
+        const pending = lookupDiscordMember(env, "bot", "987654321098765432", "poll_device_session");
+        await started;
+        assert.equal(requestSignal?.aborted, false);
+        if (stage !== "member") {
+            // Production responds before DM delivery; waitUntil retains the
+            // bounded background work until it times out.
+            assert.equal((await pending).decision, "fail_open");
+            assert.equal(requestSignal?.aborted, false);
+        }
+        t.mock.timers.tick(15_000);
+        const result = await pending;
+        await Promise.all(background);
+        assert.equal(result.decision, "fail_open");
+        assert.equal(requestSignal?.aborted, true);
+        assert.equal(canceled, true);
+        if (stage !== "member") assert.ok(logs.some((line) => JSON.parse(line).event === "nightly_gateway_alert_failed"));
+    });
+}
+
+test("response body time shares the headers deadline instead of getting a new timeout", async (t) => {
+    const { env } = testEnvironment();
+    env.DISCORD_ALERT_USER_ID = undefined;
+    t.mock.method(console, "error", () => undefined);
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    let headersReady: () => void = () => undefined;
+    const headers = new Promise<void>((resolve) => { headersReady = resolve; });
+    let bodyStarted: () => void = () => undefined;
+    const body = new Promise<void>((resolve) => { bodyStarted = resolve; });
+    t.mock.method(globalThis, "fetch", async () => {
+        await headers;
+        return new Response(new ReadableStream({ pull() { bodyStarted(); return new Promise(() => undefined); } }));
+    });
+    const pending = lookupDiscordMember(env, "bot", "987654321098765432", "poll_device_session");
+    t.mock.timers.tick(14_000);
+    headersReady();
+    await body;
+    t.mock.timers.tick(1_000);
+    assert.equal((await pending).decision, "fail_open");
+});
+
+test("a failing alert claim store suppresses DMs without losing fail-open", async (t) => {
+    const { env } = testEnvironment();
+    const logs: string[] = [];
+    t.mock.method(console, "error", (line: string) => logs.push(line));
+    env.LEGACY_DB = { prepare() { throw new Error("claim store unavailable"); } } as unknown as D1Database;
+    const calls: string[] = [];
+    t.mock.method(globalThis, "fetch", async (input: string) => {
+        calls.push(input);
+        return Response.json({ message: "Unauthorized" }, { status: 401 });
+    });
+    for (let i = 0; i < 3; i++) {
+        assert.equal((await lookupDiscordMember(env, "bot", "987654321098765432", "poll_device_session")).decision, "fail_open");
+    }
+    assert.equal(calls.length, 3);
+    assert.ok(calls.every((url) => url.includes("/members/")));
+    assert.equal(logs.filter((line) => JSON.parse(line).event === "nightly_gateway_alert_claim_failed").length, 3);
+});
+
+for (const stage of ["member", "create_channel", "send_message"] as const) {
+    test(`oversized ${stage} bodies stay bounded and fail open`, async (t) => {
+        const { env } = testEnvironment();
+        const calls: string[] = [];
+        t.mock.method(console, "error", () => undefined);
+        t.mock.method(globalThis, "fetch", async (input: string) => {
+            calls.push(input);
+            const current = input.endsWith("/messages") ? "send_message"
+                : input.endsWith("/users/@me/channels") ? "create_channel" : "member";
+            if (stage === current) return new Response("x".repeat(64 * 1024 + 1));
+            if (current === "member") return Response.json({}, { status: 503 });
+            return Response.json({ id: "987654321098765432" });
+        });
+        assert.equal((await lookupDiscordMember(env, "bot", "987654321098765432", "poll_device_session")).decision, "fail_open");
+        if (stage === "create_channel") assert.ok(!calls.some((url) => url.endsWith("/messages")));
+    });
+}
 
 for (const [label, recipient, reason] of [
     ["unset", undefined, "unset"],
@@ -199,7 +374,6 @@ for (const [label, recipient, reason] of [
         const requests: string[] = [];
         const errors: string[] = [];
         env.DISCORD_ALERT_USER_ID = recipient;
-        resetDiscordAlertStateForTests();
         console.error = (message?: unknown) => errors.push(String(message));
         globalThis.fetch = ((input: string | URL | Request) => {
             const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -217,7 +391,6 @@ for (const [label, recipient, reason] of [
         } finally {
             globalThis.fetch = originalFetch;
             console.error = originalError;
-            resetDiscordAlertStateForTests();
         }
     });
 }
@@ -244,7 +417,6 @@ test("OAuth member lookup failures approve the installer and record the fail-ope
     const originalError = console.error;
     const { env, statements } = testEnvironment();
     const requests: string[] = [];
-    resetDiscordAlertStateForTests();
     console.error = () => undefined;
     globalThis.fetch = ((input: string | URL | Request) => {
         const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -258,6 +430,7 @@ test("OAuth member lookup failures approve the installer and record the fail-ope
     }) as typeof fetch;
     try {
         const response = await completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${"H".repeat(43)}`), env);
+        await flushAlertDelivery();
         assert.equal(response.status, 200);
         assert.match(await response.text(), /Access approved/);
         assert.ok(statements.some((sql) => sql.includes("status = 'approved'")));
@@ -266,7 +439,6 @@ test("OAuth member lookup failures approve the installer and record the fail-ope
     } finally {
         globalThis.fetch = originalFetch;
         console.error = originalError;
-        resetDiscordAlertStateForTests();
     }
 });
 

@@ -239,6 +239,25 @@ class LinuxInstallerTests(unittest.TestCase):
         self.run_installer()
         self.assertEqual((self.root / "polls").read_text(), "3")
 
+    def test_gateway_diagnostics_reject_hostile_error_values(self):
+        for error in [
+            "https://example.invalid/private?token=secret",
+            "AbC9_-" * 8,
+            "internal_error\nprivate_value",
+            "internal_error\n",
+            "x" * 65,
+        ]:
+            with self.subTest(error=error):
+                self.config["polls"] = [[502, {"error": error}]]
+                output = self.run_installer(success=False)
+                self.assertIn("HTTP 502; gateway error unavailable", output)
+                self.assertNotIn(error, output)
+
+    def test_gateway_diagnostics_keep_safe_error_codes(self):
+        self.config["polls"] = [[502, {"error": "gateway_v2_error_1"}]]
+        output = self.run_installer(success=False)
+        self.assertIn("HTTP 502; error=gateway_v2_error_1", output)
+
     def test_auth_errors_stop_with_windows_messages(self):
         cases = [
             (200, {"error": "already_used"}, "already used"),

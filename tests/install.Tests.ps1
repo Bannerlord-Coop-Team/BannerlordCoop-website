@@ -453,6 +453,28 @@ if ($gatewayFailure -notmatch 'HTTP 502' -or $gatewayFailure -notmatch 'error=in
     $gatewayFailure -match 'ScriptHalted') {
     throw 'A gateway failure did not retain its HTTP status and error code.'
 }
+$hostileGatewayErrors = @(
+    'https://example.invalid/private?token=secret',
+    ('AbC9_-' * 8),
+    "internal_error`nprivate_value",
+    "internal_error`n",
+    ('x' * 65)
+)
+foreach ($hostile in $hostileGatewayErrors) {
+    $body = [pscustomobject]@{ error = $hostile }
+    if ((Get-NightlyGatewayErrorCode $body) -cne '' -or
+        (Get-NightlyGatewayErrorCodeFromText ($body | ConvertTo-Json -Compress)) -cne '') {
+        throw 'An unsafe gateway error value was accepted as a diagnostic code.'
+    }
+    $safeMessage = Get-NightlyGatewayFailureMessage -Operation 'Gateway request' -ErrorRecord (New-GatewayWebError 502 $hostile)
+    if ($safeMessage -notmatch 'HTTP 502' -or $safeMessage -notmatch 'gateway error unavailable' -or
+        $safeMessage.Contains($hostile)) {
+        throw 'Gateway failure diagnostics exposed an unsafe error value.'
+    }
+}
+if ((Get-NightlyGatewayErrorCode ([pscustomobject]@{ error = 'gateway_v2_error_1' })) -cne 'gateway_v2_error_1') {
+    throw 'A safe gateway error code with digits was rejected.'
+}
 $installerSource = Get-Content -LiteralPath $installer -Raw
 if ($installerSource -match '(?m)^\s*throw\s*$') {
     throw 'The installer still contains a bare throw that hides gateway diagnostics.'
