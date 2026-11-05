@@ -80,22 +80,22 @@ no new Worker binding or secret is required.
 
 ### Publication read failures and compatibility fallback
 
-`GET /v1/manifests/release` remains fail closed when the hash-bound publication
-cannot be read or validated, because the v1 legacy release object has no
-immutable server revision binding and could pair a stale server archive with a
-different client. A Server or Both installer therefore sees a 503 and cannot
-install an unverified pair. `GET /v1/manifests/client` emits a structured
-`nightly_publication_read_failed` operator event and falls back to the bounded,
-validated `nightly/client.json` object in the same `RELEASES` bucket. A Client
-installer can continue with that validated legacy client; a missing or invalid
-compatibility object remains a 503. The fallback accepts only the
-content-addressed client key and a gateway or fixed R2 artifact URL; it
-rewrites the response through the normal artifact route.
+`GET /v1/manifests/release` emits the same structured failure event and falls
+back only when both legacy `nightly/release.json` and `nightly/client.json`
+objects validate and agree on release date, client commit, client key, and
+client checksum. This keeps Server and Both on one validated legacy pair during
+a transient publication read failure; missing, malformed, or mismatched legacy
+objects remain a 503. `GET /v1/manifests/client` falls back to the bounded,
+validated `nightly/client.json` compatibility object in the same `RELEASES`
+bucket. A Client installer can continue with that validated legacy client. The
+fallback accepts only fixed artifact origins and content-addressed client keys,
+then rewrites responses through the normal artifact route.
 
 The failure event records the route, exact stage (`pointer`, `private_read`,
 `checksum`, `manifest`, or `container`), the pointer HTTP/R2 status when one
 exists, and the bounded exception class. Successful fallback emits
-`nightly_legacy_client_fallback_served`. These events are Worker observability
+`nightly_legacy_client_fallback_served` or
+`nightly_legacy_release_fallback_served`. These events are Worker observability
 alerts and contain no credentials or archive bytes.
 
 For a Windows authorization failure, ask for the complete **Session diagnostics

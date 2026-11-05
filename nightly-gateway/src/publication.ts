@@ -41,10 +41,23 @@ export async function readNightlyPublication(
     getPrivateManifest: (key: string) => Promise<PrivateManifest | null>,
     fetcher: typeof fetch = fetch,
 ): Promise<JsonObject> {
-    const signal = AbortSignal.timeout(5_000);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5_000);
+    try {
+        return await readNightlyPublicationWithSignal(getPrivateManifest, fetcher, controller.signal);
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+async function readNightlyPublicationWithSignal(
+    getPrivateManifest: (key: string) => Promise<PrivateManifest | null>,
+    fetcher: typeof fetch,
+    signal: AbortSignal,
+): Promise<JsonObject> {
     let response: Response;
     try {
-        response = await fetcher(NIGHTLY_POINTER_URL, {
+        response = await fetcher.call(globalThis, NIGHTLY_POINTER_URL, {
             method: "GET", redirect: "error", signal, headers: { "Cache-Control": "no-cache" },
         });
     } catch (error) {

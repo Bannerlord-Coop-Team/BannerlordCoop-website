@@ -23,6 +23,7 @@ import {
     pinClientObjectKey,
     rewriteManifestArtifactUrls,
     validateLegacyNightlyClientManifest,
+    validateLegacyNightlyReleaseManifest,
     verifySponsorFormToken,
 } from "./core";
 import { databaseForRequest } from "./database";
@@ -832,33 +833,62 @@ async function serveManifest(request: Request, env: Env, clientOnly: boolean): P
                 ?? (error instanceof Error && error.name.length > 0 ? error.name : "Error"),
             fallback: clientOnly,
         }));
-        if (!clientOnly) throw new GatewayError(503, "manifest_unavailable");
         try {
-            const legacy = await env.RELEASES.get("nightly/client.json");
-            if (legacy === null || legacy.size > 32 * 1024) throw new Error("legacy_client_unavailable");
-            const legacyBytes = await legacy.arrayBuffer();
-            const parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(legacyBytes)) as unknown;
-            validated = validateLegacyNightlyClientManifest(
-                parsed,
-                env.LEGACY_R2_ORIGIN,
-                env.PUBLIC_ORIGIN,
-            );
-            console.error(JSON.stringify({
-                event: "nightly_legacy_client_fallback_served",
-                route: "client",
-                head_sha: (validated.headSha as string).slice(0, 12),
-            }));
+            if (clientOnly) {
+                validated = validateLegacyNightlyClientManifest(
+                    await readLegacyJson(env, "nightly/client.json", 32 * 1024),
+                    env.LEGACY_R2_ORIGIN,
+                    env.PUBLIC_ORIGIN,
+                );
+                console.error(JSON.stringify({
+                    event: "nightly_legacy_client_fallback_served",
+                    route: "client",
+                    head_sha: (validated.headSha as string).slice(0, 12),
+                }));
+            } else {
+                const legacyRelease = validateLegacyNightlyReleaseManifest(
+                    await readLegacyJson(env, "nightly/release.json", 128 * 1024),
+                    env.LEGACY_R2_ORIGIN,
+                    env.PUBLIC_ORIGIN,
+                );
+                const legacyClient = validateLegacyNightlyClientManifest(
+                    await readLegacyJson(env, "nightly/client.json", 32 * 1024),
+                    env.LEGACY_R2_ORIGIN,
+                    env.PUBLIC_ORIGIN,
+                );
+                const releaseClient = legacyRelease.client as Record<string, unknown>;
+                const client = legacyClient.client as Record<string, unknown>;
+                if (legacyRelease.releaseDate !== legacyClient.releaseDate
+                    || legacyRelease.headSha !== legacyClient.headSha
+                    || releaseClient.key !== client.key
+                    || releaseClient.sha256 !== client.sha256) {
+                    throw new Error("legacy_release_client_mismatch");
+                }
+                validated = legacyRelease;
+                console.error(JSON.stringify({
+                    event: "nightly_legacy_release_fallback_served",
+                    route: "release",
+                    head_sha: (validated.headSha as string).slice(0, 12),
+                }));
+            }
         } catch (fallbackError) {
             console.error(JSON.stringify({
-                event: "nightly_legacy_client_fallback_failed",
+                event: clientOnly ? "nightly_legacy_client_fallback_failed" : "nightly_legacy_release_fallback_failed",
                 error_code: fallbackError instanceof Error && /^[a-z0-9_]{1,64}$/.test(fallbackError.message)
-                    ? fallbackError.message : "legacy_client_unavailable",
+                    ? fallbackError.message : clientOnly ? "legacy_client_unavailable" : "legacy_release_unavailable",
             }));
             throw new GatewayError(503, "manifest_unavailable");
         }
     }
     const rewritten = rewriteManifestArtifactUrls(validated, env.PUBLIC_ORIGIN, env.LEGACY_R2_ORIGIN);
     return json(rewritten);
+}
+
+async function readLegacyJson(env: Env, key: string, maximumBytes: number): Promise<Record<string, unknown>> {
+    const object = await env.RELEASES.get(key);
+    if (object === null || object.size > maximumBytes) throw new Error("legacy_manifest_unavailable");
+    const bytes = await object.arrayBuffer();
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes)) as Record<string, unknown>;
 }
 
 async function serveArtifact(request: Request, env: Env, encodedKey: string): Promise<Response> {
