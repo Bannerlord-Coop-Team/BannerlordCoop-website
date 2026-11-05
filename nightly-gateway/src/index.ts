@@ -26,7 +26,7 @@ import {
     verifySponsorFormToken,
 } from "./core";
 import { databaseForRequest } from "./database";
-import { readNightlyPublication } from "./publication";
+import { NightlyPublicationReadError, readNightlyPublication } from "./publication";
 
 const DISCORD_API = "https://discord.com/api/v10";
 const DISCORD_AUTHORIZE = "https://discord.com/oauth2/authorize";
@@ -821,10 +821,15 @@ async function serveManifest(request: Request, env: Env, clientOnly: boolean): P
     } catch (error) {
         const errorCode = error instanceof Error && /^[a-z0-9_]{1,64}$/.test(error.message)
             ? error.message : "publication_read_failed";
+        const publicationError = error instanceof NightlyPublicationReadError ? error : null;
         console.error(JSON.stringify({
             event: "nightly_publication_read_failed",
             route: clientOnly ? "client" : "release",
             error_code: errorCode,
+            stage: publicationError?.stage ?? "unknown",
+            r2_status: publicationError?.status ?? null,
+            exception_class: publicationError?.exceptionClass
+                ?? (error instanceof Error && error.name.length > 0 ? error.name : "Error"),
             fallback: clientOnly,
         }));
         if (!clientOnly) throw new GatewayError(503, "manifest_unavailable");

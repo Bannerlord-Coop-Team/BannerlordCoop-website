@@ -158,7 +158,18 @@ test("client route falls back to the validated legacy manifest while release sta
     assert.equal((await client.json() as { headSha: string }).headSha, legacy.headSha);
     const release = await worker.fetch(new Request(`${gateway}/v1/manifests/release`, { headers }), env);
     assert.equal(release.status, 503);
-    assert.ok(logs.some((line) => line.includes('"event":"nightly_publication_read_failed"')));
+    const publicationFailure = logs.find((line) => line.includes('"event":"nightly_publication_read_failed"')
+        && line.includes('"route":"release"'));
+    assert.ok(publicationFailure);
+    assert.deepEqual(JSON.parse(publicationFailure!), {
+        event: "nightly_publication_read_failed",
+        route: "release",
+        error_code: "runtime_binding_read_failed",
+        stage: "private_read",
+        r2_status: null,
+        exception_class: "Error",
+        fallback: false,
+    });
     assert.ok(logs.some((line) => line.includes('"event":"nightly_legacy_client_fallback_served"')));
     assert.deepEqual(objects, [value.pointer.manifest.key, "nightly/client.json", value.pointer.manifest.key]);
 });
