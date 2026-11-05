@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { validateLegacyNightlyClientManifest, validateNightlyPublicationPointer } from "./core";
+import { validateLegacyNightlyClientManifest, validateLegacyNightlyReleaseManifest, validateNightlyPublicationPointer } from "./core";
 import { NIGHTLY_POINTER_URL, NightlyPublicationReadError, readNightlyPublication } from "./publication";
 import worker from "./index";
 
@@ -57,7 +58,7 @@ test("gateway reads the exact public pointer and its hash-bound private object",
     assert.equal(value.requests.length, 1);
     assert.equal(value.requests[0].url, `${origin}/nightly/release.json`);
     assert.deepEqual(value.requests[0].options, {
-        method: "GET", redirect: "error", signal: value.requests[0].options?.signal,
+        method: "GET", redirect: "manual", signal: value.requests[0].options?.signal,
         headers: { "Cache-Control": "no-cache" },
     });
     assert.ok(value.requests[0].options?.signal instanceof AbortSignal);
@@ -141,12 +142,14 @@ test("client and release routes fall back only to a validated legacy pair", asyn
                     bytes: 30,
                     sha256: "f".repeat(64),
                     publicUrl: `${origin}/windows/base/v1/${"e".repeat(64)}/${"f".repeat(64)}/server-base.7z`,
+                    key: `windows/base/v1/${"e".repeat(64)}/${"f".repeat(64)}/server-base.7z`,
                 },
                 update: {
                     fileName: "BannerlordCoop-DedicatedServer-Win64-Update.7z",
                     bytes: 40,
                     sha256: "0".repeat(64),
                     publicUrl: `${origin}/nightly/windows/updates/${legacy.headSha}/${"a".repeat(40)}/${"0".repeat(64)}/server-update.7z`,
+                    key: `nightly/windows/updates/${legacy.headSha}/${"a".repeat(40)}/${"0".repeat(64)}/server-update.7z`,
                 },
             },
         },
@@ -197,7 +200,7 @@ test("client and release routes fall back only to a validated legacy pair", asyn
     assert.equal(client.status, 200);
     assert.equal((await client.json() as { headSha: string }).headSha, legacy.headSha);
     const release = await worker.fetch(new Request(`${gateway}/v1/manifests/release`, { headers }), env);
-    assert.equal(release.status, 200);
+    assert.equal(release.status, 200, logs.join("\n"));
     assert.equal((await release.json() as { headSha: string }).headSha, legacyRelease.headSha);
     const publicationFailure = logs.find((line) => line.includes('"event":"nightly_publication_read_failed"')
         && line.includes('"route":"release"'));
@@ -234,6 +237,21 @@ test("client fallback accepts the producer's null baseSha legacy shape", async (
         },
     };
     assert.doesNotThrow(() => validateLegacyNightlyClientManifest(legacy, origin, gateway));
+});
+
+test("accepts the production-shaped legacy release fixture and rejects missing artifact keys", async () => {
+    const fixture = JSON.parse(await readFile(new URL("../fixtures/legacy-release-2026-11-04.json", import.meta.url), "utf8")) as Record<string, unknown> & {
+        server: { incremental: { base: Record<string, unknown>; update: Record<string, unknown> } };
+    };
+    const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+    assert.doesNotThrow(() => validateLegacyNightlyReleaseManifest(fixture, origin, gateway));
+    const withoutBaseKey = structuredClone(fixture);
+    delete withoutBaseKey.server.incremental.base.key;
+    assert.throws(() => validateLegacyNightlyReleaseManifest(withoutBaseKey, origin, gateway), /invalid_legacy_nightly_release_artifact/);
+    const withoutUpdateKey = structuredClone(withoutBaseKey);
+    withoutUpdateKey.server.incremental.base.key = fixture.server.incremental.base.key;
+    delete withoutUpdateKey.server.incremental.update.key;
+    assert.throws(() => validateLegacyNightlyReleaseManifest(withoutUpdateKey, origin, gateway), /invalid_legacy_nightly_release_artifact/);
 });
 
 test("gateway rejects a private manifest whose bytes or image digest differ from the public pointer", async () => {

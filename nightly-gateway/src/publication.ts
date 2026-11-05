@@ -40,11 +40,12 @@ function namedError(name: string, message: string): Error {
 export async function readNightlyPublication(
     getPrivateManifest: (key: string) => Promise<PrivateManifest | null>,
     fetcher: typeof fetch = fetch,
+    getPublicPointer?: () => Promise<PrivateManifest | null>,
 ): Promise<JsonObject> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5_000);
     try {
-        return await readNightlyPublicationWithSignal(getPrivateManifest, fetcher, controller.signal);
+        return await readNightlyPublicationWithSignal(getPrivateManifest, fetcher, controller.signal, getPublicPointer);
     } finally {
         clearTimeout(timeout);
     }
@@ -54,30 +55,54 @@ async function readNightlyPublicationWithSignal(
     getPrivateManifest: (key: string) => Promise<PrivateManifest | null>,
     fetcher: typeof fetch,
     signal: AbortSignal,
+    getPublicPointer?: () => Promise<PrivateManifest | null>,
 ): Promise<JsonObject> {
-    let response: Response;
-    try {
-        response = await fetcher.call(globalThis, NIGHTLY_POINTER_URL, {
-            method: "GET", redirect: "error", signal, headers: { "Cache-Control": "no-cache" },
-        });
-    } catch (error) {
-        throw new NightlyPublicationReadError("pointer", error);
-    }
-    if (response.status !== 200 || response.body === null) {
-        await response.body?.cancel();
-        throw new NightlyPublicationReadError("pointer", namedError("PointerUnavailable", "nightly_pointer_unavailable"), response.status);
-    }
     let pointerBytes: Uint8Array;
-    try {
-        pointerBytes = await readBounded(response.body, MAXIMUM_POINTER_BYTES, signal);
-    } catch (error) {
-        throw new NightlyPublicationReadError("pointer", error, response.status);
+    let pointerStatus: number | null = null;
+    if (getPublicPointer !== undefined) {
+        let object: PrivateManifest | null;
+        try {
+            object = await beforeDeadline(getPublicPointer(), signal);
+        } catch (error) {
+            throw new NightlyPublicationReadError("pointer", error);
+        }
+        if (object === null) {
+            throw new NightlyPublicationReadError("pointer", namedError("R2ObjectMissing", "nightly_pointer_unavailable"));
+        }
+        if (!Number.isSafeInteger(object.size) || object.size < 2 || object.size > MAXIMUM_POINTER_BYTES) {
+            await object.body.cancel();
+            throw new NightlyPublicationReadError("pointer", namedError("R2ObjectInvalid", "nightly_pointer_unavailable"));
+        }
+        try {
+            pointerBytes = await readBounded(object.body, MAXIMUM_POINTER_BYTES, signal);
+        } catch (error) {
+            throw new NightlyPublicationReadError("pointer", error);
+        }
+    } else {
+        let response: Response;
+        try {
+            response = await fetcher.call(globalThis, NIGHTLY_POINTER_URL, {
+                method: "GET", redirect: "manual", signal, headers: { "Cache-Control": "no-cache" },
+            });
+        } catch (error) {
+            throw new NightlyPublicationReadError("pointer", error);
+        }
+        pointerStatus = response.status;
+        if (response.status !== 200 || response.body === null) {
+            await response.body?.cancel();
+            throw new NightlyPublicationReadError("pointer", namedError("PointerUnavailable", "nightly_pointer_unavailable"), response.status);
+        }
+        try {
+            pointerBytes = await readBounded(response.body, MAXIMUM_POINTER_BYTES, signal);
+        } catch (error) {
+            throw new NightlyPublicationReadError("pointer", error, response.status);
+        }
     }
     let pointer: NightlyPublicationPointer;
     try {
         pointer = validateNightlyPublicationPointer(decodeJson(pointerBytes));
     } catch (error) {
-        throw new NightlyPublicationReadError("pointer", error, response.status);
+        throw new NightlyPublicationReadError("pointer", error, pointerStatus);
     }
     let object: PrivateManifest | null;
     try {

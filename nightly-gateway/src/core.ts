@@ -384,6 +384,7 @@ export function validateLegacyNightlyReleaseManifest(
         `windows/base/v1/${incremental.baseFingerprint}/${baseSha}/server-base.7z`,
         /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/,
         8 * 1024 * 1024 * 1024,
+        true,
     );
     const update = recordField(incremental, "update");
     const updateSha = stringField(update, "sha256", NIGHTLY_PUBLICATION_SHA256);
@@ -405,6 +406,7 @@ export function validateLegacyNightlyReleaseManifest(
         updateKey,
         /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/,
         512 * 1024 * 1024,
+        true,
     );
     return input;
 }

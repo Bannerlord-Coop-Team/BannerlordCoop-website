@@ -818,7 +818,11 @@ async function serveManifest(request: Request, env: Env, clientOnly: boolean): P
     await requireNightlyDownloadSession(request, env);
     let validated;
     try {
-        validated = await readNightlyPublication((key) => env.RELEASES.get(key));
+        validated = await readNightlyPublication(
+            (key) => env.RELEASES.get(key),
+            fetch,
+            env.PUBLIC_RELEASES === undefined ? undefined : () => env.PUBLIC_RELEASES.get("nightly/release.json"),
+        );
     } catch (error) {
         const errorCode = error instanceof Error && /^[a-z0-9_]{1,64}$/.test(error.message)
             ? error.message : "publication_read_failed";
