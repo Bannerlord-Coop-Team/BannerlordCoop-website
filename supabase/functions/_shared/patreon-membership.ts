@@ -84,6 +84,7 @@ export async function verifyPatreonMembership(body: unknown, policy: Policy | nu
                 const tiers = relationship(member, "currently_entitled_tiers");
                 if (!Array.isArray(tiers) || tiers.length > 50) incomplete("Incomplete entitled tiers");
                 const tierIds: string[] = [];
+                let hasPaidTier = false;
                 for (const ref of tiers) {
                     if (!resource(ref, "tier") || tierIds.includes(ref.id)) incomplete("Ambiguous tier");
                     const tier = included.get(`tier:${ref.id}`);
@@ -92,6 +93,7 @@ export async function verifyPatreonMembership(body: unknown, policy: Policy | nu
                     const tierCampaign = relationship(tier, "campaign");
                     if (!resource(tierCampaign, "campaign") || tierCampaign.id !== policy.campaignId) throw new Error("Tier belongs to another campaign");
                     if (policy.qualifyingTierIds.includes(ref.id) && (tier.attributes.amount_cents as number) < policy.minimumCents) throw new Error("Policy mapping disagrees with provider");
+                    if ((tier.attributes.amount_cents as number) > 0) hasPaidTier = true;
                     tierIds.push(ref.id);
                 }
                 evidence.tierIds = tierIds.sort();
@@ -99,10 +101,13 @@ export async function verifyPatreonMembership(body: unknown, policy: Policy | nu
                 if (!record(a) || !Number.isSafeInteger(a.currently_entitled_amount_cents) || (a.currently_entitled_amount_cents as number) < 0 || typeof a.last_charge_date !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/u.test(a.last_charge_date) || !Number.isFinite(Date.parse(a.last_charge_date)) || new Date(a.last_charge_date).toISOString().slice(0,19) !== a.last_charge_date.slice(0,19) || typeof a.is_free_trial !== "boolean" || typeof a.is_gifted !== "boolean") incomplete("Missing payment/status evidence");
                 if (Date.parse(a.last_charge_date) > Date.parse(now) || a.is_free_trial || a.is_gifted) throw new Error("Payment/status evidence conflicts with policy");
                 // A cancellation can retain paid benefits. Only a complete creator-authenticated
-                // read proving former membership AND no remaining entitlement confirms loss.
+                // read proving former membership AND no remaining paid entitlement confirms loss.
+                // Patreon keeps cancelled patrons on a $0 tier, which is not a paid benefit, so
+                // those tiers are dropped: confirmed-loss evidence carries no tiers.
                 if (confirmEndedAccess && a.patron_status === "former_patron" && a.last_charge_status === "Paid"
-                    && a.currently_entitled_amount_cents === 0 && tierIds.length === 0) {
+                    && a.currently_entitled_amount_cents === 0 && !hasPaidTier) {
                     evidence.verification = "nonqualifying";
+                    evidence.tierIds = [];
                     evidence.paidAccessEndedAt = now;
                 }
                 else if (a.patron_status === "declined_patron" || a.last_charge_status === "Declined") evidence.verification = "nonqualifying";
