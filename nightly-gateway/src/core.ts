@@ -291,6 +291,43 @@ export function validateNightlyPublicationManifest(input: unknown, legacyOrigin:
     return value;
 }
 
+/** Validates the bounded v1 client manifest retained as a compatibility fallback. */
+export function validateLegacyNightlyClientManifest(
+    input: unknown,
+    legacyOrigin: string,
+    gatewayOrigin: string,
+): JsonObject {
+    if (!isRecord(input) || input.version !== 1 || typeof input.releaseDate !== "string"
+        || !NIGHTLY_PUBLICATION_DATE.test(input.releaseDate)
+        || typeof input.headSha !== "string" || !NIGHTLY_PUBLICATION_COMMIT.test(input.headSha)
+        || typeof input.baseSha !== "string" || !NIGHTLY_PUBLICATION_COMMIT.test(input.baseSha)
+        || typeof input.workflowRunId !== "number" || !Number.isSafeInteger(input.workflowRunId)
+        || input.workflowRunId <= 0 || typeof input.builtAt !== "string"
+        || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/.test(input.builtAt)) {
+        throw new Error("invalid_legacy_nightly_client_manifest");
+    }
+    const client = recordField(input, "client");
+    if (!exactKeys(client, ["fileName", "key", "bytes", "sha256", "publicUrl"])
+        || typeof client.fileName !== "string" || !NIGHTLY_PUBLICATION_FILE.test(client.fileName)
+        || typeof client.key !== "string" || client.key !== `nightly/clients/${input.headSha}/${client.sha256}/Coop.7z`
+        || !isAllowedArtifactKey(client.key) || typeof client.bytes !== "number"
+        || !Number.isSafeInteger(client.bytes) || client.bytes <= 0 || client.bytes > 8 * 1024 * 1024
+        || typeof client.sha256 !== "string" || !NIGHTLY_PUBLICATION_SHA256.test(client.sha256)
+        || typeof client.publicUrl !== "string") {
+        throw new Error("invalid_legacy_nightly_client_manifest");
+    }
+    const parsed = new URL(client.publicUrl);
+    const legacyPath = `/${client.key}`;
+    const gatewayPath = `/v1/artifacts/${client.key}`;
+    if (parsed.search || parsed.hash
+        || (parsed.origin === legacyOrigin && parsed.pathname !== legacyPath)
+        || (parsed.origin === gatewayOrigin && parsed.pathname !== gatewayPath)
+        || (parsed.origin !== legacyOrigin && parsed.origin !== gatewayOrigin)) {
+        throw new Error("invalid_legacy_nightly_client_manifest");
+    }
+    return input;
+}
+
 function recordField(value: JsonObject, field: string): JsonObject {
     const result = value[field];
     if (!isRecord(result)) throw new Error("invalid_nightly_publication_field");

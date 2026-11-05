@@ -22,6 +22,7 @@ import {
     mintSecretsEqual,
     pinClientObjectKey,
     rewriteManifestArtifactUrls,
+    validateLegacyNightlyClientManifest,
     verifySponsorFormToken,
 } from "./core";
 import { databaseForRequest } from "./database";
@@ -136,10 +137,10 @@ async function route(request: Request, env: Env): Promise<Response> {
         return servePinManifest(request, env);
     }
     if (request.method === "GET" && url.pathname === "/v1/manifests/client") {
-        return serveManifest(request, env);
+        return serveManifest(request, env, true);
     }
     if (request.method === "GET" && url.pathname === "/v1/manifests/release") {
-        return serveManifest(request, env);
+        return serveManifest(request, env, false);
     }
     if (request.method === "GET" && url.pathname.startsWith("/v1/artifacts/")) {
         return serveArtifact(request, env, url.pathname.slice("/v1/artifacts/".length));
@@ -812,13 +813,44 @@ async function sha256Bytes(bytes: Uint8Array): Promise<string> {
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function serveManifest(request: Request, env: Env): Promise<Response> {
+async function serveManifest(request: Request, env: Env, clientOnly: boolean): Promise<Response> {
     await requireNightlyDownloadSession(request, env);
     let validated;
     try {
         validated = await readNightlyPublication((key) => env.RELEASES.get(key));
-    } catch {
-        throw new GatewayError(503, "manifest_unavailable");
+    } catch (error) {
+        const errorCode = error instanceof Error && /^[a-z0-9_]{1,64}$/.test(error.message)
+            ? error.message : "publication_read_failed";
+        console.error(JSON.stringify({
+            event: "nightly_publication_read_failed",
+            route: clientOnly ? "client" : "release",
+            error_code: errorCode,
+            fallback: clientOnly,
+        }));
+        if (!clientOnly) throw new GatewayError(503, "manifest_unavailable");
+        try {
+            const legacy = await env.RELEASES.get("nightly/client.json");
+            if (legacy === null || legacy.size > 32 * 1024) throw new Error("legacy_client_unavailable");
+            const legacyBytes = await legacy.arrayBuffer();
+            const parsed = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(legacyBytes)) as unknown;
+            validated = validateLegacyNightlyClientManifest(
+                parsed,
+                env.LEGACY_R2_ORIGIN,
+                env.PUBLIC_ORIGIN,
+            );
+            console.error(JSON.stringify({
+                event: "nightly_legacy_client_fallback_served",
+                route: "client",
+                head_sha: (validated.headSha as string).slice(0, 12),
+            }));
+        } catch (fallbackError) {
+            console.error(JSON.stringify({
+                event: "nightly_legacy_client_fallback_failed",
+                error_code: fallbackError instanceof Error && /^[a-z0-9_]{1,64}$/.test(fallbackError.message)
+                    ? fallbackError.message : "legacy_client_unavailable",
+            }));
+            throw new GatewayError(503, "manifest_unavailable");
+        }
     }
     const rewritten = rewriteManifestArtifactUrls(validated, env.PUBLIC_ORIGIN, env.LEGACY_R2_ORIGIN);
     return json(rewritten);

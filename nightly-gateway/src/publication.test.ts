@@ -102,6 +102,67 @@ test("both authenticated manifest routes select the same pointer and keep privat
     assert.equal(value.requests.length, 2);
 });
 
+test("client route falls back to the validated legacy manifest while release stays fail closed", async (context) => {
+    const value = fixture();
+    const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+    const legacy = {
+        version: 1,
+        releaseDate: "2026-11-04",
+        headSha: "a".repeat(40),
+        baseSha: "a".repeat(40),
+        workflowRunId: 42007050452,
+        builtAt: "2026-11-05T10:04:43Z",
+        client: {
+            fileName: "Coop 11-04-2026.7z",
+            key: `nightly/clients/${"a".repeat(40)}/${"c".repeat(64)}/Coop.7z`,
+            bytes: 10,
+            sha256: "c".repeat(64),
+            publicUrl: `${gateway}/v1/artifacts/nightly/clients/${"a".repeat(40)}/${"c".repeat(64)}/Coop.7z`,
+        },
+    };
+    const legacyBytes = Buffer.from(JSON.stringify(legacy));
+    const objects: string[] = [];
+    const env = {
+        DB: {
+            async batch() { throw new Error("manifest discovery must be read-only"); },
+            prepare(sql: string) {
+                return { bind() {
+                    return { async first() {
+                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
+                    } };
+                } };
+            },
+        },
+        RELEASES: { async get(key: string) {
+            objects.push(key);
+            if (key === "nightly/client.json") return {
+                size: legacyBytes.byteLength,
+                body: new Response(legacyBytes).body!,
+                arrayBuffer: async () => legacyBytes.buffer.slice(
+                    legacyBytes.byteOffset,
+                    legacyBytes.byteOffset + legacyBytes.byteLength,
+                ),
+            };
+            throw new Error("runtime_binding_read_failed");
+        } },
+        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
+        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32),
+        DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+    } as unknown as Env;
+    const logs: string[] = [];
+    context.mock.method(console, "error", (line: string) => logs.push(line));
+    context.mock.method(globalThis, "fetch", value.fetcher);
+    const headers = { authorization: `Bearer ${"n".repeat(43)}` };
+    const client = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, { headers }), env);
+    assert.equal(client.status, 200);
+    assert.equal((await client.json() as { headSha: string }).headSha, legacy.headSha);
+    const release = await worker.fetch(new Request(`${gateway}/v1/manifests/release`, { headers }), env);
+    assert.equal(release.status, 503);
+    assert.ok(logs.some((line) => line.includes('"event":"nightly_publication_read_failed"')));
+    assert.ok(logs.some((line) => line.includes('"event":"nightly_legacy_client_fallback_served"')));
+    assert.deepEqual(objects, [value.pointer.manifest.key, "nightly/client.json", value.pointer.manifest.key]);
+});
+
 test("gateway rejects a private manifest whose bytes or image digest differ from the public pointer", async () => {
     const value = fixture();
     await assert.rejects(readNightlyPublication(async () => ({
