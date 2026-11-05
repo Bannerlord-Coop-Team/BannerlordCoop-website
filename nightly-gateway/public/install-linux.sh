@@ -97,6 +97,22 @@ for item in data:
 "
 }
 
+gateway_failure_detail() {
+    local status=${1:-unknown} response=${2:-} error=''
+    [[ $status =~ ^[1-5][0-9]{2}$ ]] || status=unknown
+    if [ -n "$response" ] && [ -f "$response" ]; then
+        # Preserve trailing newlines until after validation; command substitution
+        # alone would strip them and could turn a hostile value into a code.
+        error=$(json_get error < "$response" 2>/dev/null && printf '.') || error=''
+        error=${error%.}
+    fi
+    if [[ $error =~ ^[a-z0-9_]{1,64}$ ]]; then
+        printf 'HTTP %s; error=%s' "$status" "$error"
+    else
+        printf 'HTTP %s; gateway error unavailable' "$status"
+    fi
+}
+
 short_sha() {
     local sha=$1
     [ ${#sha} -le 7 ] && { printf '%s' "$sha"; return; }
@@ -129,8 +145,9 @@ check_client_url() {
 }
 
 token_poll_decision() {
-    local status=$1 response=$2 error token token_type
+    local status=$1 response=$2 error token token_type detail
     error=$(json_get error < "$response" 2>/dev/null) || error=''
+    detail=$(gateway_failure_detail "$status" "$response")
     if [ "$status" = 200 ]; then
         token=$(json_get access_token < "$response" 2>/dev/null) || token=''
         token_type=$(json_get token_type < "$response" 2>/dev/null) || token_type=''
@@ -144,16 +161,16 @@ token_poll_decision() {
         return 0
     fi
     if [ "$status" = 403 ] || [ "$error" = access_denied ] || [ "$error" = supporter_role_required ]; then
-        die "Discord access was denied. The Tester role, a current Patreon, Boosty, or Afdian supporter role, or an active sponsored-account seat is required."
+        die "Discord access was denied. The Tester role, a current Patreon, Boosty, or Afdian supporter role, or an active sponsored-account seat is required." "$detail"
     fi
     if [ "$status" = 409 ] || [ "$error" = already_used ]; then
-        die "This Discord verification was already used. Close extra installer windows and run the installer again."
+        die "This Discord verification was already used. Close extra installer windows and run the installer again." "$detail"
     fi
     if [ "$status" = 400 ] || [ "$status" = 401 ] || [ "$error" = expired_token ] || [ "$error" = invalid_request ]; then
-        die "The Discord verification expired. Run the installer again to start a new check."
+        die "The Discord verification expired. Run the installer again to start a new check." "$detail"
     fi
-    [ "$status" != 200 ] || die "The nightly authorization token is invalid."
-    die "Could not check Discord verification (HTTP $status). Run the installer again."
+    [ "$status" != 200 ] || die "The nightly authorization token is invalid." "$detail"
+    die "Could not check Discord verification ($detail). Run the installer again."
 }
 
 check_url() {
@@ -352,15 +369,29 @@ printf '\nNightly access verification\n'
 printf 'Nightly builds are for Testers, current Patreon, Boosty, or Afdian supporters, and up to 10 Discord accounts sponsored by each eligible member.\n'
 printf 'A browser will open so Discord can verify access for this install or update.\n'
 
-sess=$(curl -fsS --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 30 \
+AUTH_WORK=$(mktemp -d "${TMPDIR:-/tmp}/bannerlordcoop-auth-XXXXXX") \
+    || die "Cannot create an authorization work directory."
+trap 'rm -rf "$AUTH_WORK"' EXIT
+session_file="$AUTH_WORK/session.json"
+st=000
+if ! st=$(curl -sS --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 30 \
+    -o "$session_file" -w '%{http_code}' \
     -X POST "$GATEWAY/v1/device/sessions" \
-    -H 'Content-Type: application/x-www-form-urlencoded' -d 'client=installer') \
-    || die "Could not reach the nightly authorization service."
-DEVICE_CODE=$(printf '%s' "$sess" | json_get device_code)
-USER_CODE=$(printf '%s' "$sess" | json_get user_code)
-VERIFY_URI=$(printf '%s' "$sess" | json_get verification_uri)
-INTERVAL=$(printf '%s' "$sess" | json_get interval)
-EXPIRES=$(printf '%s' "$sess" | json_get expires_in)
+    -H 'Content-Type: application/x-www-form-urlencoded' -d 'client=installer'); then
+    detail=$(gateway_failure_detail "${st:-000}" "$session_file")
+    die "Could not reach the nightly authorization service." "$detail"
+fi
+if [ "$st" != 200 ] && [ "$st" != 201 ]; then
+    detail=$(gateway_failure_detail "$st" "$session_file")
+    rm -f "$session_file"
+    die "The nightly authorization service returned an error." "$detail"
+fi
+DEVICE_CODE=$(json_get device_code < "$session_file")
+USER_CODE=$(json_get user_code < "$session_file")
+VERIFY_URI=$(json_get verification_uri < "$session_file")
+INTERVAL=$(json_get interval < "$session_file")
+EXPIRES=$(json_get expires_in < "$session_file")
+rm -f "$session_file"
 [[ $DEVICE_CODE =~ ^[A-Za-z0-9_-]{43}$ ]] \
     || die "The nightly authorization service returned an invalid response."
 case "$USER_CODE" in
@@ -382,18 +413,18 @@ if command -v xdg-open >/dev/null 2>&1; then
 fi
 printf 'If no browser opens, go to:\n  %s\n' "$VERIFY_URI"
 
-AUTH_WORK=$(mktemp -d "${TMPDIR:-/tmp}/bannerlordcoop-auth-XXXXXX") \
-    || die "Cannot create an authorization work directory."
-trap 'rm -rf "$AUTH_WORK"' EXIT
 deadline=$(( $(date +%s) + EXPIRES ))
 while [ "$(date +%s)" -lt "$deadline" ]; do
     sleep "$INTERVAL"
     tf="$AUTH_WORK/token.json"
-    st=$(curl -sS --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 30 -o "$tf" -w '%{http_code}' \
+    st=000
+    if ! st=$(curl -sS --proto '=https' --tlsv1.2 --connect-timeout 15 --max-time 30 -o "$tf" -w '%{http_code}' \
         -X POST "$GATEWAY/v1/device/token" \
         -H 'Content-Type: application/x-www-form-urlencoded' \
-        --data-urlencode "device_code=$DEVICE_CODE") \
-        || die "Could not reach the nightly authorization service."
+        --data-urlencode "device_code=$DEVICE_CODE"); then
+        detail=$(gateway_failure_detail "${st:-000}" "$tf")
+        die "Could not reach the nightly authorization service." "$detail"
+    fi
     token_poll_decision "$st" "$tf"
     rm -f "$tf"
     [ -z "$TOKEN" ] || break
@@ -408,14 +439,15 @@ printf 'Checking the latest completed nightly release...\n'
 mf="$AUTH_WORK/manifest.json"
 st=$(curl -sS --max-time 60 "${AUTH[@]}" -o "$mf" -w '%{http_code}' "$MANIFEST_URI")
 if [ "$st" != 200 ]; then
+    detail=$(gateway_failure_detail "$st" "$mf")
     rm -f "$mf"
     if [ "$st" = 404 ]; then
         if [ "$WANT_SERVER" = 0 ]; then
-            die "No Patron client nightly has been published yet. Wait for the next completed nightly build, then run the installer again."
+            die "No Patron client nightly has been published yet. Wait for the next completed nightly build, then run the installer again." "$detail"
         fi
-        die "No matched Patron client and dedicated-server nightly has been published yet. Wait for the next completed nightly build, then run the installer again."
+        die "No matched Patron client and dedicated-server nightly has been published yet. Wait for the next completed nightly build, then run the installer again." "$detail"
     fi
-    die "Could not read the release manifest (HTTP $st)."
+    die "Could not read the release manifest." "$detail"
 fi
 
 REL_DATE=$(json_get releaseDate < "$mf")

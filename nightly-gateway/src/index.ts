@@ -17,7 +17,6 @@ import {
     isCreateBuildPinCommitSha,
     isCreateBuildPinToken,
     isDiscordSnowflake,
-    isEligibleNightlySponsor,
     isSha256Hex,
     mintSecretsEqual,
     pinClientObjectKey,
@@ -25,6 +24,7 @@ import {
     verifySponsorFormToken,
 } from "./core";
 import { databaseForRequest } from "./database";
+import { claimDiscordAlert } from "./alerts";
 
 const DISCORD_API = "https://discord.com/api/v10";
 const DISCORD_AUTHORIZE = "https://discord.com/oauth2/authorize";
@@ -43,6 +43,8 @@ const MANUAL_SERVER_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/;
 const PUBLIC_MANUAL_SERVER_ORIGIN = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const SPONSOR_SESSION_SECONDS = 24 * 60 * 60;
 const OAUTH_STATE_SECONDS = 10 * 60;
+const DISCORD_ALERT_MESSAGE_LIMIT = 2000;
+const DISCORD_REQUEST_TIMEOUT_MS = 15_000;
 const SITE_HERO_IMAGE = "https://raw.githubusercontent.com/Bannerlord-Coop-Team/BannerlordCoop-website/07491ba62e3b038b16458402b4cc92dccf71b985/public/images/singleleader.png";
 
 type DiscordToken = {
@@ -54,13 +56,35 @@ type DiscordToken = {
 };
 
 type DiscordUser = { id: string; username: string };
-type DiscordMember = { roles: string[]; user?: DiscordUser };
+export type DiscordMember = { roles: string[]; user?: DiscordUser };
+
+export type DiscordEligibilityDecision = "eligible" | "ineligible" | "not_in_guild" | "fail_open";
+
+export type DiscordMemberLookup = {
+    member: DiscordMember | null;
+    decision: DiscordEligibilityDecision;
+};
+
+type DiscordMemberLookupSource = "bot" | "oauth";
+type DiscordMemberLookupPath =
+    | "poll_device_session"
+    | "oauth_device_member"
+    | "oauth_sponsor_portal"
+    | "oauth_sponsored_recheck"
+    | "sponsor_claim"
+    | "sponsor_claim_existing_seat";
+
+type DiscordFailure = {
+    kind: string;
+    path: DiscordMemberLookupPath;
+    status: number | null;
+};
 
 export default {
-    async fetch(request: Request, env: Env): Promise<Response> {
+    async fetch(request: Request, env: Env, context?: ExecutionContext): Promise<Response> {
         try {
             const database = await databaseForRequest(env);
-            return await route(request, { ...env, DB: database });
+            return await route(request, { ...env, DB: database, ALERT_CONTEXT: context });
         } catch (error) {
             console.error(JSON.stringify({
                 event: "nightly_gateway_request_failed",
@@ -191,7 +215,7 @@ async function pollDeviceSession(request: Request, env: Env): Promise<Response> 
         || !isDiscordSnowflake(row.sponsor_discord_user_id)) {
         throw new GatewayError(403, "access_denied");
     }
-    await assertSponsorEligible(env, row.sponsor_discord_user_id);
+    await assertSponsorEligible(env, row.sponsor_discord_user_id, "poll_device_session");
     const accessToken = randomToken(32);
     const tokenHash = await sha256(accessToken);
     const result = await env.DB.batch([
@@ -248,12 +272,8 @@ export async function completeOAuth(url: URL, env: Env): Promise<Response> {
     ).bind(stateHash, nowSeconds()).first();
     if (portalState !== null) {
         await env.DB.prepare("DELETE FROM oauth_states WHERE state_hash = ?").bind(stateHash).run();
-        const member = await discordGet<DiscordMember>(
-            `/users/@me/guilds/${DISCORD_GUILD_ID}/member`,
-            token.access_token,
-        );
-        if (!Array.isArray(member.roles)) throw new GatewayError(502, "discord_response_invalid");
-        if (!hasNightlyAccessRole(member.roles)) {
+        const lookup = await discordOAuthGetGuildMember(env, token.access_token, "oauth_sponsor_portal");
+        if (lookup.decision === "ineligible" || lookup.decision === "not_in_guild") {
             return html(errorPage(
                 "A Staff, Tester, Patreon, Boosty, or Afdian role is required.",
                 sponsorCodeHelp(),
@@ -280,15 +300,8 @@ export async function completeOAuth(url: URL, env: Env): Promise<Response> {
     if (device === null || device.expires_at < nowSeconds() || !["pending", "awaiting-sponsor"].includes(device.status)) {
         return html(errorPage("That installer authorization has expired."), 400);
     }
-    const member = await discordGet<DiscordMember>(
-        `/users/@me/guilds/${DISCORD_GUILD_ID}/member`,
-        token.access_token,
-        true,
-    );
-    if (member !== null && !Array.isArray(member.roles)) {
-        throw new GatewayError(502, "discord_response_invalid");
-    }
-    if (member !== null && hasNightlyAccessRole(member.roles)) {
+    const lookup = await discordOAuthGetGuildMember(env, token.access_token, "oauth_device_member");
+    if (lookup.decision === "eligible" || lookup.decision === "fail_open") {
         await storeSupporterGrant(env, user.id, token.refresh_token);
         await env.DB.prepare(
             "UPDATE device_sessions SET status = 'approved', discord_user_id = ?, sponsor_discord_user_id = ?, authorized_at = ? WHERE id = ?",
@@ -299,7 +312,7 @@ export async function completeOAuth(url: URL, env: Env): Promise<Response> {
         "SELECT supporter_discord_user_id FROM sponsorships WHERE sponsored_discord_user_id = ?",
     ).bind(user.id).first<{ supporter_discord_user_id: string }>();
     // Keep the code form available when the previous sponsor no longer has access.
-    if (existing !== null && await tryAssertSponsorEligible(env, existing.supporter_discord_user_id)) {
+    if (existing !== null && await tryAssertSponsorEligible(env, existing.supporter_discord_user_id, "oauth_sponsored_recheck")) {
         await env.DB.prepare(
             "UPDATE device_sessions SET status = 'approved', discord_user_id = ?, sponsor_discord_user_id = ?, authorized_at = ? WHERE id = ?",
         ).bind(user.id, existing.supporter_discord_user_id, nowSeconds(), device.id).run();
@@ -334,7 +347,7 @@ async function claimSponsorship(request: Request, env: Env): Promise<Response> {
         "SELECT supporter_discord_user_id FROM supporter_grants WHERE sponsor_code_hash = ?",
     ).bind(await sha256(normalizeSponsorCode(sponsorCode))).first<{ supporter_discord_user_id: string }>();
     if (sponsor === null) return html(errorPage("That sponsor code is not valid."), 403);
-    if (!await tryAssertSponsorEligible(env, sponsor.supporter_discord_user_id)) {
+    if (!await tryAssertSponsorEligible(env, sponsor.supporter_discord_user_id, "sponsor_claim")) {
         return html(errorPage(
             "That sponsor no longer has a qualifying Staff, Tester, Patreon, Boosty, or Afdian role.",
         ), 403);
@@ -343,7 +356,7 @@ async function claimSponsorship(request: Request, env: Env): Promise<Response> {
         "SELECT supporter_discord_user_id FROM sponsorships WHERE sponsored_discord_user_id = ?",
     ).bind(device.discord_user_id).first<{ supporter_discord_user_id: string }>();
     if (existingSeat !== null && existingSeat.supporter_discord_user_id !== sponsor.supporter_discord_user_id) {
-        if (await tryAssertSponsorEligible(env, existingSeat.supporter_discord_user_id)) {
+        if (await tryAssertSponsorEligible(env, existingSeat.supporter_discord_user_id, "sponsor_claim_existing_seat")) {
             return html(errorPage("This Discord account already has sponsored access."), 409);
         }
         await env.DB.batch([
@@ -389,7 +402,7 @@ async function sponsorPortal(request: Request, env: Env): Promise<Response> {
             "portal",
         ));
     }
-    if (!await tryAssertSponsorEligible(env, sponsorId)) {
+    if (!await tryAssertSponsorEligible(env, sponsorId, "oauth_sponsor_portal")) {
         return Response.redirect(`${env.PUBLIC_ORIGIN}/sponsor/login`, 302);
     }
     const formToken = await sponsorFormToken(request);
@@ -912,9 +925,13 @@ async function requireSponsorSession(request: Request, env: Env, required: boole
     return row.supporter_discord_user_id;
 }
 
-async function tryAssertSponsorEligible(env: Env, supporterId: string): Promise<boolean> {
+async function tryAssertSponsorEligible(
+    env: Env,
+    supporterId: string,
+    path: DiscordMemberLookupPath,
+): Promise<boolean> {
     try {
-        await assertSponsorEligible(env, supporterId);
+        await assertSponsorEligible(env, supporterId, path);
         return true;
     } catch (error) {
         if (error instanceof GatewayError && error.code === "supporter_role_required") {
@@ -924,12 +941,14 @@ async function tryAssertSponsorEligible(env: Env, supporterId: string): Promise<
     }
 }
 
-async function assertSponsorEligible(env: Env, supporterId: string): Promise<void> {
-    const member = await discordBotGetGuildMember(env, supporterId);
-    if (member !== null && !Array.isArray(member.roles)) {
-        throw new GatewayError(502, "discord_response_invalid");
-    }
-    if (isEligibleNightlySponsor(member)) return;
+async function assertSponsorEligible(
+    env: Env,
+    supporterId: string,
+    path: DiscordMemberLookupPath,
+): Promise<void> {
+    const lookup = await discordBotGetGuildMember(env, supporterId, path);
+    if (lookup.decision === "fail_open") return;
+    if (lookup.decision === "eligible") return;
     await env.DB.batch([
         env.DB.prepare("DELETE FROM download_sessions WHERE supporter_discord_user_id = ?").bind(supporterId),
         env.DB.prepare("DELETE FROM supporter_grants WHERE supporter_discord_user_id = ?").bind(supporterId),
@@ -960,6 +979,46 @@ function discordAuthorizationUrl(env: Env, state: string): string {
     return url.toString();
 }
 
+class DiscordRequestError extends Error {
+    constructor(readonly status: number | null) { super("discord_request_failed"); }
+}
+
+// The same deadline covers headers and the entire bounded body read.
+async function discordFetch(input: string, init: RequestInit, maximum: number) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), DISCORD_REQUEST_TIMEOUT_MS);
+    let response: Response | undefined;
+    try {
+        response = await untilAborted(fetch(input, { ...init, signal: controller.signal }), controller.signal);
+        if (!response.ok) {
+            // Status alone is authoritative for a definite 404. Do not let an
+            // unnecessary error-body read turn that answer into fail-open.
+            void response.body?.cancel().catch(() => undefined);
+            return { ok: false, status: response.status, text: "" };
+        }
+        const text = await boundedText(response, maximum, controller.signal);
+        return { ok: true, status: response.status, text };
+    } catch {
+        throw new DiscordRequestError(response?.status ?? null);
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+async function untilAborted<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
+    if (signal.aborted) throw new Error("discord_request_aborted");
+    let abort: () => void = () => undefined;
+    const deadline = new Promise<never>((_resolve, reject) => {
+        abort = () => reject(new Error("discord_request_aborted"));
+        signal.addEventListener("abort", abort, { once: true });
+    });
+    try {
+        return await Promise.race([pending, deadline]);
+    } finally {
+        signal.removeEventListener("abort", abort);
+    }
+}
+
 async function exchangeDiscordCode(env: Env, code: string): Promise<DiscordToken> {
     return discordTokenRequest(env, new URLSearchParams({
         grant_type: "authorization_code",
@@ -971,12 +1030,12 @@ async function exchangeDiscordCode(env: Env, code: string): Promise<DiscordToken
 async function discordTokenRequest(env: Env, form: URLSearchParams): Promise<DiscordToken> {
     form.set("client_id", env.DISCORD_CLIENT_ID);
     form.set("client_secret", env.DISCORD_CLIENT_SECRET);
-    const response = await fetch(DISCORD_TOKEN, {
+    const response = await discordFetch(DISCORD_TOKEN, {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body: form,
-    });
-    const text = await boundedText(response, 16 * 1024);
+    }, 16 * 1024);
+    const text = response.text;
     if (!response.ok) throw new GatewayError(502, "discord_authorization_failed");
     const value = JSON.parse(text) as Partial<DiscordToken>;
     if (value.token_type !== "Bearer" || typeof value.access_token !== "string"
@@ -987,29 +1046,221 @@ async function discordTokenRequest(env: Env, form: URLSearchParams): Promise<Dis
     return value as DiscordToken;
 }
 
-async function discordGet<T>(path: string, accessToken: string): Promise<T>;
-async function discordGet<T>(path: string, accessToken: string, allowNotFound: true): Promise<T | null>;
-async function discordGet<T>(path: string, accessToken: string, allowNotFound = false): Promise<T | null> {
-    const response = await fetch(`${DISCORD_API}${path}`, {
+async function discordGet<T>(path: string, accessToken: string): Promise<T> {
+    const response = await discordFetch(`${DISCORD_API}${path}`, {
         headers: { authorization: `Bearer ${accessToken}`, "user-agent": "BannerlordCoop-Nightly-Gateway/1" },
-    });
-    const text = await boundedText(response, 64 * 1024);
-    if (allowNotFound && response.status === 404) return null;
+    }, 64 * 1024);
+    const text = response.text;
     if (!response.ok) throw new GatewayError(response.status === 404 ? 403 : 502, "discord_membership_required");
     return JSON.parse(text) as T;
 }
 
-async function discordBotGetGuildMember(env: Env, userId: string): Promise<DiscordMember | null> {
-    const response = await fetch(`${DISCORD_API}/guilds/${DISCORD_GUILD_ID}/members/${userId}`, {
-        headers: {
+async function discordOAuthGetGuildMember(
+    env: Env,
+    accessToken: string,
+    path: DiscordMemberLookupPath,
+): Promise<DiscordMemberLookup> {
+    return lookupDiscordMember(env, "oauth", accessToken, path);
+}
+
+async function discordBotGetGuildMember(
+    env: Env,
+    userId: string,
+    path: DiscordMemberLookupPath,
+): Promise<DiscordMemberLookup> {
+    return lookupDiscordMember(env, "bot", userId, path);
+}
+
+export async function lookupDiscordMember(
+    env: Env,
+    source: DiscordMemberLookupSource,
+    credential: string,
+    path: DiscordMemberLookupPath,
+): Promise<DiscordMemberLookup> {
+    const endpoint = source === "bot"
+        ? `/guilds/${DISCORD_GUILD_ID}/members/${credential}`
+        : `/users/@me/guilds/${DISCORD_GUILD_ID}/member`;
+    const headers = source === "bot"
+        ? {
             authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
             "user-agent": "BannerlordCoop-Nightly-Gateway/1",
-        },
-    });
-    const text = await boundedText(response, 64 * 1024);
-    if (response.status === 404) return null;
-    if (!response.ok) throw new GatewayError(502, "discord_membership_required");
-    return JSON.parse(text) as DiscordMember;
+        }
+        : {
+            authorization: `Bearer ${credential}`,
+            "user-agent": "BannerlordCoop-Nightly-Gateway/1",
+        };
+    let response: Awaited<ReturnType<typeof discordFetch>>;
+    try {
+        response = await discordFetch(`${DISCORD_API}${endpoint}`, { headers }, 64 * 1024);
+    } catch (error) {
+        await recordDiscordFailure(env, {
+            kind: source === "bot" ? "discord_bot_member_lookup_failed" : "discord_oauth_member_lookup_failed",
+            path,
+            status: error instanceof DiscordRequestError ? error.status : null,
+        });
+        return { member: null, decision: "fail_open" };
+    }
+    if (response.status === 404) return { member: null, decision: "not_in_guild" };
+    if (!response.ok) {
+        await recordDiscordFailure(env, {
+            kind: source === "bot" && response.status === 401
+                ? "discord_bot_token_rejected"
+                : source === "bot" ? "discord_bot_member_lookup_failed" : "discord_oauth_member_lookup_failed",
+            path,
+            status: response.status,
+        });
+        return { member: null, decision: "fail_open" };
+    }
+    let member: unknown;
+    try {
+        member = JSON.parse(response.text);
+    } catch {
+        await recordDiscordFailure(env, {
+            kind: source === "bot" ? "discord_bot_member_response_invalid" : "discord_oauth_member_response_invalid",
+            path,
+            status: response.status,
+        });
+        return { member: null, decision: "fail_open" };
+    }
+    if (typeof member !== "object" || member === null || !("roles" in member)
+        || !Array.isArray(member.roles) || !member.roles.every((role): role is string => typeof role === "string")) {
+        await recordDiscordFailure(env, {
+            kind: source === "bot" ? "discord_bot_member_response_invalid" : "discord_oauth_member_response_invalid",
+            path,
+            status: response.status,
+        });
+        return { member: null, decision: "fail_open" };
+    }
+    const normalized: DiscordMember = {
+        ...member,
+        roles: member.roles,
+    };
+    return {
+        member: normalized,
+        decision: hasNightlyAccessRole(normalized.roles) ? "eligible" : "ineligible",
+    };
+}
+
+async function recordDiscordFailure(env: Env, failure: DiscordFailure): Promise<void> {
+    const status = failure.status === null ? "network_error" : String(failure.status);
+    console.error(JSON.stringify({
+        event: "nightly_gateway_eligibility_fail_open",
+        decision: "fail_open",
+        error_kind: failure.kind,
+        discord_status: status,
+        path: failure.path,
+    }));
+    if (!isDiscordSnowflake(env.DISCORD_ALERT_USER_ID)) {
+        console.error(JSON.stringify({
+            event: "alert_recipient_unconfigured",
+            reason: env.DISCORD_ALERT_USER_ID ? "invalid" : "unset",
+            error_kind: failure.kind,
+            path: failure.path,
+        }));
+        return;
+    }
+    let claim: Awaited<ReturnType<typeof claimDiscordAlert>>;
+    try {
+        claim = await claimDiscordAlert(env.LEGACY_DB, failure.kind);
+    } catch {
+        console.error(JSON.stringify({
+            event: "nightly_gateway_alert_claim_failed",
+            error_kind: failure.kind,
+            path: failure.path,
+        }));
+        return; // No local fallback: an unavailable claim store must not spam.
+    }
+    console.error(JSON.stringify({
+        event: "nightly_gateway_alert_claim",
+        error_kind: failure.kind,
+        claimed: claim.claimed,
+        first_occurrence_at: claim.firstOccurrence,
+        count: claim.count,
+    }));
+    if (!claim.claimed) return;
+    const delivery = sendDiscordFailureAlert(env, failure, claim, status);
+    // Keep delivery alive after responding, without delaying installation.
+    if (env.ALERT_CONTEXT) env.ALERT_CONTEXT.waitUntil(delivery);
+    else await delivery;
+}
+
+async function sendDiscordFailureAlert(
+    env: Env,
+    failure: DiscordFailure,
+    claim: Awaited<ReturnType<typeof claimDiscordAlert>>,
+    status: string,
+): Promise<void> {
+    const message = [
+        "Nightly gateway eligibility entered fail-open mode.",
+        `error_kind=${failure.kind}`,
+        `discord_status=${status}`,
+        `path=${failure.path}`,
+        `first_occurrence_at=${claim.firstOccurrence}`,
+        `count=${claim.count}`,
+    ].join("\n").slice(0, DISCORD_ALERT_MESSAGE_LIMIT);
+    try {
+        const channelResponse = await discordFetch(`${DISCORD_API}/users/@me/channels`, {
+            method: "POST",
+            headers: {
+                authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+                "content-type": "application/json",
+                "user-agent": "BannerlordCoop-Nightly-Gateway/1",
+            },
+            body: JSON.stringify({ recipient_id: env.DISCORD_ALERT_USER_ID }),
+        }, 16 * 1024);
+        if (!channelResponse.ok) {
+            console.error(JSON.stringify({
+                event: "nightly_gateway_alert_failed",
+                stage: "create_channel",
+                status: channelResponse.status,
+                error_kind: failure.kind,
+            }));
+            return;
+        }
+        let channel: { id?: unknown };
+        try {
+            channel = JSON.parse(channelResponse.text) as { id?: unknown };
+        } catch {
+            console.error(JSON.stringify({
+                event: "nightly_gateway_alert_failed",
+                stage: "create_channel_response",
+                error_kind: failure.kind,
+            }));
+            return;
+        }
+        if (typeof channel.id !== "string" || !isDiscordSnowflake(channel.id)) {
+            console.error(JSON.stringify({
+                event: "nightly_gateway_alert_failed",
+                stage: "create_channel_response",
+                error_kind: failure.kind,
+            }));
+            return;
+        }
+        const messageResponse = await discordFetch(`${DISCORD_API}/channels/${channel.id}/messages`, {
+            method: "POST",
+            headers: {
+                authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
+                "content-type": "application/json",
+                "user-agent": "BannerlordCoop-Nightly-Gateway/1",
+            },
+            body: JSON.stringify({ content: message }),
+        }, 16 * 1024);
+        if (!messageResponse.ok) {
+            console.error(JSON.stringify({
+                event: "nightly_gateway_alert_failed",
+                stage: "send_message",
+                status: messageResponse.status,
+                error_kind: failure.kind,
+            }));
+        }
+    } catch (error) {
+        console.error(JSON.stringify({
+            event: "nightly_gateway_alert_failed",
+            stage: "request",
+            error_kind: failure.kind,
+            error_type: error instanceof Error ? error.name : "unknown",
+        }));
+    }
 }
 
 async function encryptRefreshToken(env: Env, plaintext: string): Promise<{ ciphertext: string; nonce: string }> {
@@ -1031,22 +1282,29 @@ async function readForm(request: Request): Promise<URLSearchParams> {
     return new URLSearchParams(await boundedText(request, 4096));
 }
 
-async function boundedText(response: Response | Request, maximum: number): Promise<string> {
+async function boundedText(response: Response | Request, maximum: number, signal?: AbortSignal): Promise<string> {
     const declared = Number(response.headers.get("content-length") ?? 0);
-    if (!Number.isSafeInteger(declared) || declared > maximum) throw new GatewayError(502, "response_too_large");
+    if (!Number.isSafeInteger(declared) || declared > maximum) {
+        void response.body?.cancel().catch(() => undefined);
+        throw new GatewayError(502, "response_too_large");
+    }
     if (response.body === null) return "";
     const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
     let total = 0;
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        total += value.byteLength;
-        if (total > maximum) {
-            await reader.cancel();
-            throw new GatewayError(502, "response_too_large");
+    let completed = false;
+    try {
+        while (true) {
+            const pending = reader.read();
+            const { done, value } = await (signal ? untilAborted(pending, signal) : pending);
+            if (done) { completed = true; break; }
+            total += value.byteLength;
+            if (total > maximum) throw new GatewayError(502, "response_too_large");
+            chunks.push(value);
         }
-        chunks.push(value);
+    } finally {
+        if (!completed) void reader.cancel().catch(() => undefined);
+        reader.releaseLock();
     }
     const bytes = new Uint8Array(total);
     let offset = 0;

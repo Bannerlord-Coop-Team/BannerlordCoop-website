@@ -80,12 +80,13 @@ must use `nightly_gateway_worker`, not `postgres` or `service_role`.
 
 Verify one direct eligible-member install, one sponsored install, sponsor-seat
 listing/removal, and (when configured) one create-build pin. Confirm that new
-rows appear only in `nightly_gateway` and that D1 counts remain frozen.
+account rows appear only in `nightly_gateway` and that D1 account counts remain
+frozen. The independent `discord_alerts` table remains writable in D1.
 
-Keep the stopped D1 database and `LEGACY_DB` binding only for the short rollback
-window. Once PostgreSQL has accepted new writes, switching back to the frozen
+Keep the D1 account snapshot for the short rollback window. Once PostgreSQL has
+accepted new writes, switching back to the frozen
 D1 snapshot would discard those writes; use a new maintenance window and an
-explicit reverse reconciliation instead. After acceptance, remove the D1
-binding, the `legacy-d1` selector path, and the old D1 migrations in a separate
-cleanup change. Do not delete the D1 database until retention is explicitly
-approved.
+explicit reverse reconciliation instead. Keep the `LEGACY_DB` binding and D1
+database for the global `discord_alerts` cooldown; apply migration
+`0003_discord_alerts.sql` before deploying alerting. Account-backend cleanup must
+preserve that table and binding. Do not delete the D1 database.

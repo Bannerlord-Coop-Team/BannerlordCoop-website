@@ -2,7 +2,10 @@
 // appear in wrangler.jsonc. DB is an injected test binding; production uses
 // the generated HYPERDRIVE binding from wrangler.jsonc.
 interface Env {
+    // Injected by fetch for alert delivery after the response has been sent.
+    ALERT_CONTEXT?: Pick<ExecutionContext, "waitUntil">;
     DB: import("./src/database").GatewayDatabase;
+    DISCORD_ALERT_USER_ID?: string;
     DISCORD_BOT_TOKEN: string;
     DISCORD_CLIENT_SECRET: string;
     TOKEN_ENCRYPTION_KEY: string;
