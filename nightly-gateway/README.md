@@ -153,14 +153,15 @@ Linux and checks that the packaged Linux scripts match their canonical sources.
    one-day `pins/` lifecycle rule on `bannerlordcoop-patron-nightlies`. Do not
    require this secret at Worker start.
 9. Create and bind a private R2 bucket named
-   `bannerlordcoop-patron-nightlies`. Do not enable its `r2.dev` URL or attach a
-   public custom domain. The Worker is exposed through the existing
-   `garrett-luskey.workers.dev` account subdomain, so Squarespace DNS is not
-   involved.
-10. Keep `/create-build` output in the separate public
-   `bannerlordcoop-nightly-releases` bucket. Its copyable links remain valid
-   until Bot_UP's existing 24-hour expiry cleanup; never disable public access
-   on that bucket as part of the Patron-nightly rollout.
+   `bannerlordcoop-patron-nightlies` as `RELEASES`. Do not enable its `r2.dev`
+   URL or attach a public custom domain. The Worker is exposed through the
+   existing `garrett-luskey.workers.dev` account subdomain, so Squarespace DNS
+   is not involved.
+10. Keep `/create-build` output and the public publication pointer in the
+   separate `bannerlordcoop-nightly-releases` bucket, bound as `PUBLIC_RELEASES`.
+   Its copyable links remain valid until Bot_UP's existing 24-hour expiry
+   cleanup; never disable public access on that bucket as part of the
+   Patron-nightly rollout.
 11. Migrate Bot_UP/Managed Hosting to scoped R2 S3 reads from the private Patron
    bucket. Machine-to-machine hosting downloads do not use Discord OAuth.
 12. Deploy the updated client, dedicated-server, and website publishers and
