@@ -82,6 +82,18 @@ client/server archive keys, URLs, sizes, commits, workflow runs, or credentials.
 private Patron marker and legacy-artifact bucket. Neither binding adds a secret or
 permits caller-chosen object keys.
 
+### Manifest-version compatibility during rollout
+
+`/v1/manifests/client` and `/v1/manifests/release` return the validated legacy
+v1 object by default, preserving compatibility with the 14b9e61c gateway and
+older installers. A request that sends
+`X-Bannerlord-Coop-Nightly-Version: 2` opts into the complete v2 publication;
+the header is the only representation switch and does not select an object key.
+The current Windows and Linux installers send that header and accept either v2
+or the validated v1 response, so a session can cross a gradual Worker rollout
+without a manifest-version failure. Client-only `/client` requests without the
+header remain v1.
+
 ### Publication read failures and compatibility fallback
 
 `GET /v1/manifests/release` emits the same structured failure event and falls

@@ -103,7 +103,10 @@ test("both authenticated manifest routes select the same pointer and keep privat
         DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
     } as unknown as Env;
     context.mock.method(globalThis, "fetch", value.fetcher);
-    const headers = { authorization: `Bearer ${"n".repeat(43)}` };
+    const headers = {
+        authorization: `Bearer ${"n".repeat(43)}`,
+        "x-bannerlordcoop-nightly-version": "2",
+    };
     for (const path of ["client", "release"]) {
         const response = await worker.fetch(new Request(`${gateway}/v1/manifests/${path}`, { headers }), env);
         assert.equal(response.status, 200);
@@ -212,7 +215,10 @@ test("client and release routes fall back only to a validated legacy pair", asyn
     const logs: string[] = [];
     context.mock.method(console, "error", (line: string) => logs.push(line));
     context.mock.method(globalThis, "fetch", value.fetcher);
-    const headers = { authorization: `Bearer ${"n".repeat(43)}` };
+    const headers = {
+        authorization: `Bearer ${"n".repeat(43)}`,
+        "x-bannerlordcoop-nightly-version": "2",
+    };
     const client = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, { headers }), env);
     assert.equal(client.status, 200);
     assert.equal((await client.json() as { headSha: string }).headSha, legacy.headSha);
@@ -254,6 +260,64 @@ test("client fallback accepts the producer's null baseSha legacy shape", async (
         },
     };
     assert.doesNotThrow(() => validateLegacyNightlyClientManifest(legacy, origin, gateway));
+});
+
+test("legacy v1 is the default while an explicit version header selects v2", async () => {
+    const value = fixture();
+    const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+    const legacyRelease = JSON.parse(await readFile(new URL("../fixtures/legacy-release-2026-11-04.json", import.meta.url), "utf8")) as Record<string, unknown>;
+    const legacyClient = {
+        version: 1,
+        releaseDate: legacyRelease.releaseDate,
+        headSha: legacyRelease.headSha,
+        baseSha: null,
+        workflowRunId: 42007050452,
+        builtAt: "2026-11-05T10:04:43Z",
+        client: legacyRelease.client,
+    };
+    const legacyReleaseBytes = Buffer.from(JSON.stringify(legacyRelease));
+    const legacyClientBytes = Buffer.from(JSON.stringify(legacyClient));
+    const object = (bytes: Uint8Array) => ({
+        size: bytes.byteLength,
+        body: new Response(bytes).body!,
+        arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+    });
+    const env = {
+        DB: {
+            async batch() { throw new Error("manifest discovery must be read-only"); },
+            prepare(sql: string) {
+                return { bind() {
+                    return { async first() {
+                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
+                    } };
+                } };
+            },
+        },
+        PUBLIC_RELEASES: { async get() { return object(value.pointerBytes); } },
+        RELEASES: { async get(key: string) {
+            if (key === "nightly/client.json") return object(legacyClientBytes);
+            if (key === "nightly/release.json") return object(legacyReleaseBytes);
+            return value.getObject(key);
+        } },
+        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
+        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32),
+        DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+    } as unknown as Env;
+    const authorization = `Bearer ${"n".repeat(43)}`;
+    for (const path of ["client", "release"]) {
+        const response = await worker.fetch(new Request(`${gateway}/v1/manifests/${path}`, {
+            headers: { authorization },
+        }), env);
+        assert.equal(response.status, 200);
+        const manifest = await response.json() as { version: number; headSha: string };
+        assert.equal(manifest.version, 1);
+        assert.equal(manifest.headSha, legacyRelease.headSha);
+    }
+    const v2 = await worker.fetch(new Request(`${gateway}/v1/manifests/release`, {
+        headers: { authorization, "x-bannerlordcoop-nightly-version": "2" },
+    }), env);
+    assert.equal(v2.status, 200);
+    assert.equal((await v2.json() as { version: number }).version, 2);
 });
 
 test("accepts the production-shaped legacy release fixture and rejects missing artifact keys", async () => {

@@ -22,6 +22,7 @@ import {
     mintSecretsEqual,
     pinClientObjectKey,
     rewriteManifestArtifactUrls,
+    type JsonObject,
     validateLegacyNightlyClientManifest,
     validateLegacyNightlyReleaseManifest,
     verifySponsorFormToken,
@@ -36,6 +37,7 @@ const JSON_HEADERS = Object.freeze({
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
 });
+const NIGHTLY_PUBLICATION_VERSION_HEADER = "x-bannerlordcoop-nightly-version";
 const DEVICE_SECRET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const USER_CODE_PATTERN = /^[A-Z2-9]{4}-[A-Z2-9]{4}$/;
 const MAXIMUM_PIN_CLIENT_BYTES = 8 * 1024 * 1024;
@@ -816,6 +818,24 @@ async function sha256Bytes(bytes: Uint8Array): Promise<string> {
 
 async function serveManifest(request: Request, env: Env, clientOnly: boolean): Promise<Response> {
     await requireNightlyDownloadSession(request, env);
+    const wantsV2 = request.headers.get(NIGHTLY_PUBLICATION_VERSION_HEADER)?.trim() === "2";
+    if (!wantsV2) {
+        try {
+            return json(rewriteManifestArtifactUrls(
+                await readLegacyNightlyManifest(env, clientOnly),
+                env.PUBLIC_ORIGIN,
+                env.LEGACY_R2_ORIGIN,
+            ));
+        } catch (error) {
+            console.error(JSON.stringify({
+                event: "nightly_legacy_default_read_failed",
+                route: clientOnly ? "client" : "release",
+                error_code: error instanceof Error && /^[a-z0-9_]{1,64}$/.test(error.message)
+                    ? error.message : "legacy_manifest_unavailable",
+            }));
+            throw new GatewayError(503, "manifest_unavailable");
+        }
+    }
     let validated;
     try {
         validated = await readNightlyPublication(
@@ -838,37 +858,14 @@ async function serveManifest(request: Request, env: Env, clientOnly: boolean): P
             fallback: clientOnly,
         }));
         try {
+            validated = await readLegacyNightlyManifest(env, clientOnly);
             if (clientOnly) {
-                validated = validateLegacyNightlyClientManifest(
-                    await readLegacyJson(env, "nightly/client.json", 32 * 1024),
-                    env.LEGACY_R2_ORIGIN,
-                    env.PUBLIC_ORIGIN,
-                );
                 console.error(JSON.stringify({
                     event: "nightly_legacy_client_fallback_served",
                     route: "client",
                     head_sha: (validated.headSha as string).slice(0, 12),
                 }));
             } else {
-                const legacyRelease = validateLegacyNightlyReleaseManifest(
-                    await readLegacyJson(env, "nightly/release.json", 128 * 1024),
-                    env.LEGACY_R2_ORIGIN,
-                    env.PUBLIC_ORIGIN,
-                );
-                const legacyClient = validateLegacyNightlyClientManifest(
-                    await readLegacyJson(env, "nightly/client.json", 32 * 1024),
-                    env.LEGACY_R2_ORIGIN,
-                    env.PUBLIC_ORIGIN,
-                );
-                const releaseClient = legacyRelease.client as Record<string, unknown>;
-                const client = legacyClient.client as Record<string, unknown>;
-                if (legacyRelease.releaseDate !== legacyClient.releaseDate
-                    || legacyRelease.headSha !== legacyClient.headSha
-                    || releaseClient.key !== client.key
-                    || releaseClient.sha256 !== client.sha256) {
-                    throw new Error("legacy_release_client_mismatch");
-                }
-                validated = legacyRelease;
                 console.error(JSON.stringify({
                     event: "nightly_legacy_release_fallback_served",
                     route: "release",
@@ -886,6 +883,35 @@ async function serveManifest(request: Request, env: Env, clientOnly: boolean): P
     }
     const rewritten = rewriteManifestArtifactUrls(validated, env.PUBLIC_ORIGIN, env.LEGACY_R2_ORIGIN);
     return json(rewritten);
+}
+
+async function readLegacyNightlyManifest(env: Env, clientOnly: boolean): Promise<JsonObject> {
+    if (clientOnly) {
+        return validateLegacyNightlyClientManifest(
+            await readLegacyJson(env, "nightly/client.json", 32 * 1024),
+            env.LEGACY_R2_ORIGIN,
+            env.PUBLIC_ORIGIN,
+        );
+    }
+    const legacyRelease = validateLegacyNightlyReleaseManifest(
+        await readLegacyJson(env, "nightly/release.json", 128 * 1024),
+        env.LEGACY_R2_ORIGIN,
+        env.PUBLIC_ORIGIN,
+    );
+    const legacyClient = validateLegacyNightlyClientManifest(
+        await readLegacyJson(env, "nightly/client.json", 32 * 1024),
+        env.LEGACY_R2_ORIGIN,
+        env.PUBLIC_ORIGIN,
+    );
+    const releaseClient = legacyRelease.client as Record<string, unknown>;
+    const client = legacyClient.client as Record<string, unknown>;
+    if (legacyRelease.releaseDate !== legacyClient.releaseDate
+        || legacyRelease.headSha !== legacyClient.headSha
+        || releaseClient.key !== client.key
+        || releaseClient.sha256 !== client.sha256) {
+        throw new Error("legacy_release_client_mismatch");
+    }
+    return legacyRelease;
 }
 
 async function readLegacyJson(env: Env, key: string, maximumBytes: number): Promise<Record<string, unknown>> {
