@@ -1316,6 +1316,25 @@ function Test-NightlyClientArtifactUri {
     return $parsed.AbsolutePath -ceq "/v1/artifacts/nightly/clients/$HeadSha/$Sha256/Coop.7z"
 }
 
+function Test-NightlyServerArtifactUri {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uri,
+        [Parameter(Mandatory = $true)][string]$HeadSha,
+        [Parameter(Mandatory = $true)][string]$ServerSha,
+        [Parameter(Mandatory = $true)][string]$Sha256
+    )
+
+    if ($HeadSha -notmatch '^[a-f0-9]{40}$' -or $ServerSha -notmatch '^[a-f0-9]{40}$' -or $Sha256 -notmatch '^[a-f0-9]{64}$') {
+        return $false
+    }
+    try { $parsed = [Uri]$Uri } catch { return $false }
+    if ($parsed.Scheme -cne 'https' -or
+        $parsed.Authority -cne 'bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev' -or
+        -not [string]::IsNullOrEmpty($parsed.Query) -or
+        -not [string]::IsNullOrEmpty($parsed.Fragment)) { return $false }
+    return $parsed.AbsolutePath -ceq "/v1/artifacts/nightly/windows/full/$HeadSha/$ServerSha/$Sha256/BannerlordCoop-DedicatedServer-Win64.7z"
+}
+
 function Get-ReleaseManifest {
     param([bool]$ClientOnly = $false)
 
@@ -1368,7 +1387,11 @@ function Get-ReleaseManifest {
                 -HeadSha ([string]$manifest.headSha) `
                 -Sha256 ([string]$release.sha256)
         } else {
-            [string]$release.publicUrl -ceq $entry.Uri
+            Test-NightlyServerArtifactUri `
+                -Uri ([string]$release.publicUrl) `
+                -HeadSha ([string]$manifest.headSha) `
+                -ServerSha ([string]$manifest.serverSha) `
+                -Sha256 ([string]$release.sha256)
         }
         if (-not $validUri -or
             [string]$release.sha256 -notmatch '^[a-f0-9]{64}$' -or

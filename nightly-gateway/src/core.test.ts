@@ -339,7 +339,7 @@ test("manifest URLs are rewritten to authenticated gateway paths", () => {
         version: 1,
         client: { key: clientKey, publicUrl: `${legacy}/${clientKey}` },
         server: {
-            publicUrl: `${legacy}/nightly/BannerlordCoop-DedicatedServer-Win64.7z`,
+            publicUrl: `${legacy}/nightly/windows/full/${"a".repeat(40)}/${"b".repeat(40)}/${"d".repeat(64)}/BannerlordCoop-DedicatedServer-Win64.7z`,
             incremental: {
                 base: {
                     key: "nightly/windows/base/server-base.7z",

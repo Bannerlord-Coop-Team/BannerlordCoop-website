@@ -44,8 +44,26 @@ that marker unless it contains the client, Windows server artifacts, workflow
 identities, and the immutable GHCR image identity. A client-only choice therefore
 waits for the same complete publication as a server choice. Keep the Linux
 implementation aligned when those contracts change, including downloading the
-validated client `publicUrl` rather than the mutable legacy URL. Linux-specific
+validated client and immutable Windows server `publicUrl` values rather than
+mutable legacy URLs. Linux-specific
 Steam discovery and Wine/Proton handling remain in `install-linux.sh`.
+
+### Delay-safe publication cutover
+
+The client workflow invalidates the old `nightly/client.json` object before it
+publishes a new immutable client archive. This makes an old gateway's
+`/v1/manifests/client` route fail closed during the cutover instead of returning
+a stale client-only build. The new gateway accepts only the complete v2 marker;
+an old v1 marker also fails closed until the dedicated-server publisher replaces
+it. Old installers reject v2, so they cannot consume the new client by accident.
+
+Roll out the marker-aware Control Plane before dispatching the dedicated-server
+publisher, then deploy this gateway and both installers, and only then dispatch
+the server workflow with the exact client run and head. The publisher writes
+immutable client/server objects and an immutable GHCR image first, and flips
+`nightly/release.json` last. It leaves the mutable GHCR `nightly` alias at the
+previous complete release. A delayed gateway, installer, Control Plane, or
+publisher therefore leaves the previous complete publication or fails closed.
 
 For a Windows authorization failure, ask for the complete **Session diagnostics
 v2** block from the installer. It records both PowerShell attempts and the curl

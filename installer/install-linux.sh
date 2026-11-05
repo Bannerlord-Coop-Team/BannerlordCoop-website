@@ -476,7 +476,8 @@ is_num "$CLIENT_BYTES" && [ "$CLIENT_BYTES" -gt 0 ] && [ "$CLIENT_BYTES" -le "$M
 [[ $CLIENT_NAME =~ ^[A-Za-z0-9][A-Za-z0-9\ ._-]{0,199}\.7z$ ]] \
     || die "The nightly client release metadata is invalid."
 
-[ "$FULL_URL" = "$SERVER_ARCHIVE_URI" ] || die "The nightly server release metadata is invalid."
+    [ "$FULL_URL" = "$GATEWAY/v1/artifacts/nightly/windows/full/$HEAD_SHA/$SERVER_SHA/$FULL_SHA/BannerlordCoop-DedicatedServer-Win64.7z" ] \
+        || die "The nightly server release metadata is invalid."
 is_hex64 "$FULL_SHA" || die "The nightly server release metadata is invalid."
 is_num "$FULL_BYTES" && [ "$FULL_BYTES" -gt 0 ] && [ "$FULL_BYTES" -le "$MAX_SERVER" ] \
     || die "The nightly server release metadata is invalid."

@@ -230,7 +230,10 @@ export function validateNightlyPublicationManifest(input: unknown, legacyOrigin:
     const clientSha = stringField(client, "sha256", NIGHTLY_PUBLICATION_SHA256);
     validateArtifact(client, legacyOrigin, `nightly/clients/${value.headSha}/${clientSha}/Coop.7z`, NIGHTLY_PUBLICATION_FILE, 8 * 1024 * 1024);
     const server = recordField(value, "server");
-    validateArtifact(server, legacyOrigin, "nightly/BannerlordCoop-DedicatedServer-Win64.7z", /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/, 8 * 1024 * 1024 * 1024);
+    const serverSha = stringField(value, "serverSha", NIGHTLY_PUBLICATION_COMMIT);
+    const serverSha256 = stringField(server, "sha256", NIGHTLY_PUBLICATION_SHA256);
+    const serverKey = `nightly/windows/full/${value.headSha}/${serverSha}/${serverSha256}/BannerlordCoop-DedicatedServer-Win64.7z`;
+    validateArtifact(server, legacyOrigin, serverKey, /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/, 8 * 1024 * 1024 * 1024);
     const incremental = recordField(server, "incremental");
     if (incremental.version !== 1 || incremental.layout !== "base-overlay-v1"
         || typeof incremental.baseFingerprint !== "string"
@@ -245,7 +248,7 @@ export function validateNightlyPublicationManifest(input: unknown, legacyOrigin:
     const baseSha = stringField(base, "sha256", NIGHTLY_PUBLICATION_SHA256);
     const updateSha = stringField(update, "sha256", NIGHTLY_PUBLICATION_SHA256);
     validateArtifact(base, legacyOrigin, `windows/base/v1/${incremental.baseFingerprint}/${baseSha}/server-base.7z`, /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/, 8 * 1024 * 1024 * 1024);
-    validateArtifact(update, legacyOrigin, `nightly/windows/updates/${value.headSha}/${value.serverSha}/${updateSha}/server-update.7z`, /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/, 512 * 1024 * 1024);
+    validateArtifact(update, legacyOrigin, `nightly/windows/updates/${value.headSha}/${serverSha}/${updateSha}/server-update.7z`, /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/, 512 * 1024 * 1024);
     const container = recordField(value, "container");
     const digest = stringField(container, "manifestDigest", NIGHTLY_PUBLICATION_DIGEST);
     const expectedImmutable = `${NIGHTLY_PUBLICATION_REPOSITORY}:nightly-${value.serverSha.slice(0, 12)}-${value.headSha.slice(0, 12)}-${digest.slice(7)}`;

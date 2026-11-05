@@ -127,7 +127,22 @@ class LinuxInstallerTests(unittest.TestCase):
             },
             "polls": [[200, TOKEN]],
             "artifacts": {},
-            "manifest": {"version": 1, "releaseDate": "2026-09-04", "headSha": HEAD},
+            "manifest": {
+                "version": 2,
+                "kind": "bannerlordcoop-nightly-publication",
+                "releaseDate": "2026-09-04",
+                "builtAt": "2026-09-04T12:34:56Z",
+                "headSha": HEAD,
+                "serverSha": "c" * 40,
+                "clientRunId": "12345678901",
+                "serverRunId": "12345678902",
+                "container": {
+                    "repository": "ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server",
+                    "manifestDigest": "sha256:" + "9" * 64,
+                    "digestReference": "ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server@sha256:" + "9" * 64,
+                    "immutableReference": "ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server:nightly-" + "c" * 12 + "-" + "a" * 12 + "-" + "9" * 64,
+                },
+            },
         }
         self.client = self.archive("client", {"Coop/SubModule.xml": "module", COOP_DLL: "new-client"})
         self.set_client_url(GATEWAY + f"/v1/artifacts/nightly/clients/{HEAD}/{self.client['sha256']}/Coop.7z")
@@ -154,7 +169,7 @@ class LinuxInstallerTests(unittest.TestCase):
     def configure_server(self, incremental=True, revision="first"):
         update_files = {key: value + revision for key, value in UPDATE_FILES.items()}
         server = self.archive("server", {**BASE_FILES, **update_files})
-        server["publicUrl"] = GATEWAY + "/v1/artifacts/nightly/BannerlordCoop-DedicatedServer-Win64.7z"
+        server["publicUrl"] = GATEWAY + f"/v1/artifacts/nightly/windows/full/{HEAD}/{'c' * 40}/{server['sha256']}/BannerlordCoop-DedicatedServer-Win64.7z"
         self.config["artifacts"][server["publicUrl"]] = "server.7z"
         if incremental:
             base = self.archive("server-base", BASE_FILES)
