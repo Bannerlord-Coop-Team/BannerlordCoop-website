@@ -38,6 +38,7 @@ function fixture() {
         manifest: { key: `nightly/publications/${sha256}/release.json`, sha256 },
         container: { repository, manifestDigest: digest, digestReference: `${repository}@${digest}` },
     };
+    const pointerBytes = Buffer.from(`${JSON.stringify(pointer)}\n`);
     const requests: Array<{ url: string; options: RequestInit | undefined }> = [];
     const objects: string[] = [];
     const fetcher: typeof fetch = async (input, options) => {
@@ -48,7 +49,7 @@ function fixture() {
         objects.push(key);
         return { size: bytes.byteLength, body: new Response(bytes).body! };
     };
-    return { manifest, bytes, pointer, requests, objects, fetcher, getObject };
+    return { manifest, bytes, pointer, pointerBytes, requests, objects, fetcher, getObject };
 }
 
 test("gateway reads the exact public pointer and its hash-bound private object", async () => {
@@ -64,6 +65,22 @@ test("gateway reads the exact public pointer and its hash-bound private object",
     assert.ok(value.requests[0].options?.signal instanceof AbortSignal);
     assert.deepEqual(value.objects, [value.pointer.manifest.key]);
     assert.deepEqual(Object.keys(value.pointer).sort(), ["container", "kind", "manifest", "version"]);
+});
+
+test("gateway reads the pointer through the public R2 binding without an HTTP redirect", async () => {
+    const value = fixture();
+    const requests: string[] = [];
+    const getPublicPointer = async () => ({
+        size: value.pointerBytes.byteLength,
+        body: new Response(value.pointerBytes).body!,
+    });
+    const fetcher: typeof fetch = async (input) => {
+        requests.push(String(input));
+        throw new Error("the bound pointer path must not fetch the public URL");
+    };
+    assert.deepEqual(await readNightlyPublication(value.getObject, fetcher, getPublicPointer), value.manifest);
+    assert.deepEqual(requests, []);
+    assert.deepEqual(value.objects, [value.pointer.manifest.key]);
 });
 
 test("both authenticated manifest routes select the same pointer and keep private JSON inaccessible", async (context) => {

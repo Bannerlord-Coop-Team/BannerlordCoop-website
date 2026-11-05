@@ -69,14 +69,18 @@ It leaves the mutable GHCR `nightly` alias at the previous complete release. A
 delayed gateway, installer, Control Plane, or publisher therefore leaves the
 previous complete publication or fails closed.
 
-The pointer is an unauthenticated GET at
-`https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev/nightly/release.json`, bounded
-to 4 KiB. Resolving its private manifest is bounded to 128 KiB; the whole read has
-a five-second deadline. Hash and image mismatches fail closed. There is no
-fallback to the private mutable `nightly/release.json` object. The pointer reveals
-no client/server archive keys, URLs, sizes, commits, workflow runs, or credentials.
-The existing private `RELEASES` binding and public R2 origin are sufficient;
-no new Worker binding or secret is required.
+The pointer is published at the unauthenticated
+`https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev/nightly/release.json` URL and
+is also read directly from the `PUBLIC_RELEASES` R2 binding. The direct binding
+read avoids Workers redirect/runtime differences while retaining the public URL
+for CP and other readers. The pointer is bounded to 4 KiB. Resolving its private
+manifest is bounded to 128 KiB; the whole read has a five-second deadline. Hash
+and image mismatches fail closed. There is no fallback to the private mutable
+`nightly/release.json` object for the publication path. The pointer reveals no
+client/server archive keys, URLs, sizes, commits, workflow runs, or credentials.
+`PUBLIC_RELEASES` is a read-only public pointer bucket; `RELEASES` remains the
+private Patron marker and legacy-artifact bucket. Neither binding adds a secret or
+permits caller-chosen object keys.
 
 ### Publication read failures and compatibility fallback
 
