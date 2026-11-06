@@ -259,7 +259,7 @@ export function validateNightlyPublicationManifest(input: unknown, legacyOrigin:
     }
     const client = recordField(value, "client");
     const clientSha = stringField(client, "sha256", NIGHTLY_PUBLICATION_SHA256);
-    validateArtifact(client, legacyOrigin, `nightly/clients/${value.headSha}/${clientSha}/Coop.7z`, NIGHTLY_PUBLICATION_FILE, 8 * 1024 * 1024);
+    validateArtifact(client, legacyOrigin, `nightly/clients/${value.headSha}/${clientSha}/Coop.7z`, NIGHTLY_PUBLICATION_FILE);
     const server = recordField(value, "server");
     const serverSha = stringField(value, "serverSha", NIGHTLY_PUBLICATION_COMMIT);
     const serverSha256 = stringField(server, "sha256", NIGHTLY_PUBLICATION_SHA256);
@@ -311,7 +311,7 @@ export function validateLegacyNightlyClientManifest(
         || typeof client.fileName !== "string" || !NIGHTLY_PUBLICATION_FILE.test(client.fileName)
         || typeof client.key !== "string" || client.key !== `nightly/clients/${input.headSha}/${client.sha256}/Coop.7z`
         || !isAllowedArtifactKey(client.key) || typeof client.bytes !== "number"
-        || !Number.isSafeInteger(client.bytes) || client.bytes <= 0 || client.bytes > 8 * 1024 * 1024
+        || !Number.isSafeInteger(client.bytes) || client.bytes <= 0
         || typeof client.sha256 !== "string" || !NIGHTLY_PUBLICATION_SHA256.test(client.sha256)
         || typeof client.publicUrl !== "string") {
         throw new Error("invalid_legacy_nightly_client_manifest");
@@ -348,7 +348,7 @@ export function validateLegacyNightlyReleaseManifest(
         gatewayOrigin,
         `nightly/clients/${input.headSha}/${stringField(recordField(input, "client"), "sha256", NIGHTLY_PUBLICATION_SHA256)}/Coop.7z`,
         NIGHTLY_PUBLICATION_FILE,
-        8 * 1024 * 1024,
+        undefined,
         true,
     );
     const server = recordField(input, "server");
@@ -417,14 +417,14 @@ function validateLegacyReleaseArtifact(
     gatewayOrigin: string,
     key: string,
     filePattern: RegExp,
-    maximumBytes: number,
+    maximumBytes: number | undefined,
     allowKey = false,
 ): void {
     if (!exactKeys(value, allowKey ? ["fileName", "key", "bytes", "sha256", "publicUrl"] : ["fileName", "bytes", "sha256", "publicUrl"])
         || typeof value.fileName !== "string" || !filePattern.test(value.fileName)
         || (allowKey && value.key !== key)
         || typeof value.bytes !== "number" || !Number.isSafeInteger(value.bytes)
-        || value.bytes <= 0 || value.bytes > maximumBytes
+        || value.bytes <= 0 || (maximumBytes !== undefined && value.bytes > maximumBytes)
         || typeof value.sha256 !== "string" || !NIGHTLY_PUBLICATION_SHA256.test(value.sha256)
         || typeof value.publicUrl !== "string") {
         throw new Error("invalid_legacy_nightly_release_artifact");
@@ -456,11 +456,11 @@ function validateArtifact(
     legacyOrigin: string,
     key: string,
     filePattern: RegExp,
-    maximumBytes: number,
+    maximumBytes?: number,
 ): void {
     if (typeof value.fileName !== "string" || !filePattern.test(value.fileName)
         || value.key !== key || typeof value.bytes !== "number" || !Number.isSafeInteger(value.bytes)
-        || value.bytes <= 0 || value.bytes > maximumBytes
+        || value.bytes <= 0 || (maximumBytes !== undefined && value.bytes > maximumBytes)
         || typeof value.sha256 !== "string" || !NIGHTLY_PUBLICATION_SHA256.test(value.sha256)
         || typeof value.publicUrl !== "string" || value.publicUrl !== `${legacyOrigin}/${key}`
         || !NIGHTLY_PUBLICATION_KEY.test(key)) {
