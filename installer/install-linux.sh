@@ -9,6 +9,7 @@ set -u
 GATEWAY='https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev'
 CLIENT_ARCHIVE_URI="$GATEWAY/v1/artifacts/nightly/Coop.7z"
 SERVER_ARCHIVE_URI="$GATEWAY/v1/artifacts/nightly/BannerlordCoop-DedicatedServer-Win64.7z"
+MANIFEST_VERSION_HEADER='X-Bannerlord-Coop-Nightly-Version: 2'
 MAX_SERVER=8589934592
 MAX_BASE=8589934592
 MAX_UPDATE=536870912
@@ -404,7 +405,7 @@ AUTH=(-H "Authorization: Bearer $TOKEN")
 MANIFEST_URI="$GATEWAY/v1/manifests/release"
 printf 'Checking the latest completed nightly release...\n'
 mf="$AUTH_WORK/manifest.json"
-st=$(curl -sS --max-time 60 "${AUTH[@]}" -o "$mf" -w '%{http_code}' "$MANIFEST_URI")
+st=$(curl -sS --max-time 60 "${AUTH[@]}" -H "$MANIFEST_VERSION_HEADER" -o "$mf" -w '%{http_code}' "$MANIFEST_URI")
 if [ "$st" != 200 ]; then
     rm -f "$mf"
     if [ "$st" = 404 ]; then
@@ -450,22 +451,29 @@ UPD_NAME=$(json_get server.incremental.update.fileName < "$mf")
 COMPAT_FPS=$(json_list server.incremental.compatibleBaseFingerprints < "$mf")
 rm -f "$mf"
 
-[ "$MAN_VER" = 2 ] || die "The nightly release manifest is invalid."
-[ "$MAN_KIND" = bannerlordcoop-nightly-publication ] || die "The nightly release manifest is invalid."
+case "$MAN_VER" in
+    1|2) ;;
+    *) die "The nightly release manifest is invalid." ;;
+esac
+if [ "$MAN_VER" = 2 ]; then
+    [ "$MAN_KIND" = bannerlordcoop-nightly-publication ] || die "The nightly release manifest is invalid."
+fi
 case "$REL_DATE" in
     [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
     *) die "The nightly release manifest is invalid." ;;
 esac
 is_hex40 "$HEAD_SHA" || die "The nightly release manifest is invalid."
-is_hex40 "$SERVER_SHA" || die "The nightly release manifest is invalid."
-is_num "$CLIENT_RUN_ID" || die "The nightly release manifest is invalid."
-is_num "$SERVER_RUN_ID" || die "The nightly release manifest is invalid."
-CONTAINER_REPOSITORY_EXPECTED='ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server'
-[ "$CONTAINER_REPOSITORY" = "$CONTAINER_REPOSITORY_EXPECTED" ] || die "The nightly container publication identity is invalid."
-[[ $CONTAINER_DIGEST =~ ^sha256:[0-9a-f]{64}$ ]] || die "The nightly container publication identity is invalid."
-[ "$CONTAINER_DIGEST_REFERENCE" = "$CONTAINER_REPOSITORY_EXPECTED@$CONTAINER_DIGEST" ] || die "The nightly container publication identity is invalid."
-EXPECTED_IMMUTABLE="$CONTAINER_REPOSITORY_EXPECTED:nightly-${SERVER_SHA:0:12}-${HEAD_SHA:0:12}-${CONTAINER_DIGEST:7}"
-[ "$CONTAINER_IMMUTABLE_REFERENCE" = "$EXPECTED_IMMUTABLE" ] || die "The nightly container publication identity is invalid."
+if [ "$MAN_VER" = 2 ]; then
+    is_hex40 "$SERVER_SHA" || die "The nightly release manifest is invalid."
+    is_num "$CLIENT_RUN_ID" || die "The nightly release manifest is invalid."
+    is_num "$SERVER_RUN_ID" || die "The nightly release manifest is invalid."
+    CONTAINER_REPOSITORY_EXPECTED='ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server'
+    [ "$CONTAINER_REPOSITORY" = "$CONTAINER_REPOSITORY_EXPECTED" ] || die "The nightly container publication identity is invalid."
+    [[ $CONTAINER_DIGEST =~ ^sha256:[0-9a-f]{64}$ ]] || die "The nightly container publication identity is invalid."
+    [ "$CONTAINER_DIGEST_REFERENCE" = "$CONTAINER_REPOSITORY_EXPECTED@$CONTAINER_DIGEST" ] || die "The nightly container publication identity is invalid."
+    EXPECTED_IMMUTABLE="$CONTAINER_REPOSITORY_EXPECTED:nightly-${SERVER_SHA:0:12}-${HEAD_SHA:0:12}-${CONTAINER_DIGEST:7}"
+    [ "$CONTAINER_IMMUTABLE_REFERENCE" = "$EXPECTED_IMMUTABLE" ] || die "The nightly container publication identity is invalid."
+fi
 printf 'Latest nightly: %s (%s)\n' "$(display_date "$REL_DATE" "$BUILT_AT")" "$(short_sha "$HEAD_SHA")"
 
 check_client_url
@@ -475,8 +483,12 @@ is_num "$CLIENT_BYTES" && [ "$CLIENT_BYTES" -gt 0 ] \
 [[ $CLIENT_NAME =~ ^[A-Za-z0-9][A-Za-z0-9\ ._-]{0,199}\.7z$ ]] \
     || die "The nightly client release metadata is invalid."
 
+if [ "$MAN_VER" = 1 ]; then
+    [ "$FULL_URL" = "$SERVER_ARCHIVE_URI" ] || die "The nightly server release metadata is invalid."
+else
     [ "$FULL_URL" = "$GATEWAY/v1/artifacts/nightly/windows/full/$HEAD_SHA/$SERVER_SHA/$FULL_SHA/BannerlordCoop-DedicatedServer-Win64.7z" ] \
         || die "The nightly server release metadata is invalid."
+fi
 is_hex64 "$FULL_SHA" || die "The nightly server release metadata is invalid."
 is_num "$FULL_BYTES" && [ "$FULL_BYTES" -gt 0 ] && [ "$FULL_BYTES" -le "$MAX_SERVER" ] \
     || die "The nightly server release metadata is invalid."

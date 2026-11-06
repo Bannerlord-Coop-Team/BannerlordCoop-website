@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { validateNightlyPublicationPointer } from "./core";
-import { NIGHTLY_POINTER_URL, readNightlyPublication } from "./publication";
+import { validateLegacyNightlyClientManifest, validateLegacyNightlyReleaseManifest, validateNightlyPublicationPointer } from "./core";
+import { NIGHTLY_POINTER_URL, NightlyPublicationReadError, readNightlyPublication } from "./publication";
 import worker from "./index";
 
 const origin = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
@@ -37,6 +38,7 @@ function fixture() {
         manifest: { key: `nightly/publications/${sha256}/release.json`, sha256 },
         container: { repository, manifestDigest: digest, digestReference: `${repository}@${digest}` },
     };
+    const pointerBytes = Buffer.from(`${JSON.stringify(pointer)}\n`);
     const requests: Array<{ url: string; options: RequestInit | undefined }> = [];
     const objects: string[] = [];
     const fetcher: typeof fetch = async (input, options) => {
@@ -47,7 +49,7 @@ function fixture() {
         objects.push(key);
         return { size: bytes.byteLength, body: new Response(bytes).body! };
     };
-    return { manifest, bytes, pointer, requests, objects, fetcher, getObject };
+    return { manifest, bytes, pointer, pointerBytes, requests, objects, fetcher, getObject };
 }
 
 test("gateway reads the exact public pointer and its hash-bound private object", async () => {
@@ -57,12 +59,28 @@ test("gateway reads the exact public pointer and its hash-bound private object",
     assert.equal(value.requests.length, 1);
     assert.equal(value.requests[0].url, `${origin}/nightly/release.json`);
     assert.deepEqual(value.requests[0].options, {
-        method: "GET", redirect: "error", signal: value.requests[0].options?.signal,
+        method: "GET", redirect: "manual", signal: value.requests[0].options?.signal,
         headers: { "Cache-Control": "no-cache" },
     });
     assert.ok(value.requests[0].options?.signal instanceof AbortSignal);
     assert.deepEqual(value.objects, [value.pointer.manifest.key]);
     assert.deepEqual(Object.keys(value.pointer).sort(), ["container", "kind", "manifest", "version"]);
+});
+
+test("gateway reads the pointer through the public R2 binding without an HTTP redirect", async () => {
+    const value = fixture();
+    const requests: string[] = [];
+    const getPublicPointer = async () => ({
+        size: value.pointerBytes.byteLength,
+        body: new Response(value.pointerBytes).body!,
+    });
+    const fetcher: typeof fetch = async (input) => {
+        requests.push(String(input));
+        throw new Error("the bound pointer path must not fetch the public URL");
+    };
+    assert.deepEqual(await readNightlyPublication(value.getObject, fetcher, getPublicPointer), value.manifest);
+    assert.deepEqual(requests, []);
+    assert.deepEqual(value.objects, [value.pointer.manifest.key]);
 });
 
 test("both authenticated manifest routes select the same pointer and keep private JSON inaccessible", async (context) => {
@@ -85,7 +103,10 @@ test("both authenticated manifest routes select the same pointer and keep privat
         DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
     } as unknown as Env;
     context.mock.method(globalThis, "fetch", value.fetcher);
-    const headers = { authorization: `Bearer ${"n".repeat(43)}` };
+    const headers = {
+        authorization: `Bearer ${"n".repeat(43)}`,
+        "x-bannerlord-coop-nightly-version": "2",
+    };
     for (const path of ["client", "release"]) {
         const response = await worker.fetch(new Request(`${gateway}/v1/manifests/${path}`, { headers }), env);
         assert.equal(response.status, 200);
@@ -102,6 +123,218 @@ test("both authenticated manifest routes select the same pointer and keep privat
     assert.equal(value.requests.length, 2);
 });
 
+test("client and release routes fall back only to a validated legacy pair", async (context) => {
+    const value = fixture();
+    const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+    const legacy = {
+        version: 1,
+        releaseDate: "2026-11-04",
+        headSha: "a".repeat(40),
+        baseSha: "a".repeat(40),
+        workflowRunId: 42007050452,
+        builtAt: "2026-11-05T10:04:43Z",
+        client: {
+            fileName: "Coop 11-04-2026.7z",
+            key: `nightly/clients/${"a".repeat(40)}/${"c".repeat(64)}/Coop.7z`,
+            bytes: 10,
+            sha256: "c".repeat(64),
+            publicUrl: `${gateway}/v1/artifacts/nightly/clients/${"a".repeat(40)}/${"c".repeat(64)}/Coop.7z`,
+        },
+    };
+    const legacyRelease = {
+        version: 1,
+        releaseDate: legacy.releaseDate,
+        headSha: legacy.headSha,
+        builtAt: legacy.builtAt,
+        client: legacy.client,
+        server: {
+            fileName: "BannerlordCoop-DedicatedServer-Win64-2026-11-04-coop-e2057ad.7z",
+            bytes: 20,
+            sha256: "d".repeat(64),
+            publicUrl: `${origin}/nightly/BannerlordCoop-DedicatedServer-Win64.7z`,
+            incremental: {
+                version: 1,
+                layout: "base-overlay-v1",
+                baseFingerprint: "e".repeat(64),
+                compatibleBaseFingerprints: [],
+                base: {
+                    fileName: "BannerlordCoop-DedicatedServer-Win64-Base.7z",
+                    bytes: 30,
+                    sha256: "f".repeat(64),
+                    publicUrl: `${origin}/windows/base/v1/${"e".repeat(64)}/${"f".repeat(64)}/server-base.7z`,
+                    key: `windows/base/v1/${"e".repeat(64)}/${"f".repeat(64)}/server-base.7z`,
+                },
+                update: {
+                    fileName: "BannerlordCoop-DedicatedServer-Win64-Update.7z",
+                    bytes: 40,
+                    sha256: "0".repeat(64),
+                    publicUrl: `${origin}/nightly/windows/updates/${legacy.headSha}/${"a".repeat(40)}/${"0".repeat(64)}/server-update.7z`,
+                    key: `nightly/windows/updates/${legacy.headSha}/${"a".repeat(40)}/${"0".repeat(64)}/server-update.7z`,
+                },
+            },
+        },
+    };
+    const legacyBytes = Buffer.from(JSON.stringify(legacy));
+    const legacyReleaseBytes = Buffer.from(JSON.stringify(legacyRelease));
+    const objects: string[] = [];
+    const env = {
+        DB: {
+            async batch() { throw new Error("manifest discovery must be read-only"); },
+            prepare(sql: string) {
+                return { bind() {
+                    return { async first() {
+                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
+                    } };
+                } };
+            },
+        },
+        RELEASES: { async get(key: string) {
+            objects.push(key);
+            if (key === "nightly/client.json") return {
+                size: legacyBytes.byteLength,
+                body: new Response(legacyBytes).body!,
+                arrayBuffer: async () => legacyBytes.buffer.slice(
+                    legacyBytes.byteOffset,
+                    legacyBytes.byteOffset + legacyBytes.byteLength,
+                ),
+            };
+            if (key === "nightly/release.json") return {
+                size: legacyReleaseBytes.byteLength,
+                body: new Response(legacyReleaseBytes).body!,
+                arrayBuffer: async () => legacyReleaseBytes.buffer.slice(
+                    legacyReleaseBytes.byteOffset,
+                    legacyReleaseBytes.byteOffset + legacyReleaseBytes.byteLength,
+                ),
+            };
+            throw new Error("runtime_binding_read_failed");
+        } },
+        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
+        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32),
+        DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+    } as unknown as Env;
+    const logs: string[] = [];
+    context.mock.method(console, "error", (line: string) => logs.push(line));
+    context.mock.method(globalThis, "fetch", value.fetcher);
+    const headers = {
+        authorization: `Bearer ${"n".repeat(43)}`,
+        "x-bannerlord-coop-nightly-version": "2",
+    };
+    const client = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, { headers }), env);
+    assert.equal(client.status, 200);
+    assert.equal((await client.json() as { headSha: string }).headSha, legacy.headSha);
+    const release = await worker.fetch(new Request(`${gateway}/v1/manifests/release`, { headers }), env);
+    assert.equal(release.status, 200, logs.join("\n"));
+    assert.equal((await release.json() as { headSha: string }).headSha, legacyRelease.headSha);
+    const publicationFailure = logs.find((line) => line.includes('"event":"nightly_publication_read_failed"')
+        && line.includes('"route":"release"'));
+    assert.ok(publicationFailure);
+    assert.deepEqual(JSON.parse(publicationFailure!), {
+        event: "nightly_publication_read_failed",
+        route: "release",
+        error_code: "runtime_binding_read_failed",
+        stage: "private_read",
+        r2_status: null,
+        exception_class: "Error",
+        fallback: false,
+    });
+    assert.ok(logs.some((line) => line.includes('"event":"nightly_legacy_client_fallback_served"')));
+    assert.ok(logs.some((line) => line.includes('"event":"nightly_legacy_release_fallback_served"')));
+    assert.deepEqual(objects, [value.pointer.manifest.key, "nightly/client.json", value.pointer.manifest.key, "nightly/release.json", "nightly/client.json"]);
+});
+
+test("client fallback accepts the producer's null baseSha legacy shape", async () => {
+    const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+    const legacy = {
+        version: 1,
+        releaseDate: "2026-11-04",
+        headSha: "a".repeat(40),
+        baseSha: null,
+        workflowRunId: 42007050452,
+        builtAt: "2026-11-05T10:04:43Z",
+        client: {
+            fileName: "Coop 11-04-2026.7z",
+            key: `nightly/clients/${"a".repeat(40)}/${"c".repeat(64)}/Coop.7z`,
+            bytes: 10,
+            sha256: "c".repeat(64),
+            publicUrl: `${gateway}/v1/artifacts/nightly/clients/${"a".repeat(40)}/${"c".repeat(64)}/Coop.7z`,
+        },
+    };
+    assert.doesNotThrow(() => validateLegacyNightlyClientManifest(legacy, origin, gateway));
+});
+
+test("legacy v1 is the default while an explicit version header selects v2", async () => {
+    const value = fixture();
+    const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+    const legacyRelease = JSON.parse(await readFile(new URL("../fixtures/legacy-release-2026-11-04.json", import.meta.url), "utf8")) as Record<string, unknown>;
+    const legacyClient = {
+        version: 1,
+        releaseDate: legacyRelease.releaseDate,
+        headSha: legacyRelease.headSha,
+        baseSha: null,
+        workflowRunId: 42007050452,
+        builtAt: "2026-11-05T10:04:43Z",
+        client: legacyRelease.client,
+    };
+    const legacyReleaseBytes = Buffer.from(JSON.stringify(legacyRelease));
+    const legacyClientBytes = Buffer.from(JSON.stringify(legacyClient));
+    const object = (bytes: Uint8Array) => ({
+        size: bytes.byteLength,
+        body: new Response(bytes).body!,
+        arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+    });
+    const env = {
+        DB: {
+            async batch() { throw new Error("manifest discovery must be read-only"); },
+            prepare(sql: string) {
+                return { bind() {
+                    return { async first() {
+                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
+                    } };
+                } };
+            },
+        },
+        PUBLIC_RELEASES: { async get() { return object(value.pointerBytes); } },
+        RELEASES: { async get(key: string) {
+            if (key === "nightly/client.json") return object(legacyClientBytes);
+            if (key === "nightly/release.json") return object(legacyReleaseBytes);
+            return value.getObject(key);
+        } },
+        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
+        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32),
+        DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+    } as unknown as Env;
+    const authorization = `Bearer ${"n".repeat(43)}`;
+    for (const path of ["client", "release"]) {
+        const response = await worker.fetch(new Request(`${gateway}/v1/manifests/${path}`, {
+            headers: { authorization },
+        }), env);
+        assert.equal(response.status, 200);
+        const manifest = await response.json() as { version: number; headSha: string };
+        assert.equal(manifest.version, 1);
+        assert.equal(manifest.headSha, legacyRelease.headSha);
+    }
+    const v2 = await worker.fetch(new Request(`${gateway}/v1/manifests/release`, {
+            headers: { authorization, "x-bannerlord-coop-nightly-version": "2" },
+    }), env);
+    assert.equal(v2.status, 200);
+    assert.equal((await v2.json() as { version: number }).version, 2);
+});
+
+test("accepts the production-shaped legacy release fixture and rejects missing artifact keys", async () => {
+    const fixture = JSON.parse(await readFile(new URL("../fixtures/legacy-release-2026-11-04.json", import.meta.url), "utf8")) as Record<string, unknown> & {
+        server: { incremental: { base: Record<string, unknown>; update: Record<string, unknown> } };
+    };
+    const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+    assert.doesNotThrow(() => validateLegacyNightlyReleaseManifest(fixture, origin, gateway));
+    const withoutBaseKey = structuredClone(fixture);
+    delete withoutBaseKey.server.incremental.base.key;
+    assert.throws(() => validateLegacyNightlyReleaseManifest(withoutBaseKey, origin, gateway), /invalid_legacy_nightly_release_artifact/);
+    const withoutUpdateKey = structuredClone(withoutBaseKey);
+    withoutUpdateKey.server.incremental.base.key = fixture.server.incremental.base.key;
+    delete withoutUpdateKey.server.incremental.update.key;
+    assert.throws(() => validateLegacyNightlyReleaseManifest(withoutUpdateKey, origin, gateway), /invalid_legacy_nightly_release_artifact/);
+});
+
 test("gateway rejects a private manifest whose bytes or image digest differ from the public pointer", async () => {
     const value = fixture();
     await assert.rejects(readNightlyPublication(async () => ({
@@ -110,6 +343,21 @@ test("gateway rejects a private manifest whose bytes or image digest differ from
     value.pointer.container.manifestDigest = `sha256:${"8".repeat(64)}`;
     value.pointer.container.digestReference = `${repository}@${value.pointer.container.manifestDigest}`;
     await assert.rejects(readNightlyPublication(value.getObject, value.fetcher), /container_mismatch/);
+});
+
+test("classifies a pointer fetch TypeError before any R2 read", async () => {
+    await assert.rejects(
+        readNightlyPublication(async () => { throw new Error("R2 must not be read"); }, async () => {
+            throw new TypeError("fetch failed");
+        }),
+        (error: unknown) => {
+            assert.ok(error instanceof NightlyPublicationReadError);
+            assert.equal(error.stage, "pointer");
+            assert.equal(error.status, null);
+            assert.equal(error.exceptionClass, "TypeError");
+            return true;
+        },
+    );
 });
 
 test("gateway rejects missing, legacy, or secret-bearing pointers without reading private objects", async () => {
