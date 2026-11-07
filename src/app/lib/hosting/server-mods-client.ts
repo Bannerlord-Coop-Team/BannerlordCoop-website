@@ -251,6 +251,9 @@ export function createServerModCatalog(dependencies: ServerModCatalogDependencie
         try {
             return await performUpload(serverId, expectedRevision, archive, onProgress, options);
         } catch (error) {
+            // A refused admission has no server session or acknowledged bytes to resume.
+            if (error instanceof ServerModsError && error.code === "mod_host_storage_low"
+                && (await pendingUpload(serverId))?.session === undefined) await clear(serverId);
             if (error instanceof ServerModsError && ["upload_rejected", "upload_failed", "upload_expired", "revision_conflict", "request_conflict", "upload_chunk_conflict", "invalid_request", "mod_storage_quota_exceeded"].includes(error.code)) await clear(serverId);
             throw error;
         }

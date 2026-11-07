@@ -1063,5 +1063,14 @@
   "serverVersion.yourCampaignWasLastSavedByVersionHasNotBeenVerifiedToRead": "Deine Kampagne wurde zuletzt mit {current} gespeichert. Für {version} wurde nicht überprüft, ob sie gelesen werden kann. Das Spiel lädt sie möglicherweise nicht, und Fortschritt könnte verloren gehen.",
   "serverVersion.installVersionQuestion": "{version} installieren?",
   "serverVersion.stayOnVersionQuestion": "Bei {version} bleiben?",
-  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "Versionswechsel sind für diesen Server derzeit nicht verfügbar. Versuche es später erneut oder wende dich an den Hosting-Support."
+  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "Versionswechsel sind für diesen Server derzeit nicht verfügbar. Versuche es später erneut oder wende dich an den Hosting-Support.",
+  "mods.storage": "Mod-Speicher",
+  "mods.storageUsage": "{used} / 5 GB",
+  "mods.limits": "Bis zu 3 GB pro Mod. 5 GB installierte Mods pro Server.",
+  "mods.pauseUpload": "Upload pausieren",
+  "mods.resumeUpload": "Upload fortsetzen",
+  "mods.uploadPaused": "Upload pausiert. Dein Fortschritt ist in diesem Browser gespeichert.",
+  "mods.uploadAmount": "{sent} von {total}",
+  "mods.error.hostStorageLow": "Dieser Host hat zu wenig Speicherplatz; Mod-Uploads sind pausiert",
+  "mods.error.browserStorage": "Dein Browser konnte diesen Upload nicht zum Fortsetzen speichern. Prüfe den freien Speicherplatz und die Speichereinstellungen des Browsers und versuche es erneut."
 }

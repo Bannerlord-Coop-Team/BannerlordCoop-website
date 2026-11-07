@@ -1063,5 +1063,14 @@
   "serverVersion.yourCampaignWasLastSavedByVersionHasNotBeenVerifiedToRead": "Tu campaña se guardó por última vez con {current}. No se ha verificado que {version} pueda leerla, por lo que el juego podría no cargarla y se podría perder progreso.",
   "serverVersion.installVersionQuestion": "¿Instalar {version}?",
   "serverVersion.stayOnVersionQuestion": "¿Quedarse en {version}?",
-  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "Los cambios de versión no están disponibles para este servidor en este momento. Inténtalo de nuevo más tarde o contacta con el soporte de alojamiento."
+  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "Los cambios de versión no están disponibles para este servidor en este momento. Inténtalo de nuevo más tarde o contacta con el soporte de alojamiento.",
+  "mods.storage": "Almacenamiento de mods",
+  "mods.storageUsage": "{used} / 5 GB",
+  "mods.limits": "Hasta 3 GB por mod. 5 GB de mods instalados por servidor.",
+  "mods.pauseUpload": "Pausar subida",
+  "mods.resumeUpload": "Reanudar subida",
+  "mods.uploadPaused": "Subida en pausa. El progreso se ha guardado en este navegador.",
+  "mods.uploadAmount": "{sent} de {total}",
+  "mods.error.hostStorageLow": "Este host tiene poco espacio; las subidas de mods están en pausa",
+  "mods.error.browserStorage": "El navegador no pudo guardar esta subida para reanudarla. Comprueba el espacio libre y la configuración de almacenamiento del navegador e inténtalo de nuevo."
 }

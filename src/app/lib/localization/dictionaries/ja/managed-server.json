@@ -1062,5 +1062,14 @@
   "serverVersion.yourCampaignWasLastSavedByVersionHasNotBeenVerifiedToRead": "キャンペーンは最後に {current} で保存されました。{version} で読み込めることは確認されていないため、ゲームがキャンペーンを読み込めず、進行状況が失われる可能性があります。",
   "serverVersion.installVersionQuestion": "{version} をインストールしますか?",
   "serverVersion.stayOnVersionQuestion": "{version} のままにしますか?",
-  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "このサーバーでは現在、バージョンの変更を利用できません。しばらくしてからもう一度お試しいただくか、ホスティングサポートにお問い合わせください。"
+  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "このサーバーでは現在、バージョンの変更を利用できません。しばらくしてからもう一度お試しいただくか、ホスティングサポートにお問い合わせください。",
+  "mods.storage": "MODストレージ",
+  "mods.storageUsage": "{used} / 5 GB",
+  "mods.limits": "MODごとに最大3 GB。サーバーごとに合計5 GBまでインストールできます。",
+  "mods.pauseUpload": "アップロードを一時停止",
+  "mods.resumeUpload": "アップロードを再開",
+  "mods.uploadPaused": "アップロードを一時停止しました。進行状況はこのブラウザーに保存されています。",
+  "mods.uploadAmount": "{total}中{sent}",
+  "mods.error.hostStorageLow": "このホストの空き容量が不足しているため、MODのアップロードは一時停止中です",
+  "mods.error.browserStorage": "再開用のアップロードデータをブラウザーに保存できませんでした。空き容量とブラウザーのストレージ設定を確認してから、もう一度お試しください。"
 }

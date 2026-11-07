@@ -1063,5 +1063,14 @@
   "serverVersion.yourCampaignWasLastSavedByVersionHasNotBeenVerifiedToRead": "Seferiniz en son {current} sürümüyle kaydedildi. {version} sürümünün bu seferi okuyabildiği doğrulanmadı; bu nedenle oyun seferi yükleyemeyebilir ve ilerleme kaybolabilir.",
   "serverVersion.installVersionQuestion": "{version} sürümü kurulsun mu?",
   "serverVersion.stayOnVersionQuestion": "{version} sürümünde kalınsın mı?",
-  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "Bu sunucu için sürüm değişiklikleri şu anda kullanılamıyor. Daha sonra tekrar deneyin veya barındırma desteğiyle iletişime geçin."
+  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "Bu sunucu için sürüm değişiklikleri şu anda kullanılamıyor. Daha sonra tekrar deneyin veya barındırma desteğiyle iletişime geçin.",
+  "mods.storage": "Mod depolama alanı",
+  "mods.storageUsage": "{used} / 5 GB",
+  "mods.limits": "Mod başına en fazla 3 GB. Sunucu başına toplam 5 GB yüklü mod.",
+  "mods.pauseUpload": "Yüklemeyi duraklat",
+  "mods.resumeUpload": "Yüklemeye devam et",
+  "mods.uploadPaused": "Yükleme duraklatıldı. İlerlemeniz bu tarayıcıda kaydedildi.",
+  "mods.uploadAmount": "{sent} / {total} yüklendi",
+  "mods.error.hostStorageLow": "Bu makinenin depolama alanı az; mod yüklemeleri duraklatıldı",
+  "mods.error.browserStorage": "Tarayıcınız yüklemeye devam etmek için verileri kaydedemedi. Boş alanı ve tarayıcı depolama ayarlarını kontrol edip tekrar deneyin."
 }

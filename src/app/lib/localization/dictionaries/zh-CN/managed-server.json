@@ -1062,5 +1062,14 @@
   "serverVersion.yourCampaignWasLastSavedByVersionHasNotBeenVerifiedToRead": "你的战役上次由 {current} 保存。尚未验证 {version} 能否读取它，因此游戏可能无法加载该战役，进度也可能丢失。",
   "serverVersion.installVersionQuestion": "安装 {version}？",
   "serverVersion.stayOnVersionQuestion": "保持在 {version}？",
-  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "此服务器目前无法更改版本。请稍后重试，或联系托管支持。"
+  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "此服务器目前无法更改版本。请稍后重试，或联系托管支持。",
+  "mods.storage": "模组存储空间",
+  "mods.storageUsage": "{used} / 5 GB",
+  "mods.limits": "每个模组最大 3 GB，每台服务器最多可安装 5 GB 模组。",
+  "mods.pauseUpload": "暂停上传",
+  "mods.resumeUpload": "继续上传",
+  "mods.uploadPaused": "上传已暂停。进度已保存在此浏览器中。",
+  "mods.uploadAmount": "已上传 {sent}，共 {total}",
+  "mods.error.hostStorageLow": "此主机存储空间不足；模组上传已暂停",
+  "mods.error.browserStorage": "浏览器无法保存此上传以供继续。请检查可用空间和浏览器存储设置，然后重试。"
 }

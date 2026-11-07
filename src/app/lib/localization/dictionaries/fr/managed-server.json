@@ -1063,5 +1063,14 @@
   "serverVersion.yourCampaignWasLastSavedByVersionHasNotBeenVerifiedToRead": "Votre campagne a été enregistrée pour la dernière fois par {current}. Il n’a pas été vérifié que {version} peut la lire ; le jeu pourrait donc ne pas la charger et de la progression pourrait être perdue.",
   "serverVersion.installVersionQuestion": "Installer {version} ?",
   "serverVersion.stayOnVersionQuestion": "Rester sur {version} ?",
-  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "Les changements de version ne sont pas disponibles pour ce serveur pour le moment. Réessayez plus tard ou contactez le support d’hébergement."
+  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "Les changements de version ne sont pas disponibles pour ce serveur pour le moment. Réessayez plus tard ou contactez le support d’hébergement.",
+  "mods.storage": "Stockage des mods",
+  "mods.storageUsage": "{used} / 5 GB",
+  "mods.limits": "Jusqu’à 3 GB par mod. 5 GB de mods installés par serveur.",
+  "mods.pauseUpload": "Mettre en pause",
+  "mods.resumeUpload": "Reprendre l’envoi",
+  "mods.uploadPaused": "Envoi en pause. Votre progression est enregistrée dans ce navigateur.",
+  "mods.uploadAmount": "{sent} sur {total}",
+  "mods.error.hostStorageLow": "Cet hôte manque d’espace ; les envois de mods sont en pause",
+  "mods.error.browserStorage": "Votre navigateur n’a pas pu enregistrer cet envoi pour le reprendre. Vérifiez l’espace libre et les paramètres de stockage du navigateur, puis réessayez."
 }

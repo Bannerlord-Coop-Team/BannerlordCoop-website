@@ -535,8 +535,10 @@ it("downloads the players' full load order as JSON, leaving out disabled and ded
     vi.stubGlobal("Blob", NodeBlob);
     vi.stubGlobal("URL", { createObjectURL: vi.fn((blob: NodeBlob) => { saved = blob; return "blob:mod-list"; }), revokeObjectURL: vi.fn() });
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { expect(this.download).toBe("BannerlordCoop-mod-list.json"); });
-    vi.useFakeTimers({ toFake: ["Date"] }).setSystemTime(new Date("2026-10-24T12:00:00.000Z"));
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] }).setSystemTime(new Date("2026-10-24T12:00:00.000Z"));
     await act(async () => downloadButton()!.click());
+    await act(async () => { vi.advanceTimersByTime(1_000); });
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:mod-list");
     vi.unstubAllGlobals();
     expect(click).toHaveBeenCalledOnce();
     expect(saved!.type).toBe("application/json");

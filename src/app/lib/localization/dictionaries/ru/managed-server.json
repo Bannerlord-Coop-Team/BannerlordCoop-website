@@ -1065,5 +1065,14 @@
   "serverVersion.yourCampaignWasLastSavedByVersionHasNotBeenVerifiedToRead": "Ваша кампания в последний раз была сохранена версией {current}. Возможность прочитать её в версии {version} не проверена, поэтому игра может её не загрузить, а прогресс может быть потерян.",
   "serverVersion.installVersionQuestion": "Установить {version}?",
   "serverVersion.stayOnVersionQuestion": "Остаться на {version}?",
-  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "Сейчас для этого сервера нельзя менять версию. Повторите попытку позже или обратитесь в службу поддержки хостинга."
+  "serverBuild.versionChangesAreNotAvailableForThisServerRightNow": "Сейчас для этого сервера нельзя менять версию. Повторите попытку позже или обратитесь в службу поддержки хостинга.",
+  "mods.storage": "Хранилище модов",
+  "mods.storageUsage": "{used} / 5 GB",
+  "mods.limits": "До 3 GB на мод. До 5 GB установленных модов на сервер.",
+  "mods.pauseUpload": "Приостановить загрузку",
+  "mods.resumeUpload": "Возобновить загрузку",
+  "mods.uploadPaused": "Загрузка приостановлена. Прогресс сохранён в этом браузере.",
+  "mods.uploadAmount": "{sent} из {total}",
+  "mods.error.hostStorageLow": "На этом хосте мало места; загрузка модов приостановлена",
+  "mods.error.browserStorage": "Браузер не смог сохранить загрузку для возобновления. Проверьте свободное место и настройки хранилища браузера, затем повторите попытку."
 }
