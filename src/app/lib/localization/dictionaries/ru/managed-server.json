@@ -1,6 +1,4 @@
 {
-  "configEditor.battleSizeRequiresMods": "Over 1,000 needs both Limitless and Limitless Coop Compat",
-  "configEditor.battleSizePerformance": "Each PC renders the whole battle: about 2,000 runs smooth; 6,000+ expect low FPS.",
   "controls.cancelStart": "Отменить запуск",
   "controls.cancellingStart": "Отмена запуска…",
   "controls.startCancellationUnconfirmed": "Не удалось подтвердить отмену. Возможно, запуск уже начался; обновляем сведения о ходе выполнения.",
@@ -171,7 +169,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "Ожидается объект с serverConfig и modConfig.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Ожидаются только serverConfig и modConfig.",
   "configEditor.0TurnsAutosaveOff": "0 отключает автосохранение.",
-  "configEditor.battleSizeHelp": "Общее число войск обеих сторон в битве, от {min} до {max}.",
+  "configEditor.battleSizeHelp": "Общее число воинов обеих сторон в битве.",
   "configEditor.serverSettings": "Настройки сервера",
   "configEditor.difficulty": "Сложность",
   "configEditor.gameplayOptions": "Параметры игрового процесса",

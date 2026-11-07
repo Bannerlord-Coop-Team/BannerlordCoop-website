@@ -58,7 +58,7 @@ function parseSettings(value: unknown, t: Translator["t"], maximumBattleSize: nu
     const keys = Object.keys(value);
     if (keys.length !== 2 || !("serverConfig" in value) || !("modConfig" in value)) throw new Error(t("configEditor.expectedExactlyServerconfigAndModconfig"));
     const parsed = parseManagedServerConfiguration({ schemaVersion: 1, ...(value as object) }, configurationMessages(t));
-    if (parsed.modConfig.modOptions.battleSize > maximumBattleSize) throw new Error(t("configEditor.battleSizeRequiresMods"));
+    if (parsed.modConfig.modOptions.battleSize > maximumBattleSize) throw new Error(t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe"));
     return { serverConfig: parsed.serverConfig, modConfig: parsed.modConfig };
 }
 // Compares serialized settings to detect unsaved changes.
@@ -130,7 +130,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         { key: "autoAllocateClanMemberPerks", label: t("configuration.field.autoAllocateClanMemberPerks"), kind: "boolean" },
     ];
     const MOD_OPTION_FIELDS: Field[] = [
-        { key: "battleSize", label: t("configuration.field.battleSize"), kind: "integer", min: 200, max: battleSizeLimit, help: `${t("configEditor.battleSizeHelp", { min: number(200), max: number(battleSizeLimit) })} ${t("configEditor.battleSizeRequiresMods")}${battleSizeLimit > 1000 ? ` ${t("configEditor.battleSizePerformance")}` : ""}` },
+        { key: "battleSize", label: t("configuration.field.battleSize"), kind: "integer", min: 200, max: battleSizeLimit, help: t("configEditor.battleSizeHelp") },
         { key: "fastForwardEnabled", label: t("configuration.field.fastForwardEnabled"), kind: "boolean" },
         { key: "autoPauseEnabled", label: t("configuration.field.autoPauseEnabled"), kind: "boolean" },
         { key: "clientsCanUseCheats", label: t("configuration.field.clientsCanUseCheats"), kind: "boolean" },

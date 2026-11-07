@@ -1,6 +1,4 @@
 {
-  "configEditor.battleSizeRequiresMods": "Over 1,000 needs both Limitless and Limitless Coop Compat",
-  "configEditor.battleSizePerformance": "Each PC renders the whole battle: about 2,000 runs smooth; 6,000+ expect low FPS.",
   "controls.cancelStart": "Cancel Start",
   "controls.cancellingStart": "Cancelling Start…",
   "controls.startCancellationUnconfirmed": "Cancellation could not be confirmed. The Start may already have begun; refreshing its progress.",
@@ -171,7 +169,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "Expected an object with serverConfig and modConfig.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Expected exactly serverConfig and modConfig.",
   "configEditor.0TurnsAutosaveOff": "0 turns autosave off.",
-  "configEditor.battleSizeHelp": "Total troops across both sides of a battle, from {min} to {max}.",
+  "configEditor.battleSizeHelp": "Total troops on both sides of a battle.",
   "configEditor.serverSettings": "Server settings",
   "configEditor.difficulty": "Difficulty",
   "configEditor.gameplayOptions": "Gameplay options",

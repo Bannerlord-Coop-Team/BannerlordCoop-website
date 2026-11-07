@@ -1,6 +1,4 @@
 {
-  "configEditor.battleSizeRequiresMods": "Over 1,000 needs both Limitless and Limitless Coop Compat",
-  "configEditor.battleSizePerformance": "Each PC renders the whole battle: about 2,000 runs smooth; 6,000+ expect low FPS.",
   "controls.cancelStart": "Başlatmayı iptal et",
   "controls.cancellingStart": "Başlatma iptal ediliyor…",
   "controls.startCancellationUnconfirmed": "İptal doğrulanamadı. Başlatma işlemi başlamış olabilir; ilerleme yenileniyor.",
@@ -171,7 +169,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "serverConfig ve modConfig içeren bir nesne bekleniyordu.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Yalnızca serverConfig ve modConfig bekleniyordu.",
   "configEditor.0TurnsAutosaveOff": "0, otomatik kaydetmeyi kapatır.",
-  "configEditor.battleSizeHelp": "Bir savaşta iki taraftaki toplam asker sayısı, {min} ile {max} arası.",
+  "configEditor.battleSizeHelp": "Bir savaşta her iki taraftaki toplam asker sayısı.",
   "configEditor.serverSettings": "Sunucu ayarları",
   "configEditor.difficulty": "Zorluk",
   "configEditor.gameplayOptions": "Oynanış seçenekleri",

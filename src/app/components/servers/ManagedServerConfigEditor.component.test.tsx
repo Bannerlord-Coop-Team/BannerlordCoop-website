@@ -251,7 +251,7 @@ vi.mock("@/app/lib/localization/server", () => ({
 it("edits the battle size within the range the game applies and saves it to the gameplay file", async () => {
     await render();
     expect(field<HTMLInputElement>("config-modOptions-battleSize").value).toBe("1000");
-    expect(container.textContent).toContain("Total troops across both sides of a battle, from 200 to 1,000.");
+    expect(container.textContent).toContain("Total troops on both sides of a battle.");
     await type("config-modOptions-battleSize", "1500");
     expect(container.textContent).toContain("Enter a value from 200 to 1,000.");
     expect(button("Save config").disabled).toBe(true);
@@ -267,8 +267,10 @@ it("allows 1,500 only after the CP-backed read reports both enabled server mods"
     mocks.limit.mockReturnValue(12000);
     await render();
     expect(field<HTMLInputElement>("config-modOptions-battleSize").max).toBe("12000");
-    expect(container.textContent).toContain("Over 1,000 needs both Limitless and Limitless Coop Compat");
-    expect(container.textContent).toContain("6,000+ expect low FPS");
+    expect(container.textContent).not.toContain("Limitless");
+    expect(container.textContent).not.toContain("FPS");
+    expect(container.textContent).not.toContain("12,000");
+    expect(container.textContent).toContain("Total troops on both sides of a battle.");
     await type("config-modOptions-battleSize", "1500");
     const saved = { ...config.modConfig, modOptions: { ...config.modConfig.modOptions, battleSize: 1500 } };
     mocks.save.mockResolvedValue({ ok: true, file: { configPart: "mod", revision: "c".repeat(64), settings: saved } });
