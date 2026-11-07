@@ -27,7 +27,7 @@
   "membership.nightlyInstaller": "Os apoiantes no Patreon têm acesso ao instalador da versão noturna (saiba como utilizá-lo)",
   "membership.reviewRequired": "A sua subscrição precisa de ser revista. Contacte o apoio antes de tentar novamente.",
   "membership.verifyRequired": "Verifique a sua subscrição antes de criar um novo servidor.",
-  "membership.syncPending": "A sua quota de servidores está a ser atualizada.",
+  "membership.syncPending": "O teu limite de servidores está a ser atualizado. Normalmente demora alguns segundos; o estado é atualizado automaticamente.",
   "membership.syncUnavailable": "Não foi possível verificar a sua quota de servidores.",
   "membership.expiry": "Poderá ter de verificar novamente a sua subscrição antes de criar um novo servidor. Os servidores existentes não são parados automaticamente quando a verificação expira.",
   "patreon.verifyPending": "A abrir o Patreon…",

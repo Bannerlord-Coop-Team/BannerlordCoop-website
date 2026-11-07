@@ -27,7 +27,7 @@
   "membership.nightlyInstaller": "Patreon destekçileri nightly yükleyiciye erişebilir (nasıl kullanılacağını buradan öğrenebilirsiniz)",
   "membership.reviewRequired": "Üyeliğinizin incelenmesi gerekiyor. Yeniden denemeden önce destekle iletişime geçin.",
   "membership.verifyRequired": "Yeni bir sunucu oluşturmadan önce üyeliğinizi doğrulayın.",
-  "membership.syncPending": "Sunucu hakkınız güncelleniyor.",
+  "membership.syncPending": "Sunucu hakkınız güncelleniyor. Bu işlem genellikle birkaç saniye sürer; durum otomatik olarak yenilenir.",
   "membership.syncUnavailable": "Sunucu hakkınız kontrol edilemedi.",
   "membership.expiry": "Yeni bir sunucu oluşturmadan önce üyeliğinizi yeniden doğrulamanız gerekebilir. Doğrulama süresi dolduğunda mevcut sunucular otomatik olarak durdurulmaz.",
   "patreon.verifyPending": "Patreon açılıyor…",

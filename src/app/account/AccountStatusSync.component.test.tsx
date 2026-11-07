@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({ router: { refresh: vi.fn() } }));
 vi.mock("next/navigation", () => ({ useRouter: () => mocks.router }));
 import { AccountStatusSync } from "./AccountStatusSync";
 
-it("refreshes pending state automatically with bounded retries and cleans up", async () => {
+it("refreshes pending state quickly then backs off while remaining automatic and cleans up", async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     vi.useFakeTimers();
     mocks.router.refresh.mockClear();
@@ -13,13 +13,18 @@ it("refreshes pending state automatically with bounded retries and cleans up", a
     const root = createRoot(container);
     try {
         await act(async () => root.render(<AccountStatusSync pending />));
-        for (let i = 0; i < 15; i++) await act(async () => vi.advanceTimersByTime(5_000));
-        expect(mocks.router.refresh).toHaveBeenCalledTimes(12);
+        for (let i = 0; i < 30; i++) await act(async () => vi.advanceTimersByTime(2_000));
+        expect(mocks.router.refresh).toHaveBeenCalledTimes(30);
+        await act(async () => vi.advanceTimersByTime(9_999));
+        expect(mocks.router.refresh).toHaveBeenCalledTimes(30);
+        await act(async () => vi.advanceTimersByTime(1));
+        expect(mocks.router.refresh).toHaveBeenCalledTimes(31);
+        for (let i = 0; i < 2; i++) await act(async () => vi.advanceTimersByTime(10_000));
+        expect(mocks.router.refresh).toHaveBeenCalledTimes(33);
         expect(container.querySelector("button")).toBeNull();
-        await act(async () => root.unmount());
-        await act(async () => window.dispatchEvent(new Event("focus")));
-        expect(mocks.router.refresh).toHaveBeenCalledTimes(12);
-    } finally { vi.useRealTimers(); }
+    } finally { await act(async () => root.unmount()); vi.useRealTimers(); }
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    expect(mocks.router.refresh).toHaveBeenCalledTimes(33);
 });
 it("refreshes on return to the page without polling settled state", async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -44,7 +49,7 @@ it("stops the timer when pending status settles and keeps event refreshes availa
     const root = createRoot(document.createElement("div"));
     try {
         await act(async () => root.render(<AccountStatusSync pending />));
-        await act(async () => vi.advanceTimersByTime(5_000));
+        await act(async () => vi.advanceTimersByTime(2_000));
         expect(mocks.router.refresh).toHaveBeenCalledTimes(1);
         await act(async () => root.render(<AccountStatusSync pending={false} />));
         expect(vi.getTimerCount()).toBe(0);
@@ -63,7 +68,7 @@ it("skips hidden tabs without spending attempts and coalesces simultaneous refre
     const root = createRoot(document.createElement("div"));
     try {
         await act(async () => root.render(<AccountStatusSync pending />));
-        for (let i = 0; i < 15; i++) await act(async () => vi.advanceTimersByTime(5_000));
+        for (let i = 0; i < 35; i++) await act(async () => vi.advanceTimersByTime(2_000));
         await act(async () => window.dispatchEvent(new Event("online")));
         expect(mocks.router.refresh).not.toHaveBeenCalled();
         visibility.mockReturnValue("visible");
@@ -73,7 +78,7 @@ it("skips hidden tabs without spending attempts and coalesces simultaneous refre
             window.dispatchEvent(new Event("online"));
         });
         expect(mocks.router.refresh).toHaveBeenCalledTimes(1);
-        for (let i = 0; i < 15; i++) await act(async () => vi.advanceTimersByTime(5_000));
-        expect(mocks.router.refresh).toHaveBeenCalledTimes(13);
+        for (let i = 0; i < 30; i++) await act(async () => vi.advanceTimersByTime(2_000));
+        expect(mocks.router.refresh).toHaveBeenCalledTimes(31);
     } finally { await act(async () => root.unmount()); visibility.mockRestore(); vi.useRealTimers(); }
 });

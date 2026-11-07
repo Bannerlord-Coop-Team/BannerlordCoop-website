@@ -27,7 +27,7 @@
   "membership.nightlyInstaller": "Quienes apoyan el proyecto en Patreon tienen acceso al instalador de versiones nocturnas (así se usa)",
   "membership.reviewRequired": "Tu membresía necesita una revisión. Contacta con el equipo de soporte antes de volver a intentarlo.",
   "membership.verifyRequired": "Verifica tu membresía antes de crear un nuevo servidor.",
-  "membership.syncPending": "Tu cupo de servidores se está actualizando.",
+  "membership.syncPending": "Se está actualizando tu asignación de servidores. Normalmente tarda unos segundos; el estado se actualiza automáticamente.",
   "membership.syncUnavailable": "No se pudo comprobar tu cupo de servidores.",
   "membership.expiry": "Es posible que debas volver a verificar tu membresía antes de crear un nuevo servidor. Los servidores existentes no se detienen automáticamente cuando caduca la verificación.",
   "patreon.verifyPending": "Abriendo Patreon…",
