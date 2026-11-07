@@ -1,5 +1,15 @@
 # Source-owned account and membership onboarding
 
+While a confirmed Patreon membership's allowance is pending, Account and My
+Servers explain that updating the allowance usually takes a few seconds and
+that status refreshes automatically. Both use the existing read-only refresh
+component: every two seconds for 30 visible, non-overlapping refreshes, then
+every ten seconds while still pending. Hidden tabs spend no attempts; settled
+states stop the timer. Focus, online and visibility events can also refresh.
+Refresh never replays OAuth or server creation. The existing status payload and
+the CP membership claim/snapshot/ack contract are unchanged; no Edge deployment
+or database migration is needed for this presentation change.
+
 Server-rendered account status uses the website's existing server-only Supabase
 account credential. Fresh Auth user and membership session-context checks overlap
 with a no-store `GET website-account`, which returns only `{version:1,configured}`
