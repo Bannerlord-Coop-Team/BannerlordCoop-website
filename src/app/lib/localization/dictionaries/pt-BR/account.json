@@ -27,7 +27,7 @@
   "membership.nightlyInstaller": "Apoiadores no Patreon têm acesso ao instalador da versão nightly (veja como usá-lo)",
   "membership.reviewRequired": "Sua assinatura precisa de revisão. Entre em contato com o suporte antes de tentar novamente.",
   "membership.verifyRequired": "Verifique sua assinatura antes de criar um novo servidor.",
-  "membership.syncPending": "Seu limite de servidores está sendo atualizado.",
+  "membership.syncPending": "Seu limite de servidores está sendo atualizado. Isso costuma levar alguns segundos; o status é atualizado automaticamente.",
   "membership.syncUnavailable": "Não foi possível verificar seu limite de servidores.",
   "membership.expiry": "Talvez seja necessário verificar sua assinatura novamente antes de criar um novo servidor. Os servidores existentes não são interrompidos automaticamente quando a verificação expira.",
   "patreon.verifyPending": "Abrindo o Patreon…",

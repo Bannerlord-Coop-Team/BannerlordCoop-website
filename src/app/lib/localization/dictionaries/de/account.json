@@ -27,7 +27,7 @@
   "membership.nightlyInstaller": "Patreon-Unterstützer haben Zugriff auf den Nightly-Installer (so verwendest du ihn)",
   "membership.reviewRequired": "Deine Mitgliedschaft muss überprüft werden. Wende dich an den Support, bevor du es erneut versuchst.",
   "membership.verifyRequired": "Verifiziere deine Mitgliedschaft, bevor du einen neuen Server erstellst.",
-  "membership.syncPending": "Dein Server-Kontingent wird aktualisiert.",
+  "membership.syncPending": "Dein Serverkontingent wird aktualisiert. Das dauert normalerweise nur wenige Sekunden; der Status wird automatisch aktualisiert.",
   "membership.syncUnavailable": "Dein Server-Kontingent konnte nicht geprüft werden.",
   "membership.expiry": "Möglicherweise musst du deine Mitgliedschaft erneut verifizieren, bevor du einen neuen Server erstellst. Bestehende Server werden nicht automatisch gestoppt, wenn die Verifizierung abläuft.",
   "patreon.verifyPending": "Patreon wird geöffnet…",

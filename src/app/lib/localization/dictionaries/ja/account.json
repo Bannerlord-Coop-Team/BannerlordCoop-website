@@ -27,7 +27,7 @@
   "membership.nightlyInstaller": "Patreon支援者はナイトリー版インストーラーを利用できます（使い方はこちら）",
   "membership.reviewRequired": "メンバーシップの審査が必要です。再試行する前に、サポートにお問い合わせください。",
   "membership.verifyRequired": "新しいサーバーを作成する前に、メンバーシップを確認してください。",
-  "membership.syncPending": "利用可能なサーバー枠を更新中です。",
+  "membership.syncPending": "利用可能なサーバー枠を更新しています。通常は数秒で完了し、状態は自動的に更新されます。",
   "membership.syncUnavailable": "利用可能なサーバー枠を確認できませんでした。",
   "membership.expiry": "新しいサーバーを作成する前に、メンバーシップの再確認が必要になる場合があります。確認の有効期限が切れても、既存のサーバーが自動で停止することはありません。",
   "patreon.verifyPending": "Patreonを開いています…",

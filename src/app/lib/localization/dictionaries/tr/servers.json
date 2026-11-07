@@ -4,7 +4,7 @@
   "membership.status.configuration_blocked": "Üyelik sunucu kurulumu henüz yapılandırılmadı. Destek ekibiyle iletişime geçin. Mevcut sunucular ve bağımsız yetkilendirmeler etkilenmez.",
   "membership.status.needs_patreon": "Bu hesap için abonelik avantajlarınızı denetlemek üzere Patreon hesabınızı bağlayın.",
   "membership.status.verification_pending": "Doğrulama, hesap onayınızı bekliyor. Hesabınıza dönün; yeni bir yetkilendirme başlatmayın.",
-  "membership.status.sync_pending": "Üyelik denetlendi; tahsis eşitlemesi bekleniyor. Durumu yenileyin.",
+  "membership.status.sync_pending": "Patreon üyeliğiniz doğrulandı. Sunucu hakkınız güncelleniyor. Bu işlem genellikle birkaç saniye sürer; durum otomatik olarak yenilenir.",
   "membership.status.nonqualifying": "Patreon üyeliğiniz bir sunucu içermiyor. Barındırma için en az aylık 20 $ olan Veteran kademesi gerekir. Patreon üzerinden yükseltin, ardından yeniden denetleyin.",
   "membership.status.verification_expired": "Üyeliğinizi Patreon yetkilendirmesi üzerinden yeniden denetleyin. Doğrulama yalnızca yeni tahsis için en fazla 24 saat geçerlidir.",
   "membership.status.review_required": "Üyelik veya tahsis incelenmeli. Destek ekibiyle iletişime geçin; mevcut sunucularınız kullanılabilir durumda kalır.",

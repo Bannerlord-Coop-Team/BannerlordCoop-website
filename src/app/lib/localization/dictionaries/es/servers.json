@@ -4,7 +4,7 @@
   "membership.status.configuration_blocked": "La creación de servidores mediante la membresía aún no está configurada. Contacta con soporte. Esto no afecta a los servidores existentes ni a las concesiones independientes.",
   "membership.status.needs_patreon": "Conecta Patreon para comprobar los beneficios de tu suscripción para esta cuenta.",
   "membership.status.verification_pending": "La verificación está a la espera de que confirmes tu cuenta. Vuelve a tu cuenta; no inicies otra autorización.",
-  "membership.status.sync_pending": "Se comprobó la membresía; la sincronización de la asignación está pendiente. Actualiza el estado.",
+  "membership.status.sync_pending": "Tu membresía de Patreon está confirmada. Se está actualizando tu asignación de servidores. Normalmente tarda unos segundos; el estado se actualiza automáticamente.",
   "membership.status.nonqualifying": "Tu membresía de Patreon no incluye un servidor. El alojamiento requiere el nivel Veteran de 20 $/mes o superior. Sube de nivel en Patreon y luego vuelve a comprobarlo.",
   "membership.status.verification_expired": "Vuelve a comprobar tu membresía mediante la autorización de Patreon. La verificación tiene una validez máxima de 24 horas y solo se aplica a nuevas asignaciones.",
   "membership.status.review_required": "La membresía o la asignación requieren revisión. Contacta con soporte; los servidores existentes siguen disponibles.",

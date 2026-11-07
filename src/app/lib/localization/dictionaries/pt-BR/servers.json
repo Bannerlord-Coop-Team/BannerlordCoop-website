@@ -4,7 +4,7 @@
   "membership.status.configuration_blocked": "A criação de servidores por assinatura ainda não está configurada. Entre em contato com o suporte. Os servidores existentes e as concessões independentes não são afetados.",
   "membership.status.needs_patreon": "Conecte o Patreon para verificar os benefícios da sua assinatura nesta conta.",
   "membership.status.verification_pending": "A verificação está aguardando a confirmação da sua conta. Volte à sua conta; não inicie outra autorização.",
-  "membership.status.sync_pending": "A assinatura foi verificada; a sincronização da cota está pendente. Atualize o status.",
+  "membership.status.sync_pending": "Sua assinatura do Patreon está confirmada. Seu limite de servidores está sendo atualizado. Isso costuma levar alguns segundos; o status é atualizado automaticamente.",
   "membership.status.nonqualifying": "Sua assinatura do Patreon não inclui um servidor. A hospedagem exige o nível Veteran de US$ 20/mês ou superior. Faça o upgrade no Patreon e depois verifique novamente.",
   "membership.status.verification_expired": "Verifique sua assinatura novamente por meio da autorização do Patreon. A verificação vale por no máximo 24 horas e apenas para novas alocações.",
   "membership.status.review_required": "A assinatura ou a alocação precisa de revisão. Entre em contato com o suporte; os servidores existentes continuam disponíveis.",

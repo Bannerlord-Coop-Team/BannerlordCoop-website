@@ -27,7 +27,7 @@
   "membership.nightlyInstaller": "Patreon 支持者可以使用每夜版安装程序（使用方法见此处）",
   "membership.reviewRequired": "您的会员资格需要审核。请先联系支持团队，再尝试操作。",
   "membership.verifyRequired": "请先验证会员资格，再创建新服务器。",
-  "membership.syncPending": "正在更新您的服务器配额。",
+  "membership.syncPending": "正在更新您的服务器配额。通常只需几秒钟，状态会自动刷新。",
   "membership.syncUnavailable": "无法查询您的服务器配额。",
   "membership.expiry": "创建新服务器前，您可能需要重新验证会员资格。验证过期不会自动停止现有服务器。",
   "patreon.verifyPending": "正在打开 Patreon…",
