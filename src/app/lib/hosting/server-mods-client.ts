@@ -8,7 +8,7 @@ import {
     type ModUploadSession,
     type ModUploadStatus,
 } from "../../../../supabase/functions/_shared/server-mods-contract";
-import { ServerModsError, type ServerModArchive, type ServerModCatalog, type ServerModsState, type ServerModUploadProgress } from "./server-mods";
+import { readServerModArchive, serverModArchiveSize, ServerModsError, type PendingServerModUpload, type ServerModArchive, type ServerModCatalog, type ServerModResumeStore, type ServerModsState, type ServerModUploadProgress } from "./server-mods";
 
 // The API-backed ServerModCatalog. It follows the website transport contract's retry rules: identical
 // resends under the same requestId (or the same chunk index and digest), backoff on retryable failures
@@ -22,7 +22,7 @@ export type ServerModsCallResult<T> = { ok: true; result: T } | { ok: false; err
 /** Sends one mods call to the website's routes; `refreshSession` asks the route to refresh the session first. */
 export interface ServerModsTransport {
     send(serverId: string, request: ModsRequest, options: { refreshSession: boolean }): Promise<ServerModsCallResult<unknown>>;
-    putChunk(serverId: string, chunk: { uploadId: string; index: number; sha256: string; bytes: Uint8Array<ArrayBuffer> }, options: { refreshSession: boolean }): Promise<ServerModsCallResult<ModChunkReceipt>>;
+    putChunk(serverId: string, chunk: { uploadId: string; index: number; sha256: string; bytes: Uint8Array<ArrayBuffer> }, options: { refreshSession: boolean; signal?: AbortSignal }): Promise<ServerModsCallResult<ModChunkReceipt>>;
 }
 
 export type ServerModCatalogDependencies = {
@@ -31,14 +31,15 @@ export type ServerModCatalogDependencies = {
     randomUUID(): string;
     sleep(milliseconds: number): Promise<void>;
     now(): number;
+    resumeStore?: ServerModResumeStore;
 };
 
 /** Mutations, chunks and reconciling reads retry for at least two minutes, covering a deployment restart. */
 export const MODS_RETRY_WINDOW_MILLISECONDS = 150_000;
 /** A plain list read gives up sooner; the panel offers its own retry. */
 export const MODS_READ_RETRY_WINDOW_MILLISECONDS = 20_000;
-/** An install settles within about ten minutes (one five-minute dispatch, one replay and a list). */
-export const MOD_INSTALL_SETTLE_MILLISECONDS = 12 * 60_000;
+/** Covers a thirty-minute dispatch, its one replay and a final authoritative list. */
+export const MOD_INSTALL_SETTLE_MILLISECONDS = 65 * 60_000;
 const RETRY_DELAYS_MILLISECONDS = [1_000, 2_000, 4_000, 8_000, 15_000];
 const FIRST_STATUS_POLL_MILLISECONDS = 2_000;
 const MAXIMUM_STATUS_POLL_MILLISECONDS = 10_000;
@@ -47,14 +48,37 @@ const ACTIVE_STATUSES: ReadonlySet<string> = new Set(MOD_UPLOAD_ACTIVE_STATUSES)
 /** Builds the catalog over an injected transport, hashing, ids and time. */
 export function createServerModCatalog(dependencies: ServerModCatalogDependencies): ServerModCatalog {
     const { transport, sleep, now, randomUUID } = dependencies;
+    const pendingUploads = new Map<string, PendingServerModUpload>();
+
+    function checkPaused(signal?: AbortSignal) {
+        if (signal?.aborted) throw new ServerModsError("upload_paused");
+    }
+
+    async function pendingUpload(serverId: string): Promise<PendingServerModUpload | null> {
+        const stored = pendingUploads.get(serverId) ?? await dependencies.resumeStore?.get(serverId);
+        if (stored) pendingUploads.set(serverId, stored);
+        return stored ?? null;
+    }
+
+    async function remember(upload: PendingServerModUpload) {
+        pendingUploads.set(upload.serverId, upload);
+        await dependencies.resumeStore?.save(upload);
+    }
+
+    async function clear(serverId: string) {
+        pendingUploads.delete(serverId);
+        await dependencies.resumeStore?.clear(serverId).catch(() => undefined);
+    }
 
     /** Sends until success, a refusal, or the retry window ends; a 401 refreshes the session and retries once. */
-    async function call<T>(send: (refreshSession: boolean) => Promise<ServerModsCallResult<T>>, windowMilliseconds: number): Promise<T> {
+    async function call<T>(send: (refreshSession: boolean) => Promise<ServerModsCallResult<T>>, windowMilliseconds: number, signal?: AbortSignal): Promise<T> {
         const started = now();
         let refreshed = false;
         let refreshNext = false;
         for (let attempt = 0; ; attempt += 1) {
+            checkPaused(signal);
             const outcome = await send(refreshNext);
+            checkPaused(signal);
             refreshNext = false;
             if (outcome.ok) return outcome.result;
             const { code, retryable, modId, issue } = outcome.error;
@@ -78,15 +102,20 @@ export function createServerModCatalog(dependencies: ServerModCatalogDependencie
     }
 
     /** Sends every chunk in order, one at a time, resending the same index and digest after a retryable failure. */
-    async function sendChunks(serverId: string, session: ModUploadSession, archive: ServerModArchive, report: (progress: ServerModUploadProgress) => void) {
-        const totalBytes = archive.bytes.byteLength;
-        let sentBytes = 0;
+    async function sendChunks(serverId: string, session: ModUploadSession, archive: ServerModArchive, report: (progress: ServerModUploadProgress) => void, received: ReadonlySet<number>, signal?: AbortSignal) {
+        const totalBytes = serverModArchiveSize(archive);
+        let sentBytes = [...received].reduce((sum, index) => sum + modChunkLength(totalBytes, index), 0);
+        report({ phase: "uploading", sentBytes, totalBytes });
         for (let index = 0; index < session.chunkCount; index += 1) {
+            checkPaused(signal);
+            if (received.has(index)) continue;
             const start = index * MOD_UPLOAD_CHUNK_BYTES;
-            const bytes = archive.bytes.subarray(start, start + modChunkLength(totalBytes, index));
+            const bytes = await readServerModArchive(archive, start, modChunkLength(totalBytes, index));
             const sha256 = await dependencies.sha256(bytes);
-            await call(refreshSession => transport.putChunk(serverId, { uploadId: session.uploadId, index, sha256, bytes }, { refreshSession }), MODS_RETRY_WINDOW_MILLISECONDS);
+            await call(refreshSession => transport.putChunk(serverId, { uploadId: session.uploadId, index, sha256, bytes }, { refreshSession, signal }), MODS_RETRY_WINDOW_MILLISECONDS, signal);
             sentBytes += bytes.byteLength;
+            const pending = pendingUploads.get(serverId);
+            if (pending) { pending.sentBytes = sentBytes; await remember(pending); }
             report({ phase: "uploading", sentBytes, totalBytes });
         }
     }
@@ -131,32 +160,105 @@ export function createServerModCatalog(dependencies: ServerModCatalogDependencie
         throw new ServerModsError("upload_unconfirmed", false, archive.manifest.id);
     }
 
+    async function performUpload(serverId: string, expectedRevision: string, archive: ServerModArchive, onProgress: (progress: ServerModUploadProgress) => void, options: { signal?: AbortSignal }): Promise<ServerModsState> {
+        checkPaused(options.signal);
+        const totalBytes = serverModArchiveSize(archive);
+        const sha256 = archive.source?.sha256 ?? await dependencies.sha256(archive.bytes);
+        let pending = await pendingUpload(serverId);
+        if (pending && pending.archive !== archive && (pending.archive.source === undefined || pending.archive.source.id !== archive.source?.id)) throw new ServerModsError("upload_busy");
+        if (!pending) {
+            pending = { serverId, archive, expectedRevision, createRequestId: randomUUID(), completeRequestId: randomUUID() };
+            await remember(pending);
+        }
+        const stored = pending;
+        onProgress({ phase: "creating", sentBytes: 0, totalBytes });
+        let received: ReadonlySet<number> = new Set();
+        const previousSession = stored.session;
+        if (previousSession) {
+            let status: ModUploadStatus | undefined;
+            try {
+                status = await route<ModUploadStatus>(serverId, { route: "status", body: { serverId, uploadId: previousSession.uploadId, includeReceivedChunks: true } })
+                    .catch((error: unknown) => {
+                        if (!(error instanceof ServerModsError) || error.code !== "invalid_request") throw error;
+                        return route<ModUploadStatus>(serverId, { route: "status", body: { serverId, uploadId: previousSession.uploadId } });
+                    });
+            } catch (error) {
+                if (!(error instanceof ServerModsError) || error.code !== "upload_not_found") throw error;
+                if (stored.completionStarted) {
+                    const state = await reconcile(serverId, archive, sha256);
+                    await clear(serverId);
+                    return state;
+                }
+                // No completion was sent: a forgotten session cannot install. Reuse the cached archive for a new attempt.
+                stored.session = undefined;
+                stored.createRequestId = randomUUID();
+                stored.completeRequestId = randomUUID();
+                await remember(stored);
+            }
+            if (status !== undefined) {
+                if (status.status === "installed" && "state" in status) { await clear(serverId); return status.state; }
+                if (status.status === "rejected" && "error" in status) { await clear(serverId); throw new ServerModsError("upload_rejected", false, archive.manifest.id, status.error); }
+                if (status.status === "expired" || status.status === "failed") { await clear(serverId); throw new ServerModsError(`upload_${status.status}`, false, archive.manifest.id); }
+                if (status.status !== "receiving") {
+                    const state = await settle(serverId, previousSession.uploadId, archive, sha256);
+                    await clear(serverId);
+                    return state;
+                }
+                const indices = "receivedIndices" in status ? status.receivedIndices : undefined;
+                if (indices?.some(index => index >= previousSession.chunkCount)) throw new ServerModsError("invalid_response", true);
+                received = new Set(indices ?? []);
+            }
+        }
+        if (!stored.session) {
+            stored.session = await route<ModUploadSession>(serverId, { route: "uploads", body: {
+                requestId: stored.createRequestId, serverId, expectedRevision: stored.expectedRevision, manifest: archive.manifest,
+                totalBytes, uncompressedBytes: archive.uncompressedBytes, sha256,
+            } });
+            await remember(stored);
+        }
+        const session = stored.session;
+        if (session.chunkCount !== modChunkCount(totalBytes)) throw new ServerModsError("invalid_response", false);
+        await sendChunks(serverId, session, archive, onProgress, received, options.signal);
+        checkPaused(options.signal);
+        onProgress({ phase: "installing", sentBytes: totalBytes, totalBytes });
+        stored.completionStarted = true;
+        await remember(stored);
+        try {
+            await route(serverId, { route: "complete", body: { requestId: stored.completeRequestId, uploadId: session.uploadId, expectedRevision: stored.expectedRevision } });
+        } catch (error) {
+            if (!(error instanceof ServerModsError) || !(error.retryable || error.code === "upload_not_found")) throw error;
+            onProgress({ phase: "verifying", sentBytes: totalBytes, totalBytes });
+            const state = await reconcile(serverId, archive, sha256);
+            await clear(serverId);
+            return state;
+        }
+        onProgress({ phase: "verifying", sentBytes: totalBytes, totalBytes });
+        const state = await settle(serverId, session.uploadId, archive, sha256);
+        await clear(serverId);
+        return state;
+    }
+
+    async function uploadServerMod(serverId: string, expectedRevision: string, archive: ServerModArchive, onProgress: (progress: ServerModUploadProgress) => void = () => {}, options: { signal?: AbortSignal } = {}) {
+        try {
+            return await performUpload(serverId, expectedRevision, archive, onProgress, options);
+        } catch (error) {
+            if (error instanceof ServerModsError && ["upload_rejected", "upload_failed", "upload_expired", "revision_conflict", "request_conflict", "upload_chunk_conflict", "invalid_request"].includes(error.code)) await clear(serverId);
+            throw error;
+        }
+    }
+
     return {
         listServerMods: serverId => list(serverId),
         saveServerModOrder: (serverId, expectedRevision, order) =>
             route(serverId, { route: "load-order", body: { requestId: randomUUID(), serverId, expectedRevision, mods: order } }),
         deleteServerMod: (serverId, expectedRevision, modId) =>
             route(serverId, { route: "delete", body: { requestId: randomUUID(), serverId, expectedRevision, modId } }),
-        async uploadServerMod(serverId, expectedRevision, archive, onProgress = () => {}) {
-            const totalBytes = archive.bytes.byteLength;
-            onProgress({ phase: "creating", sentBytes: 0, totalBytes });
-            const sha256 = await dependencies.sha256(archive.bytes);
-            const session = await route<ModUploadSession>(serverId, { route: "uploads", body: {
-                requestId: randomUUID(), serverId, expectedRevision, manifest: archive.manifest, totalBytes, sha256,
-            } });
-            if (session.chunkCount !== modChunkCount(totalBytes)) throw new ServerModsError("invalid_response", false);
-            await sendChunks(serverId, session, archive, onProgress);
-            onProgress({ phase: "installing", sentBytes: totalBytes, totalBytes });
-            try {
-                await route(serverId, { route: "complete", body: { requestId: randomUUID(), uploadId: session.uploadId, expectedRevision } });
-            } catch (error) {
-                // A forgotten session or an unanswered completion may still have installed; `list` decides.
-                if (!(error instanceof ServerModsError) || !(error.retryable || error.code === "upload_not_found")) throw error;
-                onProgress({ phase: "verifying", sentBytes: totalBytes, totalBytes });
-                return reconcile(serverId, archive, sha256);
-            }
-            onProgress({ phase: "verifying", sentBytes: totalBytes, totalBytes });
-            return settle(serverId, session.uploadId, archive, sha256);
+        uploadServerMod,
+        pendingServerModUpload: pendingUpload,
+        async resumeServerModUpload(serverId, onProgress, options) {
+            const pending = await pendingUpload(serverId);
+            if (pending === null) throw new ServerModsError("upload_not_found");
+            return uploadServerMod(serverId, pending.expectedRevision, pending.archive, onProgress, options);
         },
     };
 }

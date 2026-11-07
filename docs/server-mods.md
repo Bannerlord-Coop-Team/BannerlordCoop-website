@@ -47,6 +47,20 @@ the website's side of it.
   with a percentage while chunks are sent. The control plane installs a new mod
   enabled, immediately before DedicatedServer.Linux, unless a dependency or the
   enabled limit leaves it disabled; the panel says which happened.
+- The selected inline layout keeps the mod name, bytes sent, progress and
+  **Pause upload** beside the list. **Resume upload** returns after interruption
+  or revisiting the page in the same browser. Confirmed chunks are skipped; the
+  browser keeps bounded prepared ZIP parts and session metadata in IndexedDB
+  for up to eight hours (at most eight preparations). A lost control-plane
+  receiving session starts again from those cached bytes, without rereading the
+  original folder. An install with an unknown outcome is reconciled by digest.
+- Limits are **3 GB per mod**, **5 GB in the current installed set per server**,
+  with a current-set storage meter. GB means 1,000,000,000 bytes. Replacing a mod
+  charges its replacement instead of both generations. Physical retained data
+  and staging still have a separate 10 GB slot cap and count against measured
+  host free space. When a host cannot keep 20% free, or its disk measurement is
+  missing/stale, the refusal is **"This host is low on storage; mod uploads are
+  paused"**. Space must free up before Resume can continue.
 - Deleting asks for confirmation. Pinned modules and Coop have no delete button.
 - Each mod shows its notes (stripped assemblies, missing or misordered
   dependencies, removed dedicated-server or no-render tags, a mod known not to run
@@ -126,7 +140,7 @@ actions so a chunk relay of up to two minutes never blocks the page's sequential
 server-action queue (Start, Save, status polling). Each request:
 
 - is refused unless it is same-origin (`sec-fetch-site`/`Origin`);
-- names one of six allowlisted route keys, or a chunk's upload UUID and index (0–12);
+- names one of six allowlisted route keys, or a chunk's upload UUID and index (0–357);
   no caller value ever becomes an upstream path;
 - carries a body validated by `supabase/functions/_shared/server-mods-contract.ts`,
   the closed contract shared with the Edge Function, and a `serverId` equal to the
@@ -176,7 +190,8 @@ routes:
   such as the route's own `404` for a cross-site or malformed request, ends the call.
 - One chunk is sent at a time, in order.
 - After `complete`, `status` is polled after 2 s, growing to every 10 s, for up to
-  12 minutes. `installed` returns the new list; `rejected`, `failed` and `expired`
+  65 minutes, covering the runner's bounded 30-minute install dispatch and one replay.
+  `installed` returns the new list; `rejected`, `failed` and `expired`
   are reported. `unconfirmed`, any status the website does not know, a forgotten
   upload (`upload_not_found`), a completion whose answer was lost, and an install
   that outlives the poll window are all reconciled through `list`: the upload counts
@@ -197,11 +212,15 @@ clearer feedback; the runner remains authoritative.
   numeric character references are refused.
 - The archive's single top-level directory is named exactly the `Id`, whatever the
   picked folder was called.
-- At most 5,000 files, 512 MiB uncompressed and 100 MiB compressed; paths of at most
+- At most 5,000 files, 3 GB uncompressed and 3 GB compressed; paths of at most
   240 bytes and 16 levels, without backslashes or control characters, unique after
   NFC and case folding.
-- Entries above 1 MiB that would compress beyond 100:1 are stored uncompressed
-  instead; an archive above 16 MiB that still exceeds 100:1 overall is refused.
+- Large archive preparation reads files in at most 1 MiB slices and writes a
+  stored ZIP in at most 8 MiB IndexedDB parts, with incremental SHA-256. It never
+  allocates a whole large file/archive. Stored entries have a 1:1 ratio; the
+  runner retains its 100:1 entry/aggregate bomb limits and CRC/path/type checks.
+  The legacy in-memory fallback is capped at 100 MiB; larger uploads require
+  local browser storage and show a clear refusal if it is unavailable/full.
 - A fixed timestamp makes the same folder produce the same archive and sha256.
 
 Which mods run headless is the control plane's and the dedicated server's concern
@@ -219,6 +238,19 @@ Which mods run headless is the control plane's and the dedicated server's concer
   ends the pause now."). Neither refusal starts status polling or a retry.
 
 ## Rollout
+
+The storage release is paired with ControlPlane migration
+`127_managed_hosting_mod_storage_observations.sql`, a protected release after
+R124–R126 are installed and verified, plus the declared runner bundle window.
+Deploy the website contract reader before enabling the new CP/runner behavior.
+Resume status opts into received-index fields and falls back to the legacy
+status shape when an older CP rejects that option; old clients still send the
+same bounded 8 MiB requests. No mod bytes touch R2: R2 evidence is NOT APPLICABLE.
+The interim cross-repo evidence uses the real browser client/archive builder,
+owner HTTP/IPC gateway, pinned mTLS transport and Linux mod store on isolated
+synthetic files, including a 3 GB interruption/resume and runner digest check.
+It does not establish a deployed Cloudflare route, actual browser IndexedDB,
+systemd identity, Podman or gameplay.
 
 Deploy this website's optional `reorderable` reader before the control-plane
 writer emits that field. Core movement appears only when the assigned runner

@@ -1,6 +1,7 @@
-import { zipSync, type Zippable } from "fflate";
+import { Zip, ZipPassThrough, zipSync, type Zippable } from "fflate";
 
 import type { ServerModArchive } from "./server-mods";
+import { createPreparedModArchiveWriter, prunePreparedModArchives, type PreparedModArchiveWriter } from "./server-mod-upload-cache";
 import {
     MOD_ARCHIVE_MAXIMUM_COMPRESSION_RATIO,
     MOD_ARCHIVE_MAXIMUM_ENTRIES,
@@ -29,7 +30,7 @@ const ARCHIVE_MTIME = new Date(Date.UTC(2020, 0, 1));
 /** Why a picked folder cannot become an upload, before anything is sent. */
 export type ModArchiveProblem =
     | "no-folder" | "multiple-folders" | "no-submodule" | "submodule-invalid" | "invalid-id" | "reserved-id" | "invalid-name"
-    | "invalid-version" | "too-many-files" | "too-large-uncompressed" | "too-large" | "invalid-path" | "duplicate-path" | "compression-ratio";
+    | "invalid-version" | "too-many-files" | "too-large-uncompressed" | "too-large" | "invalid-path" | "duplicate-path" | "compression-ratio" | "browser-storage";
 
 /** A folder that breaks one archive rule; `detail` names the offending file or value when that helps. */
 export class ModArchiveError extends Error {
@@ -41,7 +42,7 @@ export class ModArchiveError extends Error {
 }
 
 /** The part of a picked `File` the builder reads; tests supply plain objects. */
-export type ModFolderFile = { webkitRelativePath: string; size: number; arrayBuffer(): Promise<ArrayBuffer> };
+export type ModFolderFile = { webkitRelativePath: string; size: number; arrayBuffer(): Promise<ArrayBuffer>; slice?(start: number, end: number): { arrayBuffer(): Promise<ArrayBuffer> } };
 
 /** Parses XML text into a document; injected because Node test runs have no `DOMParser`. */
 export type XmlParser = (text: string) => Document;
@@ -56,6 +57,7 @@ export type ModArchiveOptions = {
 export async function buildModArchive(files: readonly ModFolderFile[], options: ModArchiveOptions = {}): Promise<ServerModArchive> {
     const yieldToBrowser = options.yieldToBrowser ?? (() => Promise.resolve());
     const entries = folderEntries(files);
+    if (entries.totalBytes > SMALL_MEMORY_FALLBACK_BYTES) throw new ModArchiveError("browser-storage");
     const manifest = readSubModuleIdentity(await readText(entries.submodule), options.parseXml ?? defaultXmlParser);
     const paths = archivePaths(entries.files, manifest.id);
     const zippable: Zippable = {};
@@ -66,6 +68,58 @@ export async function buildModArchive(files: readonly ModFolderFile[], options: 
     const bytes = compress(zippable);
     if (bytes.byteLength > MOD_UPLOAD_MAXIMUM_BYTES) throw new ModArchiveError("too-large");
     return { manifest, bytes, fileCount: entries.files.length, uncompressedBytes: entries.totalBytes };
+}
+
+const PREPARATION_CHUNK_BYTES = 1_048_576;
+const SMALL_MEMORY_FALLBACK_BYTES = 100 * 1_048_576;
+
+/** Streams a stored ZIP into bounded browser parts. Stored entries have ratio 1:1 and need no whole-file buffer. */
+export async function buildResumableModArchive(
+    files: readonly ModFolderFile[],
+    options: ModArchiveOptions & { writer?: PreparedModArchiveWriter } = {},
+): Promise<ServerModArchive> {
+    const entries = folderEntries(files);
+    // Small files remain usable where local browser storage is unavailable; larger files fail before allocating.
+    if (options.writer === undefined && typeof indexedDB === "undefined") {
+        if (entries.totalBytes <= SMALL_MEMORY_FALLBACK_BYTES) return buildModArchive(files, options);
+        throw new ModArchiveError("browser-storage");
+    }
+    const manifest = readSubModuleIdentity(await readText(entries.submodule), options.parseXml ?? defaultXmlParser);
+    const paths = archivePaths(entries.files, manifest.id);
+    if (options.writer === undefined) await prunePreparedModArchives();
+    const writer = options.writer ?? createPreparedModArchiveWriter();
+    let pending = Promise.resolve();
+    let failure: unknown;
+    const zip = new Zip((error, bytes) => {
+        if (error) { failure ??= error; return; }
+        pending = pending.then(() => writer.append(bytes)).catch((cause: unknown) => { failure ??= cause; });
+    });
+    const drain = async () => { await pending; if (failure !== undefined) throw failure; };
+    try {
+        for (const [index, file] of entries.files.entries()) {
+            const entry = new ZipPassThrough(paths[index]);
+            entry.mtime = ARCHIVE_MTIME;
+            zip.add(entry);
+            await drain();
+            if (file.size === 0) entry.push(new Uint8Array(0), true);
+            for (let offset = 0; offset < file.size; offset += PREPARATION_CHUNK_BYTES) {
+                if (file.slice === undefined && file.size > PREPARATION_CHUNK_BYTES) throw new ModArchiveError("browser-storage");
+                const end = Math.min(file.size, offset + PREPARATION_CHUNK_BYTES);
+                const bytes = new Uint8Array(await (file.slice?.(offset, end) ?? file).arrayBuffer());
+                if (bytes.byteLength !== end - offset) throw new ModArchiveError("browser-storage");
+                entry.push(bytes, end === file.size);
+                await drain();
+                await options.yieldToBrowser?.();
+            }
+        }
+        zip.end();
+        await drain();
+        return await writer.finish({ manifest, fileCount: entries.files.length, uncompressedBytes: entries.totalBytes });
+    } catch (error) {
+        zip.terminate();
+        await writer.abort().catch(() => undefined);
+        throw error;
+    }
 }
 
 /** Returns the folder's files (sorted), its top-level SubModule.xml and total size, after the count and size bounds. */

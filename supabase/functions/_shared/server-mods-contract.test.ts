@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
     MOD_UPLOAD_CHUNK_BYTES,
+    MOD_UPLOAD_MAXIMUM_BYTES,
+    MOD_UPLOAD_MAXIMUM_CHUNKS,
     isModMutationRoute,
     isOwnerModId,
     modChunkCount,
@@ -54,7 +56,7 @@ test("accepts each route's exact body and rejects unknown fields and bad identit
     assert.throws(() => parseModsRequest("load-order", { ...order, mods: Array.from({ length: 134 }, (_, index) => ({ id: `m${index}`, enabled: true })) }));
     const upload = { requestId: REQUEST, serverId: SERVER, expectedRevision: REVISION, manifest: { id: "SomeMod", name: "Some Mod", version: "v1.2.0" }, totalBytes: 10, sha256: "C".repeat(64) };
     assert.equal((parseModsRequest("uploads", upload).body as { sha256: string }).sha256, "c".repeat(64));
-    for (const invalid of [{ ...upload, totalBytes: 0 }, { ...upload, totalBytes: 100 * 1_048_576 + 1 }, { ...upload, sha256: "x" },
+    for (const invalid of [{ ...upload, totalBytes: 0 }, { ...upload, totalBytes: MOD_UPLOAD_MAXIMUM_BYTES + 1 }, { ...upload, sha256: "x" },
         { ...upload, manifest: { id: "SomeMod", name: " padded", version: "v1" } }, { ...upload, manifest: { id: "SomeMod", name: "Mod", version: "1 0" } }]) {
         assert.throws(() => parseModsRequest("uploads", invalid));
     }
@@ -69,7 +71,7 @@ test("accepts each route's exact body and rejects unknown fields and bad identit
 
 test("bounds chunk queries and digests and computes chunk geometry", () => {
     assert.deepEqual(parseModChunkQuery(UPLOAD, "12"), { uploadId: UPLOAD, index: 12 });
-    for (const index of ["13", "01", "-1", "1.0", "", undefined]) assert.throws(() => parseModChunkQuery(UPLOAD, index));
+    for (const index of [String(MOD_UPLOAD_MAXIMUM_CHUNKS), "01", "-1", "1.0", "", undefined]) assert.throws(() => parseModChunkQuery(UPLOAD, index));
     assert.throws(() => parseModChunkQuery("upload", "0"));
     assert.equal(parseModChunkDigest("F".repeat(64)), "f".repeat(64));
     assert.throws(() => parseModChunkDigest("f".repeat(63)));
@@ -141,7 +143,7 @@ test("validates upload results against the request that produced them", () => {
     assert.throws(() => parseModUploadSession(session, 5));
     assert.throws(() => parseModUploadSession({ ...session, chunkBytes: 1_024 }));
     assert.deepEqual(parseModChunkReceipt({ receivedChunks: 1, receivedBytes: 5 }), { receivedChunks: 1, receivedBytes: 5 });
-    assert.throws(() => parseModChunkReceipt({ receivedChunks: 99, receivedBytes: 5 }));
+    assert.throws(() => parseModChunkReceipt({ receivedChunks: MOD_UPLOAD_MAXIMUM_CHUNKS + 1, receivedBytes: 5 }));
     assert.deepEqual(parseModUploadAccepted({ uploadId: UPLOAD, status: "validating" }, UPLOAD), { uploadId: UPLOAD, status: "validating" });
     assert.throws(() => parseModUploadAccepted({ uploadId: UPLOAD, status: "receiving" }));
     assert.throws(() => parseModUploadAccepted({ uploadId: REQUEST, status: "validating" }, UPLOAD));

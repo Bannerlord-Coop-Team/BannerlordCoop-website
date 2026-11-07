@@ -8,6 +8,7 @@ import {
 } from "../../../../supabase/functions/_shared/server-mods-contract";
 import { MODS_REFRESH_SESSION_HEADER, type ServerModCatalog } from "./server-mods";
 import { createServerModCatalog, type ServerModsCallFailure, type ServerModsCallResult, type ServerModsTransport } from "./server-mods-client";
+import { browserModResumeStore } from "./server-mod-upload-cache";
 
 // The browser transport to the website's own mods routes (never to Supabase or the control plane directly).
 
@@ -30,7 +31,7 @@ export function createServerModsHttpTransport(fetchImplementation: typeof fetch 
             }));
             return response.ok === false ? response : readResult(response.value, result => parseModsResult(request.route, result, request));
         },
-        async putChunk(serverId, chunk, { refreshSession }) {
+        async putChunk(serverId, chunk, { refreshSession, signal }) {
             const query = new URLSearchParams({ uploadId: chunk.uploadId, index: String(chunk.index) });
             const response = await attempt(() => fetchImplementation(`/api/servers/${encodeURIComponent(serverId)}/mods/chunk?${query}`, {
                 method: "PUT",
@@ -38,7 +39,7 @@ export function createServerModsHttpTransport(fetchImplementation: typeof fetch 
                 body: chunk.bytes,
                 cache: "no-store",
                 credentials: "same-origin",
-                signal: AbortSignal.timeout(CHUNK_TIMEOUT_MILLISECONDS),
+                signal: signal === undefined ? AbortSignal.timeout(CHUNK_TIMEOUT_MILLISECONDS) : AbortSignal.any([signal, AbortSignal.timeout(CHUNK_TIMEOUT_MILLISECONDS)]),
             }));
             return response.ok === false ? response : readResult(response.value, parseModChunkReceipt);
         },
@@ -101,6 +102,7 @@ export function createBrowserServerModCatalog(): ServerModCatalog {
         randomUUID: () => crypto.randomUUID(),
         sleep: milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)),
         now: () => Date.now(),
+        resumeStore: browserModResumeStore,
     });
 }
 
