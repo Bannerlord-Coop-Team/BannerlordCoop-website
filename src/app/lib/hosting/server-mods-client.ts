@@ -210,10 +210,19 @@ export function createServerModCatalog(dependencies: ServerModCatalogDependencie
             }
         }
         if (!stored.session) {
-            stored.session = await route<ModUploadSession>(serverId, { route: "uploads", body: {
+            const body = {
                 requestId: stored.createRequestId, serverId, expectedRevision: stored.expectedRevision, manifest: archive.manifest,
                 totalBytes, uncompressedBytes: archive.uncompressedBytes, sha256,
-            } });
+            };
+            try {
+                stored.session = await route<ModUploadSession>(serverId, { route: "uploads", body });
+            } catch (error) {
+                if (!(error instanceof ServerModsError) || error.code !== "invalid_request") throw error;
+                // Reader-first website rollout: an older CP refuses the optional size hint before admission.
+                const { uncompressedBytes: sizeHint, ...legacyBody } = body;
+                void sizeHint;
+                stored.session = await route<ModUploadSession>(serverId, { route: "uploads", body: legacyBody });
+            }
             await remember(stored);
         }
         const session = stored.session;
@@ -242,7 +251,7 @@ export function createServerModCatalog(dependencies: ServerModCatalogDependencie
         try {
             return await performUpload(serverId, expectedRevision, archive, onProgress, options);
         } catch (error) {
-            if (error instanceof ServerModsError && ["upload_rejected", "upload_failed", "upload_expired", "revision_conflict", "request_conflict", "upload_chunk_conflict", "invalid_request"].includes(error.code)) await clear(serverId);
+            if (error instanceof ServerModsError && ["upload_rejected", "upload_failed", "upload_expired", "revision_conflict", "request_conflict", "upload_chunk_conflict", "invalid_request", "mod_storage_quota_exceeded"].includes(error.code)) await clear(serverId);
             throw error;
         }
     }

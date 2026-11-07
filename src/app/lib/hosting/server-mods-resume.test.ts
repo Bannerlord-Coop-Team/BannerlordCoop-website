@@ -64,3 +64,38 @@ test("resumes from server receipts in a new browser client without rebuilding, r
     assert.equal(requests.find(request => request.route === "complete")?.body.requestId, completeRequestId);
     assert.equal(cached.size, 0);
 });
+
+test("keeps small uploads usable during reader-first rollout when an older CP refuses the optional extracted-size hint", async () => {
+    const serverId = "11111111-1111-4111-8111-111111111111";
+    const uploadId = "22222222-2222-4222-8222-222222222222";
+    const revision = "a".repeat(64);
+    const archive: ServerModArchive = { manifest: { id: "SmallMod", name: "Small Mod", version: "v1" },
+        bytes: new Uint8Array([1, 2, 3]), uncompressedBytes: 100, fileCount: 2 };
+    const state: ServerModsState = { revision: "b".repeat(64), restartRequired: false, mods: [] };
+    const requests: ModsRequest[] = [];
+    const transport: ServerModsTransport = {
+        async send(id, request) {
+            assert.equal(id, serverId); requests.push(structuredClone(request));
+            if (request.route === "uploads") {
+                if ("uncompressedBytes" in request.body) return { ok: false, error: { code: "invalid_request", retryable: false, modId: null } };
+                return { ok: true, result: { uploadId, chunkCount: 1, chunkBytes: MOD_UPLOAD_CHUNK_BYTES, expiresAt: "2026-11-08T00:00:00.000Z", replaces: false } };
+            }
+            if (request.route === "complete") return { ok: true, result: { uploadId, status: "installing" } };
+            if (request.route === "status") return { ok: true, result: { uploadId, status: "installed", state } };
+            throw new Error(`Unexpected route ${request.route}`);
+        },
+        async putChunk(id, chunk) {
+            assert.equal(id, serverId);
+            assert.deepEqual(chunk, { uploadId, index: 0, bytes: archive.bytes, sha256: await webSha256(archive.bytes) });
+            return { ok: true, result: { receivedChunks: 1, receivedBytes: archive.bytes.byteLength } };
+        },
+    };
+    const catalog = createServerModCatalog({ transport, sha256: webSha256, now: () => 0, sleep: async () => {},
+        randomUUID: () => "00000000-0000-4000-8000-000000000001" });
+    assert.deepEqual(await catalog.uploadServerMod(serverId, revision, archive), state);
+    const [first, legacy] = requests.filter(request => request.route === "uploads");
+    assert.equal(first.route, "uploads"); assert.equal(legacy.route, "uploads");
+    const { uncompressedBytes, ...body } = first.body;
+    assert.equal(uncompressedBytes, 100); assert.deepEqual(legacy.body, body);
+    assert.equal(requests.length, 4);
+});
