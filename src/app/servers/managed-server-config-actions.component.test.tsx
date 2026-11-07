@@ -1,18 +1,21 @@
+import fixture from "../../../test/fixtures/limitless-contract/v1.json";
 import { createTranslator } from "@/app/lib/localization/translator";
 import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { beforeEach, expect, it, vi } from "vitest";
 import { readManagedServerConfig, readManagedServerConfigFiles, saveManagedServerConfig } from "./managed-server-config-actions";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION as config } from "../../../supabase/functions/_shared/managed-server-configuration";
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), read: vi.fn(), save: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), read: vi.fn(), save: vi.fn(), mods: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: mocks.auth }));
 vi.mock("@/app/lib/hosting/server-configuration", () => ({ getMyServerConfiguration: mocks.read, saveMyServerConfiguration: mocks.save }));
+vi.mock("@/app/lib/hosting/server-mods-api", () => ({ requestServerMods: mocks.mods }));
 const id = "11111111-1111-4111-8111-111111111111";
 const revision = "a".repeat(64);
 const file = { configPart: "server", revision, settings: config.serverConfig };
 const request = { requestId: id, serverId: id, configPart: "server", expectedRevision: revision, settings: config.serverConfig };
 beforeEach(() => {
     vi.resetAllMocks();
+    mocks.mods.mockRejectedValue(new Error("Catalog unavailable"));
     mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "owner" } } }), getSession: async () => ({ data: { session: { access_token: "original-owner-token" } } }) } });
 });
 it("checks the current account before reading or saving configuration", async () => {
@@ -32,7 +35,7 @@ it("reads both configuration files concurrently in one authenticated action", as
     expect(mocks.read.mock.calls).toEqual([["original-owner-token", id, "server"], ["original-owner-token", id, "mod"]]);
     pending[1](file);
     pending[0](file);
-    expect(await result).toEqual({ server: { ok: true, file }, mod: { ok: true, file } });
+    expect(await result).toEqual({ maximumBattleSize: 1000, server: { ok: true, file }, mod: { ok: true, file } });
     expect(mocks.auth).toHaveBeenCalledOnce();
 });
 it("reports each configuration file independently and checks the account before reading either", async () => {
@@ -115,4 +118,16 @@ it.each([false, true])("preserves idempotency conflict submission semantics (not
         message: expect.stringContaining(notSubmitted ? "were not sent" : "changed on the runner"),
     });
     expect(mocks.save).toHaveBeenCalledTimes(notSubmitted ? 0 : 1);
+});
+
+
+it("reports the higher limit only from the validated CP catalog with both enabled modules", async () => {
+    mocks.read.mockResolvedValue(file);
+    mocks.mods.mockResolvedValue(fixture.state);
+    expect(await readManagedServerConfigFiles(id, "owner")).toHaveProperty("maximumBattleSize", 12000);
+    expect(mocks.mods).toHaveBeenCalledWith("original-owner-token", { route: "list", body: { serverId: id } });
+    for (const missing of ["Limitless", "Limitless.CoopCompat"]) {
+        mocks.mods.mockResolvedValue({ ...fixture.state, mods: fixture.state.mods.filter(mod => mod.id !== missing) });
+        expect(await readManagedServerConfigFiles(id, "owner")).toHaveProperty("maximumBattleSize", 1000);
+    }
 });

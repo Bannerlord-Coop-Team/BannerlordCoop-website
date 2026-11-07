@@ -252,7 +252,7 @@ export function parseManagedServerConfiguration(
       modOptions: {
         voiceEnabled: requireBoolean(modOptions.voiceEnabled, messages),
         // The game clamps battle size to this range.
-        battleSize: requireInteger(modOptions.battleSize, 200, 1_000, messages),
+        battleSize: requireInteger(modOptions.battleSize, 200, 12_000, messages),
         fastForwardEnabled: requireBoolean(modOptions.fastForwardEnabled, messages),
         autoPauseEnabled: requireBoolean(modOptions.autoPauseEnabled, messages),
         clientsCanUseCheats: requireBoolean(modOptions.clientsCanUseCheats, messages),

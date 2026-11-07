@@ -1,4 +1,6 @@
 {
+  "configEditor.battleSizeRequiresMods": "Over 1,000 needs both Limitless and Limitless Coop Compat",
+  "configEditor.battleSizePerformance": "Each PC renders the whole battle: about 2,000 runs smooth; 6,000+ expect low FPS.",
   "controls.cancelStart": "Annuler le démarrage",
   "controls.cancellingStart": "Annulation du démarrage…",
   "controls.startCancellationUnconfirmed": "L’annulation n’a pas pu être confirmée. Le démarrage a peut-être déjà commencé ; actualisation de sa progression.",

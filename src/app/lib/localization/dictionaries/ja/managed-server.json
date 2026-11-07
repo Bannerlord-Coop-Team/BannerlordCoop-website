@@ -1,4 +1,6 @@
 {
+  "configEditor.battleSizeRequiresMods": "Over 1,000 needs both Limitless and Limitless Coop Compat",
+  "configEditor.battleSizePerformance": "Each PC renders the whole battle: about 2,000 runs smooth; 6,000+ expect low FPS.",
   "controls.cancelStart": "起動をキャンセル",
   "controls.cancellingStart": "起動をキャンセル中…",
   "controls.startCancellationUnconfirmed": "キャンセルを確認できませんでした。すでに起動処理が始まっている可能性があります。進行状況を更新します。",

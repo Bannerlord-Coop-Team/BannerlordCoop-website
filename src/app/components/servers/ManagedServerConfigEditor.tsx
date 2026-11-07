@@ -53,11 +53,12 @@ function numberProblem(field: Field, value: unknown, t: Translator["t"], number:
 // Serializes editable configuration without translating its payload.
 function pretty(settings: Settings) { return JSON.stringify({ serverConfig: settings.serverConfig, modConfig: settings.modConfig }, null, 2); }
 // Validates configuration shape and injects detailed parser diagnostics.
-function parseSettings(value: unknown, t: Translator["t"]): Settings {
+function parseSettings(value: unknown, t: Translator["t"], maximumBattleSize: number): Settings {
     if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(t("configEditor.expectedAnObjectWithServerconfigAndModconfig"));
     const keys = Object.keys(value);
     if (keys.length !== 2 || !("serverConfig" in value) || !("modConfig" in value)) throw new Error(t("configEditor.expectedExactlyServerconfigAndModconfig"));
     const parsed = parseManagedServerConfiguration({ schemaVersion: 1, ...(value as object) }, configurationMessages(t));
+    if (parsed.modConfig.modOptions.battleSize > maximumBattleSize) throw new Error(t("configEditor.battleSizeRequiresMods"));
     return { serverConfig: parsed.serverConfig, modConfig: parsed.modConfig };
 }
 // Compares serialized settings to detect unsaved changes.
@@ -106,6 +107,7 @@ export function ManagedServerConfigEditor({ configuration, access, notice }: { c
 // Presents live configuration editing and localized validation feedback.
 function ConfigSession({ configuration, access, notice }: { configuration?: ManagedServerConfiguration; access?: ConfigAccess; notice?: ReactNode }) {
     const { t, number, locale } = useTranslations("managed-server");
+    const [battleSizeLimit, setBattleSizeLimit] = useState<1000 | 12000>(1000);
     const SERVER_FIELDS: Field[] = [
         { key: "autosaveMinutes", label: t("configuration.field.autosaveMinutes"), kind: "integer", min: 0, max: 1440, help: t("configEditor.0TurnsAutosaveOff") },
         { key: "logFile", label: t("configuration.field.logFile"), kind: "boolean" },
@@ -128,7 +130,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         { key: "autoAllocateClanMemberPerks", label: t("configuration.field.autoAllocateClanMemberPerks"), kind: "boolean" },
     ];
     const MOD_OPTION_FIELDS: Field[] = [
-        { key: "battleSize", label: t("configuration.field.battleSize"), kind: "integer", min: 200, max: 1000, help: t("configEditor.battleSizeHelp", { min: number(200), max: number(1000) }) },
+        { key: "battleSize", label: t("configuration.field.battleSize"), kind: "integer", min: 200, max: battleSizeLimit, help: `${t("configEditor.battleSizeHelp", { min: number(200), max: number(battleSizeLimit) })} ${t("configEditor.battleSizeRequiresMods")}${battleSizeLimit > 1000 ? ` ${t("configEditor.battleSizePerformance")}` : ""}` },
         { key: "fastForwardEnabled", label: t("configuration.field.fastForwardEnabled"), kind: "boolean" },
         { key: "autoPauseEnabled", label: t("configuration.field.autoPauseEnabled"), kind: "boolean" },
         { key: "clientsCanUseCheats", label: t("configuration.field.clientsCanUseCheats"), kind: "boolean" },
@@ -175,6 +177,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         void (async () => {
             const files = await readManagedServerConfigFiles(serverId, userId).catch(() => null);
             if (cancelled) return;
+            setBattleSizeLimit(files?.maximumBattleSize === 12000 ? 12000 : 1000);
             const server = files?.server ?? null;
             const mod = files?.mod ?? null;
             if (server?.ok && mod?.ok && server.file.configPart === "server" && mod.file.configPart === "mod") {
@@ -221,7 +224,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     // Parses a JSON draft and reports validation without changing saved settings.
     function editJson(text: string) {
         setJsonText(text); setMessage("");
-        try { setDraft(parseSettings(JSON.parse(text), t)); setJsonError(""); }
+        try { setDraft(parseSettings(JSON.parse(text), t, battleSizeLimit)); setJsonError(""); }
         catch (error) { setJsonError(error instanceof SyntaxError ? jsonSyntaxMessage(text, error, t) : error instanceof Error ? error.message : t("configEditor.unsupportedSettings")); }
     }
     // Restores the draft from the last confirmed configuration.
@@ -233,7 +236,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     function save() {
         if (!access || !editable || !draft || !dirty || jsonError) return;
         let parsed: Settings;
-        try { parsed = parseSettings({ serverConfig: draft.serverConfig, modConfig: draft.modConfig }, t); }
+        try { parsed = parseSettings({ serverConfig: draft.serverConfig, modConfig: draft.modConfig }, t, battleSizeLimit); }
         catch { setMessage(t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe")); return; }
         setMessage("");
         startTransition(async () => {

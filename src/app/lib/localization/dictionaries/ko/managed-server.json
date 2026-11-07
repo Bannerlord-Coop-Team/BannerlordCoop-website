@@ -1,4 +1,6 @@
 {
+  "configEditor.battleSizeRequiresMods": "Over 1,000 needs both Limitless and Limitless Coop Compat",
+  "configEditor.battleSizePerformance": "Each PC renders the whole battle: about 2,000 runs smooth; 6,000+ expect low FPS.",
   "controls.cancelStart": "시작 취소",
   "controls.cancellingStart": "시작 취소 중…",
   "controls.startCancellationUnconfirmed": "취소를 확인하지 못했습니다. 시작 작업이 이미 진행 중일 수 있습니다. 진행 상황을 새로 고칩니다.",

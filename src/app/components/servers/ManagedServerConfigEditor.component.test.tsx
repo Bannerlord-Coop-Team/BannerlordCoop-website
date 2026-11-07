@@ -7,14 +7,14 @@ import { ManagedServerConfigEditor } from "./ManagedServerConfigEditor";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION as config } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { RunnerConfigurationFile, RunnerConfigurationPart } from "../../../../supabase/functions/_shared/server-configuration-contract";
 
-const mocks = vi.hoisted(() => ({ read: vi.fn(), readFiles: vi.fn(), save: vi.fn() }));
+const mocks = vi.hoisted(() => ({ read: vi.fn(), readFiles: vi.fn(), limit: vi.fn(), save: vi.fn() }));
 vi.mock("@/app/servers/managed-server-config-actions", () => ({
     readManagedServerConfig: mocks.read,
     // One action reads both files, so each load is a single request rather than two queued ones.
     readManagedServerConfigFiles: async (serverId: string, userId: string) => {
         mocks.readFiles(serverId, userId);
         const [server, mod] = await Promise.all([mocks.read(serverId, "server", userId), mocks.read(serverId, "mod", userId)]);
-        return { server, mod };
+        return { server, mod, maximumBattleSize: mocks.limit() ?? 1000 };
     },
     saveManagedServerConfig: mocks.save,
 }));
@@ -260,4 +260,18 @@ it("edits the battle size within the range the game applies and saves it to the 
     mocks.save.mockResolvedValue({ ok: true, file: { configPart: "mod", revision: "c".repeat(64), settings: saved } });
     await click("Save config");
     expect(mocks.save).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ configPart: "mod", expectedRevision: revisions.mod, settings: saved }), "owner");
+});
+
+
+it("allows 1,500 only after the CP-backed read reports both enabled server mods", async () => {
+    mocks.limit.mockReturnValue(12000);
+    await render();
+    expect(field<HTMLInputElement>("config-modOptions-battleSize").max).toBe("12000");
+    expect(container.textContent).toContain("Over 1,000 needs both Limitless and Limitless Coop Compat");
+    expect(container.textContent).toContain("6,000+ expect low FPS");
+    await type("config-modOptions-battleSize", "1500");
+    const saved = { ...config.modConfig, modOptions: { ...config.modConfig.modOptions, battleSize: 1500 } };
+    mocks.save.mockResolvedValue({ ok: true, file: { configPart: "mod", revision: "c".repeat(64), settings: saved } });
+    await click("Save config");
+    expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ settings: saved }), "owner");
 });
