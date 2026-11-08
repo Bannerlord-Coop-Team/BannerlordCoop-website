@@ -11,6 +11,7 @@ import { readManagedServerConfigFiles, saveManagedServerConfig } from "@/app/ser
 import { fileButtonClass, filePrimaryButtonClass } from "./server-file-styles";
 import { segmentedButtonClass, segmentedGroupClass } from "./segmented-controls";
 import { workspaceNoticeClass } from "./server-workspace-ui";
+import { useServerWorkspaceSectionShown } from "./ServerManagementWorkspace";
 import {
     MANAGED_DIFFICULTY_LEVELS, MANAGED_GOLD_FOOD_CHANGE_MODES, MANAGED_LORD_DEFECTION_RETRY_MODES,
     parseManagedServerConfiguration, type ManagedServerConfiguration,
@@ -108,6 +109,9 @@ export function ManagedServerConfigEditor({ configuration, access, notice }: { c
 function ConfigSession({ configuration, access, notice }: { configuration?: ManagedServerConfiguration; access?: ConfigAccess; notice?: ReactNode }) {
     const { t, number, locale } = useTranslations("managed-server");
     const [battleSizeLimit, setBattleSizeLimit] = useState<1000 | 12000>(1000);
+    const shown = useServerWorkspaceSectionShown("Save & config");
+    const previouslyShown = useRef(shown);
+    const battleSizeRead = useRef(0);
     const SERVER_FIELDS: Field[] = [
         { key: "autosaveMinutes", label: t("configuration.field.autosaveMinutes"), kind: "integer", min: 0, max: 1440, help: t("configEditor.0TurnsAutosaveOff") },
         { key: "logFile", label: t("configuration.field.logFile"), kind: "boolean" },
@@ -174,10 +178,11 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     useEffect(() => {
         if (!serverId || !userId) return;
         let cancelled = false;
+        const limitRead = ++battleSizeRead.current;
         void (async () => {
             const files = await readManagedServerConfigFiles(serverId, userId).catch(() => null);
             if (cancelled) return;
-            setBattleSizeLimit(files?.maximumBattleSize === 12000 ? 12000 : 1000);
+            if (limitRead === battleSizeRead.current) setBattleSizeLimit(files?.maximumBattleSize === 12000 ? 12000 : 1000);
             const server = files?.server ?? null;
             const mod = files?.mod ?? null;
             if (server?.ok && mod?.ok && server.file.configPart === "server" && mod.file.configPart === "mod") {
@@ -192,6 +197,19 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         })();
         return () => { cancelled = true; };
     }, [serverId, userId, loadVersion]);
+
+    // Mods can change while this panel stays mounted on another tab. Refresh its limit without discarding edits.
+    useEffect(() => {
+        const reopened = shown && !previouslyShown.current;
+        previouslyShown.current = shown;
+        if (!reopened || !serverId || !userId) return;
+        let cancelled = false;
+        const limitRead = ++battleSizeRead.current;
+        void readManagedServerConfigFiles(serverId, userId).catch(() => null).then(files => {
+            if (!cancelled && limitRead === battleSizeRead.current) setBattleSizeLimit(files?.maximumBattleSize === 12000 ? 12000 : 1000);
+        });
+        return () => { cancelled = true; };
+    }, [shown, serverId, userId]);
 
     const baseline: Settings | null = loadState === "ready" && live.server && live.mod
         ? { serverConfig: live.server.settings as Settings["serverConfig"], modConfig: live.mod.settings as Settings["modConfig"] } : stored;
