@@ -93,13 +93,14 @@ export async function readManagedServerConfigFiles(serverId: string, expectedUse
         const failed = await failure(error);
         return { server: failed, mod: failed };
     }
-    // A missing/legacy/unavailable catalog never unlocks a higher input limit.
-    const limit = requestServerMods(token, { route: "list", body: { serverId } })
-        .then(state => maximumBattleSize(parseModsState(state).mods)).catch(() => 1000 as const);
     const [server, mod] = await Promise.all((["server", "mod"] as const).map(async (configPart): Promise<ManagedServerConfigResult> => {
         try { return { ok: true, file: await getMyServerConfiguration(token, serverId, configPart) }; } catch (error) { return await failure(error); }
     }));
-    return { server, mod, maximumBattleSize: await limit };
+    // An unreadable gameplay file cannot be edited. Avoid a needless catalog RPC in that state.
+    // A readable 1,000 setting still needs the catalog so owners can silently enter a larger supported value.
+    const limit = mod.ok ? await requestServerMods(token, { route: "list", body: { serverId } })
+        .then(state => maximumBattleSize(parseModsState(state).mods)).catch(() => 1000 as const) : 1000;
+    return { server, mod, maximumBattleSize: limit };
 }
 
 // Authenticates and validates configuration writes without changing their inputs.

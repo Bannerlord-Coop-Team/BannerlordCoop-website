@@ -43,6 +43,7 @@ it("reports each configuration file independently and checks the account before 
     const result = await readManagedServerConfigFiles(id, "owner");
     expect(result.server).toEqual({ ok: true, file });
     expect(result.mod).toMatchObject({ ok: false, message: expect.stringContaining("no active runner") });
+    expect(mocks.mods).not.toHaveBeenCalled();
     mocks.read.mockClear();
     expect(await readManagedServerConfigFiles(id, "previous-owner")).toMatchObject({ server: { ok: false }, mod: { ok: false } });
     expect(await readManagedServerConfigFiles("not-a-uuid", "owner")).toMatchObject({ server: { ok: false }, mod: { ok: false } });

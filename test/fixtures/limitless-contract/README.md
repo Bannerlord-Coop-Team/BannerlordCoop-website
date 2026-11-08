@@ -9,3 +9,9 @@ Source for the ceiling: Andrew-supplied Limitless.CoopCompat v1.1.0 archive SHA-
 No new IPC response keys or notice kinds. The website must deploy its expanded configuration parser before CP starts returning values above 1000; old parsers reject such values. Runners must be updated in their authorized window before raising a saved value, as an older runner rejects the expanded range. This fixture proves parsing and policy, not gameplay or multiplayer load. Exact paired heads, PR links, commands and results belong in each PR's pre-merge evidence.
 
 The original Limitless package Andrew supplied previously was named with Nexus id **14025** ([Nexus page](https://www.nexusmods.com/mountandblade2bannerlord/mods/14025)); the current page was unavailable to this inspection (HTTP 403). The compat build is identified by its supplied archive digest and module descriptor, with no separate public distribution id asserted. The original Limitless binary is unnecessary for the dedicated-server check: the compat README says it is listed there without running.
+
+## Rollback and mixed runner versions
+
+Deploy the expanded website parser before CP returns values above 1,000. Before rolling the website back below #430, either retain this expanded parser or reduce every larger stored value to 1,000 through authorized typed CP settings operations and verify old-parser reads. A runner downgrade alone does not repair stored values.
+
+CP admission requires the target health capability limitless-battle-size-v1 as well as the enabled pair. Start and default-save requests are bounded to 1,000 for an older, native-pinned, rolled-back or relocation target without that capability, preserving owner Start while retaining the desired value.
