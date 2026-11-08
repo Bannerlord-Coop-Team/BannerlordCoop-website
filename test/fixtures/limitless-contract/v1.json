@@ -172,5 +172,10 @@
       }
     }
   },
-  "resetNoticeBody": "Battle size reset to 1,000 because Limitless is off"
+  "resetNoticeBody": "Battle size reset to 1,000 because Limitless is off",
+  "runnerUnsupportedError": {
+    "code": "battle_size_runner_unsupported",
+    "message": "Battle sizes above 1,000 are not available on this server yet. Use 1,000 or less.",
+    "retryable": false
+  }
 }

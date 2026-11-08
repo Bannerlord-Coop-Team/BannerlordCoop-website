@@ -75,6 +75,13 @@ it("maps conflicts to reload guidance and keeps unconfirmed failures retryable",
     expect(await readManagedServerConfig(id, "mod", "owner")).toMatchObject({ ok: false, message: expect.stringContaining("no active runner") });
 });
 
+it("explains a runner capability refusal before any configuration write is dispatched", async () => {
+    const refusal = fixture.runnerUnsupportedError;
+    mocks.save.mockRejectedValueOnce(new MyServersApiError(refusal.code, refusal.message, refusal.retryable, undefined, true));
+    expect(await saveManagedServerConfig({ ...request, configPart: "mod", settings: fixture.file.settings }, "owner"))
+        .toEqual({ ok: false, reload: false, notSubmitted: true, message: refusal.message });
+});
+
 // Resolves real English messages without reading cookies in standalone tests.
 vi.mock("@/app/lib/localization/server", () => ({
     getLocale: async () => "en",

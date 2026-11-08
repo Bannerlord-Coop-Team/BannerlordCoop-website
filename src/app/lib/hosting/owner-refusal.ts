@@ -9,7 +9,7 @@ const REFUSAL_CODES = new Set([
     "packaged_save_delete_forbidden", "backup_not_found", "backup_expired", "backup_unavailable",
     "backup_build_mismatch", "no_update_available", "validated_build_unavailable", "nightly_unavailable",
     "release_compatibility_unknown", "release_compatibility_unsafe", "settings_unchanged",
-    "first_start_required", "impersonation_read_only",
+    "first_start_required", "impersonation_read_only", "battle_size_runner_unsupported",
 ]);
 
 /** Returns safe owner copy only for a parsed, definitive refusal; null preserves existing recovery. */
