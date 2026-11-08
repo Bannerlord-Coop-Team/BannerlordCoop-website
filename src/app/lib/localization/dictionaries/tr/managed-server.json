@@ -612,6 +612,7 @@
   "configuration.reviewField.battleSize": "Savaş boyutu",
   "configuration.reviewField.showPlayerNameplates": "Oyuncu isim etiketleri",
   "configuration.reviewField.playerWoundedBattleEntry": "Yaralıyken savaşlara katılma",
+  "configuration.reviewField.warSails": "War Sails",
   "configuration.reviewField.mode": "Mod",
   "configuration.reviewField.devModuleRoot": "Geliştirme modülü kökü",
   "configuration.reviewField.skipLateAi": "Geç yapay zekâyı atla",

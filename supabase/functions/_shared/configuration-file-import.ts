@@ -85,7 +85,7 @@ export function parseConfigurationImport(value: unknown, messages: Configuration
 
 // Applies only the selected import while retaining omitted values and injected diagnostics.
 export function applyConfigurationImport(current: ManagedServerConfiguration, input: ConfigurationImport, messages: ConfigurationImportMessages = defaultImportMessages): ManagedServerConfiguration {
-  if ('managedConfig' in input) return parseManagedServerConfiguration(input.managedConfig, messages.configuration);
+  if ('managedConfig' in input) return withWarSails(input.managedConfig, current.modConfig.modOptions.warSails, messages);
   return parseManagedServerConfiguration(input.configPart === 'server'
     ? { ...current, serverConfig: { ...current.serverConfig, ...input.settings } }
     : { ...current, modConfig: {
@@ -98,7 +98,17 @@ export function applyConfigurationImport(current: ManagedServerConfiguration, in
 // These native settings are intentionally outside the managed configuration contract.
 const ignoredServerKeys = ['saveName', 'password', 'port', 'mode', 'devModuleRoot', 'skipLateAi', 'replayHero', 'terrain', 'scene', 'savePath', 'userDir'];
 const ignoredModRootKeys = ['network'];
-const ignoredModKeys = ['showPlayerNameplates', 'playerWoundedBattleEntry'];
+// War Sails is fixed when a campaign is created, so an import never changes it.
+const WAR_SAILS_KEY = 'warSails';
+const ignoredModKeys = ['showPlayerNameplates', 'playerWoundedBattleEntry', WAR_SAILS_KEY];
+
+// Returns the configuration with War Sails set to `warSails`, or without the key when it is undefined.
+function withWarSails(configuration: ManagedServerConfiguration, warSails: boolean | undefined, messages: ConfigurationImportMessages): ManagedServerConfiguration {
+  const modOptions: ManagedServerConfiguration['modConfig']['modOptions'] = { ...configuration.modConfig.modOptions };
+  delete modOptions.warSails;
+  if (warSails !== undefined) modOptions.warSails = warSails;
+  return parseManagedServerConfiguration({ ...configuration, modConfig: { ...configuration.modConfig, modOptions } }, messages.configuration);
+}
 
 // Reads a native or exported configuration with detailed injected diagnostics and private ignored values.
 export function readConfigurationFile(text: string, part: ConfigurationPart, messages: ConfigurationImportMessages = defaultImportMessages): { input: ConfigurationImport; ignoredSettings: string[] } {
@@ -108,8 +118,12 @@ export function readConfigurationFile(text: string, part: ConfigurationPart, mes
   catch { throw new Error(messages.unreadable); }
   const ignoredSettings: string[] = [];
   if (part === 'combined') {
-    try { return { input: parseConfigurationImport({ managedConfig: raw }, messages), ignoredSettings }; }
+    let backup: ManagedServerConfiguration;
+    try { backup = parseManagedServerConfiguration(raw, messages.configuration); }
     catch { throw new Error(messages.combinedBackup); }
+    if (backup.modConfig.modOptions.warSails === undefined) return { input: { managedConfig: backup }, ignoredSettings };
+    ignoredSettings.push(WAR_SAILS_KEY);
+    return { input: { managedConfig: withWarSails(backup, undefined, messages) }, ignoredSettings };
   }
   if (Object.keys(raw).some((key) => ['schemaVersion', 'serverConfig', 'modConfig'].includes(key))) {
     throw new Error(messages.olderBackup);

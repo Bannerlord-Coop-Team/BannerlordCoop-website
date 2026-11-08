@@ -622,6 +622,7 @@
   "configuration.reviewField.battleSize": "Battle size",
   "configuration.reviewField.showPlayerNameplates": "Player nameplates",
   "configuration.reviewField.playerWoundedBattleEntry": "Joining battles while wounded",
+  "configuration.reviewField.warSails": "War Sails",
   "configuration.reviewField.mode": "Mode",
   "configuration.reviewField.devModuleRoot": "Dev Module Root",
   "configuration.reviewField.skipLateAi": "Skip Late Ai",

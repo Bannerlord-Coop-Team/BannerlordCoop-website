@@ -612,6 +612,7 @@
   "configuration.reviewField.battleSize": "Размер битвы",
   "configuration.reviewField.showPlayerNameplates": "Подписи с именами игроков",
   "configuration.reviewField.playerWoundedBattleEntry": "Вступление в бой при ранении",
+  "configuration.reviewField.warSails": "War Sails",
   "configuration.reviewField.mode": "Режим",
   "configuration.reviewField.devModuleRoot": "Корневая папка модуля разработки",
   "configuration.reviewField.skipLateAi": "Пропуск позднего ИИ",

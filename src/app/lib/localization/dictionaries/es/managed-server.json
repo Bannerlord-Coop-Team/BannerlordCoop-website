@@ -612,6 +612,7 @@
   "configuration.reviewField.battleSize": "Tamaño de batalla",
   "configuration.reviewField.showPlayerNameplates": "Etiquetas de nombre de jugadores",
   "configuration.reviewField.playerWoundedBattleEntry": "Unirse a batallas estando herido",
+  "configuration.reviewField.warSails": "War Sails",
   "configuration.reviewField.mode": "Modo",
   "configuration.reviewField.devModuleRoot": "Raíz del módulo de desarrollo",
   "configuration.reviewField.skipLateAi": "Omitir IA tardía",
