@@ -27,7 +27,7 @@
   "membership.nightlyInstaller": "Patreon supporters have access to the nightly installer (here's how to use it)",
   "membership.reviewRequired": "Your membership needs review. Contact support before trying again.",
   "membership.verifyRequired": "Verify your membership before creating a new server.",
-  "membership.syncPending": "Your server allowance is updating.",
+  "membership.syncPending": "Your server allowance is being updated. This usually takes a few seconds; refreshing automatically.",
   "membership.syncUnavailable": "Your server allowance could not be checked.",
   "membership.expiry": "You may need to verify your membership again before creating a new server. Existing servers aren’t automatically stopped when verification expires.",
   "patreon.verifyPending": "Opening Patreon…",
