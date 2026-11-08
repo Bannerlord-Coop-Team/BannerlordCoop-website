@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
-    classifyLapseServers, createPatreonLapseAlertHandler, fetchQualifyingPatrons, lapseAlertMessage, lapseReportText,
+    classifyLapseServers, createPatreonLapseAlertHandler, fetchQualifyingPatrons, lapseAlertMessage, lapseReportText, parseLapseReportRecipients,
 } from "../_shared/patreon-lapse-alert.ts";
 import {
     createLapseInventoryLoader, parseLapseInventory, type LapseInventory, type LapseServer,
@@ -23,6 +23,14 @@ const wire = () => ({ version: 1, observed_at: at, truncated: false, servers: [{
     independent_quota: 0, owner_usage: 1, funding_recorded: true, grace_due_at: null,
     verification: "review_required", grant_reason: null, grant_recorded_at: null,
 }] });
+
+test("requires the explicit private recipient set and never includes a rejected address in errors", () => {
+    assert.deepEqual(parseLapseReportRecipients("first@example.test, SECOND@example.test, first@example.test"), ["first@example.test", "second@example.test"]);
+    for (const value of [undefined, "", "invalid", "private@example.test\nBcc: other@example.test", "x".repeat(5121),
+        Array.from({ length: 21 }, (_, i) => `recipient${i}@example.test`).join(",")]) {
+        assert.throws(() => parseLapseReportRecipients(value), { message: "Invalid lapse report recipients" });
+    }
+});
 
 test("classifies the five causes, prioritizes manual review, and never treats a trial note as an expiry", () => {
     const report = classifyLapseServers(inventory([

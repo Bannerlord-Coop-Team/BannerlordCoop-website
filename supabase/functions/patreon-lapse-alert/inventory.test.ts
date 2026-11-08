@@ -20,6 +20,9 @@ create table control_plane.hosting_membership_sources(account_id text, guild_id 
 create table control_plane.hosting_jobs(job_id text primary key, state text);
 create table control_plane.hosting_role_restoration_authorizations(server_id text, restoration_job_id text, consumed_at text, invalidated_at text);
 create table control_plane.audit_events(audit_sequence bigint primary key, target_discord_user_id text, action text, reason text, occurred_at text);
+create table control_plane.hosting_history_audit_facts(like control_plane.audit_events);
+create view control_plane.hosting_audit_event_reads with (security_invoker=true) as
+  select * from control_plane.audit_events union all select * from control_plane.hosting_history_audit_facts;
 create function public.patreon_lapse_server_owners() returns integer language sql as $$ select 7 $$;
 `;
 const migration = readFile(new URL("../../migrations/202611080001_patreon_lapse_report_inventory.sql", import.meta.url), "utf8");
@@ -35,7 +38,7 @@ async function read(db: PGlite) {
 }
 async function state(db: PGlite) {
     const snapshot: Record<string, unknown> = {};
-    for (const table of ["managed_servers", "hosting_entitlements", "hosting_website_accounts", "hosting_subscription_grace", "hosting_membership_sources", "hosting_jobs", "hosting_role_restoration_authorizations", "audit_events"]) {
+    for (const table of ["managed_servers", "hosting_entitlements", "hosting_website_accounts", "hosting_subscription_grace", "hosting_membership_sources", "hosting_jobs", "hosting_role_restoration_authorizations", "audit_events", "hosting_history_audit_facts"]) {
         snapshot[table] = (await db.query(`select * from control_plane.${table}`)).rows;
     }
     snapshot.patreon_accounts = (await db.query("select * from public.patreon_accounts")).rows;
@@ -52,7 +55,8 @@ test("RPC upgrades/replays without changing state, preserves the old report and 
         await db.query("insert into public.patreon_accounts values($1,'42')", [account]);
         await db.query("insert into control_plane.hosting_subscription_grace values($1,$2,'grace','2026-11-10T00:00:00.000Z','100')", [server, owner]);
         await db.query("insert into control_plane.hosting_membership_sources values($1,'guild','100','{\"verification\":\"nonqualifying\"}','2026-11-08T12:00:00.000Z')", [account]);
-        await db.query("insert into control_plane.audit_events values(1,$1,'hosting.admin.quota_changed','Trial 1 day','2026-10-23T18:13:42.581Z')", [owner]);
+        await db.query("insert into control_plane.audit_events values(1,$1,'hosting.admin.quota_changed','Earlier grant','2026-10-22T18:13:42.581Z')", [owner]);
+        await db.query("insert into control_plane.hosting_history_audit_facts values(2,$1,'hosting.admin.quota_changed','Trial 1 day','2026-10-23T18:13:42.581Z')", [owner]);
         const before = await state(db);
         await db.exec(await migration); await db.exec(await migration);
         await db.exec("begin read only; set local role service_role;");
@@ -72,7 +76,24 @@ test("RPC upgrades/replays without changing state, preserves the old report and 
         }
         await db.exec("set role service_role");
         await assert.rejects(db.query("select * from control_plane.managed_servers"), /permission denied/u);
+        await assert.rejects(db.query("select * from public.patreon_lapse_report_grant('other-owner')"), /permission denied/u);
         await db.exec("reset role");
+    } finally { await db.close(); }
+});
+
+test("the same report reads primary grant history before archival and retained facts after view commissioning", async () => {
+    const db = await database();
+    try {
+        await db.exec("drop view control_plane.hosting_audit_event_reads");
+        await db.query("insert into control_plane.managed_servers values($1,'guild',$2,null,'stopped')", [server, owner]);
+        await db.query("insert into control_plane.hosting_entitlements values('guild',$1,1,0,'2026-10-23T18:13:42.581Z')", [owner]);
+        await db.query("insert into control_plane.audit_events values(1,$1,'hosting.admin.quota_changed','Primary grant','2026-10-23T18:13:42.581Z')", [owner]);
+        await db.exec(await migration);
+        assert.equal(parseLapseInventory(await read(db)).servers[0].grantReason, "Primary grant");
+        await db.exec(`create view control_plane.hosting_audit_event_reads with (security_invoker=true) as
+            select * from control_plane.audit_events union all select * from control_plane.hosting_history_audit_facts`);
+        await db.query("insert into control_plane.hosting_history_audit_facts values(2,$1,'hosting.admin.quota_changed','Retained grant','2026-10-24T18:13:42.581Z')", [owner]);
+        assert.equal(parseLapseInventory(await read(db)).servers[0].grantReason, "Retained grant");
     } finally { await db.close(); }
 });
 

@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { boundedJson } from "./membership.ts";
 import { isLapseTimestamp, reportGrantReason, type LapseInventory, type LapseServer } from "./patreon-lapse-inventory.ts";
-import type { SmtpMessage } from "./smtp.ts";
+import { isEmailAddress, type SmtpMessage } from "./smtp.ts";
 
 export type LapseClassification = "grant-backed" | "in grace" | "review_required" | "untracked/grandfathered" | "deleted";
 // No provider identity, owner email, server name or full account/server ID leaves the classifier.
@@ -11,6 +11,16 @@ export type LapseReportRow = Omit<LapseServer, "patreonUserId"> & {
 };
 export type LapseReport = { observedAt: string; rows: LapseReportRow[] };
 type AlertEnvelope = { from: string; fromName?: string; recipients: readonly string[] };
+
+// The deployed report has its own private operator list. Do not inherit a different shared alert list.
+export function parseLapseReportRecipients(value: string | undefined): string[] {
+    if (value === undefined || value.length > 5120) throw new Error("Invalid lapse report recipients");
+    const recipients = [...new Set(value.split(",").map(item => item.trim().toLowerCase()))];
+    if (recipients.length === 0 || recipients.length > 20 || !recipients.every(isEmailAddress)) {
+        throw new Error("Invalid lapse report recipients");
+    }
+    return recipients;
+}
 
 const CLASS_ORDER: Record<LapseClassification, number> = {
     "untracked/grandfathered": 0, review_required: 1, "in grace": 2, "grant-backed": 3, deleted: 4,

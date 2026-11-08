@@ -1,8 +1,8 @@
 # Daily subscription funding report
 
 `patreon-lapse-alert` is the existing daily, scheduler-secret-authenticated operator
-report. It retains the active USD20 Patreon criterion and shared operator mail
-settings. It never changes a grant, grace, server, job or deletion decision.
+report. It retains the active USD20 Patreon criterion and site SMTP settings.
+It never changes a grant, grace, server, job or deletion decision.
 Grant notes such as “Trial 1 day” and “3 mo” remain notes without an inferred expiry.
 
 Manual-review rows appear first, followed by context:
@@ -36,7 +36,22 @@ Website-owned.
 
 Apply `202611080001_patreon_lapse_report_inventory.sql` through the separately
 authorized migration path before deploying the reviewed `patreon-lapse-alert`.
-Preserve its scheduler secret, creator credential, mail password, campaign and
+A private execute-denied helper reads primary audit history on the current
+production schema, and uses the canonical retained read view once CP's archive
+migration is separately commissioned. Moving an audit to retained facts then
+preserves its report context. This does not require installing that CP migration
+as part of the report rollout. Both read paths are fixed SQL; owner data never
+chooses a query or relation.
+
+Before deployment, provision `PATREON_LAPSE_REPORT_RECIPIENTS` with the existing
+report's exact operator addresses as a private comma-separated value (1–20 valid
+addresses). The deployed report has two recipients; the website's current shared
+region-alert list has one, so this report deliberately does not inherit it. Copy
+the existing set through the approved private configuration path; do not paste it
+into source, logs or PRs. Missing/invalid recipients refuse boot instead of
+silently dropping an operator. No recipient configuration was changed in this PR.
+
+Preserve the scheduler secret, creator credential, mail password, campaign and
 daily cron. This PR does not invoke, schedule, deploy or send the live report.
 Alert functions and migrations remain outside automated hosting API deployment.
 

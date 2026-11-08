@@ -2,6 +2,33 @@ begin;
 
 -- Additive Website-owned report RPC. The previous deployed report can keep using
 -- patreon_lapse_server_owners(); neither function writes ControlPlane state.
+-- This private helper supports the deployed pre-archive schema as well as the
+-- retained read view once commissioned. Only the inventory definer calls it.
+create or replace function public.patreon_lapse_report_grant(reviewed_owner text)
+returns table(reason text, occurred_at text)
+language plpgsql
+stable
+rows 1
+set search_path = ''
+as $grant$
+begin
+    if pg_catalog.to_regclass('control_plane.hosting_audit_event_reads') is null then
+        return query
+            select a.reason, a.occurred_at from control_plane.audit_events a
+            where a.target_discord_user_id = reviewed_owner
+              and a.action in ('hosting.admin.quota_changed', 'hosting.entitlement.granted')
+            order by a.audit_sequence desc limit 1;
+    else
+        return query
+            select a.reason, a.occurred_at from control_plane.hosting_audit_event_reads a
+            where a.target_discord_user_id = reviewed_owner
+              and a.action in ('hosting.admin.quota_changed', 'hosting.entitlement.granted')
+            order by a.audit_sequence desc limit 1;
+    end if;
+end;
+$grant$;
+revoke all on function public.patreon_lapse_report_grant(text) from public, anon, authenticated, service_role;
+
 create or replace function public.patreon_lapse_report_inventory()
 returns jsonb
 language sql
@@ -34,12 +61,7 @@ with candidates as materialized (
     from owners o
     left join control_plane.hosting_entitlements e
       on e.guild_id = o.guild_id and e.discord_user_id = o.owner_discord_user_id
-    left join lateral (
-        select a.reason, a.occurred_at from control_plane.audit_events a
-        where a.target_discord_user_id = o.owner_discord_user_id
-          and a.action in ('hosting.admin.quota_changed', 'hosting.entitlement.granted')
-        order by a.audit_sequence desc limit 1
-    ) grant_audit on true
+    left join lateral public.patreon_lapse_report_grant(o.owner_discord_user_id) grant_audit on true
 ), report_rows as (
     select s.server_id, jsonb_build_object(
         'server_prefix', left(s.server_id, 8),
