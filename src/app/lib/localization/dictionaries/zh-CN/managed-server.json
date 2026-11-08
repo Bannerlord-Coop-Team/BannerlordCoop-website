@@ -612,6 +612,7 @@
   "configuration.reviewField.battleSize": "战场规模",
   "configuration.reviewField.showPlayerNameplates": "玩家名称标牌",
   "configuration.reviewField.playerWoundedBattleEntry": "受伤时加入战斗",
+  "configuration.reviewField.warSails": "War Sails",
   "configuration.reviewField.mode": "模式",
   "configuration.reviewField.devModuleRoot": "开发模块根目录",
   "configuration.reviewField.skipLateAi": "跳过迟到的 AI",

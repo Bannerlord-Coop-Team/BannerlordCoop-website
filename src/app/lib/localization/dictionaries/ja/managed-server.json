@@ -612,6 +612,7 @@
   "configuration.reviewField.battleSize": "戦闘規模",
   "configuration.reviewField.showPlayerNameplates": "プレイヤーのネームプレート",
   "configuration.reviewField.playerWoundedBattleEntry": "負傷中の戦闘参加",
+  "configuration.reviewField.warSails": "War Sails",
   "configuration.reviewField.mode": "モード",
   "configuration.reviewField.devModuleRoot": "開発用モジュールのルート",
   "configuration.reviewField.skipLateAi": "遅延AIをスキップ",

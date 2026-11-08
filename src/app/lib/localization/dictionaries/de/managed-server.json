@@ -612,6 +612,7 @@
   "configuration.reviewField.battleSize": "Kampfgröße",
   "configuration.reviewField.showPlayerNameplates": "Namensschilder der Spieler",
   "configuration.reviewField.playerWoundedBattleEntry": "Kampfbeitritt im verwundeten Zustand",
+  "configuration.reviewField.warSails": "War Sails",
   "configuration.reviewField.mode": "Modus",
   "configuration.reviewField.devModuleRoot": "Stammverzeichnis des Entwicklungsmoduls",
   "configuration.reviewField.skipLateAi": "Späte KI überspringen",

@@ -612,6 +612,7 @@
   "configuration.reviewField.battleSize": "전투 규모",
   "configuration.reviewField.showPlayerNameplates": "플레이어 이름표",
   "configuration.reviewField.playerWoundedBattleEntry": "부상 중 전투 참가",
+  "configuration.reviewField.warSails": "War Sails",
   "configuration.reviewField.mode": "모드",
   "configuration.reviewField.devModuleRoot": "개발 모듈 루트",
   "configuration.reviewField.skipLateAi": "늦은 AI 처리 건너뛰기",

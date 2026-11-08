@@ -67,6 +67,11 @@ export interface ManagedModOptionsConfiguration {
   enableHeroExecutions: boolean;
   enablePlayerClanMemberExecutions: boolean;
   enablePlayerExecutions: boolean;
+  /**
+   * Coop's War Sails (NavalDLC) mode. Optional and never defaulted: older control planes reject the key, so a
+   * configuration carries it only when it was read with it.
+   */
+  warSails?: boolean;
 }
 
 export interface ManagedServerConfiguration {
@@ -218,7 +223,7 @@ export function parseManagedServerConfiguration(
     coopClansEnabled: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.coopClansEnabled,
     enablePlayerExecutions: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.enablePlayerExecutions,
     battleSize: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.battleSize,
-  }, messages);
+  }, messages, ['warSails']);
   return deepFreeze({
     schemaVersion: 1,
     serverConfig: {
@@ -303,6 +308,7 @@ export function parseManagedServerConfiguration(
           modOptions.enablePlayerClanMemberExecutions, messages,
         ),
         enablePlayerExecutions: requireBoolean(modOptions.enablePlayerExecutions, messages),
+        ...(modOptions.warSails === undefined ? {} : { warSails: requireBoolean(modOptions.warSails, messages) }),
       },
     },
   });
@@ -328,14 +334,16 @@ function requireExactRecord(
   return value;
 }
 
+// Requires the listed keys, fills added keys' defaults and allows optional keys without adding them.
 function requireCompatibleRecord(
   value: unknown,
   requiredKeys: readonly string[],
   optionalDefaults: Readonly<Record<string, unknown>>,
   messages: ManagedConfigurationMessages,
+  optionalKeys: readonly string[] = [],
 ): Record<string, unknown> {
   if (!isPlainRecord(value)) throw new Error(messages.shape);
-  const allowed = new Set([...requiredKeys, ...Object.keys(optionalDefaults)]);
+  const allowed = new Set([...requiredKeys, ...Object.keys(optionalDefaults), ...optionalKeys]);
   const actual = Object.keys(value);
   if (actual.some((key) => !allowed.has(key)) || requiredKeys.some((key) => !Object.hasOwn(value, key))) {
     throw new Error(messages.shape);
