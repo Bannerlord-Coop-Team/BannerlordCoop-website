@@ -42,6 +42,9 @@ migration is separately commissioned. Moving an audit to retained facts then
 preserves its report context. This does not require installing that CP migration
 as part of the report rollout. Both read paths are fixed SQL; owner data never
 chooses a query or relation.
+Grant history is read once for the report and reused across owners; a report with
+no independent quota skips that batch. Membership-only owners do not each scan
+their entire audit history.
 
 Before deployment, provision `PATREON_LAPSE_REPORT_RECIPIENTS` with the existing
 report's exact operator addresses as a private comma-separated value (1–20 valid

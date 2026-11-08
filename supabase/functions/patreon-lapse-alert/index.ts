@@ -8,7 +8,7 @@ declare const Deno: {
     serve(handler: (request: Request) => Response | Promise<Response>): void;
 };
 
-const mail = resolveMailConfig(SITE_MAIL, name => Deno.env.get(name));
+const mail = resolveMailConfig({ ...SITE_MAIL, fromName: "Bannerlord Coop" }, name => Deno.env.get(name));
 if (mail === null) throw new Error("SMTP_PASS is required");
 const campaignId = required("PATREON_CAMPAIGN_ID");
 const creatorAccessToken = required("PATREON_CREATOR_ACCESS_TOKEN");

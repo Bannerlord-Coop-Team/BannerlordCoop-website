@@ -76,7 +76,7 @@ test("RPC upgrades/replays without changing state, preserves the old report and 
         }
         await db.exec("set role service_role");
         await assert.rejects(db.query("select * from control_plane.managed_servers"), /permission denied/u);
-        await assert.rejects(db.query("select * from public.patreon_lapse_report_grant('other-owner')"), /permission denied/u);
+        await assert.rejects(db.query("select * from public.patreon_lapse_report_grants(true)"), /permission denied/u);
         await db.exec("reset role");
     } finally { await db.close(); }
 });
@@ -94,6 +94,21 @@ test("the same report reads primary grant history before archival and retained f
             select * from control_plane.audit_events union all select * from control_plane.hosting_history_audit_facts`);
         await db.query("insert into control_plane.hosting_history_audit_facts values(2,$1,'hosting.admin.quota_changed','Retained grant','2026-10-24T18:13:42.581Z')", [owner]);
         assert.equal(parseLapseInventory(await read(db)).servers[0].grantReason, "Retained grant");
+    } finally { await db.close(); }
+});
+
+test("skips the grant-history batch when no candidate has independent quota", async () => {
+    const db = await database();
+    try {
+        await db.query("insert into control_plane.managed_servers values($1,'guild',$2,null,'running')", [server, owner]);
+        await db.query("insert into control_plane.hosting_entitlements values('guild',$1,0,0,'2026-10-23T18:13:42.581Z')", [owner]);
+        await db.exec(await migration);
+        await db.exec(`create or replace function public.patreon_lapse_report_grants(include_grants boolean)
+            returns table(owner_id text, reason text, occurred_at text) language plpgsql stable strict rows 1000
+            as $$ begin raise exception 'unexpected grant-history read'; end $$`);
+        assert.equal(parseLapseInventory(await read(db)).servers[0].grantReason, null);
+        await db.exec("update control_plane.hosting_entitlements set base_quota = 1");
+        await assert.rejects(read(db), /unexpected grant-history read/u);
     } finally { await db.close(); }
 });
 

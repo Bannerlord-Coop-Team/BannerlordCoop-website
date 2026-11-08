@@ -4,30 +4,40 @@ begin;
 -- patreon_lapse_server_owners(); neither function writes ControlPlane state.
 -- This private helper supports the deployed pre-archive schema as well as the
 -- retained read view once commissioned. Only the inventory definer calls it.
-create or replace function public.patreon_lapse_report_grant(reviewed_owner text)
-returns table(reason text, occurred_at text)
+create or replace function public.patreon_lapse_report_grants(include_grants boolean)
+returns table(owner_id text, reason text, occurred_at text)
 language plpgsql
 stable
-rows 1
+strict
+rows 1000
 set search_path = ''
 as $grant$
 begin
+    if not include_grants then return; end if;
     if pg_catalog.to_regclass('control_plane.hosting_audit_event_reads') is null then
         return query
-            select a.reason, a.occurred_at from control_plane.audit_events a
-            where a.target_discord_user_id = reviewed_owner
-              and a.action in ('hosting.admin.quota_changed', 'hosting.entitlement.granted')
-            order by a.audit_sequence desc limit 1;
+            with grant_events as materialized (
+                select a.target_discord_user_id, a.reason, a.occurred_at, a.audit_sequence
+                from control_plane.audit_events a
+                where a.action in ('hosting.admin.quota_changed', 'hosting.entitlement.granted')
+                  and a.target_discord_user_id is not null
+            )
+            select distinct on (g.target_discord_user_id) g.target_discord_user_id, g.reason, g.occurred_at
+            from grant_events g order by g.target_discord_user_id, g.audit_sequence desc;
     else
         return query
-            select a.reason, a.occurred_at from control_plane.hosting_audit_event_reads a
-            where a.target_discord_user_id = reviewed_owner
-              and a.action in ('hosting.admin.quota_changed', 'hosting.entitlement.granted')
-            order by a.audit_sequence desc limit 1;
+            with grant_events as materialized (
+                select a.target_discord_user_id, a.reason, a.occurred_at, a.audit_sequence
+                from control_plane.hosting_audit_event_reads a
+                where a.action in ('hosting.admin.quota_changed', 'hosting.entitlement.granted')
+                  and a.target_discord_user_id is not null
+            )
+            select distinct on (g.target_discord_user_id) g.target_discord_user_id, g.reason, g.occurred_at
+            from grant_events g order by g.target_discord_user_id, g.audit_sequence desc;
     end if;
 end;
 $grant$;
-revoke all on function public.patreon_lapse_report_grant(text) from public, anon, authenticated, service_role;
+revoke all on function public.patreon_lapse_report_grants(boolean) from public, anon, authenticated, service_role;
 
 create or replace function public.patreon_lapse_report_inventory()
 returns jsonb
@@ -45,6 +55,12 @@ with candidates as materialized (
     limit 1001
 ), owners as materialized (
     select distinct guild_id, owner_discord_user_id from candidates
+), grant_audits as materialized (
+    select * from public.patreon_lapse_report_grants(
+        (select case when bool_or(coalesce(e.base_quota, 0) + coalesce(e.bonus_quota, 0) > 0) then true else null end
+         from owners o left join control_plane.hosting_entitlements e
+           on e.guild_id = o.guild_id and e.discord_user_id = o.owner_discord_user_id)
+    )
 ), owner_facts as materialized (
     select o.guild_id, o.owner_discord_user_id,
         coalesce(e.base_quota, 0) + coalesce(e.bonus_quota, 0) as independent_quota,
@@ -61,7 +77,8 @@ with candidates as materialized (
     from owners o
     left join control_plane.hosting_entitlements e
       on e.guild_id = o.guild_id and e.discord_user_id = o.owner_discord_user_id
-    left join lateral public.patreon_lapse_report_grant(o.owner_discord_user_id) grant_audit on true
+    left join grant_audits grant_audit on grant_audit.owner_id = o.owner_discord_user_id
+      and coalesce(e.base_quota, 0) + coalesce(e.bonus_quota, 0) > 0
 ), report_rows as (
     select s.server_id, jsonb_build_object(
         'server_prefix', left(s.server_id, 8),
