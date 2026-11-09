@@ -170,7 +170,7 @@
   "configEditor.expectedExactlyServerconfigAndModconfig": "Expected exactly serverConfig and modConfig.",
   "configEditor.0TurnsAutosaveOff": "0 turns autosave off.",
   "configEditor.battleSizeHelp": "Total troops across both sides of a battle, from {min} to {max}.",
-  "configEditor.warSailsHelp": "Experimental, nightly releases only. Needs a campaign made with War Sails, and players must turn War Sails on.",
+  "configEditor.warSailsHelp": "Experimental, nightly releases only. Needs a campaign made with War Sails; use New campaign to reset an existing land campaign. Players must turn War Sails on too.",
   "configEditor.serverSettings": "Server settings",
   "configEditor.difficulty": "Difficulty",
   "configEditor.gameplayOptions": "Gameplay options",

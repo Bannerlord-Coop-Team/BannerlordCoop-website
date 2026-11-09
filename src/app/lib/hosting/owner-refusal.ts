@@ -10,6 +10,7 @@ const REFUSAL_CODES = new Set([
     "backup_build_mismatch", "no_update_available", "validated_build_unavailable", "nightly_unavailable",
     "release_compatibility_unknown", "release_compatibility_unsafe", "settings_unchanged",
     "first_start_required", "impersonation_read_only",
+    "war_sails_requires_new_campaign", "war_sails_campaign_unverified",
 ]);
 
 /** Returns safe owner copy only for a parsed, definitive refusal; null preserves existing recovery. */

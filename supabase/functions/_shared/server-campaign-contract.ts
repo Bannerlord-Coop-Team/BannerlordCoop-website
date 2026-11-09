@@ -33,7 +33,7 @@ export type CampaignResetResult = { outcome: "enqueued" | "existing"; jobId: str
 
 export type CampaignMutation =
     | { action: "select-save"; serverId: string; saveId: string; expectedUpdatedAt: string }
-    | { action: "reset-campaign"; serverId: string; expectedUpdatedAt: string };
+    | { action: "reset-campaign"; serverId: string; expectedUpdatedAt: string; warSails?: boolean };
 
 export const MAXIMUM_CAMPAIGN_LIMIT = 100;
 
@@ -94,8 +94,10 @@ export function parseCampaignMutation(value: unknown): CampaignMutation {
         return { action: "select-save", serverId: value.serverId, saveId: value.saveId, expectedUpdatedAt: value.expectedUpdatedAt };
     }
     if (value.action === "reset-campaign") {
-        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) throw new Error("Invalid campaign reset request");
-        return { action: "reset-campaign", serverId: value.serverId, expectedUpdatedAt: value.expectedUpdatedAt };
+        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId", ...(value.warSails === undefined ? [] : ["warSails"])])
+            || (value.warSails !== undefined && typeof value.warSails !== "boolean")) throw new Error("Invalid campaign reset request");
+        return { action: "reset-campaign", serverId: value.serverId, expectedUpdatedAt: value.expectedUpdatedAt,
+            ...(value.warSails === undefined ? {} : { warSails: value.warSails }) };
     }
     throw new Error("Invalid campaign request");
 }

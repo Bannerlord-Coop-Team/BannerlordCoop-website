@@ -102,6 +102,22 @@ it("starts a new campaign only after confirmation, replays the same request on r
     expect(button("New campaign").disabled).toBe(false);
 });
 
+it("lets the owner choose War Sails with the destructive reset and preserves an existing choice", async () => {
+    mocks.change.mockResolvedValue({ ok: false, notSubmitted: true, refresh: false, message: "Refused" });
+    await render();
+    await act(async () => button("New campaign").click());
+    const checkbox = dialog().querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    expect(checkbox.checked).toBe(false);
+    await act(async () => checkbox.click());
+    await act(async () => button("Delete saves and start fresh").click());
+    expect(mocks.change.mock.calls[0][0]).toMatchObject({ action: "reset-campaign", warSails: true });
+    await act(async () => button("Cancel").click());
+    await render({ ...stopped, managedConfig: { ...stopped.managedConfig, modConfig: { ...stopped.managedConfig.modConfig,
+        modOptions: { ...stopped.managedConfig.modConfig.modOptions, warSails: true } } } });
+    await act(async () => button("New campaign").click());
+    expect(checkbox.checked).toBe(true);
+});
+
 it("shows load failures without hiding the controls and refuses changes before status is known", async () => {
     mocks.list.mockResolvedValue({ ok: false, message: "The campaign list could not be loaded. Try again." });
     await render(null);

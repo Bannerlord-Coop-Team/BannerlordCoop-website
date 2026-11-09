@@ -20,6 +20,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
     const [message, setMessage] = useState("");
     const [pending, startTransition] = useTransition();
     const [confirming, setConfirming] = useState(false);
+    const [resetWarSails, setResetWarSails] = useState(false);
     const [resetting, setResetting] = useState<{ previousSaveId: string | null; since: number } | null>(null);
     const resettingRef = useRef<{ previousSaveId: string | null; since: number } | null>(null);
     const [version, setVersion] = useState(0);
@@ -71,7 +72,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
         return next.requestId;
     }
 
-    function change(input: { action: "select-save"; saveId: string } | { action: "reset-campaign" }) {
+    function change(input: { action: "select-save"; saveId: string } | { action: "reset-campaign"; warSails?: boolean }) {
         if (!campaigns || !status) return;
         const body = { ...input, serverId, expectedUpdatedAt: campaigns.updatedAt };
         const key = JSON.stringify(body);
@@ -145,7 +146,9 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
             <div className="ml-auto flex flex-wrap gap-2">
                 <button type="button" className={fileButtonClass} disabled={busy} onClick={() => setVersion((value) => value + 1)}><RefreshCw aria-hidden className="size-4" />Refresh list</button>
                 <DisabledControlHint disabled={newCampaignDisabled} message={newCampaignHint}>
-                    <button type="button" className={fileButtonClass} disabled={newCampaignDisabled} onClick={() => setConfirming(true)}><Sparkles aria-hidden className="size-4" />New campaign</button>
+                    <button type="button" className={fileButtonClass} disabled={newCampaignDisabled} onClick={() => {
+                        setResetWarSails(status?.managedConfig.modConfig.modOptions.warSails ?? false); setConfirming(true);
+                    }}><Sparkles aria-hidden className="size-4" />New campaign</button>
                 </DisabledControlHint>
             </div>
         </div>
@@ -157,9 +160,16 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
         <dialog ref={dialogRef} aria-labelledby="new-campaign-heading" onClose={() => setConfirming(false)} className="w-full max-w-md rounded-lg border border-white/10 bg-surface p-5 text-foreground backdrop:bg-black/60">
             <h3 id="new-campaign-heading" className="text-base font-semibold">Start a new campaign?</h3>
             <p className="mt-2 text-sm leading-6 text-foreground-muted">This deletes every campaign on this server and creates a fresh one. Export your save first if you want to keep it. The server stays stopped until you start it.</p>
+            <label className="mt-4 flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={resetWarSails} disabled={pending} onChange={(event) => setResetWarSails(event.target.checked)} />
+                Use War Sails for the new campaign
+            </label>
+            <p className="mt-2 text-xs leading-5 text-foreground-muted">War Sails requires a campaign created with it. Experimental, nightly releases only; players must enable War Sails too.</p>
             <div className="mt-4 flex flex-wrap justify-end gap-2">
                 <button type="button" className={fileButtonClass} disabled={pending} onClick={() => setConfirming(false)}>Cancel</button>
-                <button type="button" className={filePrimaryButtonClass} disabled={pending || !stopped} onClick={() => change({ action: "reset-campaign" })}>{pending ? "Starting…" : "Delete saves and start fresh"}</button>
+                <button type="button" className={filePrimaryButtonClass} disabled={pending || !stopped} onClick={() => change({ action: "reset-campaign",
+                    ...(resetWarSails === status?.managedConfig.modConfig.modOptions.warSails ? {} : { warSails: resetWarSails }),
+                })}>{pending ? "Starting…" : "Delete saves and start fresh"}</button>
             </div>
         </dialog>
     </div>;
