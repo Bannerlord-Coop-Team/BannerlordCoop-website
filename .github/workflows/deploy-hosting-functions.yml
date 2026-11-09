@@ -37,6 +37,17 @@ jobs:
       - run: npm run test:supabase:deployment
       - name: Replay the sanitized subscription funding report
         run: npm run replay:patreon-lapse
+      - name: Render the IDs-only subscription email sample
+        run: npm run render:patreon-lapse
+      - name: Check the committed email sample
+        run: git diff --exit-code -- docs/evidence/patreon-lapse-links.html docs/evidence/patreon-lapse-links.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: subscription-funding-email-sample
+          path: |
+            docs/evidence/patreon-lapse-links.html
+            docs/evidence/patreon-lapse-links.txt
+          if-no-files-found: error
       - run: node scripts/deploy-hosting-functions.mjs plan
 
   deploy:

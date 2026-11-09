@@ -1,16 +1,18 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { boundedJson } from "./membership.ts";
-import { isLapseTimestamp, reportGrantReason, type LapseInventory, type LapseServer } from "./patreon-lapse-inventory.ts";
+import { isLapseTimestamp, LAPSE_UUID, reportGrantReason, type LapseInventory, type LapseServer } from "./patreon-lapse-inventory.ts";
 import { isEmailAddress, type SmtpMessage } from "./smtp.ts";
 
 export type LapseClassification = "grant-backed" | "in grace" | "review_required" | "untracked/grandfathered" | "deleted";
-// No provider identity, owner email, server name or full account/server ID leaves the classifier.
+// UUIDs support admin links; provider identity, owner email and server name never leave the classifier.
 export type LapseReportRow = Omit<LapseServer, "patreonUserId"> & {
     classification: LapseClassification;
     actionable: boolean;
 };
 export type LapseReport = { observedAt: string; rows: LapseReportRow[] };
 type AlertEnvelope = { from: string; fromName?: string; recipients: readonly string[] };
+// Committed production origin, never derived from a request, inventory row or grant note.
+export const LAPSE_REPORT_SITE_ORIGIN = "https://bannerlordcoop.com";
 
 // The deployed report has its own private operator list. Do not inherit a different shared alert list.
 export function parseLapseReportRecipients(value: string | undefined): string[] {
@@ -37,6 +39,7 @@ export function classifyLapseServers(inventory: LapseInventory, patrons: Readonl
             : server.graceDueAt !== null ? "in grace"
             : !server.fundingRecorded ? "untracked/grandfathered" : "review_required";
         rows.push({
+            ...(server.serverId === undefined ? {} : { serverId: server.serverId, accountId: server.accountId }),
             serverPrefix: server.serverPrefix, accountPrefix: server.accountPrefix, deletedAt: server.deletedAt,
             independentQuota: server.independentQuota, ownerUsage: server.ownerUsage, fundingRecorded: server.fundingRecorded,
             graceDueAt: server.graceDueAt, verification: server.verification,
@@ -51,23 +54,70 @@ export function classifyLapseServers(inventory: LapseInventory, patrons: Readonl
     return { observedAt: inventory.observedAt, rows };
 }
 
-function rowLine(row: LapseReportRow): string {
-    const identity = `server ${row.serverPrefix} / account ${row.accountPrefix ?? "none"}`;
+function rowDetails(row: LapseReportRow): string {
     switch (row.classification) {
         case "grant-backed":
-            return `${identity} | grant-backed | quota ${row.independentQuota}, usage ${row.ownerUsage}`
+            return ` | grant-backed | quota ${row.independentQuota}, usage ${row.ownerUsage}`
                 + ` | grant reason: ${row.grantReason ? reportGrantReason(row.grantReason) : "historical grant; reason not retained"}`
                 + ` | grant/quota recorded ${row.grantRecordedAt ?? "date not retained"}`;
         case "in grace":
-            return `${identity} | in grace | deletion due ${row.graceDueAt}`
+            return ` | in grace | deletion due ${row.graceDueAt}`
                 + (row.actionable ? " | deadline reached; review worker evidence" : "");
         case "review_required":
-            return `${identity} | review_required | membership ${row.verification ?? "unavailable"}; no active grace`;
+            return ` | review_required | membership ${row.verification ?? "unavailable"}; no active grace`;
         case "untracked/grandfathered":
-            return `${identity} | untracked/grandfathered | no current funding record; review exact funding identity`;
+            return ` | untracked/grandfathered | no current funding record; review exact funding identity`;
         case "deleted":
-            return `${identity} | deleted | recorded ${row.deletedAt}`;
+            return ` | deleted | recorded ${row.deletedAt}`;
     }
+}
+
+function identityLink(row: LapseReportRow, kind: "server" | "account"): string | null {
+    const id = kind === "server" ? row.serverId : row.accountId;
+    const prefix = kind === "server" ? row.serverPrefix : row.accountPrefix;
+    if (id === undefined || id === null) return null;
+    if (!LAPSE_UUID.test(id) || id.toLowerCase().slice(0, 8) !== prefix) throw new Error("Invalid lapse report identity");
+    // The server detail page refuses tombstones; keep the owner account reachable.
+    if (kind === "server" && (row.deletedAt !== null || row.classification === "deleted")) return null;
+    const url = new URL(kind === "server" ? "/admin/control-plane" : "/admin", LAPSE_REPORT_SITE_ORIGIN);
+    if (kind === "server") url.searchParams.set("view", "server");
+    url.searchParams.set(kind === "server" ? "serverId" : "q", id.toLowerCase());
+    return url.href;
+}
+
+function identityText(row: LapseReportRow, kind: "server" | "account"): string {
+    const prefix = kind === "server" ? row.serverPrefix : row.accountPrefix ?? "none";
+    const link = identityLink(row, kind);
+    return `${kind} ${prefix}${link === null ? "" : ` (${link})`}`;
+}
+
+function rowLine(row: LapseReportRow): string {
+    return `${identityText(row, "server")} / ${identityText(row, "account")}${rowDetails(row)}`;
+}
+
+function escapeHtml(value: string): string {
+    return value.replace(/[&<>"']/gu, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
+}
+
+function identityHtml(row: LapseReportRow, kind: "server" | "account"): string {
+    const prefix = kind === "server" ? row.serverPrefix : row.accountPrefix ?? "none";
+    const link = identityLink(row, kind);
+    return `${kind} ${link === null ? escapeHtml(prefix) : `<a href="${escapeHtml(link)}">${escapeHtml(prefix)}</a>`}`;
+}
+
+export function lapseReportHtml(report: LapseReport): string {
+    const actionable = report.rows.filter(row => row.actionable);
+    const context = report.rows.filter(row => !row.actionable);
+    const section = (title: string, rows: LapseReportRow[]) => `<h2>${title}</h2>\n<ul>\n`
+        + (rows.length ? rows.map(row => `<li>${identityHtml(row, "server")} / ${identityHtml(row, "account")}${escapeHtml(rowDetails(row))}</li>`).join("\n") : "<li>none</li>")
+        + "\n</ul>";
+    return ["<!doctype html>", '<html lang="en"><head><meta charset="utf-8"><title>Subscription funding report</title></head><body>',
+        `<p>Subscription funding report as of ${escapeHtml(report.observedAt)}</p>`,
+        `<p>${actionable.length} row(s) need review; ${context.length} context row(s).</p>`,
+        section("Needs review:", actionable), section("Context:", context),
+        "<p>Grant notes do not establish an expiry. Grace deadlines remain subject to ControlPlane verification.</p>",
+        "<p>No action was taken automatically.</p>", "</body></html>",
+    ].join("\n");
 }
 
 export function lapseReportText(report: LapseReport): string {
@@ -89,6 +139,7 @@ export function lapseAlertMessage(report: LapseReport, envelope: AlertEnvelope):
         to: envelope.recipients,
         subject: `[BannerlordCoop] Subscription funding: ${report.rows.filter(row => row.actionable).length} need review, ${report.rows.length} total`,
         text: lapseReportText(report),
+        html: lapseReportHtml(report),
     };
 }
 
