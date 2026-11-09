@@ -14,6 +14,7 @@ import {
     getMyServerDeletionStatus,
     getMyServerSaveGenerations,
     listAllMyServerBackups,
+    listAllMyServerSaves,
     listAllMyServers,
     MyServersApiError,
     myServersEndpoint,
@@ -266,6 +267,27 @@ test("loads and validates bounded server-scoped backup pages", async () => {
         assert.equal(endpoint.searchParams.get("serverId"), FIRST_SERVER.serverId);
         assert.equal(endpoint.searchParams.get("limit"), "50");
         assert.equal(new URL(requests[1]?.url ?? "").searchParams.get("cursor"), "next-page");
+    } finally {
+        restoreEnvironment();
+    }
+});
+
+test("accepts each listed save's optional War Sails label and rejects a malformed one", async () => {
+    configureEnvironment();
+    const save = { saveId: BACKUP.backupId, displayName: "Default New Game", byteSize: 6_144, createdAt: BACKUP.createdAt, lastUsedAt: null, importedBy: "system" };
+    const page = (item: object) => ({ serverId: FIRST_SERVER.serverId, updatedAt: BACKUP.createdAt, activeSaveId: save.saveId, items: [item], nextCursor: null });
+    let result: object = page(save);
+    globalThis.fetch = async (input, init) => Response.json({ version: 1, requestId: new Request(input, init).headers.get("x-request-id"), ok: true, result });
+    try {
+        // Older control planes omit the label entirely.
+        for (const item of [save, { ...save, warSails: true }, { ...save, warSails: false }, { ...save, warSails: null }]) {
+            result = page(item);
+            assert.deepEqual((await listAllMyServerSaves(TOKEN, FIRST_SERVER.serverId)).items, [item]);
+        }
+        for (const warSails of ["true", 0, {}]) {
+            result = page({ ...save, warSails });
+            await assert.rejects(listAllMyServerSaves(TOKEN, FIRST_SERVER.serverId), (error) => error instanceof MyServersApiError && error.code === "invalid_response");
+        }
     } finally {
         restoreEnvironment();
     }

@@ -31,6 +31,38 @@ campaign list every five seconds and reports when the selection moved to the
 freshly seeded campaign. ControlPlane PR #297 and `docs/managed-hosting/web-admin.md`
 describe the operations; `server-campaign-contract.ts` mirrors their shapes.
 
+## War Sails campaigns
+
+War Sails (NavalDLC) is fixed when a campaign is created: the dedicated server
+refuses a save whose NavalDLC status disagrees with `modOptions.warSails`. So War
+Sails is a property of the campaign, not a setting. The control plane derives
+`modOptions.warSails` from the active save at Start; switching mode means switching
+campaign (start a new one, import one, or select one). The cross-repo contract is
+fixed; the website reads it before the control plane writes it, and every field is
+optional so today's control plane keeps working:
+
+- **Campaign list** items may carry `warSails: boolean | null` (the save header's
+  label; `null` when unknown). The list shows a "War Sails" or "Classic" badge for
+  `true` or `false` and nothing otherwise. Selecting a campaign whose label differs
+  from the active campaign's notes that switching changes the mode (and that
+  players must enable War Sails for a War Sails campaign).
+- **Owner summary** may carry `warSailsCapable: boolean`, true only when the
+  installed build can run War Sails (nightly channel, an image with War Sails and a
+  Coop build with naval support). Only then does the "Start a new campaign?" dialog
+  offer a Classic / War Sails choice (Classic by default).
+- **New campaign** sends `warSails: true` only when War Sails is chosen. A Classic
+  reset sends exactly the request it sent before (`{ action, serverId,
+  expectedUpdatedAt }`); the Edge Function accepts an optional boolean `warSails`
+  and forwards the key only when it is `true`. A build that cannot run War Sails
+  refuses with `war_sails_unsupported`.
+- **Launch failures** `war_sails_save_mismatch` and `war_sails_unsupported` are
+  accepted as Start refusals, failed-Start codes and runtime-insight codes, and
+  shown with localized owner copy.
+- **Configuration** keeps `modOptions.warSails` in the contract, but the editor no
+  longer offers a toggle: it shows "War Sails: On / Off — set by the active
+  campaign" and every save (form or JSON) sends back the value it read. Imports
+  never change it either.
+
 ## Inline configuration editing
 
 The Configuration card edits the runner's native `server-config.json` and
@@ -44,7 +76,8 @@ request ID, are re-wrapped into the website envelope; mismatched write request I
 foreign file parts and unsupported fields are rejected as invalid responses.
 
 - The form is the default editor; JSON shows `{ serverConfig, modConfig }` and
-  validates on every keystroke. Both views share one draft, so switching never
+  validates on every keystroke. War Sails is shown read-only (see
+  [War Sails campaigns](#war-sails-campaigns)); an edit to it is ignored. Both views share one draft, so switching never
   loses edits. Discard restores the last loaded values.
 - Only the managed owner (`manage-settings`) loads and saves live files. Managers,
   support and administrators see the stored managed configuration read-only, and a

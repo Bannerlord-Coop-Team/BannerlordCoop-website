@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useEffectEvent, useId, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
+import { Suspense, use, useEffect, useEffectEvent, useId, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
 import { Download, FlaskConical, Lock, Menu, Puzzle, RefreshCw, Trash2, Upload } from "lucide-react";
 
 import { useTranslations } from "@/app/lib/localization/client";
@@ -12,6 +12,7 @@ import {
     type ServerMod, type ServerModArchive, type ServerModCatalog, type ServerModListFile, type ServerModRunsOn, type ServerModsState, type ServerModUploadProgress,
 } from "@/app/lib/hosting/server-mods";
 import { createBrowserServerModCatalog } from "@/app/lib/hosting/server-mods-transport";
+import { WAR_SAILS_MODULE } from "@/app/lib/hosting/war-sails";
 import { MOD_MAXIMUM_ENABLED_OWNER_MODS } from "../../../../supabase/functions/_shared/server-mods-contract";
 import { useServerWorkspaceSectionShown } from "./ServerManagementWorkspace";
 import { archiveProblemMessage, describeModIssue, lockedRunsOnMessage, modsErrorMessage } from "./server-mods-messages";
@@ -30,17 +31,19 @@ const KEYBOARD_SAVE_DELAY_MS = 600;
 const PLAIN_REFUSALS = ["server_suspended", "mod_order_invalid", "mod_dependency_unsatisfied", "mod_reserved_id", "upload_busy", "unauthenticated", "server_not_found", "runner_unsupported"];
 
 type Busy = null | "loading" | "deleting" | "preparing" | "uploading";
+/** Whether the active campaign uses War Sails, known now or once the page's campaign reads finish. */
+type CampaignWarSails = boolean | Promise<boolean>;
 type Notice = { tone: "info" | "error"; text: string };
 
 /** The managed page's Mods tab: owners and managers load the list when the tab first opens; others see why they cannot. */
-export function ManagedServerMods({ serverId, canManage }: { serverId: string; canManage: boolean }) {
+export function ManagedServerMods({ serverId, canManage, warSails }: { serverId: string; canManage: boolean; warSails?: CampaignWarSails }) {
     const shown = useServerWorkspaceSectionShown("Mods");
     const [catalog] = useState<ServerModCatalog>(() => createBrowserServerModCatalog());
-    return <ServerModsPanel serverId={serverId} catalog={catalog} canEdit={canManage} active={shown} />;
+    return <ServerModsPanel serverId={serverId} catalog={catalog} canEdit={canManage} active={shown} warSails={warSails} />;
 }
 
 /** Lists a server's mods and saves each load-order or enabled change as it is made; uploads and deletes use the same catalog. */
-export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: { serverId: string; catalog: ServerModCatalog; canEdit: boolean; active?: boolean }) {
+export function ServerModsPanel({ serverId, catalog, canEdit, active = true, warSails = false }: { serverId: string; catalog: ServerModCatalog; canEdit: boolean; active?: boolean; warSails?: CampaignWarSails }) {
     const { t } = useTranslations("managed-server");
     const idPrefix = useId();
     const listRef = useRef<HTMLOListElement>(null);
@@ -325,7 +328,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
                     onKeyDown={event => handleKey(event, index)} onToggle={() => toggle(mod)} onRunsOn={runsOn => chooseRunsOn(mod, runsOn)} onDelete={() => remove(mod)} />)}
             </ol>
             <p id={`${idPrefix}-reorder-help`} className="sr-only">{t("mods.reorderHelp")}</p>
-            <ModsPlayersNeed serverId={serverId} mods={loaded.mods} idPrefix={idPrefix} />
+            <Suspense fallback={null}><ModsPlayersNeed serverId={serverId} mods={loaded.mods} idPrefix={idPrefix} warSails={warSails} /></Suspense>
         </>}
         <p role="status" className="sr-only">{announcement}</p>
     </WorkspaceCard>;
@@ -382,22 +385,30 @@ function ModRunsOnChoice({ mod, id, editable, onChange }: { mod: ServerMod; id: 
     </div>;
 }
 
-/** Lists the mods every player must install, at their exact versions, from the saved list, and offers it as a JSON download. */
-function ModsPlayersNeed({ serverId, mods, idPrefix }: { serverId: string; mods: readonly ServerMod[]; idPrefix: string }) {
+/**
+ * Lists the mods every player must install, at their exact versions, from the saved list, and offers it as a JSON download.
+ * A War Sails campaign also needs the War Sails DLC enabled, so it is listed first and added to the download after Coop.
+ */
+function ModsPlayersNeed({ serverId, mods, idPrefix, warSails }: { serverId: string; mods: readonly ServerMod[]; idPrefix: string; warSails: CampaignWarSails }) {
     const { t } = useTranslations("managed-server");
+    const usesWarSails = typeof warSails === "boolean" ? warSails : use(warSails);
     const needed = serverModsPlayersNeed(mods);
     return <section aria-labelledby={`${idPrefix}-players-need`} className="border-t border-white/10 p-5">
         <h3 id={`${idPrefix}-players-need`} className="text-sm font-semibold">{t("mods.playersNeed.heading")}</h3>
         <p className="mt-1 text-sm leading-6 text-foreground-muted">{needed.length === 0 ? t("mods.playersNeed.none") : t("mods.playersNeed.exact")}</p>
-        <p className="text-sm leading-6 text-foreground-muted">{t("mods.playersNeed.noDlc")}</p>
-        {needed.length > 0 && <ul className="mt-3 space-y-1.5 text-sm">
+        <p className="text-sm leading-6 text-foreground-muted">{t(usesWarSails ? "mods.playersNeed.warSails" : "mods.playersNeed.noDlc")}</p>
+        {(needed.length > 0 || usesWarSails) && <ul className="mt-3 space-y-1.5 text-sm">
+            {usesWarSails && <li key={WAR_SAILS_MODULE.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="font-medium text-foreground">{WAR_SAILS_MODULE.name}</span>
+                <span className="font-mono text-xs text-foreground-muted">{WAR_SAILS_MODULE.id}</span>
+            </li>}
             {needed.map(mod => <li key={mod.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <span className="font-medium text-foreground">{mod.name}</span>
                 <span className="font-mono text-xs text-foreground-muted">{mod.id} {mod.version}</span>
                 {mod.runsOn === "players" && <span className={badgeClass}>{t("mods.playersNeed.playersOnly")}</span>}
             </li>)}
         </ul>}
-        {needed.length > 0 && <button type="button" onClick={() => downloadModList(serverModListFile(serverId, mods, new Date()))} className={`${fileButtonClass} mt-4`}>
+        {(needed.length > 0 || usesWarSails) && <button type="button" onClick={() => downloadModList(serverModListFile(serverId, mods, new Date(), usesWarSails))} className={`${fileButtonClass} mt-4`}>
             <Download className="size-4" aria-hidden="true" />{t("mods.playersNeed.download")}
         </button>}
     </section>;

@@ -62,6 +62,17 @@ function parseSettings(value: unknown, t: Translator["t"]): Settings {
 }
 // Compares serialized settings to detect unsaved changes.
 function sameSettings(a: unknown, b: unknown) { return JSON.stringify(a) === JSON.stringify(b); }
+// Keeps War Sails at the value read from the server: the active campaign sets it, so no edit may change it.
+function withReadWarSails(settings: Settings, read: Settings | null): Settings {
+    if (!read || settings.modConfig.modOptions.warSails === read.modConfig.modOptions.warSails) return settings;
+    return withValue(settings, "modOptions", "warSails", read.modConfig.modOptions.warSails);
+}
+// Shows the active campaign's War Sails mode as a read-only line instead of an editable setting.
+function WarSailsModeLine({ settings, t }: { settings: Settings; t: Translator["t"] }) {
+    return <p id="config-modOptions-warSails" className="mt-4 text-sm text-foreground-muted">
+        {t(settings.modConfig.modOptions.warSails ? "configEditor.warSailsOn" : "configEditor.warSailsOff")}
+    </p>;
+}
 // Keeps the editor's layout visible while live values are being fetched.
 function ConfigLoadingSkeleton({ groups, label }: { groups: readonly { title: string; fields: readonly Field[] }[]; label: string }) {
     return <div role="status" aria-label={label} className="space-y-6" data-config-loading-skeleton>
@@ -147,7 +158,6 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         { key: "lordDefectionRetries", label: t("configuration.field.lordDefectionRetries"), kind: "choice", options: MANAGED_LORD_DEFECTION_RETRY_MODES },
         { key: "enableHeroExecutions", label: t("configuration.field.enableHeroExecutions"), kind: "boolean" },
         { key: "enablePlayerClanMemberExecutions", label: t("configuration.field.enablePlayerClanMemberExecutions"), kind: "boolean" },
-        { key: "warSails", label: t("configuration.field.warSails"), kind: "boolean", help: t("configEditor.warSailsHelp") },
     ];
     const GROUPS: { group: Group; title: string; fields: Field[] }[] = [
         { group: "serverConfig", title: t("configEditor.serverSettings"), fields: SERVER_FIELDS },
@@ -222,7 +232,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     // Parses a JSON draft and reports validation without changing saved settings.
     function editJson(text: string) {
         setJsonText(text); setMessage("");
-        try { setDraft(parseSettings(JSON.parse(text), t)); setJsonError(""); }
+        try { setDraft(withReadWarSails(parseSettings(JSON.parse(text), t), baseline)); setJsonError(""); }
         catch (error) { setJsonError(error instanceof SyntaxError ? jsonSyntaxMessage(text, error, t) : error instanceof Error ? error.message : t("configEditor.unsupportedSettings")); }
     }
     // Restores the draft from the last confirmed configuration.
@@ -234,7 +244,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     function save() {
         if (!access || !editable || !draft || !dirty || jsonError) return;
         let parsed: Settings;
-        try { parsed = parseSettings({ serverConfig: draft.serverConfig, modConfig: draft.modConfig }, t); }
+        try { parsed = withReadWarSails(parseSettings({ serverConfig: draft.serverConfig, modConfig: draft.modConfig }, t), baseline); }
         catch { setMessage(t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe")); return; }
         setMessage("");
         startTransition(async () => {
@@ -321,6 +331,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
                 <legend className="text-sm font-semibold">{title}</legend>
                 <div className="mt-3 grid gap-4 sm:grid-cols-2">{fields.filter((field) => field.kind !== "boolean").map((field) => renderField(group, field))}</div>
                 {fields.some((field) => field.kind === "boolean") && <div className="mt-4 grid gap-x-6 gap-y-3 rounded-md border border-white/10 bg-white/[0.02] p-4 sm:grid-cols-2">{fields.filter((field) => field.kind === "boolean").map((field) => renderField(group, field))}</div>}
+                {group === "modOptions" && <WarSailsModeLine settings={draft} t={t} />}
             </fieldset>)}
         </div>}
         {notice}

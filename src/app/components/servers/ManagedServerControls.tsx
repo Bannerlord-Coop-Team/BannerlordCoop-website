@@ -19,6 +19,7 @@ import { useRouter } from "next/navigation";
 import type { ManagedStartStatus } from "@/app/lib/hosting/my-servers-server";
 import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
 import { modLoadFailureMessage } from "./server-mods-messages";
+import { isWarSailsFailureCode, warSailsFailureMessage } from "@/app/lib/hosting/war-sails";
 import { Check, Download, KeyRound, LoaderCircle, Play, RotateCw, Square } from "lucide-react";
 import { filePrimaryButtonClass } from "./server-file-styles";
 import { WorkspaceCard } from "./server-workspace-ui";
@@ -382,6 +383,7 @@ export function ManagedServerControls({
     const insightPanel = runtimeInsight && hasInsight && <div className="max-w-xl space-y-2 text-sm leading-6 text-foreground-muted">
         {showInsightDetails && (runtimeInsight.modLoadFailure && ["stopped", "failed"].includes(observedGameState)
             ? <p className="text-red-200">{modLoadFailureMessage(runtimeInsight.modLoadFailure, t)}</p>
+            : isWarSailsFailureCode(runtimeInsight.failureCode) ? <p className="text-red-200">{warSailsFailureMessage(runtimeInsight.failureCode, t)}</p>
             : <>{runtimeInsight.failureMessage && <p className="text-red-200">{runtimeInsight.failureMessage}</p>}
                 {runtimeInsight.recommendation && <p>{runtimeInsight.recommendation}</p>}</>)}
         {runtimeInsight.failureCode && <button type="button" className="min-h-10 rounded-md border border-gold/40 px-3 text-gold focus-visible:outline-2 focus-visible:outline-gold" onClick={() => startTransition(() => router.refresh())} disabled={isPending}>{t("controls.checkNow")}</button>}
@@ -708,10 +710,11 @@ function StartProgress({ status, paused }: { status: StartProgressStatus | null;
         title={failed ? status.state === "cancelled" ? t(restarting ? "controls.restartCancelled" : "controls.startCancelled") : t(restarting ? "controls.serverCouldNotRestart" : "controls.serverCouldNotStart")
             : status?.state === "succeeded" ? t("controls.yourServerIsReadyToJoin") : t(restarting ? "controls.restartingYourServer" : "controls.startingYourServer")}
         labels={labels}
-        current={status?.state === "retry-wait" || (failed && ["game_crashed_during_load", "mod_load_failed"].includes(status.failureCode ?? "")) ? 2
+        current={status?.state === "retry-wait" || (failed && ["game_crashed_during_load", "mod_load_failed", "war_sails_save_mismatch", "war_sails_unsupported"].includes(status.failureCode ?? "")) ? 2
             : Math.max(0, phases.findIndex(phase => phase === status?.phase))}
         outcome={outcome}
         footer={failed && status.modLoadFailure ? modLoadFailureMessage(status.modLoadFailure, t)
+            : failed && isWarSailsFailureCode(status.failureCode) ? warSailsFailureMessage(status.failureCode, t)
             : failed ? status.progress
             : status?.state === "retry-wait" ? t("controls.waitingToRetrySafelyProgress", { progress: status.progress })
                 : status?.state === "succeeded" ? <>{status.progress ?? t("controls.yourServerIsReadyToJoin")} <span className="mt-1 block">{t("controls.connectWithIpAddress")}</span></>
