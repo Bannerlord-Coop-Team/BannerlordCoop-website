@@ -169,7 +169,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "Un objet contenant serverConfig et modConfig est attendu.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Seuls serverConfig et modConfig sont attendus.",
   "configEditor.0TurnsAutosaveOff": "0 désactive l’enregistrement automatique.",
-  "configEditor.battleSizeHelp": "Nombre total de troupes des deux camps lors d’une bataille, de {min} à {max}.",
+  "configEditor.battleSizeHelp": "Nombre total de troupes des deux camps lors d’une bataille.",
   "configEditor.warSailsOn": "War Sails : Activé — défini par la campagne active",
   "configEditor.warSailsOff": "War Sails : Désactivé — défini par la campagne active",
   "configEditor.serverSettings": "Paramètres du serveur",

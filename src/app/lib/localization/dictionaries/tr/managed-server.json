@@ -169,7 +169,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "serverConfig ve modConfig içeren bir nesne bekleniyordu.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Yalnızca serverConfig ve modConfig bekleniyordu.",
   "configEditor.0TurnsAutosaveOff": "0, otomatik kaydetmeyi kapatır.",
-  "configEditor.battleSizeHelp": "Bir savaşta iki taraftaki toplam asker sayısı, {min} ile {max} arası.",
+  "configEditor.battleSizeHelp": "Bir savaşta her iki taraftaki toplam asker sayısı.",
   "configEditor.warSailsOn": "War Sails: Açık — etkin sefer tarafından belirlenir",
   "configEditor.warSailsOff": "War Sails: Kapalı — etkin sefer tarafından belirlenir",
   "configEditor.serverSettings": "Sunucu ayarları",

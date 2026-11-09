@@ -1,5 +1,7 @@
 "use client";
 
+import { useRouter } from "next/navigation";
+
 import { Suspense, use, useEffect, useEffectEvent, useId, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
 import { Download, FlaskConical, Lock, Menu, Puzzle, RefreshCw, Trash2, Upload } from "lucide-react";
 
@@ -37,13 +39,14 @@ type Notice = { tone: "info" | "error"; text: string };
 
 /** The managed page's Mods tab: owners and managers load the list when the tab first opens; others see why they cannot. */
 export function ManagedServerMods({ serverId, canManage, warSails }: { serverId: string; canManage: boolean; warSails?: CampaignWarSails }) {
+    const router = useRouter();
     const shown = useServerWorkspaceSectionShown("Mods");
     const [catalog] = useState<ServerModCatalog>(() => createBrowserServerModCatalog());
-    return <ServerModsPanel serverId={serverId} catalog={catalog} canEdit={canManage} active={shown} warSails={warSails} />;
+    return <ServerModsPanel serverId={serverId} catalog={catalog} canEdit={canManage} active={shown} onChanged={() => router.refresh()} warSails={warSails} />;
 }
 
 /** Lists a server's mods and saves each load-order or enabled change as it is made; uploads and deletes use the same catalog. */
-export function ServerModsPanel({ serverId, catalog, canEdit, active = true, warSails = false }: { serverId: string; catalog: ServerModCatalog; canEdit: boolean; active?: boolean; warSails?: CampaignWarSails }) {
+export function ServerModsPanel({ serverId, catalog, canEdit, active = true, onChanged, warSails = false }: { serverId: string; catalog: ServerModCatalog; canEdit: boolean; active?: boolean; onChanged?: () => void; warSails?: CampaignWarSails }) {
     const { t } = useTranslations("managed-server");
     const idPrefix = useId();
     const listRef = useRef<HTMLOListElement>(null);
@@ -128,6 +131,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true, war
             const state = await run();
             apply(state);
             setNotice({ tone: "info", text: success(state) });
+            onChanged?.();
         } catch (error) {
             if (error instanceof ServerModsError && error.code === CANCELLED) return;
             const message = error instanceof ServerModsError ? modsErrorMessage(error, t) : error instanceof ModArchiveError ? archiveProblemMessage(error, t) : t("mods.error.other");
@@ -168,6 +172,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true, war
                 if (draftRef.current === sent) updateDraft(state.mods);
             }
             setNotice({ tone: "info", text: t("mods.saved") });
+            onChanged?.();
         } catch (error) {
             setNotice({ tone: "error", text: error instanceof ServerModsError ? modsErrorMessage(error, t, changedRunsOn) : t("mods.error.other") });
             await reconcile(error, changedRunsOn.length > 0);

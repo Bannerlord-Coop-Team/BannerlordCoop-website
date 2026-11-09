@@ -169,7 +169,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "Ожидается объект с serverConfig и modConfig.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Ожидаются только serverConfig и modConfig.",
   "configEditor.0TurnsAutosaveOff": "0 отключает автосохранение.",
-  "configEditor.battleSizeHelp": "Общее число войск обеих сторон в битве, от {min} до {max}.",
+  "configEditor.battleSizeHelp": "Общее число воинов обеих сторон в битве.",
   "configEditor.warSailsOn": "War Sails: Вкл. — задаётся активной кампанией",
   "configEditor.warSailsOff": "War Sails: Выкл. — задаётся активной кампанией",
   "configEditor.serverSettings": "Настройки сервера",
