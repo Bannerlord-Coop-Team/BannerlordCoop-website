@@ -90,6 +90,7 @@ it("starts a new campaign only after confirmation, replays the same request on r
     const first = mocks.change.mock.calls[0]![0] as { requestId: string };
     expect(mocks.change).toHaveBeenCalledWith({ requestId: first.requestId, action: "reset-campaign", serverId, expectedUpdatedAt: stopped.updatedAt }, "owner");
     expect(container.textContent).toContain("Connection interrupted.");
+    expect(dialog().querySelector<HTMLInputElement>('input[type="checkbox"]')!.disabled).toBe(true);
     mocks.change.mockResolvedValueOnce({ ok: true, reset: { outcome: "enqueued", jobId: freshId, action: "reset-campaign" } });
     await act(async () => button("Delete saves and start fresh").click());
     expect((mocks.change.mock.calls[1]![0] as { requestId: string }).requestId).toBe(first.requestId);

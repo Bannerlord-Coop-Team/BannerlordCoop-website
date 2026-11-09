@@ -27,7 +27,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
     const deletion = useSaveDeletion(userId, serverId, () => { setVersion(value => value + 1); router.refresh(); });
     const dialogRef = useRef<HTMLDialogElement>(null);
     // Retries reuse the request so the control plane replays instead of queueing twice.
-    const requests = useRef<{ key: string; requestId: string } | null>(null);
+    const requests = useRef<{ key: string; requestId: string; action: "select-save" | "reset-campaign" } | null>(null);
     const statusUpdatedAt = status?.updatedAt ?? null;
     const stopped = status !== null && status.observedGameState === "stopped" && ["stopped", "awaiting-save"].includes(status.operationState);
 
@@ -65,9 +65,9 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
         return () => window.clearInterval(timer);
     }, [resetting, router]);
 
-    function requestId(key: string) {
+    function requestId(key: string, action: "select-save" | "reset-campaign") {
         if (requests.current?.key === key) return requests.current.requestId;
-        const next = { key, requestId: crypto.randomUUID() };
+        const next = { key, requestId: crypto.randomUUID(), action };
         requests.current = next;
         return next.requestId;
     }
@@ -79,7 +79,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
         setMessage("");
         startTransition(async () => {
             let response: Awaited<ReturnType<typeof changeManagedServerCampaign>> | null = null;
-            try { response = await changeManagedServerCampaign({ requestId: requestId(key), ...body }, userId); } catch { response = null; }
+            try { response = await changeManagedServerCampaign({ requestId: requestId(key, input.action), ...body }, userId); } catch { response = null; }
             if (!response?.ok) {
                 if (!response || response.refresh || response.notSubmitted) requests.current = null;
                 setMessage(response?.message ?? "Connection interrupted. Try again; a repeated request is replayed, not duplicated.");
@@ -147,7 +147,8 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
                 <button type="button" className={fileButtonClass} disabled={busy} onClick={() => setVersion((value) => value + 1)}><RefreshCw aria-hidden className="size-4" />Refresh list</button>
                 <DisabledControlHint disabled={newCampaignDisabled} message={newCampaignHint}>
                     <button type="button" className={fileButtonClass} disabled={newCampaignDisabled} onClick={() => {
-                        setResetWarSails(status?.managedConfig.modConfig.modOptions.warSails ?? false); setConfirming(true);
+                        if (requests.current?.action !== "reset-campaign") setResetWarSails(status?.managedConfig.modConfig.modOptions.warSails ?? false);
+                        setConfirming(true);
                     }}><Sparkles aria-hidden className="size-4" />New campaign</button>
                 </DisabledControlHint>
             </div>
@@ -161,7 +162,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
             <h3 id="new-campaign-heading" className="text-base font-semibold">Start a new campaign?</h3>
             <p className="mt-2 text-sm leading-6 text-foreground-muted">This deletes every campaign on this server and creates a fresh one. Export your save first if you want to keep it. The server stays stopped until you start it.</p>
             <label className="mt-4 flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={resetWarSails} disabled={pending} onChange={(event) => setResetWarSails(event.target.checked)} />
+                <input type="checkbox" checked={resetWarSails} disabled={pending || requests.current?.action === "reset-campaign"} onChange={(event) => setResetWarSails(event.target.checked)} />
                 Use War Sails for the new campaign
             </label>
             <p className="mt-2 text-xs leading-5 text-foreground-muted">War Sails requires a campaign created with it. Experimental, nightly releases only; players must enable War Sails too.</p>
