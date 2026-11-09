@@ -21,6 +21,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
     const [pending, startTransition] = useTransition();
     const [confirming, setConfirming] = useState(false);
     const [resetWarSails, setResetWarSails] = useState(false);
+    const [resetChoiceLocked, setResetChoiceLocked] = useState(false);
     const [resetting, setResetting] = useState<{ previousSaveId: string | null; since: number } | null>(null);
     const resettingRef = useRef<{ previousSaveId: string | null; since: number } | null>(null);
     const [version, setVersion] = useState(0);
@@ -43,7 +44,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
             const reset = resettingRef.current;
             if (!reset) return;
             if (result.campaigns.activeSaveId !== null && result.campaigns.activeSaveId !== reset.previousSaveId) {
-                resettingRef.current = null; setResetting(null); requests.current = null;
+                resettingRef.current = null; setResetting(null); requests.current = null; setResetChoiceLocked(false);
                 setMessage("Your fresh campaign is ready. Start the server when you want to play it.");
             } else if (Date.now() - reset.since > 10 * 60_000) {
                 resettingRef.current = null; setResetting(null);
@@ -69,6 +70,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
         if (requests.current?.key === key) return requests.current.requestId;
         const next = { key, requestId: crypto.randomUUID(), action };
         requests.current = next;
+        setResetChoiceLocked(action === "reset-campaign");
         return next.requestId;
     }
 
@@ -81,12 +83,13 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
             let response: Awaited<ReturnType<typeof changeManagedServerCampaign>> | null = null;
             try { response = await changeManagedServerCampaign({ requestId: requestId(key, input.action), ...body }, userId); } catch { response = null; }
             if (!response?.ok) {
-                if (!response || response.refresh || response.notSubmitted) requests.current = null;
+                if (response?.refresh || response?.notSubmitted) { requests.current = null; setResetChoiceLocked(false); }
                 setMessage(response?.message ?? "Connection interrupted. Try again; a repeated request is replayed, not duplicated.");
                 if (!response || response.refresh) setVersion((value) => value + 1);
                 return;
             }
             requests.current = null;
+            setResetChoiceLocked(false);
             if ("selection" in response) {
                 setMessage("Campaign selected. It loads the next time the server starts.");
                 setVersion((value) => value + 1); router.refresh();
@@ -162,7 +165,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
             <h3 id="new-campaign-heading" className="text-base font-semibold">Start a new campaign?</h3>
             <p className="mt-2 text-sm leading-6 text-foreground-muted">This deletes every campaign on this server and creates a fresh one. Export your save first if you want to keep it. The server stays stopped until you start it.</p>
             <label className="mt-4 flex items-center gap-2 text-sm">
-                <input type="checkbox" checked={resetWarSails} disabled={pending || requests.current?.action === "reset-campaign"} onChange={(event) => setResetWarSails(event.target.checked)} />
+                <input type="checkbox" checked={resetWarSails} disabled={pending || resetChoiceLocked} onChange={(event) => setResetWarSails(event.target.checked)} />
                 Use War Sails for the new campaign
             </label>
             <p className="mt-2 text-xs leading-5 text-foreground-muted">War Sails requires a campaign created with it. Experimental, nightly releases only; players must enable War Sails too.</p>

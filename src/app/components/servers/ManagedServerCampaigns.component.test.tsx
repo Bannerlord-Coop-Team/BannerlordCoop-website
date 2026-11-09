@@ -119,6 +119,21 @@ it("lets the owner choose War Sails with the destructive reset and preserves an 
     expect(checkbox.checked).toBe(true);
 });
 
+it("keeps the reset choice and request identity after losing the response", async () => {
+    mocks.change.mockRejectedValueOnce(new Error("Connection lost"));
+    await render();
+    await act(async () => button("New campaign").click());
+    const checkbox = dialog().querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    await act(async () => checkbox.click());
+    await act(async () => button("Delete saves and start fresh").click());
+    const first = mocks.change.mock.calls[0][0];
+    expect(checkbox.disabled).toBe(true);
+    mocks.change.mockResolvedValueOnce({ ok: true, reset: { outcome: "existing", jobId: freshId, action: "reset-campaign" } });
+    await act(async () => button("Delete saves and start fresh").click());
+    expect(mocks.change.mock.calls[1][0]).toEqual(first);
+    expect(first.warSails).toBe(true);
+});
+
 it("shows load failures without hiding the controls and refuses changes before status is known", async () => {
     mocks.list.mockResolvedValue({ ok: false, message: "The campaign list could not be loaded. Try again." });
     await render(null);
