@@ -85,22 +85,27 @@ test("imports the native battle size and still reports other unmanaged mod optio
     assert.throws(() => readConfigurationFile('{"modOptions":{"battleSize":1500}}', "mod", messages), { message: messages.unsupportedValues });
 });
 
+// Builds a configuration whose War Sails mode is `warSails`.
+function withWarSails(warSails: boolean) {
+    return { ...defaults, modConfig: { ...defaults.modConfig, modOptions: { ...defaults.modConfig.modOptions, warSails } } };
+}
+
 test("a native War Sails setting is reported as ignored and never imported", () => {
     const parsed = readConfigurationFile('{"modOptions":{"battleSize":600,"WarSails":true}}', "mod");
     assert.deepEqual(parsed.ignoredSettings, ["warSails"]);
     assert.deepEqual(parsed.input, { configPart: "mod", settings: { modOptions: { battleSize: 600 } } });
-    const warSailsServer = applyConfigurationImport({ ...defaults, modConfig: { ...defaults.modConfig, modOptions: { ...defaults.modConfig.modOptions, warSails: true } } }, parsed.input);
-    assert.equal(warSailsServer.modConfig.modOptions.warSails, true);
+    assert.equal(applyConfigurationImport(withWarSails(true), parsed.input).modConfig.modOptions.warSails, true);
+    assert.equal(applyConfigurationImport(defaults, parsed.input).modConfig.modOptions.warSails, false);
 });
 
-test("a backup's War Sails setting is dropped and the server keeps its own mode", () => {
-    const backup = { ...defaults, modConfig: { ...defaults.modConfig, modOptions: { ...defaults.modConfig.modOptions, warSails: true } } };
-    const parsed = readConfigurationFile(JSON.stringify(backup), "combined");
+test("a backup's War Sails setting is reported as ignored and every import keeps the server's mode", () => {
+    const parsed = readConfigurationFile(JSON.stringify(withWarSails(true)), "combined");
     assert.deepEqual(parsed.ignoredSettings, ["warSails"]);
-    assert.ok("managedConfig" in parsed.input);
-    assert.equal(Object.hasOwn(parsed.input.managedConfig.modConfig.modOptions, "warSails"), false);
-    assert.equal(Object.hasOwn(applyConfigurationImport(defaults, parsed.input).modConfig.modOptions, "warSails"), false);
-    const current = { ...defaults, modConfig: { ...defaults.modConfig, modOptions: { ...defaults.modConfig.modOptions, warSails: false } } };
-    assert.equal(applyConfigurationImport(current, parsed.input).modConfig.modOptions.warSails, false);
-    assert.deepEqual(readConfigurationFile(JSON.stringify(defaults), "combined").ignoredSettings, []);
+    assert.equal(applyConfigurationImport(defaults, parsed.input).modConfig.modOptions.warSails, false);
+    assert.equal(applyConfigurationImport(withWarSails(true), { managedConfig: defaults }).modConfig.modOptions.warSails, true);
+    const patch = parseConfigurationImport({ configPart: "mod", settings: { modOptions: { warSails: true } } });
+    assert.equal(applyConfigurationImport(defaults, patch).modConfig.modOptions.warSails, false);
+    const older = structuredClone(defaults) as { modConfig: { modOptions: Partial<typeof defaults.modConfig.modOptions> } };
+    delete older.modConfig.modOptions.warSails;
+    assert.deepEqual(readConfigurationFile(JSON.stringify(older), "combined").ignoredSettings, []);
 });

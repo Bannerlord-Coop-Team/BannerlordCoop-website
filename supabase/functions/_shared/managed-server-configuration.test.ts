@@ -61,10 +61,10 @@ test('battle size defaults when omitted and accepts only whole sizes the game ap
   }
 });
 
-test('War Sails is kept only when present, so configurations without it round-trip unchanged', () => {
-  const omitted = parseManagedServerConfiguration(configuration());
-  assert.equal(Object.hasOwn(omitted.modConfig.modOptions, 'warSails'), false);
-  assert.equal(JSON.stringify(omitted), JSON.stringify(DEFAULT_MANAGED_SERVER_CONFIGURATION));
+test('War Sails defaults to off when omitted and accepts only a boolean', () => {
+  const omitted = configuration() as { modConfig: { modOptions: Partial<typeof DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions> } };
+  delete omitted.modConfig.modOptions.warSails;
+  assert.equal(parseManagedServerConfiguration(omitted).modConfig.modOptions.warSails, false);
   for (const warSails of [true, false]) {
     const value = configuration();
     value.modConfig.modOptions.warSails = warSails;
