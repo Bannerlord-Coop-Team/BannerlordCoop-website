@@ -35,8 +35,23 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:supabase:deployment
+      - name: Check safe sign-in destinations for funding links
+        run: npx tsx --test src/app/lib/auth/redirect.test.ts
+      - name: Exercise both admin sign-in round trips
+        run: npm run test:components -- src/app/admin/login-return.component.test.tsx src/app/auth/callback/route.component.test.tsx
       - name: Replay the sanitized subscription funding report
         run: npm run replay:patreon-lapse
+      - name: Render the IDs-only subscription email sample
+        run: npm run render:patreon-lapse
+      - name: Check the committed email sample
+        run: git diff --exit-code -- docs/evidence/patreon-lapse-links.html docs/evidence/patreon-lapse-links.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: subscription-funding-email-sample
+          path: |
+            docs/evidence/patreon-lapse-links.html
+            docs/evidence/patreon-lapse-links.txt
+          if-no-files-found: error
       - run: node scripts/deploy-hosting-functions.mjs plan
 
   deploy:

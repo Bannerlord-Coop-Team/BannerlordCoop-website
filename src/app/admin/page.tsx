@@ -4,6 +4,7 @@ import { startImpersonation } from "./impersonation-actions";
 import { DEFAULT_MEMBER_PAGE_SIZE, parseMemberListState, type MemberListState } from "./member-list";
 import { paginateItems } from "@/app/lib/pagination";
 import { getMemberRole, hasAdminAccess, isBootstrapAdmin } from "@/app/lib/auth/access";
+import { getLoginRedirect } from "@/app/lib/auth/redirect";
 import { createSupabaseServerClient, getSupabaseServerClient } from "@/app/lib/supabase/server";
 import {
     AUTH_USERS_MAX_PAGES,
@@ -71,14 +72,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     const sessionClient = await getSupabaseServerClient({ impersonation: "actor" });
     const { data: sessionData } = await sessionClient.auth.getUser();
     const currentUser = sessionData.user;
+    const params = await searchParams;
 
-    if (!currentUser) redirect("/login?next=/admin");
+    if (!currentUser) redirect(getLoginRedirect("/admin", params));
     if (!hasAdminAccess(currentUser)) redirect("/");
     // The picker belongs to the original admin; role mutations still use the
     // effective user's permissions, just like the rest of the website.
     const effectiveUser = (await (await createSupabaseServerClient()).auth.getUser()).data.user;
 
-    const params = await searchParams;
     const requestedList = parseMemberListState({
         query: firstValue(params.q),
         page: firstValue(params.page),

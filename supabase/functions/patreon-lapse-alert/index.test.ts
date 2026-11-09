@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import {
-    classifyLapseServers, createPatreonLapseAlertHandler, fetchQualifyingPatrons, lapseAlertMessage, lapseReportText, parseLapseReportRecipients,
+    classifyLapseServers, createPatreonLapseAlertHandler, fetchQualifyingPatrons, lapseAlertMessage, lapseReportHtml, lapseReportText, parseLapseReportRecipients,
 } from "../_shared/patreon-lapse-alert.ts";
 import {
     createLapseInventoryLoader, parseLapseInventory, type LapseInventory, type LapseServer,
@@ -23,6 +23,87 @@ const wire = () => ({ version: 1, observed_at: at, truncated: false, servers: [{
     independent_quota: 0, owner_usage: 1, funding_recorded: true, grace_due_at: null,
     verification: "review_required", grant_reason: null, grant_recorded_at: null,
 }] });
+const serverId = "11111111-1111-4111-8111-111111111111";
+const accountId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const wireV2 = () => ({ ...wire(), version: 2, servers: wire().servers.map(server => ({ ...server, server_id: serverId, account_id: accountId })) });
+
+test("renders production admin links with full UUIDs, short labels and URLs in the text alternative", () => {
+    const report = classifyLapseServers(parseLapseInventory(wireV2()), new Set());
+    const message = lapseAlertMessage(report, envelope);
+    assert.match(message.html!, /server <a href="https:\/\/bannerlordcoop\.com\/admin\/control-plane\?view=server&amp;serverId=11111111-1111-4111-8111-111111111111">11111111<\/a>/);
+    assert.match(message.html!, /account <a href="https:\/\/bannerlordcoop\.com\/admin\?q=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa">aaaaaaaa<\/a>/);
+    assert.match(message.text, /server 11111111 \(https:\/\/bannerlordcoop\.com\/admin\/control-plane\?view=server&serverId=11111111-1111-4111-8111-111111111111\)/);
+    assert.match(message.text, /account aaaaaaaa \(https:\/\/bannerlordcoop\.com\/admin\?q=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa\)/);
+    assert.doesNotMatch(message.html! + message.text, /@|patreonUserId|patreon_user_id/);
+});
+
+test("escapes HTML in grant notes and keeps their PII and URL redaction in both alternatives", () => {
+    const value = wireV2();
+    Object.assign(value.servers[0], { independent_quota: 1,
+        grant_reason: '<script>alert("x")</script> & \'Trial\' private@example.test https://evil.test/name 192469416892432384 bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb' });
+    const message = lapseAlertMessage(classifyLapseServers(parseLapseInventory(value), new Set()), envelope);
+    assert.match(message.html!, /&lt;script&gt;alert\(&quot;x&quot;\)&lt;\/script&gt; &amp; &#39;Trial&#39;/);
+    assert.match(message.text, /<script>alert\("x"\)<\/script> & 'Trial'/);
+    for (const body of [message.html!, message.text]) {
+        assert.doesNotMatch(body, /private@|evil\.test|192469416892432384|bbbbbbbb-bbbb/);
+        assert.match(body, /\[email redacted\]/);
+    }
+    assert.equal([...message.html!.matchAll(/href="([^"]+)"/gu)].length, 2);
+});
+
+test("deleted server prefixes stay unlinked; their account still links, and unbound accounts show none", () => {
+    const value = wireV2();
+    Object.assign(value.servers[0], { deleted_at: at });
+    const report = classifyLapseServers(parseLapseInventory(value), new Set());
+    assert.match(lapseReportHtml(report), /server 11111111 \/ account <a href=/);
+    assert.doesNotMatch(lapseReportHtml(report), /serverId=/);
+    assert.doesNotMatch(lapseReportText(report), /view=server/);
+    Object.assign(value.servers[0], { account_id: null, account_prefix: null });
+    const unbound = classifyLapseServers(parseLapseInventory(value), new Set());
+    assert.match(lapseReportHtml(unbound), /server 11111111 \/ account none/);
+    assert.doesNotMatch(lapseReportHtml(unbound), /<a /);
+});
+
+test("a tombstone without a deletion timestamp uses its account link only", () => {
+    const value = wireV2(); Object.assign(value.servers[0], { server_id: null });
+    const message = lapseAlertMessage(classifyLapseServers(parseLapseInventory(value), new Set()), envelope);
+    assert.match(message.html!, /server 11111111 \/ account <a href=/);
+    assert.doesNotMatch(message.html! + message.text, /serverId=/);
+});
+
+test("the five-state IDs-only sample keeps classifications and text byte-identical after removing link URLs", async () => {
+    const fixture = JSON.parse(await readFile(new URL("../../../tests/fixtures/patreon-lapse-links-v2.json", import.meta.url), "utf8"));
+    const withLinks = classifyLapseServers(parseLapseInventory(fixture.inventory), new Set());
+    const legacy = { ...fixture.inventory, version: 1, servers: fixture.inventory.servers.map((row: Record<string, unknown>) =>
+        Object.fromEntries(Object.entries(row).filter(([key]) => !["server_id", "account_id"].includes(key)))) };
+    const before = classifyLapseServers(parseLapseInventory(legacy), new Set());
+    assert.deepEqual(withLinks.rows.map(row => Object.fromEntries(Object.entries(row).filter(([key]) => !["serverId", "accountId"].includes(key)))), before.rows);
+    assert.equal(lapseReportText(withLinks).replace(/ \(https:\/\/bannerlordcoop\.com\/admin[^)]+\)/gu, ""), lapseReportText(before));
+    assert.deepEqual(withLinks.rows.map(row => row.classification), ["untracked/grandfathered", "review_required", "in grace", "grant-backed", "deleted"]);
+    assert.equal([...lapseReportHtml(withLinks).matchAll(/href=/gu)].length, 9);
+});
+
+test("v2 requires exact UUIDs and matching prefixes and rejects URL, attribute, query and path injection", () => {
+    for (const bad of ["11111111", "../11111111", "https://evil.test", serverId + '?email=private@example.test', serverId + '\" onclick=\"x', "22222222-1111-4111-8111-111111111111"]) {
+        const value = wireV2(); value.servers[0].server_id = bad;
+        assert.throws(() => parseLapseInventory(value), /identity/u);
+        const direct = classifyLapseServers(inventory([row({ serverId: bad })]), new Set());
+        assert.throws(() => lapseReportHtml(direct), /identity/u);
+        assert.throws(() => lapseReportText(direct), /identity/u);
+    }
+    for (const bad of ["aaaaaaaa", "private@example.test", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", null]) {
+        const value = wireV2(); Object.assign(value.servers[0], { account_id: bad });
+        assert.throws(() => parseLapseInventory(value), /identity/u);
+    }
+    const value = wireV2(); Object.assign(value.servers[0], { email: "private@example.test" });
+    assert.throws(() => parseLapseInventory(value), /row/u);
+});
+
+test("both HTML sections show none for empty results and no prefix-only links are invented for v1 fixtures", () => {
+    const report = classifyLapseServers(inventory([]), new Set());
+    assert.equal((lapseReportHtml(report).match(/<li>none<\/li>/gu) ?? []).length, 2);
+    assert.doesNotMatch(lapseReportHtml(classifyLapseServers(parseLapseInventory(wire()), new Set())), /href=/);
+});
 
 test("requires the explicit private recipient set and never includes a rejected address in errors", () => {
     assert.deepEqual(parseLapseReportRecipients("first@example.test, SECOND@example.test, first@example.test"), ["first@example.test", "second@example.test"]);
@@ -87,19 +168,20 @@ test("redacts grant contact/identity fields and prevents multiline report inject
 });
 
 test("inventory loader makes exactly one fixed read RPC request, including meaningful empty success", async () => {
-    for (const servers of [wire().servers, []]) {
+    for (const servers of [wireV2().servers, []]) {
         let calls = 0;
         const fetcher: typeof fetch = async (url, init) => {
             calls++;
-            assert.equal(String(url), "https://project.example.test/rest/v1/rpc/patreon_lapse_report_inventory");
+            assert.equal(String(url), "https://project.example.test/rest/v1/rpc/patreon_lapse_report_inventory_v2");
             assert.equal(init?.method, "POST"); assert.equal(init?.body, "{}"); assert.equal(init?.redirect, "error");
             assert.deepEqual(init?.headers, { apikey: "fixture-service-key", authorization: "Bearer fixture-service-key", "content-type": "application/json" });
             assert.ok(init?.signal instanceof AbortSignal);
-            return json({ ...wire(), servers });
+            return json({ ...wireV2(), servers });
         };
         const result = await createLapseInventoryLoader(fetcher, "https://project.example.test/unused", "fixture-service-key")();
         assert.equal(result.servers.length, servers.length); assert.equal(calls, 1);
     }
+    await assert.rejects(createLapseInventoryLoader(async () => json(wire()), "https://project.example.test", "fixture-service-key")(), /UUIDs are required/u);
 });
 
 test("Patreon uses exact paginated GETs, active USD20 selection, and refuses incomplete or looping pages", async () => {

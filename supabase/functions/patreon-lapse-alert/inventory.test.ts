@@ -26,6 +26,7 @@ create view control_plane.hosting_audit_event_reads with (security_invoker=true)
 create function public.patreon_lapse_server_owners() returns integer language sql as $$ select 7 $$;
 `;
 const migration = readFile(new URL("../../migrations/202611080001_patreon_lapse_report_inventory.sql", import.meta.url), "utf8");
+const linksMigration = readFile(new URL("../../migrations/202611090002_patreon_lapse_report_links.sql", import.meta.url), "utf8");
 const owner = "supabase:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const account = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const server = "11111111-1111-4111-8111-111111111111";
@@ -36,6 +37,9 @@ async function database(): Promise<PGlite> {
 async function read(db: PGlite) {
     return (await db.query<{ inventory: unknown }>("select public.patreon_lapse_report_inventory() inventory")).rows[0].inventory;
 }
+async function readV2(db: PGlite) {
+    return (await db.query<{ inventory: unknown }>("select public.patreon_lapse_report_inventory_v2() inventory")).rows[0].inventory;
+}
 async function state(db: PGlite) {
     const snapshot: Record<string, unknown> = {};
     for (const table of ["managed_servers", "hosting_entitlements", "hosting_website_accounts", "hosting_subscription_grace", "hosting_membership_sources", "hosting_jobs", "hosting_role_restoration_authorizations", "audit_events", "hosting_history_audit_facts"]) {
@@ -44,6 +48,49 @@ async function state(db: PGlite) {
     snapshot.patreon_accounts = (await db.query("select * from public.patreon_accounts")).rows;
     return snapshot;
 }
+
+test("UUID migration replays read-only, retains v1 byte-for-byte and changes no classification, redaction, state or callers", async () => {
+    const db = await database();
+    try {
+        const deleted = new Date(Date.now() - 60_000).toISOString();
+        await db.query("insert into control_plane.managed_servers values($1,'guild',$2,null,'running'),('22222222-2222-4222-8222-222222222222','guild',$2,$3,'deleted'),('33333333-3333-4333-8333-333333333333','guild','unbound',null,'stopped'),('44444444-4444-4444-8444-444444444444','guild',$2,null,'deleted')", [server, owner, deleted]);
+        await db.query("insert into control_plane.hosting_website_accounts values($1,$2)", [account, owner]);
+        await db.query("insert into control_plane.hosting_entitlements values('guild',$1,3,0,'2026-10-23T18:13:42.581Z')", [owner]);
+        await db.query("insert into control_plane.audit_events values(1,$1,'hosting.admin.quota_changed','Trial private@example.test https://private.test','2026-10-23T18:13:42.581Z')", [owner]);
+        await db.exec(await migration);
+        const beforeState = await state(db);
+        const v1 = await read(db);
+        await db.exec(await linksMigration); await db.exec(await linksMigration);
+        await db.exec("begin read only; set local role service_role");
+        const raw = await readV2(db);
+        const v2 = parseLapseInventory(raw);
+        await db.exec("rollback");
+        assert.deepEqual(await state(db), beforeState);
+        // The old signature remains deployable while the new one is commissioned.
+        const afterV1 = await read(db);
+        assert.equal(JSON.stringify(afterV1).replace(/"observed_at":"[^"]+"/u, '"observed_at":"CLOCK"'),
+            JSON.stringify(v1).replace(/"observed_at":"[^"]+"/u, '"observed_at":"CLOCK"'));
+        const original = parseLapseInventory(v1);
+        assert.equal(v2.version, 2);
+        const factsOnly = (row: Record<string, unknown>) => Object.fromEntries(Object.entries(row).filter(([key]) => !["serverId", "accountId"].includes(key)));
+        assert.deepEqual(v2.servers.map(factsOnly), original.servers);
+        const report = classifyLapseServers(v2, new Set());
+        assert.deepEqual(report.rows.map(factsOnly), classifyLapseServers(original, new Set()).rows);
+        assert.equal(v2.servers[0].serverId, server); assert.equal(v2.servers[0].accountId, account);
+        assert.equal(v2.servers[1].serverId, null);
+        assert.equal(v2.servers[2].accountId, null);
+        assert.equal(v2.servers[3].serverId, null);
+        assert.equal(v2.servers[3].deletedAt, null);
+        assert.doesNotMatch(JSON.stringify(v2), /private@|private\.test/);
+        for (const role of ["anon", "authenticated"]) {
+            await db.exec(`set role ${role}`); await assert.rejects(readV2(db), /permission denied/u); await db.exec("reset role");
+        }
+        await db.exec("set role service_role");
+        await assert.rejects(db.query("select * from control_plane.managed_servers"), /permission denied/u);
+        await assert.rejects(db.query("select * from public.patreon_lapse_report_grants(true)"), /permission denied/u);
+        await db.exec("reset role");
+    } finally { await db.close(); }
+});
 
 test("RPC upgrades/replays without changing state, preserves the old report and runs in a read-only transaction", async () => {
     const db = await database();
@@ -163,7 +210,7 @@ test("the real RPC output round-trips through the HTTP loader for nonempty and e
     const http = createServer(async (request, response) => {
         try {
             assert.equal(request.method, "POST");
-            assert.equal(request.url, "/rest/v1/rpc/patreon_lapse_report_inventory");
+            assert.equal(request.url, "/rest/v1/rpc/patreon_lapse_report_inventory_v2");
             assert.equal(request.headers.authorization, "Bearer fixture-service-key");
             assert.equal(request.headers.apikey, "fixture-service-key");
             assert.equal(request.headers["content-type"], "application/json");
@@ -171,11 +218,12 @@ test("the real RPC output round-trips through the HTTP loader for nonempty and e
             for await (const chunk of request) { body += String(chunk); assert.ok(body.length <= 16); }
             assert.equal(body, "{}"); requests.push(body);
             response.writeHead(200, { "content-type": "application/json" });
-            response.end(JSON.stringify(await read(db)));
+            response.end(JSON.stringify(await readV2(db)));
         } catch { response.writeHead(500); response.end(); }
     });
     try {
         await db.exec(await migration);
+        await db.exec(await linksMigration);
         await new Promise<void>(resolve => http.listen(0, "127.0.0.1", resolve));
         const address = http.address();
         assert.ok(address && typeof address !== "string");
@@ -185,6 +233,7 @@ test("the real RPC output round-trips through the HTTP loader for nonempty and e
         const result = classifyLapseServers(await load(), new Set());
         assert.equal(result.rows[0].classification, "untracked/grandfathered");
         assert.equal(result.rows[0].serverPrefix, "11111111");
+        assert.equal(result.rows[0].serverId, server);
         assert.deepEqual(requests, ["{}", "{}"]);
     } finally {
         await new Promise<void>((resolve, reject) => http.close(error => error ? reject(error) : resolve()));
