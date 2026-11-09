@@ -8,7 +8,9 @@ import fixture from '../../../../test/fixtures/limitless-contract/v1.json';
 it('consumes the same versioned CP config/catalog fixture and fails closed for either missing module', () => {
     expect(fixture.schema).toBe('limitless-battle-size-v1');
     const file = parseRunnerConfigurationFile(fixture.file);
-    expect(file).toEqual(fixture.file);
+    // The retained v1 wire fixture predates War Sails; current website parsing fills its default.
+    expect(file).toEqual({ ...fixture.file, settings: { ...fixture.file.settings,
+        modOptions: { ...fixture.file.settings.modOptions, warSails: false } } });
     const state = parseModsState(fixture.state);
     expect(state).toEqual(fixture.state);
     expect(maximumBattleSize(state.mods)).toBe(12000);
