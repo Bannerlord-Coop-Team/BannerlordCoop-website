@@ -85,4 +85,34 @@ describe("localized auth callback", () => {
         expect(url.searchParams.get("error")).toBe(translatedError);
         expect(url.searchParams.has("next")).toBe(false);
     });
+
+    it.each([
+        "%2F%2Fevil.example%2Faccount",
+        "https%3A%2F%2Fevil.example%2Faccount",
+        "%2F%5Cevil.example%2Faccount",
+        "%2Fadmin%0D%0A",
+        "%2Fadmin%0D%0ALocation%3A%20https%3A%2F%2Fevil.example",
+        "%2F%09%2Fevil.example",
+        "%2Fadmin%00",
+        "%2Fadmin%7F",
+    ])("rejects an adversarial encoded next after successful sign-in: %s", async encodedNext => {
+        mocks.exchange.mockResolvedValue({ error: null });
+        const response = await GET(new NextRequest(`https://coop.example/auth/callback?code=fixture-code&next=${encodedNext}`));
+        expect(response.status).toBe(307);
+        expect(response.headers.get("location")).toBe("https://coop.example/");
+        expect(mocks.exchange).toHaveBeenCalledExactlyOnceWith("fixture-code");
+    });
+
+    it.each([
+        ["%2F%252F%252Fevil.example%2Faccount", "/%2F%2Fevil.example/account"],
+        ["%2F%255C%255Cevil.example%2Faccount", "/%5C%5Cevil.example/account"],
+        ["%2Fadmin%3Fq%3D%252F%252Fevil.example%250D%250A", "/admin?q=%2F%2Fevil.example%0D%0A"],
+    ])("keeps another encoding layer inside the same origin: %s", async (encodedNext, path) => {
+        mocks.exchange.mockResolvedValue({ error: null });
+        const response = await GET(new NextRequest(`https://coop.example/auth/callback?code=fixture-code&next=${encodedNext}`));
+        const location = response.headers.get("location")!;
+        expect(new URL(location).origin).toBe("https://coop.example");
+        expect(location).toBe(`https://coop.example${path}`);
+        expect(location).not.toMatch(/[\r\n\t\\]/u);
+    });
 });
