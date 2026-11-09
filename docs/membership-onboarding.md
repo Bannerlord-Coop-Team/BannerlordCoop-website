@@ -220,6 +220,54 @@ Every snapshot authoritatively looks up the exact account via Auth admin API;
 404 becomes a tombstone, outage fails closed, identities never fall back to metadata.
 Patreon is a website-owned binding, not a Supabase provider identity.
 
+### Funding providers (snapshot v2, claim v3)
+
+The control plane's provider-list policy speaks a provider-naming contract alongside
+the versions above, which stay byte-for-byte unchanged. The closed provider set is
+`patreon` and `boosty` (`_shared/funding-provider.ts`, mirroring CP
+`membership/funding-provider.ts`).
+
+- `{"version":2,"operation":"snapshot","accountId":UUID,"provider":"patreon"|"boosty"}`
+  returns the version 1 fields with `version:2`, `provider`, and
+  `providerUserId`/`programId` in place of `patreonUserId`/`campaignId`, validated
+  with the provider's grammar: Patreon user/campaign/tier IDs `^[1-9][0-9]{0,31}$` and a
+  UUID member; Boosty user/level IDs `^[1-9][0-9]{0,19}$`, a blog slug
+  `^[a-z0-9][a-z0-9_-]{0,31}$` and `memberId:null`; policy versions
+  `patreon-paid-usd20-v1`/`patreon-paid-usd50-v1` or `boosty-paid-v1`.
+  `paidAccessEndedAt` is present only when the evidence has it. A response for another
+  account or provider fails closed.
+- A Patreon v2 snapshot is `membership_fence`'s v1 snapshot renamed field for field, with
+  the same generation and revision, so the CP's v1 re-serialization hashes identically.
+- `{"version":3,"operation":"claim","claimId":UUID,"limit":1..50}` returns
+  `{"version":3,claimId,leaseExpiresAt,events:[{eventId,accountId,provider}]}`. It is
+  exactly the v2 claim (same RPC, lease, replay and row set) with each hint's provider
+  added; v2 claims keep omitting it. ACK v2 acknowledges hints claimed by either version.
+
+`20261109140000_membership_funding_providers.sql` keeps `membership_heads` as the
+Patreon head and the account anchor that Discord linking, completion receipts and the
+outbox reference, so every Patreon and Discord RPC keeps its behavior. Changing that
+table's key to `(account_id, provider)` would have required rebuilding three foreign
+keys, the global `patreon_user_id` uniqueness and every head-reading RPC. Other
+providers get `membership_provider_heads`, keyed by `(account_id, provider)`, with the
+same RLS and no client or service-role table grants. Outbox hints gain
+`provider` (existing rows become `patreon`) and are unique per
+`(account_id, provider, revision)`. The 8 ordinary + 1 reserved revocation hint bound
+now applies per provider, and an acknowledgement repairs the newest head of its own
+provider, so one provider's backlog cannot starve another's revocation.
+
+No Boosty linking adapter exists yet. A Boosty snapshot of a live account without a
+head writes nothing and answers a constant `unlinked`/`unverified` head at generation
+and revision `"0"` with null identities. A deleted account (Auth 404) creates a
+`account_deleted` tombstone at generation 1 with its own Boosty hint, and the Auth
+deletion trigger tombstones every existing provider head after the Patreon head. Both
+use the Patreon fence's account lock and refuse resurrection.
+
+Rollout: apply the migration, then deploy the `control-plane-membership-v1` Edge
+function, then switch the control plane to its provider-list policy. A v2-speaking CP
+may only be enabled against a website that serves both. Before that switch a v2
+claim may deliver a Boosty tombstone hint without its provider; the old CP treats it as a
+Patreon hint, reads the current Patreon snapshot and acknowledges it, which is safe.
+
 Website account operations overlap fresh Auth-user and session-context checks.
 Both must succeed, with any impersonation target matching the verified user,
 before membership reads or writes proceed. Account status still precedes
