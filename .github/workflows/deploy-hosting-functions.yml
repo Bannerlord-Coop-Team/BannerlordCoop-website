@@ -35,6 +35,8 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:supabase:deployment
+      - name: Replay the sanitized subscription funding report
+        run: npm run replay:patreon-lapse
       - run: node scripts/deploy-hosting-functions.mjs plan
 
   deploy:

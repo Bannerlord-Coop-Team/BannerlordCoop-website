@@ -77,6 +77,19 @@ it("loads the live runner files, defaults to the form and saves only the changed
     expect(mocks.save).toHaveBeenLastCalledWith(expect.objectContaining({ expectedRevision: "c".repeat(64) }), "owner");
 });
 
+it("turns War Sails on as a gameplay setting and saves it with the mod file", async () => {
+    await render();
+    const toggle = field<HTMLInputElement>("config-modOptions-warSails");
+    expect(toggle.checked).toBe(false);
+    expect(container.textContent).toContain("Needs a campaign made with War Sails");
+    await act(async () => toggle.click());
+    expect(container.textContent).toContain("Unsaved changes to gameplay settings");
+    const saved = { ...config.modConfig, modOptions: { ...config.modConfig.modOptions, warSails: true } };
+    mocks.save.mockResolvedValue({ ok: true, file: { configPart: "mod", revision: "c".repeat(64), settings: saved } });
+    await click("Save config");
+    expect(mocks.save).toHaveBeenCalledExactlyOnceWith({ requestId: expect.stringMatching(/^[0-9a-f-]{36}$/), serverId, configPart: "mod", expectedRevision: revisions.mod, settings: saved }, "owner");
+});
+
 it("shows a form-shaped skeleton while the live configuration is loading", async () => {
     let resolveServer!: (value: unknown) => void;
     let resolveMod!: (value: unknown) => void;

@@ -83,22 +83,36 @@ export function parseConfigurationImport(value: unknown, messages: Configuration
   return { configPart: 'mod', settings };
 }
 
-// Applies only the selected import while retaining omitted values and injected diagnostics.
+// Applies only the selected import while retaining omitted values; War Sails always keeps its current value.
 export function applyConfigurationImport(current: ManagedServerConfiguration, input: ConfigurationImport, messages: ConfigurationImportMessages = defaultImportMessages): ManagedServerConfiguration {
-  if ('managedConfig' in input) return parseManagedServerConfiguration(input.managedConfig, messages.configuration);
-  return parseManagedServerConfiguration(input.configPart === 'server'
+  const imported = 'managedConfig' in input ? input.managedConfig : input.configPart === 'server'
     ? { ...current, serverConfig: { ...current.serverConfig, ...input.settings } }
     : { ...current, modConfig: {
       voice: { ...current.modConfig.voice, ...input.settings.voice },
       difficulty: { ...current.modConfig.difficulty, ...input.settings.difficulty },
       modOptions: { ...current.modConfig.modOptions, ...input.settings.modOptions },
-    } }, messages.configuration);
+    } };
+  return parseManagedServerConfiguration({ ...imported, modConfig: { ...imported.modConfig,
+    modOptions: { ...imported.modConfig.modOptions, warSails: current.modConfig.modOptions.warSails } } }, messages.configuration);
 }
 
 // These native settings are intentionally outside the managed configuration contract.
 const ignoredServerKeys = ['saveName', 'password', 'port', 'mode', 'devModuleRoot', 'skipLateAi', 'replayHero', 'terrain', 'scene', 'savePath', 'userDir'];
 const ignoredModRootKeys = ['network'];
-const ignoredModKeys = ['showPlayerNameplates', 'playerWoundedBattleEntry'];
+// War Sails is fixed when a campaign is created, so an import reports it as ignored and never changes it.
+const WAR_SAILS_KEY = 'warSails';
+const ignoredModKeys = ['showPlayerNameplates', 'playerWoundedBattleEntry', WAR_SAILS_KEY];
+const importableModOptions: Readonly<Record<string, unknown>> = Object.freeze(Object.fromEntries(
+  Object.entries(defaults.modConfig.modOptions).filter(([key]) => key !== WAR_SAILS_KEY),
+));
+
+// Whether a website backup names War Sails, which its import ignores.
+function backupNamesWarSails(raw: Record<string, unknown>): boolean {
+  const modConfig = raw.modConfig;
+  if (typeof modConfig !== 'object' || modConfig === null) return false;
+  const modOptions = (modConfig as Record<string, unknown>).modOptions;
+  return typeof modOptions === 'object' && modOptions !== null && Object.hasOwn(modOptions, WAR_SAILS_KEY);
+}
 
 // Reads a native or exported configuration with detailed injected diagnostics and private ignored values.
 export function readConfigurationFile(text: string, part: ConfigurationPart, messages: ConfigurationImportMessages = defaultImportMessages): { input: ConfigurationImport; ignoredSettings: string[] } {
@@ -108,8 +122,11 @@ export function readConfigurationFile(text: string, part: ConfigurationPart, mes
   catch { throw new Error(messages.unreadable); }
   const ignoredSettings: string[] = [];
   if (part === 'combined') {
-    try { return { input: parseConfigurationImport({ managedConfig: raw }, messages), ignoredSettings }; }
+    let backup: ManagedServerConfiguration;
+    try { backup = parseManagedServerConfiguration(raw, messages.configuration); }
     catch { throw new Error(messages.combinedBackup); }
+    if (backupNamesWarSails(raw)) ignoredSettings.push(WAR_SAILS_KEY);
+    return { input: { managedConfig: backup }, ignoredSettings };
   }
   if (Object.keys(raw).some((key) => ['schemaVersion', 'serverConfig', 'modConfig'].includes(key))) {
     throw new Error(messages.olderBackup);
@@ -146,7 +163,9 @@ export function readConfigurationFile(text: string, part: ConfigurationPart, mes
   }
   const settings = part === 'server' ? pick(raw, defaults.serverConfig, ignoredServerKeys) : pick(raw, defaults.modConfig, ignoredModRootKeys);
   if (part === 'mod') for (const section of ['voice', 'difficulty', 'modOptions'] as const) {
-    if (settings[section] !== undefined) settings[section] = pick(object(settings[section], messages), defaults.modConfig[section], section === 'modOptions' ? ignoredModKeys : [], true, section);
+    if (settings[section] !== undefined) settings[section] = section === 'modOptions'
+      ? pick(object(settings[section], messages), importableModOptions, ignoredModKeys, true, section)
+      : pick(object(settings[section], messages), defaults.modConfig[section], [], true, section);
   }
   try { return { input: parseConfigurationImport({ configPart: part, settings }, messages), ignoredSettings }; }
   catch { throw new Error(messages.unsupportedValues); }

@@ -153,6 +153,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         { key: "lordDefectionRetries", label: t("configuration.field.lordDefectionRetries"), kind: "choice", options: MANAGED_LORD_DEFECTION_RETRY_MODES },
         { key: "enableHeroExecutions", label: t("configuration.field.enableHeroExecutions"), kind: "boolean" },
         { key: "enablePlayerClanMemberExecutions", label: t("configuration.field.enablePlayerClanMemberExecutions"), kind: "boolean" },
+        { key: "warSails", label: t("configuration.field.warSails"), kind: "boolean", help: t("configEditor.warSailsHelp") },
     ];
     const GROUPS: { group: Group; title: string; fields: Field[] }[] = [
         { group: "serverConfig", title: t("configEditor.serverSettings"), fields: SERVER_FIELDS },

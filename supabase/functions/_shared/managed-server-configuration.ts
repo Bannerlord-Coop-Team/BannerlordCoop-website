@@ -67,6 +67,8 @@ export interface ManagedModOptionsConfiguration {
   enableHeroExecutions: boolean;
   enablePlayerClanMemberExecutions: boolean;
   enablePlayerExecutions: boolean;
+  /** Coop's War Sails (NavalDLC) mode; the dedicated server reads it from mod-config.json. */
+  warSails: boolean;
 }
 
 export interface ManagedServerConfiguration {
@@ -135,6 +137,7 @@ export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfigu
         enableHeroExecutions: true,
         enablePlayerClanMemberExecutions: false,
         enablePlayerExecutions: false,
+        warSails: false,
       },
     },
   });
@@ -218,6 +221,7 @@ export function parseManagedServerConfiguration(
     coopClansEnabled: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.coopClansEnabled,
     enablePlayerExecutions: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.enablePlayerExecutions,
     battleSize: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.battleSize,
+    warSails: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.warSails,
   }, messages);
   return deepFreeze({
     schemaVersion: 1,
@@ -303,6 +307,7 @@ export function parseManagedServerConfiguration(
           modOptions.enablePlayerClanMemberExecutions, messages,
         ),
         enablePlayerExecutions: requireBoolean(modOptions.enablePlayerExecutions, messages),
+        warSails: requireBoolean(modOptions.warSails, messages),
       },
     },
   });
@@ -328,6 +333,7 @@ function requireExactRecord(
   return value;
 }
 
+// Requires the listed keys and fills the defaults of keys added after schema version 1.
 function requireCompatibleRecord(
   value: unknown,
   requiredKeys: readonly string[],
