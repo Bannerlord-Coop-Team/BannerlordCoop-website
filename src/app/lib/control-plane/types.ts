@@ -56,6 +56,8 @@ export type MyServerSummary = Pick<
     // Optional for older deployments; independent of the visibility rollout.
     connectionIp?: string | null;
     gamePorts?: number[];
+    // True only when the installed build can run a War Sails campaign; missing from older control planes.
+    warSailsCapable?: boolean;
 };
 
 /** A notice on one server's page that this viewer has not dismissed. Placement kinds carry typed parameters. */
@@ -92,6 +94,8 @@ export type MyServerSaveSummary = {
     createdAt: string;
     lastUsedAt: string | null;
     importedBy: "system" | "owner";
+    /** The save's War Sails mode; null when unknown, absent from older control planes. */
+    warSails?: boolean | null;
 };
 
 export type MyServerSavePage = {

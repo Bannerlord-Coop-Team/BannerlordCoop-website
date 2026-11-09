@@ -100,3 +100,41 @@ test("campaign selection and reset require a durable request ID, exact fields an
     assert.deepEqual(parseCampaignMutation(select), select);
     assert.throws(() => parseCampaignMutation({ ...reset, saveId }));
 });
+
+test("campaign pages accept an optional War Sails label of true, false or null and reject anything else", async () => {
+    // Older control planes omit the key; the page must still parse unchanged.
+    assert.deepEqual(parseCampaignPage(page), page);
+    for (const warSails of [true, false, null]) {
+        const labelled = { ...page, items: [{ ...campaign, warSails }] };
+        assert.deepEqual(parseCampaignPage(labelled), labelled);
+        const response = await handler(async () => Response.json({ version: 1, requestId, ok: true, result: labelled }))(get(`resource=saves&serverId=${serverId}`));
+        assert.equal(response.status, 200);
+        assert.deepEqual((await response.json()).result, labelled);
+    }
+    for (const warSails of ["true", 1, {}, []]) {
+        const invalid = { ...page, items: [{ ...campaign, warSails }] };
+        assert.throws(() => parseCampaignPage(invalid));
+        assert.equal((await handler(async () => Response.json({ version: 1, requestId, ok: true, result: invalid }))(get(`resource=saves&serverId=${serverId}`))).status, 502);
+    }
+});
+
+test("reset-campaign forwards warSails only when true, so a Classic reset is byte-identical to today's request", async () => {
+    const reset = { action: "reset-campaign", serverId, expectedUpdatedAt: updatedAt };
+    const queued = { outcome: "enqueued", jobId: requestId, action: "reset-campaign" };
+    const classicBody = JSON.stringify({ version: 1, requestId, operation: "reset-campaign", input: { serverId, expectedUpdatedAt: updatedAt } });
+    const sent: string[] = [];
+    const recording = handler(async (_url, init) => { sent.push(String(init?.body)); return Response.json({ version: 1, requestId, ok: true, result: queued }); });
+    for (const body of [reset, { ...reset, warSails: false }, { ...reset, warSails: true }]) assert.equal((await recording(post(body))).status, 200);
+    assert.deepEqual(sent, [classicBody, classicBody,
+        JSON.stringify({ version: 1, requestId, operation: "reset-campaign", input: { serverId, expectedUpdatedAt: updatedAt, warSails: true } })]);
+    let calls = 0;
+    const rejecting = handler(async () => { calls++; throw Error("Unexpected fetch"); });
+    for (const warSails of ["true", 1, null]) assert.equal((await rejecting(post({ ...reset, warSails }))).status, 400);
+    assert.equal(calls, 0);
+    assert.deepEqual(parseCampaignMutation({ ...reset, warSails: true }), { ...reset, warSails: true });
+    assert.deepEqual(parseCampaignMutation({ ...reset, warSails: false }), reset);
+    assert.throws(() => parseCampaignMutation({ action: "select-save", serverId, saveId, expectedUpdatedAt: updatedAt, warSails: true }));
+    const refused = await handler(async () => Response.json({ version: 1, requestId, ok: false, error: { code: "war_sails_unsupported", message: "This build cannot run War Sails.", retryable: false } }, { status: 409 }))(post({ ...reset, warSails: true }));
+    assert.equal(refused.status, 409);
+    assert.equal((await refused.json()).error.code, "war_sails_unsupported");
+});

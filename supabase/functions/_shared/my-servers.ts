@@ -73,7 +73,7 @@ type UpstreamRequest =
     | { operation: "restore-save-generation"; input: Omit<SaveGenerationRestoreMutation, "action"> }
     | { operation: "select-save"; input: { serverId: string; saveId: string; expectedUpdatedAt: string } }
     | { operation: "delete-save"; input: { serverId: string; saveId: string; expectedUpdatedAt: string; confirmationText: string } }
-    | { operation: "reset-campaign"; input: { serverId: string; expectedUpdatedAt: string } }
+    | { operation: "reset-campaign"; input: { serverId: string; expectedUpdatedAt: string; warSails?: true } }
     | { operation: "server-backup-status"; input: { serverId: string } }
     | { operation: "server-deletion-status"; input: { serverId: string } }
     | { operation: "update-server"; input: { serverId: string; expectedUpdatedAt: string } }
@@ -572,7 +572,9 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
     }
     if (value.action === "reset-campaign") {
         const parsed = parseCampaignMutation(value);
-        return { operation: "reset-campaign", input: { serverId: parsed.serverId, expectedUpdatedAt: parsed.expectedUpdatedAt } };
+        if (parsed.action !== "reset-campaign") throw new Error("Invalid campaign reset request");
+        // Only a War Sails choice adds the key, so a Classic reset reaches the control plane exactly as before.
+        return { operation: "reset-campaign", input: { serverId: parsed.serverId, expectedUpdatedAt: parsed.expectedUpdatedAt, ...(parsed.warSails ? { warSails: true as const } : {}) } };
     }
     if (value.action === "create-backup") {
         if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {

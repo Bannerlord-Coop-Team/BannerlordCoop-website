@@ -296,6 +296,8 @@ whole chunk of at most 8 MiB before forwarding it to
 browser never calls the Edge Function directly; same-origin website route handlers
 revalidate the session and relay through it. Start refusals `mod_load_failed` and
 `crash_loop_cooldown`, and a Start status's `modLoadFailure`, are shown to owners.
+War Sails launch failures (`war_sails_save_mismatch`, `war_sails_unsupported`) get
+localized owner copy; see [War Sails campaigns](server-file-transfers.md#war-sails-campaigns).
 [Server mods](server-mods.md) has the complete contract, retry rules and rollout
 order (control-plane release and `--enable-mods` runners, the separately authorized
 Oracle `@mods`/`@modChunk` proxy matchers, then this function).

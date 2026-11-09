@@ -77,17 +77,39 @@ it("loads the live runner files, defaults to the form and saves only the changed
     expect(mocks.save).toHaveBeenLastCalledWith(expect.objectContaining({ expectedRevision: "c".repeat(64) }), "owner");
 });
 
-it("turns War Sails on as a gameplay setting and saves it with the mod file", async () => {
+/** Serves a live mod file whose War Sails value the active campaign set. */
+function liveWarSails(warSails: boolean) {
+    const modConfig = { ...config.modConfig, modOptions: { ...config.modConfig.modOptions, warSails } };
+    mocks.read.mockImplementation(async (_serverId: string, part: RunnerConfigurationPart) => ({ ok: true,
+        file: part === "mod" ? { configPart: "mod", revision: revisions.mod, settings: modConfig } : file(part) }));
+    return modConfig;
+}
+
+it.each([[false, "War Sails: Off — set by the active campaign"], [true, "War Sails: On — set by the active campaign"]])(
+    "shows War Sails %s as a read-only line set by the active campaign, with no toggle", async (warSails, line) => {
+        liveWarSails(warSails);
+        await render();
+        const shown = field<HTMLElement>("config-modOptions-warSails");
+        expect(shown.tagName).toBe("P");
+        expect(shown.textContent).toBe(line);
+        expect(container.querySelector('input[id*="warSails"]')).toBeNull();
+        expect(container.textContent).not.toContain("Needs a campaign made with War Sails");
+    });
+
+it("sends back the War Sails value it read when saving gameplay settings, even after a JSON edit tries to flip it", async () => {
+    const live = liveWarSails(true);
     await render();
-    const toggle = field<HTMLInputElement>("config-modOptions-warSails");
-    expect(toggle.checked).toBe(false);
-    expect(container.textContent).toContain("Needs a campaign made with War Sails");
-    await act(async () => toggle.click());
-    expect(container.textContent).toContain("Unsaved changes to gameplay settings");
-    const saved = { ...config.modConfig, modOptions: { ...config.modConfig.modOptions, warSails: true } };
+    await click("JSON");
+    const edited = { serverConfig: liveServer, modConfig: { ...live, modOptions: { ...live.modOptions, warSails: false } } };
+    await type("config-json", JSON.stringify(edited));
+    // A War Sails-only edit is not a change: the active campaign owns that value.
+    expect(container.textContent).toContain("No pending changes");
+    await type("config-json", JSON.stringify({ ...edited, modConfig: { ...edited.modConfig, modOptions: { ...edited.modConfig.modOptions, battleSize: 600 } } }));
+    const saved = { ...live, modOptions: { ...live.modOptions, battleSize: 600 } };
     mocks.save.mockResolvedValue({ ok: true, file: { configPart: "mod", revision: "c".repeat(64), settings: saved } });
     await click("Save config");
     expect(mocks.save).toHaveBeenCalledExactlyOnceWith({ requestId: expect.stringMatching(/^[0-9a-f-]{36}$/), serverId, configPart: "mod", expectedRevision: revisions.mod, settings: saved }, "owner");
+    expect((mocks.save.mock.calls[0]![0] as { settings: typeof saved }).settings.modOptions.warSails).toBe(true);
 });
 
 it("shows a form-shaped skeleton while the live configuration is loading", async () => {

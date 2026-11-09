@@ -407,6 +407,25 @@ it.each(["failed", "retry-wait"] as const)("restores truthful %s progress after 
     } finally { await act(async () => root.unmount()); }
 });
 
+it.each([
+    ["war_sails_save_mismatch", "This campaign's War Sails mode doesn't match. Select or start a campaign in the right mode."],
+    ["war_sails_unsupported", "This campaign uses War Sails, which this server's build can't run. Switch to the nightly channel or pick a Classic campaign."],
+] as const)("explains a %s failure insight and a failed Start with localized copy", async (failureCode, message) => {
+    vi.useFakeTimers();
+    const container = document.createElement("div"); const root = createRoot(container);
+    const receipt = { action: "start" as const, jobId: progressJobId, state: "failed" as const, phase: "failed" as const, progress: "Control plane English copy.",
+        attemptCount: 1, maximumAttempts: 3, nextRetryAt: null, stoppedRetrying: true, failureCode, recommendedAction: null };
+    const insight: OwnerRuntimeInsight = { desiredState: "stopped", observedAt: null, allowedActions: ["start"], crashLoopDetected: false,
+        failureCode, recommendedAction: null, failureMessage: "Control plane English copy.", recommendation: null, start: receipt };
+    startStatus.mockReset().mockResolvedValue({ serverId: progressServerId, ...receipt });
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="stopped" runtimeInsight={insight} /></TestLocalization>));
+        await act(async () => vi.advanceTimersByTimeAsync(0));
+        expect(container.textContent).toContain(message);
+        expect(container.textContent).not.toContain("Control plane English copy.");
+    } finally { await act(async () => root.unmount()); vi.useRealTimers(); }
+});
+
 it.each(["admin", "support"] as const)("keeps %s controls read-only while showing the safe failure insight", async accessRole => {
     const container = document.createElement("div"); const root = createRoot(container);
     const insight: OwnerRuntimeInsight = { desiredState: "running", observedAt: null, allowedActions: ["stop"],
@@ -715,10 +734,14 @@ it.each([
     ["mod_load_failed", { modId: "Broken.Mod", reason: "missing-dll" }, "Mod Broken.Mod is missing a DLL listed in SubModule.xml. Upload the complete mod including its bin folder, or disable it in Mods. Then start again."],
     ["mod_load_failed", null, "A custom mod failed to load. Disable recently enabled mods and start again."],
     ["crash_loop_cooldown", null, "The server crashed repeatedly while starting, so Start is paused for about 25 minutes. Changing its enabled mods ends the pause now."],
+    ["war_sails_save_mismatch", null, "This campaign's War Sails mode doesn't match. Select or start a campaign in the right mode."],
+    ["war_sails_unsupported", null, "This campaign uses War Sails, which this server's build can't run. Switch to the nightly channel or pick a Classic campaign."],
 ])("shows a terminal %s Start refusal without following status", async (code, diagnosis, message) => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     beginPolling.mockClear();
-    const ownerCopy = code === "crash_loop_cooldown" ? message : "A custom mod failed to load. Disable recently enabled mods and start again.";
+    // War Sails refusals show the website's localized copy, never the control plane's English text.
+    const ownerCopy = code === "crash_loop_cooldown" ? message : code.startsWith("war_sails") ? "Control plane English copy."
+        : "A custom mod failed to load. Disable recently enabled mods and start again.";
     request.mockReset().mockRejectedValue(new MyServersApiError(code, ownerCopy, false, progressJobId));
     startStatus.mockReset().mockResolvedValue({ ...progress("starting", "failed", ownerCopy), ...(diagnosis ? { modLoadFailure: diagnosis } : {}) });
     const container = document.createElement("div"); const root = createRoot(container);
@@ -726,6 +749,7 @@ it.each([
         await act(async () => root.render(<TestLocalization>{<ManagedServerControls observedGameState="stopped" {...progressProps} />} </TestLocalization>));
         await act(async () => container.querySelector("button")!.click());
         expect(container.textContent).toContain(message);
+        expect(container.textContent).not.toContain("Control plane English copy.");
         expect(beginPolling).not.toHaveBeenCalled();
         expect(startStatus).toHaveBeenCalledTimes(code === "mod_load_failed" ? 1 : 0);
         expect(container.querySelector("button")!.disabled).toBe(false);
