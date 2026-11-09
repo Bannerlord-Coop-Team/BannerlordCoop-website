@@ -35,6 +35,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:supabase:deployment
+      - name: Check safe sign-in destinations for funding links
+        run: npx tsx --test src/app/lib/auth/redirect.test.ts
+      - name: Exercise both admin sign-in round trips
+        run: npm run test:components -- src/app/admin/login-return.component.test.tsx src/app/auth/callback/route.component.test.tsx
       - name: Replay the sanitized subscription funding report
         run: npm run replay:patreon-lapse
       - name: Render the IDs-only subscription email sample
