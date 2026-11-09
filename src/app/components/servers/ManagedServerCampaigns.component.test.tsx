@@ -90,6 +90,7 @@ it("starts a new campaign only after confirmation, replays the same request on r
     const first = mocks.change.mock.calls[0]![0] as { requestId: string };
     expect(mocks.change).toHaveBeenCalledWith({ requestId: first.requestId, action: "reset-campaign", serverId, expectedUpdatedAt: stopped.updatedAt }, "owner");
     expect(container.textContent).toContain("Connection interrupted.");
+    expect(dialog().querySelector<HTMLInputElement>('input[type="checkbox"]')!.disabled).toBe(true);
     mocks.change.mockResolvedValueOnce({ ok: true, reset: { outcome: "enqueued", jobId: freshId, action: "reset-campaign" } });
     await act(async () => button("Delete saves and start fresh").click());
     expect((mocks.change.mock.calls[1]![0] as { requestId: string }).requestId).toBe(first.requestId);
@@ -100,6 +101,37 @@ it("starts a new campaign only after confirmation, replays the same request on r
     await act(async () => vi.advanceTimersByTimeAsync(5_000));
     expect(container.textContent).toContain("Your fresh campaign is ready");
     expect(button("New campaign").disabled).toBe(false);
+});
+
+it("lets the owner choose War Sails with the destructive reset and preserves an existing choice", async () => {
+    mocks.change.mockResolvedValue({ ok: false, notSubmitted: true, refresh: false, message: "Refused" });
+    await render();
+    await act(async () => button("New campaign").click());
+    const checkbox = dialog().querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    expect(checkbox.checked).toBe(false);
+    await act(async () => checkbox.click());
+    await act(async () => button("Delete saves and start fresh").click());
+    expect(mocks.change.mock.calls[0][0]).toMatchObject({ action: "reset-campaign", warSails: true });
+    await act(async () => button("Cancel").click());
+    await render({ ...stopped, managedConfig: { ...stopped.managedConfig, modConfig: { ...stopped.managedConfig.modConfig,
+        modOptions: { ...stopped.managedConfig.modConfig.modOptions, warSails: true } } } });
+    await act(async () => button("New campaign").click());
+    expect(checkbox.checked).toBe(true);
+});
+
+it("keeps the reset choice and request identity after losing the response", async () => {
+    mocks.change.mockRejectedValueOnce(new Error("Connection lost"));
+    await render();
+    await act(async () => button("New campaign").click());
+    const checkbox = dialog().querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    await act(async () => checkbox.click());
+    await act(async () => button("Delete saves and start fresh").click());
+    const first = mocks.change.mock.calls[0][0];
+    expect(checkbox.disabled).toBe(true);
+    mocks.change.mockResolvedValueOnce({ ok: true, reset: { outcome: "existing", jobId: freshId, action: "reset-campaign" } });
+    await act(async () => button("Delete saves and start fresh").click());
+    expect(mocks.change.mock.calls[1][0]).toEqual(first);
+    expect(first.warSails).toBe(true);
 });
 
 it("shows load failures without hiding the controls and refuses changes before status is known", async () => {

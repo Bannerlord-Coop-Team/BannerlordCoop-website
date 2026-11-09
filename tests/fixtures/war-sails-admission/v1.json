@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "provenance": "Synthetic owner requests and fixed public refusal text. No production identities, saves or credentials.",
+  "requestId": "aaaaaaaa-1111-4111-8111-111111111111",
+  "resets": [
+    { "action": "reset-campaign", "serverId": "bbbbbbbb-1111-4111-8111-111111111111", "expectedUpdatedAt": "2026-10-02T12:00:00.000Z" },
+    { "action": "reset-campaign", "serverId": "bbbbbbbb-1111-4111-8111-111111111111", "expectedUpdatedAt": "2026-10-02T12:00:00.000Z", "warSails": true },
+    { "action": "reset-campaign", "serverId": "bbbbbbbb-1111-4111-8111-111111111111", "expectedUpdatedAt": "2026-10-02T12:00:00.000Z", "warSails": false }
+  ],
+  "invalidReset": { "action": "reset-campaign", "serverId": "bbbbbbbb-1111-4111-8111-111111111111", "expectedUpdatedAt": "2026-10-02T12:00:00.000Z", "warSails": "true" },
+  "refusals": [
+    { "code": "war_sails_requires_new_campaign", "message": "This campaign was created without NavalDLC. War Sails needs a new campaign. Use Reset campaign and select War Sails there.", "retryable": false },
+    { "code": "war_sails_campaign_unverified", "message": "This campaign’s War Sails compatibility could not be verified. Update the runner, or use Reset campaign and select War Sails there.", "retryable": false }
+  ]
+}

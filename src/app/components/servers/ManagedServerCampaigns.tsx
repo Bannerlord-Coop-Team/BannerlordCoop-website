@@ -20,13 +20,15 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
     const [message, setMessage] = useState("");
     const [pending, startTransition] = useTransition();
     const [confirming, setConfirming] = useState(false);
+    const [resetWarSails, setResetWarSails] = useState(false);
+    const [resetChoiceLocked, setResetChoiceLocked] = useState(false);
     const [resetting, setResetting] = useState<{ previousSaveId: string | null; since: number } | null>(null);
     const resettingRef = useRef<{ previousSaveId: string | null; since: number } | null>(null);
     const [version, setVersion] = useState(0);
     const deletion = useSaveDeletion(userId, serverId, () => { setVersion(value => value + 1); router.refresh(); });
     const dialogRef = useRef<HTMLDialogElement>(null);
     // Retries reuse the request so the control plane replays instead of queueing twice.
-    const requests = useRef<{ key: string; requestId: string } | null>(null);
+    const requests = useRef<{ key: string; requestId: string; action: "select-save" | "reset-campaign" } | null>(null);
     const statusUpdatedAt = status?.updatedAt ?? null;
     const stopped = status !== null && status.observedGameState === "stopped" && ["stopped", "awaiting-save"].includes(status.operationState);
 
@@ -42,7 +44,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
             const reset = resettingRef.current;
             if (!reset) return;
             if (result.campaigns.activeSaveId !== null && result.campaigns.activeSaveId !== reset.previousSaveId) {
-                resettingRef.current = null; setResetting(null); requests.current = null;
+                resettingRef.current = null; setResetting(null); requests.current = null; setResetChoiceLocked(false);
                 setMessage("Your fresh campaign is ready. Start the server when you want to play it.");
             } else if (Date.now() - reset.since > 10 * 60_000) {
                 resettingRef.current = null; setResetting(null);
@@ -64,28 +66,30 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
         return () => window.clearInterval(timer);
     }, [resetting, router]);
 
-    function requestId(key: string) {
+    function requestId(key: string, action: "select-save" | "reset-campaign") {
         if (requests.current?.key === key) return requests.current.requestId;
-        const next = { key, requestId: crypto.randomUUID() };
+        const next = { key, requestId: crypto.randomUUID(), action };
         requests.current = next;
+        setResetChoiceLocked(action === "reset-campaign");
         return next.requestId;
     }
 
-    function change(input: { action: "select-save"; saveId: string } | { action: "reset-campaign" }) {
+    function change(input: { action: "select-save"; saveId: string } | { action: "reset-campaign"; warSails?: boolean }) {
         if (!campaigns || !status) return;
         const body = { ...input, serverId, expectedUpdatedAt: campaigns.updatedAt };
         const key = JSON.stringify(body);
         setMessage("");
         startTransition(async () => {
             let response: Awaited<ReturnType<typeof changeManagedServerCampaign>> | null = null;
-            try { response = await changeManagedServerCampaign({ requestId: requestId(key), ...body }, userId); } catch { response = null; }
+            try { response = await changeManagedServerCampaign({ requestId: requestId(key, input.action), ...body }, userId); } catch { response = null; }
             if (!response?.ok) {
-                if (!response || response.refresh || response.notSubmitted) requests.current = null;
+                if (response?.refresh || response?.notSubmitted) { requests.current = null; setResetChoiceLocked(false); }
                 setMessage(response?.message ?? "Connection interrupted. Try again; a repeated request is replayed, not duplicated.");
                 if (!response || response.refresh) setVersion((value) => value + 1);
                 return;
             }
             requests.current = null;
+            setResetChoiceLocked(false);
             if ("selection" in response) {
                 setMessage("Campaign selected. It loads the next time the server starts.");
                 setVersion((value) => value + 1); router.refresh();
@@ -145,7 +149,10 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
             <div className="ml-auto flex flex-wrap gap-2">
                 <button type="button" className={fileButtonClass} disabled={busy} onClick={() => setVersion((value) => value + 1)}><RefreshCw aria-hidden className="size-4" />Refresh list</button>
                 <DisabledControlHint disabled={newCampaignDisabled} message={newCampaignHint}>
-                    <button type="button" className={fileButtonClass} disabled={newCampaignDisabled} onClick={() => setConfirming(true)}><Sparkles aria-hidden className="size-4" />New campaign</button>
+                    <button type="button" className={fileButtonClass} disabled={newCampaignDisabled} onClick={() => {
+                        if (requests.current?.action !== "reset-campaign") setResetWarSails(status?.managedConfig.modConfig.modOptions.warSails ?? false);
+                        setConfirming(true);
+                    }}><Sparkles aria-hidden className="size-4" />New campaign</button>
                 </DisabledControlHint>
             </div>
         </div>
@@ -157,9 +164,16 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
         <dialog ref={dialogRef} aria-labelledby="new-campaign-heading" onClose={() => setConfirming(false)} className="w-full max-w-md rounded-lg border border-white/10 bg-surface p-5 text-foreground backdrop:bg-black/60">
             <h3 id="new-campaign-heading" className="text-base font-semibold">Start a new campaign?</h3>
             <p className="mt-2 text-sm leading-6 text-foreground-muted">This deletes every campaign on this server and creates a fresh one. Export your save first if you want to keep it. The server stays stopped until you start it.</p>
+            <label className="mt-4 flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={resetWarSails} disabled={pending || resetChoiceLocked} onChange={(event) => setResetWarSails(event.target.checked)} />
+                Use War Sails for the new campaign
+            </label>
+            <p className="mt-2 text-xs leading-5 text-foreground-muted">War Sails requires a campaign created with it. Experimental, nightly releases only; players must enable War Sails too.</p>
             <div className="mt-4 flex flex-wrap justify-end gap-2">
                 <button type="button" className={fileButtonClass} disabled={pending} onClick={() => setConfirming(false)}>Cancel</button>
-                <button type="button" className={filePrimaryButtonClass} disabled={pending || !stopped} onClick={() => change({ action: "reset-campaign" })}>{pending ? "Starting…" : "Delete saves and start fresh"}</button>
+                <button type="button" className={filePrimaryButtonClass} disabled={pending || !stopped} onClick={() => change({ action: "reset-campaign",
+                    ...(resetWarSails === status?.managedConfig.modConfig.modOptions.warSails ? {} : { warSails: resetWarSails }),
+                })}>{pending ? "Starting…" : "Delete saves and start fresh"}</button>
             </div>
         </dialog>
     </div>;

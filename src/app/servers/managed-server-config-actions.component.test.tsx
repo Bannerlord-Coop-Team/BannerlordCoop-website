@@ -15,6 +15,12 @@ beforeEach(() => {
     vi.resetAllMocks();
     mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "owner" } } }), getSession: async () => ({ data: { session: { access_token: "original-owner-token" } } }) } });
 });
+
+it.each(["war_sails_requires_new_campaign", "war_sails_campaign_unverified"])("shows the campaign guidance and settles a definitive %s refusal", async (code) => {
+    const message = "War Sails needs a new campaign. Use Reset campaign and select War Sails there.";
+    mocks.save.mockRejectedValueOnce(new MyServersApiError(code, message, false, undefined, true));
+    expect(await saveManagedServerConfig(request, "owner")).toEqual({ ok: false, message, reload: false, notSubmitted: true });
+});
 it("checks the current account before reading or saving configuration", async () => {
     expect((await readManagedServerConfig(id, "server", "previous-owner")).ok).toBe(false);
     expect((await saveManagedServerConfig(request, "previous-owner")).ok).toBe(false);
