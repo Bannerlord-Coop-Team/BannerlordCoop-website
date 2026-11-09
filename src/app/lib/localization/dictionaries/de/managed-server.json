@@ -169,7 +169,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "Erwartet wurde ein Objekt mit serverConfig und modConfig.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Erwartet wurden genau serverConfig und modConfig.",
   "configEditor.0TurnsAutosaveOff": "0 schaltet das automatische Speichern aus.",
-  "configEditor.battleSizeHelp": "Gesamtzahl der Truppen beider Seiten einer Schlacht, von {min} bis {max}.",
+  "configEditor.battleSizeHelp": "Gesamtzahl der Truppen beider Seiten in einer Schlacht.",
   "configEditor.warSailsHelp": "Experimentell, nur mit Nightly-Releases. Erfordert eine mit War Sails erstellte Kampagne, und Spieler müssen War Sails aktivieren.",
   "configEditor.serverSettings": "Servereinstellungen",
   "configEditor.difficulty": "Schwierigkeit",

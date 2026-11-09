@@ -169,7 +169,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "需要包含 serverConfig 和 modConfig 的对象。",
   "configEditor.expectedExactlyServerconfigAndModconfig": "对象必须且只能包含 serverConfig 和 modConfig。",
   "configEditor.0TurnsAutosaveOff": "设为 0 可关闭自动保存。",
-  "configEditor.battleSizeHelp": "一场战斗中双方的部队总数，范围为 {min} 到 {max}。",
+  "configEditor.battleSizeHelp": "一场战斗中双方士兵的总数。",
   "configEditor.warSailsHelp": "实验性功能，仅限 nightly 版本。需要使用 War Sails 创建的战役，玩家也必须启用 War Sails。",
   "configEditor.serverSettings": "服务器设置",
   "configEditor.difficulty": "难度",

@@ -169,7 +169,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "Ожидается объект с serverConfig и modConfig.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Ожидаются только serverConfig и modConfig.",
   "configEditor.0TurnsAutosaveOff": "0 отключает автосохранение.",
-  "configEditor.battleSizeHelp": "Общее число войск обеих сторон в битве, от {min} до {max}.",
+  "configEditor.battleSizeHelp": "Общее число воинов обеих сторон в битве.",
   "configEditor.warSailsHelp": "Экспериментально, только для ночных релизов. Нужна кампания, созданная с War Sails, и игрокам нужно включить War Sails.",
   "configEditor.serverSettings": "Настройки сервера",
   "configEditor.difficulty": "Сложность",

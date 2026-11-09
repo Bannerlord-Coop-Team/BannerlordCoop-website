@@ -1,5 +1,9 @@
 "use server";
 
+import { requestServerMods } from "@/app/lib/hosting/server-mods-api";
+import { parseModsState } from "../../../supabase/functions/_shared/server-mods-contract";
+import { maximumBattleSize } from "../../../supabase/functions/_shared/battle-size-policy";
+
 import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
@@ -16,7 +20,7 @@ import {
 export type ManagedServerConfigResult =
     | { ok: true; file: RunnerConfigurationFile }
     | { ok: false; message: string; reload: boolean; notSubmitted: boolean };
-export type ManagedServerConfigFiles = { server: ManagedServerConfigResult; mod: ManagedServerConfigResult };
+export type ManagedServerConfigFiles = { maximumBattleSize?: 1000 | 12000; server: ManagedServerConfigResult; mod: ManagedServerConfigResult };
 
 // Binds the existing operation to the authenticated page account.
 async function currentToken(expectedUserId: string) {
@@ -92,7 +96,11 @@ export async function readManagedServerConfigFiles(serverId: string, expectedUse
     const [server, mod] = await Promise.all((["server", "mod"] as const).map(async (configPart): Promise<ManagedServerConfigResult> => {
         try { return { ok: true, file: await getMyServerConfiguration(token, serverId, configPart) }; } catch (error) { return await failure(error); }
     }));
-    return { server, mod };
+    // An unreadable gameplay file cannot be edited. Avoid a needless catalog RPC in that state.
+    // A readable 1,000 setting still needs the catalog so owners can silently enter a larger supported value.
+    const limit = mod.ok ? await requestServerMods(token, { route: "list", body: { serverId } })
+        .then(state => maximumBattleSize(parseModsState(state).mods)).catch(() => 1000 as const) : 1000;
+    return { server, mod, maximumBattleSize: limit };
 }
 
 // Authenticates and validates configuration writes without changing their inputs.

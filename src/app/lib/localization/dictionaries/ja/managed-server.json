@@ -169,7 +169,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "serverConfigとmodConfigを含むオブジェクトが必要です。",
   "configEditor.expectedExactlyServerconfigAndModconfig": "serverConfigとmodConfigのみを指定してください。",
   "configEditor.0TurnsAutosaveOff": "0にすると自動保存が無効になります。",
-  "configEditor.battleSizeHelp": "戦闘に参加する両陣営の合計兵数（{min}~{max}）。",
+  "configEditor.battleSizeHelp": "戦闘に参加する両軍の兵士の合計です。",
   "configEditor.warSailsHelp": "試験的な機能で、ナイトリーリリースのみ対応です。War Sails で作成したキャンペーンが必要で、プレイヤーも War Sails を有効にする必要があります。",
   "configEditor.serverSettings": "サーバー設定",
   "configEditor.difficulty": "難易度",

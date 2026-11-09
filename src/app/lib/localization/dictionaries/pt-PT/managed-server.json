@@ -169,7 +169,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "Era esperado um objeto com serverConfig e modConfig.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Eram esperados exatamente serverConfig e modConfig.",
   "configEditor.0TurnsAutosaveOff": "0 desativa a gravação automática.",
-  "configEditor.battleSizeHelp": "Total de tropas de ambos os lados de uma batalha, de {min} a {max}.",
+  "configEditor.battleSizeHelp": "Total de tropas dos dois lados de uma batalha.",
   "configEditor.warSailsHelp": "Experimental, apenas em versões nightly. Requer uma campanha criada com War Sails, e os jogadores têm de ativar War Sails.",
   "configEditor.serverSettings": "Definições do servidor",
   "configEditor.difficulty": "Dificuldade",

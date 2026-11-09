@@ -169,7 +169,7 @@
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "Expected an object with serverConfig and modConfig.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Expected exactly serverConfig and modConfig.",
   "configEditor.0TurnsAutosaveOff": "0 turns autosave off.",
-  "configEditor.battleSizeHelp": "Total troops across both sides of a battle, from {min} to {max}.",
+  "configEditor.battleSizeHelp": "Total troops on both sides of a battle.",
   "configEditor.warSailsHelp": "Experimental, nightly releases only. Needs a campaign made with War Sails, and players must turn War Sails on.",
   "configEditor.serverSettings": "Server settings",
   "configEditor.difficulty": "Difficulty",
