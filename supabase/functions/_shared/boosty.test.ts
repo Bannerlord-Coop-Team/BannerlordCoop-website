@@ -88,10 +88,12 @@ test("the client sends exact GETs, replaces a rejected token once and reports a 
     await assert.rejects(denied.dialogs(null), BoostyAuthError);
     const outage = createBoostyApi({ blog: "coop-team", priceField: "RUB", credential: tokens("access-token-xxxxxx", null).provider,
         fetchImplementation: strictFetch([{ method: "GET", url: "https://api.boosty.to/v1/dialog/900/message/?limit=20", headers: apiHeaders("access-token-xxxxxx"), reply: () => new Response("busy", { status: 502 }) }]) });
-    await assert.rejects(outage.messages("900"), (error: Error) => !(error instanceof BoostyAuthError));
+    // A request mismatch inside the strict fake is an AssertionError, which must not pass as the expected failure.
+    const notFake = (error: Error) => !(error instanceof assert.AssertionError);
+    await assert.rejects(outage.messages("900"), (error: Error) => notFake(error) && !(error instanceof BoostyAuthError));
     const html = createBoostyApi({ blog: "coop-team", priceField: "RUB", credential: tokens("access-token-xxxxxx", null).provider,
         fetchImplementation: strictFetch([{ method: "GET", url: "https://api.boosty.to/v1/dialog/?limit=20", headers: apiHeaders("access-token-xxxxxx"), reply: () => new Response("<html>", { headers: { "content-type": "text/html" } }) }]) });
-    await assert.rejects(html.dialogs(null));
+    await assert.rejects(html.dialogs(null), notFake);
 });
 
 test("subscriber, dialog and message parsers read only the allowlisted subset and fail closed on identity", () => {
