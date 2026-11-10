@@ -258,13 +258,95 @@ provider, so one provider's backlog cannot starve another's revocation.
 A Boosty snapshot of a live account that never linked Boosty writes nothing and answers a
 constant `unlinked`/`unverified` head at generation and revision `"0"` with null
 identities. Linking (a one-time code sent by Boosty private message) and evidence polling
-are described in [Boosty membership adapter](boosty-membership.md);
-`20261110120000_boosty_membership_adapter.sql` replaces `membership_provider_fence` so it
-fences the head against the current `boosty_membership.links` binding with the same
-`identity_changed`/`unlinked` rules as Patreon. A deleted account (Auth 404) creates a
-`account_deleted` tombstone at generation 1 with its own Boosty hint, and the Auth
-deletion trigger tombstones every existing provider head after the Patreon head. Both
-use the Patreon fence's account lock and refuse resurrection.
+are described in [Boosty membership adapter](boosty-membership.md). The generic
+`membership_provider_fence` is defined once, in the provider migration: under the
+account lock it reads the provider's current binding through
+`membership_provider_identity(account, provider)` and fences the head with the same
+`identity_changed`/`unlinked` rules as Patreon. The provider migration's lookup refuses
+every provider, so a live non-Patreon fence fails closed until an adapter is installed;
+`20261110120000_boosty_membership_adapter.sql` re-creates it with Boosty's branch
+(`boosty_membership.links`). A deleted account (Auth 404) creates an `account_deleted` tombstone at
+generation 1 with its own Boosty hint, and the Auth deletion trigger tombstones every
+existing provider head after the Patreon head. Both use the Patreon fence's account lock
+and refuse resurrection.
+
+#### Adding a funding provider
+
+The provider list, identifier grammars and policy versions are kept in one place per
+layer and checked against each other:
+
+- TypeScript: `FUNDING_PROVIDERS` and `FUNDING_PROVIDER_GRAMMAR` in
+  `_shared/funding-provider.ts` (`satisfies Record<FundingProvider, …>`, so a provider
+  without an entry fails to compile; the snapshot parser reads it).
+- SQL: the `provider` CHECKs on `membership_outbox` (every provider) and
+  `membership_provider_heads` (every non-Patreon provider),
+  `membership_provider_identifier_valid(provider, kind, value)` (the only SQL copy of the
+  user/program/tier patterns; adapter tables and RPCs call it instead of repeating them),
+  `membership_provider_policy_versions(provider)` (every accepted policy version, oldest
+  first, so stored evidence under an older version stays valid),
+  `membership_provider_empty_evidence(provider)` (empty evidence; `NULL` means "not a
+  provider") and `membership_provider_identity(account, provider)` (the current-link
+  lookup). Adapter tables check identifier columns with the helper, never a raw pattern.
+  Applied migrations are never edited: a new provider is a **new append-only migration**
+  that widens both CHECKs and re-creates all four functions with every existing
+  provider's branch plus its own. The drift test scans
+  `supabase/migrations` and replays every migration that names these objects, any
+  function it checks (including Patreon-era redefinitions of the fence, ack and
+  Auth-deletion functions), a non-Patreon provider id or its adapter schema, so the new
+  migration is covered automatically. Provider CHECKs must equal the generated
+  `provider = ANY (ARRAY[…])` definition exactly. It compares each registry function's whitespace-normalized body with
+  one generated from the fixture and the test's `ADAPTERS` entry (identity lookup and
+  empty-evidence version), pins the provider-neutral fence, notify, claim and ack bodies
+  by digest (a deliberate change updates the digest), and checks every one's language,
+  volatility, definer, `search_path` and EXECUTE grants, so a function re-created with
+  default `PUBLIC` EXECUTE fails.
+- Account surface, Edge: one entry in `fundingAccountSurfaces` (`_shared/website-account.ts`,
+  typed `Record<FundingProvider, …>`).
+- Account surface, wire names: derived as the provider id plus `-status`, `-start` and
+  `-unlink` (`_shared/funding-account.ts`). Patreon's legacy unprefixed `status`/`unlink`
+  is the single explicit exception.
+- Account surface, page: one section in `src/app/account/funding-sections.tsx`.
+- Account surface, disconnect: one explanation in `DisconnectAccount.tsx`.
+- `test/fixtures/cross-repo/funding-provider-contract-v1.json` is byte-identical to
+  ControlPlane's copy at the same path; `tests/funding-provider-contract.test.ts` pins its
+  SHA-256 and checks the TypeScript registry, the snapshot parser and the SQL registry
+  above against it. Change both repositories together, as below.
+
+**Fixture version policy.** Adding a provider, or changing a pattern, member rule or
+policy version, edits `funding-provider-contract-v1.json` in place in both repositories
+in one paired change and updates both digest pins (`CONTRACT_SHA256` in ControlPlane's
+`test/hosting-funding-provider-contract.test.ts` and in the website's
+`tests/funding-provider-contract.test.ts`); ControlPlane's paired harness
+`test/manual/website-membership-fixture.ts` also requires the two copies to be equal.
+Only a change to the fixture's own shape (a field added, renamed or re-typed) bumps
+`fixtureVersion`: the file is renamed to `-v2.json` and both tests' path, version and
+digest constants and the harness's `FUNDING_PROVIDER_CONTRACT` path change together.
+The tests enforce exactly this: they pin `fixtureVersion` 1, the `-v1.json` path and
+the digest.
+
+**Pattern and migration rules.** Registry patterns must contain no `'` or `\`: the
+website drift test generates the expected SQL bodies from the fixture and refuses both
+(write a literal dot as `[.]`, a digit as `[0-9]`). They must also be anchored and
+bounded, built only from literals and character classes with optional `?` or `{m,n}`
+quantifiers, with no groups, alternation, `*`, `+` or `{m,}`: ControlPlane's
+`longestMatch` refuses anything else, and the longest match must fit the 32-character
+`campaign_key`, `patreon_user_id` and `campaign_id` columns. Every website migration the
+drift test replays (any migration naming a registry object, a checked function, a
+non-Patreon provider id or its adapter schema) must apply in PGlite, so top-level
+`cron.schedule`, `create extension` and similar platform statements belong in a separate
+migration that names none of those.
+
+A deployed control plane rejects a whole version 3 claim page if any hint names a
+provider it does not know, stalling every provider's hints. The control plane that knows
+a new provider must be **deployed before** this website emits that provider's hints:
+apply its CP migration and deploy the CP first, then the website migration, Edge
+functions and adapter. `refreshMode` is `oauth_reauthorization` for every provider today
+and the 24-hour freshness window assumes daily evidence re-reads (Patreon webhooks,
+Boosty's 30-minute poll). A webhook-only provider such as Ko-fi would need a
+per-provider refresh mode and a daily re-assertion job; that is future work.
+Also future work: `memberResource` is `"uuid" | "none"`; a provider whose member
+resource is not a UUID would need a per-provider member pattern in the registry, the
+fixture and the SQL helper.
 
 Rollout: apply the migration, then deploy the `control-plane-membership-v1` Edge
 function, then switch the control plane to its provider-list policy. A v2-speaking CP

@@ -87,6 +87,8 @@ test("Boosty adapter links DM codes, decides evidence conservatively and serves 
         // Populated pre-upgrade state: a tombstoned Boosty head and Patreon heads.
         const tombstoned = await fresh(), live = await fresh();
         await rpc("membership_funding_fence", [tombstoned, "boosty", null, true]);
+        // Before an adapter is installed the provider migration's identity stub refuses every live fence.
+        await assert.rejects(rpc("membership_funding_fence", [live, "boosty", null, false]), /Invalid funding provider/u);
         const before = (await query("select * from public.membership_provider_heads order by account_id")).rows;
         const outbox = (await query("select * from public.membership_outbox order by sequence")).rows;
         await db.exec(await readFile(`supabase/migrations/${migration}`, "utf8"));

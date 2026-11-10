@@ -1,7 +1,9 @@
 begin;
 
 -- Boosty membership adapter: DM link codes, the creator credential in Supabase Vault, the
--- subscriber poll's durable state, and the provider fence that reports real link state.
+-- subscriber poll's durable state, and Boosty's arm of the provider identity lookup that the
+-- generic fence (20261109140000_membership_funding_providers.sql) reads. Identifiers are
+-- checked by that migration's membership_provider_identifier_valid, never a local pattern.
 -- Boosty's API is unofficial; every write here treats a failed or partial read as "no
 -- evidence", never as loss. Service role only; browser roles have no access.
 create schema boosty_membership;
@@ -10,7 +12,7 @@ revoke all on schema boosty_membership from public, anon, authenticated, service
 -- Worker lease, pinned blog, poll schedule, circuit-breaker baseline and dispatch state.
 create table boosty_membership.sync_state (
  singleton boolean primary key default true check (singleton),
- blog text check (blog ~ '^[a-z0-9][a-z0-9_-]{0,31}$'),
+ blog text check (public.membership_provider_identifier_valid('boosty','program',blog)),
  worker_token uuid,
  worker_until timestamptz,
  next_poll_at timestamptz not null default '-infinity',
@@ -29,7 +31,7 @@ insert into boosty_membership.sync_state default values;
 -- The authoritative account <-> Boosty user binding, like public.patreon_accounts.
 create table boosty_membership.links (
  account_id uuid primary key references auth.users(id) on delete cascade,
- boosty_user_id text not null unique check (boosty_user_id ~ '^[1-9][0-9]{0,19}$'),
+ boosty_user_id text not null unique check (public.membership_provider_identifier_valid('boosty','user',boosty_user_id)),
  linked_at timestamptz not null default clock_timestamp()
 );
 
@@ -58,7 +60,7 @@ create table boosty_membership.dialog_cursors (
 -- First complete poll that did not list a linked subscriber; cleared when listed again.
 create table boosty_membership.absences (
  account_id uuid primary key references auth.users(id) on delete cascade,
- boosty_user_id text not null check (boosty_user_id ~ '^[1-9][0-9]{0,19}$'),
+ boosty_user_id text not null check (public.membership_provider_identifier_valid('boosty','user',boosty_user_id)),
  absent_since timestamptz not null
 );
 
@@ -86,49 +88,18 @@ alter table boosty_membership.absences enable row level security;
 alter table boosty_membership.creator_credential enable row level security;
 revoke all on all tables in schema boosty_membership from public, anon, authenticated, service_role;
 
--- Caller MUST first read the exact account via Auth admin API. Fences one non-Patreon head
--- against the current link with the same lock, tombstone and Discord rules as membership_fence.
-create or replace function public.membership_provider_fence(p_account_id uuid, p_provider text, p_discord_user_id text, p_deleted boolean) returns jsonb
-language plpgsql security definer set search_path = '' as $$
-declare h public.membership_provider_heads; current_identity text; state text;
+-- The provider registry's identity lookup, re-created with every adapter's branch: the account's
+-- current binding for one provider, or null when unlinked. The generic membership_provider_fence
+-- calls it under the account lock. A later provider's migration re-creates it with Boosty's branch
+-- and its own; a provider without a branch is refused, never read as unlinked. CREATE OR REPLACE
+-- keeps the provider migration's revoked privileges.
+create or replace function public.membership_provider_identity(p_account_id uuid, p_provider text) returns text
+language plpgsql stable security definer set search_path = '' as $$
 begin
- perform set_config('lock_timeout',public.membership_lock_budget(),true);
- if p_provider is distinct from 'boosty' then raise exception 'Invalid funding provider'; end if;
- if not pg_try_advisory_xact_lock(hashtextextended(p_account_id::text, 702)) then raise sqlstate '55P03' using message='membership_retry'; end if;
- if not coalesce(p_deleted,false) then
-  select boosty_user_id into current_identity from boosty_membership.links where account_id=p_account_id;
- end if;
- select * into h from public.membership_provider_heads where account_id=p_account_id and provider=p_provider for update;
- if not found then
-  -- A live account that never bound this provider: a constant generation-0 answer, no writes.
-  if not coalesce(p_deleted,false) and current_identity is null then
-   h.account_id := p_account_id; h.provider := p_provider; h.link_generation := 0; h.revision := 0;
-   h.link_state := 'unlinked'; h.evidence := public.membership_provider_empty_evidence(p_provider);
-   return public.membership_provider_snapshot_json(h);
-  end if;
-  -- A tombstone or a head for an existing link needs the anchor membership_outbox references.
-  insert into public.membership_heads(account_id) values(p_account_id) on conflict do nothing;
-  insert into public.membership_provider_heads(account_id,provider,evidence)
-   values(p_account_id,p_provider,public.membership_provider_empty_evidence(p_provider)) returning * into h;
- end if;
- if p_deleted then current_identity := null; state := 'account_deleted';
- else
-  if h.link_state='account_deleted' then raise exception 'Deleted account cannot be resurrected'; end if;
-  state := case when current_identity is null then 'unlinked' else h.link_state end;
-  if current_identity is not null and h.provider_user_id is distinct from current_identity then state := 'identity_changed'; end if;
- end if;
- if h.provider_user_id is distinct from current_identity or h.link_state is distinct from state then
-  update public.membership_provider_heads set discord_user_id=case when p_deleted then null else p_discord_user_id end, provider_user_id=current_identity,
-   link_generation=link_generation+1, revision=revision+1, link_state=state, evidence=public.membership_provider_empty_evidence(p_provider)
-   where account_id=p_account_id and provider=p_provider returning * into h;
-  perform public.membership_notify_provider(p_account_id,p_provider,true);
- elsif h.discord_user_id is distinct from p_discord_user_id then
-  -- Optional profile metadata changes never invalidate paid membership evidence.
-  update public.membership_provider_heads set discord_user_id=p_discord_user_id, revision=revision+1
-   where account_id=p_account_id and provider=p_provider returning * into h;
-  perform public.membership_notify_provider(p_account_id,p_provider,false);
- end if;
- return public.membership_provider_snapshot_json(h);
+ case p_provider
+  when 'boosty' then return (select boosty_user_id from boosty_membership.links where account_id=p_account_id);
+  else raise exception 'Invalid funding provider';
+ end case;
 end $$;
 
 -- Website account status for Boosty: the fenced head plus the account's link-code state.
@@ -199,7 +170,7 @@ create function boosty_membership.acquire(p_input jsonb) returns jsonb
 language plpgsql security definer set search_path = '' as $$
 declare s boosty_membership.sync_state; token uuid := gen_random_uuid();
 begin
- if p_input->>'blog' is null or p_input->>'blog' !~ '^[a-z0-9][a-z0-9_-]{0,31}$' then raise exception 'invalid_boosty_blog'; end if;
+ if p_input->>'blog' is null or not public.membership_provider_identifier_valid('boosty','program',p_input->>'blog') then raise exception 'invalid_boosty_blog'; end if;
  -- A concurrent acquirer holds the row: that run owns the lease, so this one is already running.
  select * into s from boosty_membership.sync_state where singleton for update skip locked;
  if not found then return null; end if;
@@ -242,7 +213,7 @@ begin
   raise exception 'invalid_boosty_matches';
  end if;
  for m in select * from jsonb_to_recordset(p_input->'matches') as x("messageId" bigint, "boostyUserId" text, "codeHash" text, "messageAt" timestamptz) loop
-  if m."messageId" is null or m."messageId" < 1 or m."messageId" > through or m."boostyUserId" !~ '^[1-9][0-9]{0,19}$' or m."codeHash" !~ '^[a-f0-9]{64}$' then
+  if m."messageId" is null or m."messageId" < 1 or m."messageId" > through or not public.membership_provider_identifier_valid('boosty','user',m."boostyUserId") or m."codeHash" !~ '^[a-f0-9]{64}$' then
    raise exception 'invalid_boosty_match';
   end if;
   select * into c from boosty_membership.link_codes where code_hash=m."codeHash" and outcome is null for update;
@@ -300,9 +271,9 @@ language sql immutable set search_path = '' as $$
   and e ?& array['verification','programId','memberId','tierIds','verifiedAt','paidThroughAt','policyVersion','evidenceSha256']
   and e->>'verification' in ('qualifying','nonqualifying','unknown','review_required')
   and e->>'programId' is not distinct from p_blog and e->'memberId'='null'::jsonb and e->'paidThroughAt'='null'::jsonb
-  and e->>'policyVersion'='boosty-paid-v1'
+  and e->>'policyVersion'=any(public.membership_provider_policy_versions('boosty'))
   and jsonb_typeof(e->'tierIds')='array' and jsonb_array_length(e->'tierIds') <= 1
-  and not exists(select 1 from jsonb_array_elements(e->'tierIds') t where jsonb_typeof(t)<>'string' or t#>>'{}' !~ '^[1-9][0-9]{0,19}$')
+  and not exists(select 1 from jsonb_array_elements(e->'tierIds') t where jsonb_typeof(t)<>'string' or not public.membership_provider_identifier_valid('boosty','tier',t#>>'{}'))
   and jsonb_typeof(e->'verifiedAt')='string' and e->>'verifiedAt' ~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$'
   and jsonb_typeof(e->'evidenceSha256')='string' and e->>'evidenceSha256' ~ '^[a-f0-9]{64}$'
   and (e->>'verification'<>'qualifying' or jsonb_array_length(e->'tierIds')=1)
@@ -319,7 +290,7 @@ begin
  select s.blog into strict blog from boosty_membership.sync_state s where singleton;
  if jsonb_typeof(p_input->'results') <> 'array' or jsonb_array_length(p_input->'results') > 200 then raise exception 'invalid_boosty_results'; end if;
  for r in select * from jsonb_to_recordset(p_input->'results') as x("accountId" uuid, "providerUserId" text, "linkGeneration" bigint, evidence jsonb, "absentSince" timestamptz) loop
-  if r."accountId" is null or r."providerUserId" !~ '^[1-9][0-9]{0,19}$' or r."linkGeneration" is null or not boosty_membership.valid_evidence(r.evidence, blog) then
+  if r."accountId" is null or not public.membership_provider_identifier_valid('boosty','user',r."providerUserId") or r."linkGeneration" is null or not boosty_membership.valid_evidence(r.evidence, blog) then
    raise exception 'invalid_boosty_result';
   end if;
   if not pg_try_advisory_xact_lock(hashtextextended(r."accountId"::text, 702)) then continue; end if; -- a busy account keeps its evidence until the next poll
