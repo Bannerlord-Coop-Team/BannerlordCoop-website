@@ -170,8 +170,6 @@
   "configEditor.expectedExactlyServerconfigAndModconfig": "serverConfig와 modConfig만 있어야 합니다.",
   "configEditor.0TurnsAutosaveOff": "0으로 설정하면 자동 저장이 꺼집니다.",
   "configEditor.battleSizeHelp": "전투에 참여하는 양측 병력의 총합입니다.",
-  "configEditor.warSailsOn": "War Sails: 켜짐 — 활성 캠페인에 따라 설정됨",
-  "configEditor.warSailsOff": "War Sails: 꺼짐 — 활성 캠페인에 따라 설정됨",
   "configEditor.serverSettings": "서버 설정",
   "configEditor.difficulty": "난이도",
   "configEditor.gameplayOptions": "게임플레이 옵션",

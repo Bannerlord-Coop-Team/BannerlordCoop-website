@@ -170,8 +170,6 @@
   "configEditor.expectedExactlyServerconfigAndModconfig": "Expected exactly serverConfig and modConfig.",
   "configEditor.0TurnsAutosaveOff": "0 turns autosave off.",
   "configEditor.battleSizeHelp": "Total troops on both sides of a battle.",
-  "configEditor.warSailsOn": "War Sails: On — set by the active campaign",
-  "configEditor.warSailsOff": "War Sails: Off — set by the active campaign",
   "configEditor.serverSettings": "Server settings",
   "configEditor.difficulty": "Difficulty",
   "configEditor.gameplayOptions": "Gameplay options",
