@@ -33,9 +33,21 @@ const ADAPTERS: Record<AdapterProvider, { schema: string; identifiers: Identifie
 };
 const ADAPTER_PROVIDERS = FUNDING_PROVIDERS.filter((provider): provider is AdapterProvider => provider !== "patreon");
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
-// Patreon's own name appears throughout its historical tables, which keep their own CHECKs outside this registry.
-const REGISTRY_OBJECTS = new RegExp(["membership_provider_", "membership_notify_provider", "membership_outbox",
-    ...ADAPTER_PROVIDERS.flatMap(provider => [provider, ADAPTERS[provider].schema])].map(escape).join("|"), "u");
+
+/** Quotes a fixture or adapter value as a SQL string literal, refusing a quote instead of escaping it. */
+function sqlLiteral(value: string): string {
+    assert.ok(!value.includes("'") && !value.includes("\\"), `unexpected quote or backslash in ${value}`);
+    return `'${value}'`;
+}
+
+/** Every object whose later redefinition must be replayed: each checked function, the provider tables, the
+ * prefix of every registry helper, and each non-Patreon provider id and adapter schema. Patreon's own name is
+ * left out: it appears throughout its historical tables, which keep their own CHECKs outside this registry. */
+function registryObjects(contract: { providers: ContractProvider[] }): RegExp {
+    const functions = Object.keys(registryFunctions(contract)).map(signature => /^public\.([a-z_]+)\(/u.exec(signature)![1]);
+    const names = [...functions, "membership_provider_heads", "membership_outbox", ...ADAPTER_PROVIDERS.flatMap(provider => [provider, ADAPTERS[provider].schema])];
+    return new RegExp(`membership_provider_|${names.map(name => `\\b${escape(name)}\\b`).join("|")}`, "u");
+}
 type Identifiers = { userId: string; programId: string; tierId: string; memberId: string | null };
 type ContractProvider = { provider: FundingProvider; userId: string; programId: string; tierId: string; memberResource: "uuid" | "none"; policyVersions: string[]; valid: Identifiers; invalid: Identifiers };
 type Row = Record<string, unknown>;
@@ -54,12 +66,13 @@ function snapshot(entry: ContractProvider, ids: Identifiers) {
 }
 
 /** Lists, in apply (filename) order, the prerequisites plus every migration naming a registry object. */
-async function replayedMigrations(): Promise<string[]> {
+async function replayedMigrations(contract: { providers: ContractProvider[] }): Promise<string[]> {
+    const objects = registryObjects(contract);
     const all = (await readdir("supabase/migrations")).filter(name => name.endsWith(".sql")).sort();
     for (const name of PREREQUISITES) assert.ok(all.includes(name), `missing prerequisite ${name}`);
     const replayed: string[] = [];
     for (const name of all) {
-        if (PREREQUISITES.includes(name) || REGISTRY_OBJECTS.test(await readFile(`supabase/migrations/${name}`, "utf8"))) replayed.push(name);
+        if (PREREQUISITES.includes(name) || objects.test(await readFile(`supabase/migrations/${name}`, "utf8"))) replayed.push(name);
     }
     assert.ok(replayed.includes("20261109140000_membership_funding_providers.sql") && replayed.includes("20261110120000_boosty_membership_adapter.sql"));
     return replayed;
@@ -81,10 +94,10 @@ function registryFunctions(contract: { providers: ContractProvider[] }): Record<
     const registry = (body: string, language: "sql" | "plpgsql" = "sql", volatility: "i" | "s" = "i", securityDefiner = false): FunctionSpec => ({ language, volatility, securityDefiner, execute: "none", body: { exact: body } });
     const pinned = (sha256: string, execute: "none" | "service_role", language: "sql" | "plpgsql" = "plpgsql", volatility: "s" | "v" = "v", securityDefiner = true): FunctionSpec => ({ language, volatility, securityDefiner, execute, body: { sha256 } });
     return {
-        "public.membership_provider_identifier_valid(text,text,text)": registry(`select case p_provider || ':' || p_kind ${others.flatMap(entry => fields.map(field => `when '${entry.provider}:${KINDS[field]}' then p_value ~ '${entry[field]}'`)).join(" ")} else false end`),
-        "public.membership_provider_policy_versions(text)": registry(`select case p_provider ${others.map(entry => `when '${entry.provider}' then array[${entry.policyVersions.map(version => `'${version}'`).join(",")}]`).join(" ")} end`),
-        "public.membership_provider_empty_evidence(text)": registry(`select case p_provider ${others.map(entry => `when '${entry.provider}' then '${empty(ADAPTERS[entry.provider as AdapterProvider].emptyPolicyVersion)}'::jsonb`).join(" ")} end`),
-        "public.membership_provider_identity(uuid,text)": registry(`begin case p_provider ${others.map(entry => `when '${entry.provider}' then return (${ADAPTERS[entry.provider as AdapterProvider].identity});`).join(" ")} else raise exception 'Invalid funding provider'; end case; end`, "plpgsql", "s", true),
+        "public.membership_provider_identifier_valid(text,text,text)": registry(`select case p_provider || ':' || p_kind ${others.flatMap(entry => fields.map(field => `when ${sqlLiteral(`${entry.provider}:${KINDS[field]}`)} then p_value ~ ${sqlLiteral(entry[field])}`)).join(" ")} else false end`),
+        "public.membership_provider_policy_versions(text)": registry(`select case p_provider ${others.map(entry => `when ${sqlLiteral(entry.provider)} then array[${entry.policyVersions.map(sqlLiteral).join(",")}]`).join(" ")} end`),
+        "public.membership_provider_empty_evidence(text)": registry(`select case p_provider ${others.map(entry => `when ${sqlLiteral(entry.provider)} then ${sqlLiteral(empty(ADAPTERS[entry.provider as AdapterProvider].emptyPolicyVersion))}::jsonb`).join(" ")} end`),
+        "public.membership_provider_identity(uuid,text)": registry(`begin case p_provider ${others.map(entry => `when ${sqlLiteral(entry.provider)} then return (${ADAPTERS[entry.provider as AdapterProvider].identity});`).join(" ")} else raise exception 'Invalid funding provider'; end case; end`, "plpgsql", "s", true),
         "public.membership_provider_snapshot_json(membership_provider_heads)": pinned("d990d1b1932af11f34c4563f771550a7ad6408c81014e9ebb5264fe894c646eb", "none", "sql", "s", false),
         "public.membership_notify_provider(uuid,text,boolean)": pinned("9f71c677e931612350e79b9cc7f11daf2997681065ca43f1208ca5645100c9cf", "none"),
         "public.membership_provider_fence(uuid,text,text,boolean)": pinned("7c33a93d542223a71fd16d93970e6c76484a0f2d7a4aa2ead42ef1658df7005b", "none"),
@@ -97,9 +110,10 @@ function registryFunctions(contract: { providers: ContractProvider[] }): Record<
     };
 }
 
-/** Extracts the quoted provider names of one CHECK definition, in order. */
-function checkedProviders(definition: string): string[] {
-    return [...definition.matchAll(/'([a-z0-9-]+)'::text/gu)].map(match => match[1]);
+/** The exact definition PostgreSQL reports for `provider in (...)` over these providers. */
+function providerCheck(providers: readonly string[]): string {
+    const literals = providers.map(provider => `${sqlLiteral(provider)}::text`);
+    return literals.length === 1 ? `CHECK ((provider = ${literals[0]}))` : `CHECK ((provider = ANY (ARRAY[${literals.join(", ")}])))`;
 }
 
 test("the TypeScript registry and snapshot parser match the shared provider contract", async () => {
@@ -126,11 +140,13 @@ test("the TypeScript registry and snapshot parser match the shared provider cont
 test("the SQL provider registry matches the TypeScript provider list and the shared contract", async () => {
     const { contract } = await readContract();
     const others = contract.providers.filter(entry => entry.provider !== "patreon");
+    // Generated SQL never splices a quote or backslash from the fixture into a literal.
+    for (const unsafe of ["^a'b$", "^\\d$"]) assert.throws(() => sqlLiteral(unsafe), /unexpected quote or backslash/u);
     const db = new PGlite();
     const query = async (sql: string, args: unknown[] = []) => (await db.query<Row>(sql, args)).rows;
     try {
         await db.exec("create schema auth; create table auth.users(id uuid primary key, email text, email_confirmed_at timestamptz, deleted_at timestamptz, banned_until timestamptz, raw_app_meta_data jsonb default '{}', updated_at timestamptz default now()); create role anon; create role authenticated; create role service_role;");
-        for (const name of await replayedMigrations()) await db.exec(await readFile(`supabase/migrations/${name}`, "utf8"));
+        for (const name of await replayedMigrations(contract)) await db.exec(await readFile(`supabase/migrations/${name}`, "utf8"));
 
         // Every CHECK on a public `provider` column: the outbox names every provider, provider heads every non-Patreon one.
         const checks = await query(`select c.conrelid::regclass::text as "table", pg_get_constraintdef(c.oid) as definition from pg_constraint c
@@ -139,7 +155,7 @@ test("the SQL provider registry matches the TypeScript provider list and the sha
         assert.deepEqual(checks.map(check => check.table), ["membership_outbox", "membership_provider_heads"]);
         for (const check of checks) {
             const expected = check.table === "membership_provider_heads" ? others.map(entry => entry.provider) : [...FUNDING_PROVIDERS];
-            assert.deepEqual(checkedProviders(check.definition as string), expected, check.table as string);
+            assert.equal(check.definition, providerCheck(expected), check.table as string);
         }
 
         // Storage-level identifier CHECKs: exactly the expected set, each calling the helper, and no other CHECK
@@ -147,7 +163,7 @@ test("the SQL provider registry matches the TypeScript provider list and the sha
         const schemas = ["public", ...ADAPTER_PROVIDERS.map(provider => ADAPTERS[provider].schema)];
         const expected = [{ table: "membership_provider_heads", column: "provider_user_id", definition: "CHECK (membership_provider_identifier_valid(provider, 'user'::text, provider_user_id))" },
             ...ADAPTER_PROVIDERS.flatMap(provider => ADAPTERS[provider].identifiers.map(({ table, column, kind }) =>
-                ({ table, column, definition: `CHECK (membership_provider_identifier_valid('${provider}'::text, '${kind}'::text, ${column}))` })))];
+                ({ table, column, definition: `CHECK (membership_provider_identifier_valid(${sqlLiteral(provider)}::text, ${sqlLiteral(kind)}::text, ${column}))` })))];
         const definitions = async (where: string, args: unknown[]) => (await query(`select c.conrelid::regclass::text as "table", replace(pg_get_constraintdef(c.oid), 'public.', '') as definition
             from pg_constraint c where c.contype = 'c' and c.connamespace = any(select oid from pg_namespace where nspname = any($1::text[])) and ${where} order by 1, 2`, [schemas, ...args]))
             .map(row => ({ table: row.table as string, definition: row.definition as string }));

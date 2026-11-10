@@ -290,9 +290,11 @@ layer and checked against each other:
   Applied migrations are never edited: a new provider is a **new append-only migration**
   that widens both CHECKs and re-creates all four functions with every existing
   provider's branch plus its own. The drift test scans
-  `supabase/migrations` and replays every migration that names these objects, a
-  non-Patreon provider id or its adapter schema, so the new migration is covered
-  automatically. It compares each registry function's whitespace-normalized body with
+  `supabase/migrations` and replays every migration that names these objects, any
+  function it checks (including Patreon-era redefinitions of the fence, ack and
+  Auth-deletion functions), a non-Patreon provider id or its adapter schema, so the new
+  migration is covered automatically. Provider CHECKs must equal the generated
+  `provider = ANY (ARRAY[…])` definition exactly. It compares each registry function's whitespace-normalized body with
   one generated from the fixture and the test's `ADAPTERS` entry (identity lookup and
   empty-evidence version), pins the provider-neutral fence, notify, claim and ack bodies
   by digest (a deliberate change updates the digest), and checks every one's language,
@@ -308,12 +310,19 @@ layer and checked against each other:
 - `test/fixtures/cross-repo/funding-provider-contract-v1.json` is byte-identical to
   ControlPlane's copy at the same path; `tests/funding-provider-contract.test.ts` pins its
   SHA-256 and checks the TypeScript registry, the snapshot parser and the SQL registry
-  above against it. Change both repositories together. Bumping the fixture version means
-  renaming the file (`-v2.json`, keeping `-v1.json` while older peers still validate
-  against it) and updating, in the same change, the path and digest constants of this
-  test, of ControlPlane's `test/hosting-funding-provider-contract.test.ts`, and the
-  `FUNDING_PROVIDER_CONTRACT` path of ControlPlane's paired harness
-  `test/manual/website-membership-fixture.ts`.
+  above against it. Change both repositories together, as below.
+
+**Fixture version policy.** Adding a provider, or changing a pattern, member rule or
+policy version, edits `funding-provider-contract-v1.json` in place in both repositories
+in one paired change and updates both digest pins (`CONTRACT_SHA256` in ControlPlane's
+`test/hosting-funding-provider-contract.test.ts` and in the website's
+`tests/funding-provider-contract.test.ts`); ControlPlane's paired harness
+`test/manual/website-membership-fixture.ts` also requires the two copies to be equal.
+Only a change to the fixture's own shape (a field added, renamed or re-typed) bumps
+`fixtureVersion`: the file is renamed to `-v2.json` and both tests' path, version and
+digest constants and the harness's `FUNDING_PROVIDER_CONTRACT` path change together.
+The tests enforce exactly this: they pin `fixtureVersion` 1, the `-v1.json` path and
+the digest.
 
 A deployed control plane rejects a whole version 3 claim page if any hint names a
 provider it does not know, stalling every provider's hints. The control plane that knows
