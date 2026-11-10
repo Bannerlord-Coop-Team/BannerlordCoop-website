@@ -1,12 +1,17 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { createMyServersHandler } from "../../../../supabase/functions/_shared/my-servers.ts";
 import { campaignResetStatusMessage } from "../../../../supabase/functions/_shared/server-campaign-contract.ts";
 import { getMyServerCampaignResetStatus, resetMyServerCampaign } from "./server-campaigns.ts";
 import { MyServersApiError } from "./my-servers.ts";
 
-const fixture = JSON.parse(readFileSync(new URL("../../../../test/fixtures/campaign-reset/v1.json", import.meta.url), "utf8"));
+const fixtureBytes = readFileSync(new URL("../../../../test/fixtures/campaign-reset/v1.json", import.meta.url));
+const fixture = JSON.parse(fixtureBytes.toString("utf8"));
+const captureBytes = readFileSync(new URL("../../../../test/fixtures/campaign-reset/capture-v1.json", import.meta.url));
+const capture = JSON.parse(captureBytes.toString("utf8"));
+const provenance = JSON.parse(readFileSync(new URL("../../../../test/fixtures/campaign-reset/provenance.json", import.meta.url), "utf8"));
 const { serverId, jobId } = fixture;
 const originalFetch = globalThis.fetch;
 const previous = { url: process.env.NEXT_PUBLIC_SUPABASE_URL, key: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY };
@@ -54,10 +59,24 @@ function wire(response: (requestId: string) => Response) {
     return () => { assert.deepEqual(requestFailures, []); assert.equal(edgeCalls, 1); assert.equal(upstreamCalls, 1); };
 }
 
+test("paired reset fixture and recorded exchanges retain both implementation heads and content digests", () => {
+    assert.equal(fixture.schemaVersion, 1);
+    assert.equal(fixture.contract, "managed-hosting.campaign-reset-status");
+    assert.equal(provenance.schemaVersion, 1);
+    assert.equal(createHash("sha256").update(fixtureBytes).digest("hex"), provenance.fixtureSha256);
+    assert.equal(createHash("sha256").update(captureBytes).digest("hex"), provenance.captureSha256);
+    assert.equal(capture.fixtureSha256, provenance.fixtureSha256);
+    assert.equal(capture.cpHead, provenance.producer.captureHead);
+    assert.equal(capture.websiteHead, provenance.consumer.captureHead);
+    assert.equal(capture.legacyHead, provenance.olderProducerHead);
+});
+
 test("real Website client and Edge consume the fixed refusal without submitting another reset", async () => {
     const { state, errorCode, instruction } = fixture.terminalFailures[0];
     const failure = { state, errorCode, instruction };
-    const result = { serverId, jobId, ...failure };
+    // The recorded result came through the real CP HTTP/IPC/runtime; only synthetic identity bindings are replaced.
+    const result = { ...capture.exchanges[2].response.body.result, serverId, jobId };
+    assert.deepEqual(result, { serverId, jobId, ...failure });
     const check = wire(requestId => Response.json({ version: 1, requestId, ok: true, result }));
     const status = await getMyServerCampaignResetStatus("synthetic-owner-token", serverId, jobId);
     assert.deepEqual(status, result);
