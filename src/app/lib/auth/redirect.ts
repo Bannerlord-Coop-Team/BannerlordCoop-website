@@ -1,6 +1,6 @@
 export function getSafeDestination(value: string | null, origin: string) {
     const fallback = new URL("/", origin);
-    if (!value?.startsWith("/") || value.startsWith("//") || value.includes("\\")) {
+    if (!value?.startsWith("/") || value.startsWith("//") || value.includes("\\") || /[\x00-\x1f\x7f]/u.test(value)) {
         return fallback;
     }
 

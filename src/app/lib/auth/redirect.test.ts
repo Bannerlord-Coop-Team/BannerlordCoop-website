@@ -26,6 +26,23 @@ test("rejects external and scheme-relative destinations", () => {
     }
 });
 
+test("rejects control characters before URL parsing can silently remove or normalize them", () => {
+    for (const value of ["/admin\r\n", "/admin\t", "/admin?tab=a\nb", "/admin\u0000", "/admin\u001f", "/admin\u007f"]) {
+        assert.equal(getSafeDestination(value, origin).href, `${origin}/`);
+        const login = new URL(getLoginRedirect(value, {}), origin);
+        assert.equal(login.searchParams.get("next"), "/");
+    }
+});
+
+test("encoded separators stay path or query data and never become an external authority", () => {
+    for (const value of ["/%2F%2Fevil.test/path", "/%5C%5Cevil.test/path", "/%252F%252Fevil.test/path", "/admin?q=%2F%2Fevil.test%0D%0A"]) {
+        const destination = getSafeDestination(value, origin);
+        assert.equal(destination.origin, origin);
+        assert.equal(destination.href, new URL(value, origin).href);
+        assert.doesNotMatch(destination.href, /[\r\n\t\\]/u);
+    }
+});
+
 test("encodes the full admin destination and repeated query values inside one relative login next", () => {
     const login = new URL(getLoginRedirect("/admin/control-plane", {
         view: "server", serverId: "11111111-1111-4111-8111-111111111111", q: ["a & b", "//evil.test"], next: "https://evil.test", unused: undefined,
