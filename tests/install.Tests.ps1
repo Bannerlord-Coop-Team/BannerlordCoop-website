@@ -407,6 +407,28 @@ try {
     Remove-Item -LiteralPath $installRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+$driveRootTarget = Join-Path ([IO.Path]::GetTempPath()) ('BannerlordCoopDriveRootServerTests-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $driveRootTarget -Force | Out-Null
+try {
+    $driveRootUsedNames = @(Get-PSDrive -PSProvider FileSystem | ForEach-Object { $_.Name.ToUpperInvariant() })
+    $driveRootName = @(68..90 | ForEach-Object { ([char]$_).ToString() } | Where-Object { $driveRootUsedNames -notcontains $_ }) | Select-Object -First 1
+    if (-not $driveRootName) { throw 'The drive-root server install test requires an available drive letter.' }
+    & "$env:SystemRoot\System32\subst.exe" "$($driveRootName):" "$driveRootTarget"
+    if ($LASTEXITCODE -ne 0) { throw 'The drive-root server install test could not map its temporary drive.' }
+    try {
+        $driveRootServer = Join-Path "$($driveRootName):\" 'BannerlordCoop Dedicated Server'
+        $script:DownloadedLabels = @()
+        Install-Server $validManifest.server $driveRootServer 'unused.exe'
+        if (-not (Test-Path -LiteralPath (Join-Path $driveRootServer 'BannerlordCoopServer.exe') -PathType Leaf)) {
+            throw 'The dedicated server was not installed into a folder directly under a drive root.'
+        }
+    } finally {
+        & "$env:SystemRoot\System32\subst.exe" "$($driveRootName):" '/d'
+    }
+} finally {
+    Remove-Item -LiteralPath $driveRootTarget -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 function New-GatewayWebError {
     param(
         [Parameter(Mandatory = $true)][int]$StatusCode,
