@@ -362,11 +362,11 @@ test("CP version 2 snapshots and version 3 claims are strict per provider and fa
     assert.deepEqual(bodies, [{ p_account_id: accountId, p_provider: "boosty", p_discord_user_id: null, p_deleted: false }]);
     reply = patreon; assert.deepEqual(await snapshot("patreon"), { status: 200, body: patreon });
     for (const paidAccessEndedAt of [null, now]) { reply = { ...patreon, paidAccessEndedAt }; assert.equal((await snapshot("patreon")).status, 200); }
-    // Each response must name the requested account and provider and satisfy that provider's grammar.
+    // Each response must name the requested account and provider and satisfy that provider's grammar; per-field
+    // identifier grammar is pinned by the shared provider contract test.
     for (const [provider, bad] of [
         ["boosty", patreon], ["patreon", boosty], ["boosty", { ...boosty, accountId: "dddddddd-1111-4111-8111-111111111111" }], ["boosty", { ...boosty, version: 1 }],
-        ["boosty", { ...boosty, memberId }], ["boosty", { ...boosty, programId: "Coop" }], ["boosty", { ...boosty, providerUserId: "1".repeat(21) }],
-        ["boosty", { ...boosty, policyVersion: POLICY_VERSION }], ["patreon", { ...patreon, policyVersion: "boosty-paid-v1" }], ["patreon", { ...patreon, programId: "coop" }],
+        ["boosty", { ...boosty, memberId }], ["boosty", { ...boosty, policyVersion: POLICY_VERSION }], ["patreon", { ...patreon, policyVersion: "boosty-paid-v1" }],
         ["patreon", { ...patreon, memberId: null, tierIds: ["20", "20"] }], ["boosty", { ...boosty, extra: true }], ["patreon", { ...patreon, patreonUserId: "1" }],
         ["boosty", { ...boosty, linkGeneration: 0 }], ["boosty", { ...boosty, paidAccessEndedAt: "yesterday" }], ["patreon", { ...patreon, campaignId: "10", programId: undefined }],
     ] as const) { reply = bad; assert.equal((await snapshot(provider)).status, 503, JSON.stringify(bad)); }
