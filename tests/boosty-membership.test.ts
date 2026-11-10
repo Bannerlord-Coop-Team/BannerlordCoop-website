@@ -281,12 +281,13 @@ test("Boosty adapter links DM codes, decides evidence conservatively and serves 
             assert.deepEqual([snapshot.providerUserId, snapshot.verification, snapshot.tierIds, snapshot.programId], ["8888", "qualifying", ["555"], "coop-team"]);
             // Not due again: the next wake reads dialogs only.
             calls.length = 0; assert.equal((await wake()).status, 200); assert.deepEqual(calls, ["dialogs:null"]);
-            // Unsubscribed is explicit loss on the next complete poll.
+            // A cancelled but still listed subscription stops qualifying without being loss:
+            // its paid period may continue, and only confirmed absence from the list proves it ended.
             await query("update boosty_membership.sync_state set next_poll_at='-infinity'");
             subscribers.set("8888", subscriber("8888", { subscribed: false }));
             assert.equal((await wake()).status, 200);
-            const lost = await cpSnapshot(id);
-            assert.equal(lost.verification, "nonqualifying"); assert.equal(lost.paidAccessEndedAt, lost.verifiedAt);
+            const cancelled = await cpSnapshot(id);
+            assert.equal(cancelled.verification, "nonqualifying"); assert.equal(cancelled.paidAccessEndedAt, undefined);
             assert.deepEqual(alerts, []);
             assert.deepEqual((await accountCall({ operation: "boosty-unlink" })).body, { unlinked: true });
             assert.equal((await cpSnapshot(id)).linkState, "unlinked");

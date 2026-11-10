@@ -56,7 +56,7 @@ duplicate ids and no change of `total` between pages. After a complete poll:
 | Observation | Evidence |
 | --- | --- |
 | listed, `subscribed: true`, not blacklisted, level in `qualifyingLevelIds`, level price ≥ `minimumPrice` | `qualifying`, `tierIds: [level]` |
-| listed, `subscribed: false` | `nonqualifying`, no tiers, `paidAccessEndedAt = verifiedAt` (explicit loss) |
+| listed, `subscribed: false` | `nonqualifying`, no tiers, **no loss**: a cancelled subscription can keep paid access until its period ends and the list exposes no paid-through time |
 | listed and subscribed, but blacklisted, another level or a lower price | `nonqualifying`, no loss |
 | listed with `subscribed`, blacklist, level or price missing or malformed | `unknown` |
 | absent, first complete poll | `nonqualifying`, no loss; absence recorded |

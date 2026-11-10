@@ -114,7 +114,7 @@ test("subscriber, dialog and message parsers read only the allowlisted subset an
         { messageId: "32", authorId: "1", messageAt: null, code: null }]);
 });
 
-test("evidence: qualifying, explicit unsubscribe loss, two-poll absence, no-loss uncertainty and nextPayTime ignored", async () => {
+test("evidence: qualifying, no-loss unsubscribe, two-poll absence, no-loss uncertainty and nextPayTime ignored", async () => {
     const decide = (subscriber: BoostySubscriber | undefined, at = polledAt, absentSince: string | null = null) => decideBoostyEvidence(policy, { ...head, absentSince }, subscriber, at);
     const listed = (overrides: Partial<BoostySubscriber> = {}): BoostySubscriber => ({ id: "4242", subscribed: true, blacklisted: false, levelId: "555", price: 500, ...overrides });
     const qualifying = await decide(listed());
@@ -122,7 +122,9 @@ test("evidence: qualifying, explicit unsubscribe loss, two-poll absence, no-loss
     assert.match(qualifying.evidence.evidenceSha256, /^[a-f0-9]{64}$/u); assert.equal(qualifying.absentSince, null);
     assert.equal((await decide(listed())).evidence.evidenceSha256, qualifying.evidence.evidenceSha256, "the digest is deterministic");
     const unsubscribed = await decide(listed({ subscribed: false }));
-    assert.deepEqual([unsubscribed.evidence.verification, unsubscribed.evidence.tierIds, unsubscribed.evidence.paidAccessEndedAt], ["nonqualifying", [], polledAt]);
+    // Still listed after cancelling may still be paid access: nonqualifying for new allocation, never loss.
+    assert.deepEqual([unsubscribed.evidence.verification, unsubscribed.evidence.tierIds, unsubscribed.evidence.paidAccessEndedAt, unsubscribed.absentSince],
+        ["nonqualifying", [], undefined, null]);
     const firstAbsence = await decide(undefined);
     assert.deepEqual([firstAbsence.evidence.verification, firstAbsence.evidence.paidAccessEndedAt, firstAbsence.absentSince], ["nonqualifying", undefined, polledAt]);
     const soon = await decide(undefined, "2026-11-10T12:59:59.999Z", polledAt);

@@ -23,7 +23,9 @@ function classify(policy: BoostyPolicy, head: LinkedBoostyHead, subscriber: Boos
         const confirmed = Date.parse(polledAt) - Date.parse(head.absentSince) >= ABSENCE_CONFIRMATION_MS;
         return { verification: "nonqualifying", tierIds: [], loss: confirmed, absentSince: head.absentSince };
     }
-    if (subscriber.subscribed === false) return { verification: "nonqualifying", tierIds: [], loss: true, absentSince: null };
+    // A cancelled subscription can keep paid access until its period ends, and the list exposes
+    // no paid-through time, so only confirmed absence from the list proves the access ended.
+    if (subscriber.subscribed === false) return { verification: "nonqualifying", tierIds: [], loss: false, absentSince: null };
     if (subscriber.subscribed !== true || subscriber.blacklisted === null || subscriber.levelId === null || subscriber.price === null) {
         return { verification: "unknown", tierIds: [], loss: false, absentSince: null };
     }
