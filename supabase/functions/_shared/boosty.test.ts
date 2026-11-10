@@ -66,9 +66,8 @@ test("link codes are canonical, hash-only and matched only when exactly one appe
 test("only the allowlisted routes exist, each with an exact query", () => {
     assert.equal(BOOSTY_API_ORIGIN, "https://api.boosty.to");
     assert.equal(boostyUrl({ route: "subscribers", blog: "coop-team", offset: 200 }).href, "https://api.boosty.to/v1/blog/coop-team/subscribers?limit=100&offset=200&sort_by=on_time&order=gt&with_follow=false");
-    assert.equal(boostyUrl({ route: "dialogs", offset: null }).href, "https://api.boosty.to/v1/dialog/?limit=20");
+    // The first dialog page and message routes are pinned by the exact-request client test below.
     assert.equal(boostyUrl({ route: "dialogs", offset: "40" }).href, "https://api.boosty.to/v1/dialog/?limit=20&offset=40");
-    assert.equal(boostyUrl({ route: "messages", dialogId: "900" }).href, "https://api.boosty.to/v1/dialog/900/message/?limit=20");
     for (const bad of [{ route: "subscribers", blog: "../x", offset: 0 }, { route: "subscribers", blog: "coop-team", offset: -1 }, { route: "subscribers", blog: "coop-team", offset: 5001 },
         { route: "dialogs", offset: "1&x=1" }, { route: "messages", dialogId: "1/../2" }, { route: "messages", dialogId: "0" }, { route: "levels" }] as never[]) assert.throws(() => boostyUrl(bad), JSON.stringify(bad));
 });

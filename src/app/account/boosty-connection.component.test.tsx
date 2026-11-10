@@ -33,27 +33,27 @@ function render(status: typeof base, code: string | null = null, result?: string
 }
 
 it("offers a code to an unlinked account and shows it with DM instructions only while it is the pending one", () => {
-    expect(render(base).textContent).toContain("Get a Boosty link code");
+    expect(render(base).textContent).toContain(t("boosty.start"));
     const pending = { ...base, pending: { expiresAt: "2026-11-10T12:30:00.000Z", matches: true } };
     const shown = render(pending, "BLC-AB12C-DE34F");
     expect(shown.querySelector("code")?.textContent).toBe("BLC-AB12C-DE34F");
-    expect(shown.textContent).toContain("Send this code as a private message to Coop Team on Boosty");
-    expect(shown.textContent).toContain("12:30 UTC");
-    expect(shown.textContent).toContain("Get a new code");
+    // The creator name and the code's UTC expiry reach the instructions; a pending code offers a new one, not a first one.
+    expect(shown.textContent).toContain(t("boosty.codeInstructions", { creator: "Coop Team", expiresAt: "12:30 UTC" }));
+    expect(shown.textContent).toContain(t("boosty.restart"));
     const lost = render({ ...pending, pending: { ...pending.pending, matches: false } }, "BLC-AB12C-DE34F");
     expect(lost.querySelector("code")).toBeNull();
-    expect(lost.textContent).toContain("A link code is waiting for your message.");
+    expect(lost.textContent).toContain(t("boosty.codeWaiting"));
 });
 
 it("explains conflicts and superseded codes, and shows linked verification with disconnect", () => {
-    expect(render({ ...base, outcome: "conflict" }).querySelector('[role="alert"]')?.textContent).toContain("already linked to another website account");
-    expect(render({ ...base, outcome: "superseded" }).querySelector('[role="alert"]')?.textContent).toContain("no longer valid");
+    expect(render({ ...base, outcome: "conflict" }).querySelector('[role="alert"]')?.textContent).toBe(t("boosty.conflict"));
+    expect(render({ ...base, outcome: "superseded" }).querySelector('[role="alert"]')?.textContent).toBe(t("boosty.superseded"));
     const linked = render({ ...base, linked: true, linkState: "linked", verification: "qualifying" });
-    expect(linked.textContent).toContain("Your Boosty account is linked. Membership verified.");
-    expect([...linked.querySelectorAll("button")].some(button => button.textContent === "Disconnect Boosty")).toBe(true);
+    expect(linked.querySelector('[role="status"]')?.textContent).toBe(`${t("boosty.linked")} ${t("membership.verified")}`);
+    expect([...linked.querySelectorAll("button")].some(button => button.textContent === t("disconnect.trigger", { provider: "Boosty" }))).toBe(true);
     expect(linked.querySelector("form")).toBeNull();
-    expect(render({ ...base, linked: true, linkState: "linked", verification: "unknown" }).textContent).toContain("will be checked shortly");
-    expect(render(base, null, "error").textContent).toContain("could not be created");
+    expect(render({ ...base, linked: true, linkState: "linked", verification: "unknown" }).textContent).toContain(t("boosty.checking"));
+    expect(render(base, null, "error").querySelector('[role="alert"]')?.textContent).toBe(t("boosty.error"));
 });
 
 it("the account page reads Boosty status only when enabled and hides the section when unconfigured or unreadable", async () => {
