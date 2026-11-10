@@ -88,11 +88,12 @@ alter table boosty_membership.absences enable row level security;
 alter table boosty_membership.creator_credential enable row level security;
 revoke all on all tables in schema boosty_membership from public, anon, authenticated, service_role;
 
--- The provider registry's identity lookup: the account's current binding for one provider, or
--- null when unlinked. The generic membership_provider_fence calls it under the account lock.
--- A later provider's adapter migration replaces this function with one more arm; a provider
--- without an arm is refused, never read as unlinked.
-create function public.membership_provider_identity(p_account_id uuid, p_provider text) returns text
+-- The provider registry's identity lookup, re-created with every adapter's branch: the account's
+-- current binding for one provider, or null when unlinked. The generic membership_provider_fence
+-- calls it under the account lock. A later provider's migration re-creates it with Boosty's branch
+-- and its own; a provider without a branch is refused, never read as unlinked. CREATE OR REPLACE
+-- keeps the provider migration's revoked privileges.
+create or replace function public.membership_provider_identity(p_account_id uuid, p_provider text) returns text
 language plpgsql stable security definer set search_path = '' as $$
 begin
  case p_provider
@@ -461,7 +462,6 @@ begin
 end $function$;
 
 revoke all on all functions in schema boosty_membership from public, anon, authenticated, service_role;
-revoke all on function public.membership_provider_identity(uuid,text) from public, anon, authenticated, service_role;
 revoke all on function public.boosty_link_status(uuid,text,text), public.boosty_link_begin(uuid,text,text), public.boosty_unlink(uuid,text),
  public.boosty_membership_sync(text,jsonb), public.boosty_creator_credential(text,jsonb) from public, anon, authenticated;
 grant execute on function public.boosty_link_status(uuid,text,text), public.boosty_link_begin(uuid,text,text), public.boosty_unlink(uuid,text),

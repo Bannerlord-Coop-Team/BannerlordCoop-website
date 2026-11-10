@@ -2,21 +2,24 @@
 // shared cross-repo fixture (same bytes and path as ControlPlane), and the SQL registry against both.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 import { FUNDING_PROVIDER_GRAMMAR, FUNDING_PROVIDERS, parseFundingSnapshot, type FundingProvider } from "../supabase/functions/_shared/funding-provider";
-import { fundingAccountOperation, type FundingAccountOperation } from "../supabase/functions/_shared/funding-account";
+import { FUNDING_ACCOUNT_ACTIONS, fundingAccountOperation, fundingAccountOperationName, type FundingAccountOperation } from "../supabase/functions/_shared/funding-account";
 
 const CONTRACT_PATH = "test/fixtures/cross-repo/funding-provider-contract-v1.json";
 const CONTRACT_SHA256 = "2038c8a4892896457b5ec53ca526b97d479b4c52757c2a65169d6b7783633366";
 const KINDS = { userId: "user", programId: "program", tierId: "tier" } as const;
-const history = ["20260907212654_create_patreon_links.sql", "20260907220000_patreon_website_roles.sql", "20260907230000_atomic_live_console_assignments.sql",
+// Schema the membership chain needs that never names a registry object. Every migration that does name one
+// is found by scanning the directory, so a later migration re-creating a registry function or altering a
+// provider CHECK is always replayed (and must apply) here; the drift test cannot pass on a stale schema.
+const PREREQUISITES = ["20260907212654_create_patreon_links.sql", "20260907220000_patreon_website_roles.sql", "20260907230000_atomic_live_console_assignments.sql",
     "202609080002_membership_onboarding.sql", "202609080003_membership_role_locking.sql", "20260908030000_patreon_event_reconciliation.sql",
     "20260910200000_membership_receipt_claims.sql", "202609110001_edge_owned_link_commit.sql", "20260919010000_actionable_patreon_retries.sql",
     "202609220001_patreon_allocation_webhooks.sql", "202609280003_account_owned_membership.sql", "202609280006_membership_paid_access_end.sql",
-    "202610020001_membership_allocation_usd20.sql", "20261009170000_patreon_creator_token_refresh.sql",
-    "20261109140000_membership_funding_providers.sql", "20261110120000_boosty_membership_adapter.sql"];
+    "202610020001_membership_allocation_usd20.sql", "20261009170000_patreon_creator_token_refresh.sql"];
+const REGISTRY_OBJECTS = /membership_provider_identifier_valid|membership_provider_identity|membership_provider_empty_evidence|membership_provider_heads|membership_provider_fence|membership_provider_snapshot_json|membership_notify_provider|membership_outbox/u;
 type Identifiers = { userId: string; programId: string; tierId: string; memberId: string | null };
 type ContractProvider = { provider: FundingProvider; userId: string; programId: string; tierId: string; memberResource: "uuid" | "none"; policyVersions: string[]; valid: Identifiers; invalid: Identifiers };
 type Row = Record<string, unknown>;
@@ -32,6 +35,18 @@ function snapshot(entry: ContractProvider, ids: Identifiers) {
     return { version: 2, provider: entry.provider, accountId: "10000000-0000-4000-8000-000000000001", discordUserId: null, providerUserId: ids.userId,
         linkGeneration: "1", revision: "1", linkState: "linked", verification: "qualifying", programId: ids.programId, memberId: ids.memberId,
         tierIds: [ids.tierId], verifiedAt: "2026-11-10T12:00:00.000Z", paidThroughAt: null, policyVersion: entry.policyVersions[0], evidenceSha256: "a".repeat(64) };
+}
+
+/** Lists, in apply (filename) order, the prerequisites plus every migration naming a registry object. */
+async function replayedMigrations(): Promise<string[]> {
+    const all = (await readdir("supabase/migrations")).filter(name => name.endsWith(".sql")).sort();
+    for (const name of PREREQUISITES) assert.ok(all.includes(name), `missing prerequisite ${name}`);
+    const replayed: string[] = [];
+    for (const name of all) {
+        if (PREREQUISITES.includes(name) || REGISTRY_OBJECTS.test(await readFile(`supabase/migrations/${name}`, "utf8"))) replayed.push(name);
+    }
+    assert.ok(replayed.includes("20261109140000_membership_funding_providers.sql") && replayed.includes("20261110120000_boosty_membership_adapter.sql"));
+    return replayed;
 }
 
 /** Extracts the quoted provider names of one CHECK definition, in order. */
@@ -67,7 +82,7 @@ test("the SQL provider registry matches the TypeScript provider list and the sha
     const query = async (sql: string, args: unknown[] = []) => (await db.query<Row>(sql, args)).rows;
     try {
         await db.exec("create schema auth; create table auth.users(id uuid primary key, email text, email_confirmed_at timestamptz, deleted_at timestamptz, banned_until timestamptz, raw_app_meta_data jsonb default '{}', updated_at timestamptz default now()); create role anon; create role authenticated; create role service_role;");
-        for (const name of history) await db.exec(await readFile(`supabase/migrations/${name}`, "utf8"));
+        for (const name of await replayedMigrations()) await db.exec(await readFile(`supabase/migrations/${name}`, "utf8"));
 
         // Every CHECK on a public `provider` column: the outbox names every provider, provider heads every non-Patreon one.
         const checks = await query(`select c.conrelid::regclass::text as "table", pg_get_constraintdef(c.oid) as definition from pg_constraint c
@@ -110,8 +125,12 @@ test("the account-surface registry resolves each provider's own wire operation n
     const named = (label: string): FundingAccountOperation => async () => Response.json({ label });
     const patreonStatus = named("patreon-status"), patreonUnlink = named("patreon-unlink");
     const boostyStatus = named("boosty-status"), boostyStart = named("boosty-start"), boostyUnlink = named("boosty-unlink");
-    const surfaces = { patreon: { operationPrefix: "", operations: { status: patreonStatus, unlink: patreonUnlink } },
-        boosty: { operationPrefix: "boosty-", operations: { status: boostyStatus, start: boostyStart, unlink: boostyUnlink } } };
+    const surfaces = { patreon: { operations: { status: patreonStatus, unlink: patreonUnlink } },
+        boosty: { operations: { status: boostyStatus, start: boostyStart, unlink: boostyUnlink } } };
+    // Derived names are unique across every provider and action, so no provider can shadow another's operation.
+    const names = FUNDING_PROVIDERS.flatMap(provider => FUNDING_ACCOUNT_ACTIONS.map(action => fundingAccountOperationName(provider, action)));
+    assert.equal(new Set(names).size, names.length);
+    assert.ok(names.every(name => !name.startsWith("discord-")), "funding names never collide with Discord linking");
     // Patreon keeps its legacy unprefixed names; other providers are prefixed by their id.
     assert.equal(fundingAccountOperation(surfaces, "status"), patreonStatus);
     assert.equal(fundingAccountOperation(surfaces, "unlink"), patreonUnlink);

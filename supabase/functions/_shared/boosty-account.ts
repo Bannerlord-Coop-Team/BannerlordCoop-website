@@ -27,7 +27,7 @@ export function boostyLinkStatus(value: unknown, user: User, policy: BoostyPolic
 
 /** Boosty's account-surface entry: status (with an optional shown code), issuing a DM code, and unlink. */
 export function boostyAccountSurface(store: Store, user: User, policy: BoostyPolicy | null, respond: (body: unknown, status?: number) => Response): FundingAccountSurface {
-    return { operationPrefix: "boosty-", operations: {
+    return { operations: {
         status: async body => {
             if (!exact(body, ["operation"]) && !(exact(body, ["operation", "code"]) && typeof body.code === "string" && LINK_CODE.test(body.code))) return null;
             if (policy === null) return respond({ version: 1, configured: false });

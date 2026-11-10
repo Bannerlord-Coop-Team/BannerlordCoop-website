@@ -262,9 +262,10 @@ are described in [Boosty membership adapter](boosty-membership.md). The generic
 `membership_provider_fence` is defined once, in the provider migration: under the
 account lock it reads the provider's current binding through
 `membership_provider_identity(account, provider)` and fences the head with the same
-`identity_changed`/`unlinked` rules as Patreon. `20261110120000_boosty_membership_adapter.sql`
-supplies Boosty's arm of that lookup (`boosty_membership.links`); the two migrations ship
-together. A deleted account (Auth 404) creates an `account_deleted` tombstone at
+`identity_changed`/`unlinked` rules as Patreon. The provider migration's lookup refuses
+every provider, so a live non-Patreon fence fails closed until an adapter is installed;
+`20261110120000_boosty_membership_adapter.sql` re-creates it with Boosty's branch
+(`boosty_membership.links`). A deleted account (Auth 404) creates an `account_deleted` tombstone at
 generation 1 with its own Boosty hint, and the Auth deletion trigger tombstones every
 existing provider head after the Patreon head. Both use the Patreon fence's account lock
 and refuse resurrection.
@@ -277,16 +278,21 @@ layer and checked against each other:
 - TypeScript: `FUNDING_PROVIDERS` and `FUNDING_PROVIDER_GRAMMAR` in
   `_shared/funding-provider.ts` (`satisfies Record<FundingProvider, …>`, so a provider
   without an entry fails to compile; the snapshot parser reads it).
-- SQL, in the provider migration: the `provider` CHECKs on `membership_outbox` (every
-  provider) and `membership_provider_heads` (every non-Patreon provider),
+- SQL: the `provider` CHECKs on `membership_outbox` (every provider) and
+  `membership_provider_heads` (every non-Patreon provider),
   `membership_provider_identifier_valid(provider, kind, value)` (the only SQL copy of the
   user/program/tier patterns; adapter tables and RPCs call it instead of repeating them),
-  and `membership_provider_empty_evidence(provider)` (empty evidence and policy version;
-  `NULL` means "not a provider"). The adapter adds one arm to
-  `membership_provider_identity`.
+  `membership_provider_empty_evidence(provider)` (empty evidence and policy version; `NULL`
+  means "not a provider") and `membership_provider_identity(account, provider)` (the
+  current-link lookup). Applied migrations are never edited: a new provider is a **new
+  append-only migration** that widens both CHECKs and re-creates all three functions with
+  every existing provider's branch plus its own. The drift test scans
+  `supabase/migrations` and replays every migration that names these objects, so the new
+  migration is covered automatically.
 - Account surface: one entry in `fundingAccountSurfaces` (`_shared/website-account.ts`,
-  `Record<FundingProvider, …>`; wire names are the provider id plus `-status`, `-start`
-  and `-unlink`, while Patreon keeps its legacy `status`/`unlink`), one section in
+  `Record<FundingProvider, …>`). Wire names are derived as the provider id plus `-status`,
+  `-start` and `-unlink` (`_shared/funding-account.ts`); Patreon's legacy unprefixed
+  `status`/`unlink` is the single explicit exception, one section in
   `src/app/account/funding-sections.tsx`, and one disconnect explanation in
   `DisconnectAccount.tsx`.
 - `test/fixtures/cross-repo/funding-provider-contract-v1.json` is byte-identical to

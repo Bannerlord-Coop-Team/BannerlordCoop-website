@@ -8,13 +8,14 @@ begin;
 --
 -- This migration owns the provider-neutral machinery and the SQL provider registry:
 -- the provider CHECKs below, membership_provider_identifier_valid (identifier grammar)
--- and membership_provider_empty_evidence (empty evidence and policy version). Each
--- provider's adapter migration supplies its current link as one arm of
--- public.membership_provider_identity(account, provider), which the generic fence
--- calls; Boosty's is 20261110120000_boosty_membership_adapter.sql, which ships with
--- this one. Adding a provider widens the CHECKs and adds one arm to each of those three
--- functions. tests/funding-provider-contract.test.ts checks this registry against
--- TypeScript FUNDING_PROVIDERS and the shared provider contract fixture.
+-- and membership_provider_empty_evidence (empty evidence and policy version), plus
+-- public.membership_provider_identity(account, provider), the current-link lookup the
+-- generic fence calls. Here it refuses every provider; each adapter migration re-creates
+-- it with every adapter's branch (Boosty's is 20261110120000_boosty_membership_adapter.sql).
+-- Adding a provider is a new append-only migration that widens the CHECKs and re-creates
+-- the three registry functions with every existing provider's branch.
+-- tests/funding-provider-contract.test.ts checks the registry against TypeScript
+-- FUNDING_PROVIDERS and the shared provider contract fixture.
 
 -- Identifier grammar of every non-Patreon funding provider by kind ('user', 'program',
 -- 'tier'); Patreon's identifiers keep their own historical tables. The only SQL copy of
@@ -93,6 +94,15 @@ create or replace function public.membership_notify(p_account_id uuid, p_revocat
 language plpgsql security definer set search_path = '' as $$
 begin
  perform public.membership_notify_provider(p_account_id,'patreon',p_revocation);
+end $$;
+
+-- The registry's current-link lookup: the account's binding for one provider, or null when
+-- unlinked. No adapter is installed by this migration, so every provider is refused here and a
+-- live non-Patreon fence fails closed until an adapter migration re-creates this function.
+create function public.membership_provider_identity(p_account_id uuid, p_provider text) returns text
+language plpgsql stable security definer set search_path = '' as $$
+begin
+ raise exception 'Invalid funding provider';
 end $$;
 
 -- Caller MUST first read the exact account via Auth admin API. Fences one non-Patreon head
@@ -256,6 +266,7 @@ $function$;
 
 -- Internal helpers have no client or service grants; CREATE OR REPLACE keeps existing grants.
 revoke all on function public.membership_provider_identifier_valid(text,text,text),
+ public.membership_provider_identity(uuid,text),
  public.membership_provider_empty_evidence(text),
  public.membership_provider_snapshot_json(public.membership_provider_heads),
  public.membership_notify_provider(uuid,text,boolean),

@@ -20,7 +20,7 @@ type User = { accountId: string; discordUserId: string | null };
  * Patreon keeps its unprefixed legacy names; its OAuth start is the separate patreon-start function. */
 function fundingAccountSurfaces(config: AccountConfig, store: Store, user: User, respond: (body: unknown, status?: number) => Response): Record<FundingProvider, FundingAccountSurface> {
     return {
-        patreon: { operationPrefix: "", operations: {
+        patreon: { operations: {
             status: async body => {
                 if (!exact(body, ["operation"])) return null;
                 const value = await store.rpc("membership_status", { p_account_id: user.accountId, p_discord_user_id: user.discordUserId });
