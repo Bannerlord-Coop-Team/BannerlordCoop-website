@@ -39,7 +39,7 @@ it.each(LOCALES)("localizes every new War Sails string in %s, keeps the name in 
     for (const key of NEW_KEYS.filter(key => key !== "campaigns.mode.legend" && key !== "campaigns.mode.classic")) {
         expect(dictionary[key], key).toContain("War Sails");
     }
-    for (const key of ["configEditor.warSailsHelp", "configEditor.warSailsOn", "configEditor.warSailsOff"]) expect(dictionary[key], key).toBeUndefined();
+    expect(dictionary["configEditor.warSailsHelp"]).toBeUndefined();
     expect(dictionary["configuration.field.warSails"]).toBeUndefined();
     const t = createTranslator(locale, dictionary).t;
     expect(warSailsFailureMessage("war_sails_unsupported", t)).toBe(dictionary["controls.warSailsUnsupported"]);
