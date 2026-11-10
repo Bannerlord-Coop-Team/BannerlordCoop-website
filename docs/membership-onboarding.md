@@ -324,6 +324,18 @@ digest constants and the harness's `FUNDING_PROVIDER_CONTRACT` path change toget
 The tests enforce exactly this: they pin `fixtureVersion` 1, the `-v1.json` path and
 the digest.
 
+**Pattern and migration rules.** Registry patterns must contain no `'` or `\`: the
+website drift test generates the expected SQL bodies from the fixture and refuses both
+(write a literal dot as `[.]`, a digit as `[0-9]`). They must also be anchored and
+bounded, built only from literals and character classes with optional `?` or `{m,n}`
+quantifiers, with no groups, alternation, `*`, `+` or `{m,}`: ControlPlane's
+`longestMatch` refuses anything else, and the longest match must fit the 32-character
+`campaign_key`, `patreon_user_id` and `campaign_id` columns. Every website migration the
+drift test replays (any migration naming a registry object, a checked function, a
+non-Patreon provider id or its adapter schema) must apply in PGlite, so top-level
+`cron.schedule`, `create extension` and similar platform statements belong in a separate
+migration that names none of those.
+
 A deployed control plane rejects a whole version 3 claim page if any hint names a
 provider it does not know, stalling every provider's hints. The control plane that knows
 a new provider must be **deployed before** this website emits that provider's hints:

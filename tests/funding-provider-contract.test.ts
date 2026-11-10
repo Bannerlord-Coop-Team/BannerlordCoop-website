@@ -211,11 +211,11 @@ test("the SQL provider registry matches the TypeScript provider list and the sha
             assert.ok(entry.policyVersions.includes(empty.policyVersion as string), entry.provider);
             assert.equal(empty.memberId, null);
         }
-        for (const provider of ["patreon", "ko-fi", null]) {
+        for (const provider of ["patreon", "unknown-provider", null]) {
             assert.equal((await query("select public.membership_provider_empty_evidence($1) as e", [provider]))[0].e, null);
             assert.equal((await query("select public.membership_provider_policy_versions($1) as v", [provider]))[0].v, null);
         }
-        await assert.rejects(query("select public.membership_provider_identity(gen_random_uuid(), 'ko-fi')"), /Invalid funding provider/u);
+        await assert.rejects(query("select public.membership_provider_identity(gen_random_uuid(), 'unknown-provider')"), /Invalid funding provider/u);
     } finally { await db.close(); }
 });
 
@@ -235,5 +235,5 @@ test("the account-surface registry resolves each provider's own wire operation n
     assert.equal(fundingAccountOperation(surfaces, "boosty-status"), boostyStatus);
     assert.equal(fundingAccountOperation(surfaces, "boosty-start"), boostyStart);
     assert.equal(fundingAccountOperation(surfaces, "boosty-unlink"), boostyUnlink);
-    for (const unknown of ["start", "boosty-link", "ko-fi-status", "Boosty-status", "", null, 1, ["status"]]) assert.equal(fundingAccountOperation(surfaces, unknown), null, String(unknown));
+    for (const unknown of ["start", "boosty-link", "unknown-provider-status", "Boosty-status", "", null, 1, ["status"]]) assert.equal(fundingAccountOperation(surfaces, unknown), null, String(unknown));
 });
