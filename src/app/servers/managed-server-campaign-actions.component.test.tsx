@@ -2,12 +2,13 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { createTranslator } from "@/app/lib/localization/translator";
 import messages from "@/app/lib/localization/dictionaries/en/managed-server.json";
 vi.mock("@/app/lib/localization/server", () => ({ getTranslations: async () => createTranslator("en", messages) }));
-import { changeManagedServerCampaign, listManagedServerCampaigns } from "./managed-server-campaign-actions";
+import { changeManagedServerCampaign, listManagedServerCampaigns, readManagedServerCampaignReset } from "./managed-server-campaign-actions";
+import { CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION } from "../../../supabase/functions/_shared/server-campaign-contract";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), select: vi.fn(), reset: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), select: vi.fn(), reset: vi.fn(), resetStatus: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: mocks.auth }));
-vi.mock("@/app/lib/hosting/server-campaigns", () => ({ listMyServerCampaigns: mocks.list, selectMyServerCampaign: mocks.select, resetMyServerCampaign: mocks.reset }));
+vi.mock("@/app/lib/hosting/server-campaigns", () => ({ listMyServerCampaigns: mocks.list, selectMyServerCampaign: mocks.select, resetMyServerCampaign: mocks.reset, getMyServerCampaignResetStatus: mocks.resetStatus }));
 const id = "11111111-1111-4111-8111-111111111111";
 const updatedAt = "2026-10-02T12:00:00.000Z";
 const page = { serverId: id, updatedAt, activeSaveId: id, items: [] };
@@ -22,6 +23,21 @@ it("checks the current account before listing or changing campaigns", async () =
     mocks.list.mockResolvedValue(page);
     expect(await listManagedServerCampaigns(id, "owner")).toEqual({ ok: true, campaigns: page });
     expect(mocks.list).toHaveBeenCalledWith("token", id);
+});
+
+it("returns fixed reset refusal guidance through the authenticated campaign action, never re-submitting Reset", async () => {
+    const status = { serverId: id, jobId: id, state: "failed", errorCode: "agent_capability_unavailable", instruction: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION };
+    mocks.resetStatus.mockResolvedValue(status);
+    expect(await readManagedServerCampaignReset(id, id, "owner")).toEqual({ ok: true, status, message: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION });
+    expect(mocks.resetStatus).toHaveBeenCalledExactlyOnceWith("token", id, id);
+    expect(mocks.reset).not.toHaveBeenCalled();
+    mocks.resetStatus.mockClear();
+    expect(await readManagedServerCampaignReset(id, id, "previous-owner")).toMatchObject({ ok: false, retryable: false });
+    expect(mocks.resetStatus).not.toHaveBeenCalled();
+    mocks.resetStatus.mockResolvedValue(null);
+    expect(await readManagedServerCampaignReset(id, id, "owner")).toMatchObject({ ok: true, status: null, message: expect.stringContaining("not available") });
+    mocks.resetStatus.mockRejectedValue(new MyServersApiError("forbidden", "private worker path"));
+    expect(await readManagedServerCampaignReset(id, id, "owner")).toEqual({ ok: false, retryable: false, message: "This server is unavailable or your access changed." });
 });
 it("validates the mutation before sending and forwards the request identity", async () => {
     mocks.select.mockResolvedValue({ serverId: id, activeSaveId: id, updatedAt });
