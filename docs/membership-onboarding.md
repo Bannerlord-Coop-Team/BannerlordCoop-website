@@ -290,8 +290,14 @@ layer and checked against each other:
   Applied migrations are never edited: a new provider is a **new append-only migration**
   that widens both CHECKs and re-creates all four functions with every existing
   provider's branch plus its own. The drift test scans
-  `supabase/migrations` and replays every migration that names these objects, so the new
-  migration is covered automatically.
+  `supabase/migrations` and replays every migration that names these objects, a
+  non-Patreon provider id or its adapter schema, so the new migration is covered
+  automatically. It compares each registry function's whitespace-normalized body with
+  one generated from the fixture and the test's `ADAPTERS` entry (identity lookup and
+  empty-evidence version), pins the provider-neutral fence, notify, claim and ack bodies
+  by digest (a deliberate change updates the digest), and checks every one's language,
+  volatility, definer, `search_path` and EXECUTE grants, so a function re-created with
+  default `PUBLIC` EXECUTE fails.
 - Account surface, Edge: one entry in `fundingAccountSurfaces` (`_shared/website-account.ts`,
   typed `Record<FundingProvider, …>`).
 - Account surface, wire names: derived as the provider id plus `-status`, `-start` and
@@ -317,6 +323,9 @@ functions and adapter. `refreshMode` is `oauth_reauthorization` for every provid
 and the 24-hour freshness window assumes daily evidence re-reads (Patreon webhooks,
 Boosty's 30-minute poll). A webhook-only provider such as Ko-fi would need a
 per-provider refresh mode and a daily re-assertion job; that is future work.
+Also future work: `memberResource` is `"uuid" | "none"`; a provider whose member
+resource is not a UUID would need a per-provider member pattern in the registry, the
+fixture and the SQL helper.
 
 Rollout: apply the migration, then deploy the `control-plane-membership-v1` Edge
 function, then switch the control plane to its provider-list policy. A v2-speaking CP

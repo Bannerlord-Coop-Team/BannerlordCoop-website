@@ -17,8 +17,10 @@ export type FundingSnapshot = {
     linkGeneration: string; revision: string; linkState: "linked" | "unlinked" | "identity_changed" | "account_deleted";
     verification: Verification; programId: string | null; memberId: string | null; tierIds: string[];
     verifiedAt: string | null; paidThroughAt: string | null; paidAccessEndedAt?: string | null;
-    policyVersion: typeof POLICY_VERSION | typeof ALLOCATION_POLICY_VERSION | typeof BOOSTY_POLICY_VERSION; evidenceSha256: string | null;
+    policyVersion: FundingPolicyVersion; evidenceSha256: string | null;
 };
+/** Every policy version any provider's registry entry accepts. */
+export type FundingPolicyVersion = (typeof FUNDING_PROVIDER_GRAMMAR)[FundingProvider]["policyVersions"][number];
 export type FundingClaimEvent = { eventId: string; accountId: string; provider: FundingProvider };
 export type FundingClaim = { version: 3; claimId: string; leaseExpiresAt: string; events: FundingClaimEvent[] };
 

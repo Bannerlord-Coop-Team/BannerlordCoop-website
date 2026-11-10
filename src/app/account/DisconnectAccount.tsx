@@ -4,17 +4,20 @@ import { useTranslations } from "@/app/lib/localization/client";
 import { LoadingSpinner } from "@/app/components/ui/LoadingSpinner";
 import { useId, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
+import type { FundingProvider } from "../../../supabase/functions/_shared/funding-provider";
 
 const buttonClass =
     "inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-white/20 px-4 py-2 text-sm text-foreground transition-colors hover:border-gold hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:opacity-50";
 
-// The explanation shown before disconnecting each sign-in or funding provider; a provider is one entry here.
+// Every funding provider's display name; a provider missing here fails to compile.
+const FUNDING_DISPLAY_NAMES = { patreon: "Patreon", boosty: "Boosty" } as const satisfies Record<FundingProvider, string>;
+export type DisconnectProvider = "Discord" | (typeof FUNDING_DISPLAY_NAMES)[FundingProvider];
+// The explanation shown before disconnecting each sign-in or funding provider; one entry is required per provider.
 const DISCONNECT_EXPLANATIONS = {
     Discord: "disconnect.discordExplanation",
-    Patreon: "disconnect.patreonExplanation",
-    Boosty: "disconnect.boostyExplanation",
-} as const;
-export type DisconnectProvider = keyof typeof DISCONNECT_EXPLANATIONS;
+    [FUNDING_DISPLAY_NAMES.patreon]: "disconnect.patreonExplanation",
+    [FUNDING_DISPLAY_NAMES.boosty]: "disconnect.boostyExplanation",
+} as const satisfies Record<DisconnectProvider, string>;
 
 /** Requires explicit localized confirmation before disconnecting the selected provider. */
 export function DisconnectAccount({provider, action, disabledReason,}: {

@@ -22,9 +22,10 @@ const PREREQUISITES = ["20260907212654_create_patreon_links.sql", "2026090722000
     "202610020001_membership_allocation_usd20.sql", "20261009170000_patreon_creator_token_refresh.sql"];
 type AdapterProvider = Exclude<FundingProvider, "patreon">;
 type IdentifierColumn = { table: string; column: string; kind: "user" | "program" | "tier" };
-// Each non-Patreon provider's adapter schema and the identifier columns it stores; a missing provider fails to compile.
-const ADAPTERS: Record<AdapterProvider, { schema: string; identifiers: IdentifierColumn[] }> = {
-    boosty: { schema: "boosty_membership", identifiers: [
+// Each non-Patreon provider's adapter: its schema, the identifier columns it stores, its current-link lookup
+// (the identity function's branch) and the policy version of its empty evidence. A missing provider fails to compile.
+const ADAPTERS: Record<AdapterProvider, { schema: string; identifiers: IdentifierColumn[]; identity: string; emptyPolicyVersion: string }> = {
+    boosty: { schema: "boosty_membership", identity: "select boosty_user_id from boosty_membership.links where account_id=p_account_id", emptyPolicyVersion: "boosty-paid-v1", identifiers: [
         { table: "boosty_membership.links", column: "boosty_user_id", kind: "user" },
         { table: "boosty_membership.absences", column: "boosty_user_id", kind: "user" },
         { table: "boosty_membership.sync_state", column: "blog", kind: "program" },
@@ -62,6 +63,38 @@ async function replayedMigrations(): Promise<string[]> {
     }
     assert.ok(replayed.includes("20261109140000_membership_funding_providers.sql") && replayed.includes("20261110120000_boosty_membership_adapter.sql"));
     return replayed;
+}
+
+/** Collapses whitespace so a function body compares independently of its layout. */
+function normalized(body: string): string {
+    return body.replace(/\s+/gu, " ").trim();
+}
+
+type FunctionSpec = { language: "sql" | "plpgsql"; volatility: "i" | "s" | "v"; securityDefiner: boolean; execute: "none" | "service_role"; body: { exact: string } | { sha256: string } };
+
+/** The exact definition and privileges of every SQL registry and fence function. Registry bodies are generated
+ * from the fixture and ADAPTERS; the provider-neutral machinery is pinned by its normalized body digest. */
+function registryFunctions(contract: { providers: ContractProvider[] }): Record<string, FunctionSpec> {
+    const others = contract.providers.filter(entry => entry.provider !== "patreon");
+    const fields = ["userId", "programId", "tierId"] as const;
+    const empty = (version: string) => JSON.stringify({ verification: "unverified", programId: null, memberId: null, tierIds: [], verifiedAt: null, paidThroughAt: null, policyVersion: version, evidenceSha256: null });
+    const registry = (body: string, language: "sql" | "plpgsql" = "sql", volatility: "i" | "s" = "i", securityDefiner = false): FunctionSpec => ({ language, volatility, securityDefiner, execute: "none", body: { exact: body } });
+    const pinned = (sha256: string, execute: "none" | "service_role", language: "sql" | "plpgsql" = "plpgsql", volatility: "s" | "v" = "v", securityDefiner = true): FunctionSpec => ({ language, volatility, securityDefiner, execute, body: { sha256 } });
+    return {
+        "public.membership_provider_identifier_valid(text,text,text)": registry(`select case p_provider || ':' || p_kind ${others.flatMap(entry => fields.map(field => `when '${entry.provider}:${KINDS[field]}' then p_value ~ '${entry[field]}'`)).join(" ")} else false end`),
+        "public.membership_provider_policy_versions(text)": registry(`select case p_provider ${others.map(entry => `when '${entry.provider}' then array[${entry.policyVersions.map(version => `'${version}'`).join(",")}]`).join(" ")} end`),
+        "public.membership_provider_empty_evidence(text)": registry(`select case p_provider ${others.map(entry => `when '${entry.provider}' then '${empty(ADAPTERS[entry.provider as AdapterProvider].emptyPolicyVersion)}'::jsonb`).join(" ")} end`),
+        "public.membership_provider_identity(uuid,text)": registry(`begin case p_provider ${others.map(entry => `when '${entry.provider}' then return (${ADAPTERS[entry.provider as AdapterProvider].identity});`).join(" ")} else raise exception 'Invalid funding provider'; end case; end`, "plpgsql", "s", true),
+        "public.membership_provider_snapshot_json(membership_provider_heads)": pinned("d990d1b1932af11f34c4563f771550a7ad6408c81014e9ebb5264fe894c646eb", "none", "sql", "s", false),
+        "public.membership_notify_provider(uuid,text,boolean)": pinned("9f71c677e931612350e79b9cc7f11daf2997681065ca43f1208ca5645100c9cf", "none"),
+        "public.membership_provider_fence(uuid,text,text,boolean)": pinned("7c33a93d542223a71fd16d93970e6c76484a0f2d7a4aa2ead42ef1658df7005b", "none"),
+        "public.membership_auth_deleted()": pinned("3105eabcbaf09d6f3c6555a9a44282a8ba0732a8b8a9db45e463258a26961222", "none"),
+        "public.membership_notify(uuid,boolean)": pinned("698104ca0e895ea054902f9ffa69fe805e090909bbcc83da787f2d272bb600fe", "none"),
+        "public.membership_funding_fence(uuid,text,text,boolean)": pinned("bc7d35a7993a291802e00b8a077913953df21fbe3371e1d259e795f7c0a0978e", "service_role"),
+        "public.membership_funding_claim(uuid,integer)": pinned("f3f8a493926b2e4c35b89498b80552dfa378ffd1cf19a657319546a7e3087400", "service_role"),
+        "public.membership_ack(uuid,uuid)": pinned("b2168f23f83d15923e1a60a33bd2f74ba3d5ac174abb439181a8287b586a63cc", "service_role"),
+        "public.membership_ack_claim(uuid,uuid,uuid)": pinned("88e926905f20dd1743bf7bd96b5d08e36837f00effd1f146153cfc0efd053649", "service_role"),
+    };
 }
 
 /** Extracts the quoted provider names of one CHECK definition, in order. */
@@ -125,10 +158,24 @@ test("the SQL provider registry matches the TypeScript provider list and the sha
             assert.deepEqual(onColumn, [{ table, definition }], `${table}.${column} is checked only by the identifier helper`);
         }
 
-        // The single SQL grammar helper has one arm per non-Patreon provider and kind, with the fixture's pattern.
-        const helper = (await query("select pg_get_functiondef('public.membership_provider_identifier_valid'::regproc) as body"))[0].body as string;
-        const arms = [...helper.matchAll(/when '([a-z0-9-]+):([a-z]+)' then p_value ~ '([^']+)'/gu)].map(([, provider, kind, pattern]) => ({ provider, kind, pattern }));
-        assert.deepEqual(arms, others.flatMap(entry => (["userId", "programId", "tierId"] as const).map(field => ({ provider: entry.provider, kind: KINDS[field], pattern: entry[field] }))));
+        // Every registry and fence function has exactly its expected body, language, volatility, definer, search
+        // path and EXECUTE grants (a dropped and re-created function would regain PUBLIC EXECUTE); there are no others.
+        const specs = registryFunctions(contract);
+        const registered = await query(`select p.oid::regprocedure::text as signature from pg_proc p where p.pronamespace = 'public'::regnamespace
+            and (p.proname like 'membership\\_provider\\_%' or p.proname in ('membership_notify_provider', 'membership_funding_fence', 'membership_funding_claim')) order by 1`);
+        assert.deepEqual(registered.map(row => `public.${row.signature as string}`), Object.keys(specs).filter(signature => /membership_provider_|membership_notify_provider|membership_funding_/u.test(signature)).sort());
+        for (const [signature, spec] of Object.entries(specs)) {
+            const [row] = await query(`select l.lanname as language, p.provolatile as volatility, p.prosecdef as "securityDefiner", p.proconfig as config, p.prosrc as body,
+                has_function_privilege('public', p.oid, 'execute') as public, has_function_privilege('anon', p.oid, 'execute') as anon,
+                has_function_privilege('authenticated', p.oid, 'execute') as authenticated, has_function_privilege('service_role', p.oid, 'execute') as service_role
+                from pg_proc p join pg_language l on l.oid = p.prolang where p.oid = $1::regprocedure`, [signature]);
+            assert.deepEqual([row.language, row.volatility, row.securityDefiner, row.config], [spec.language, spec.volatility, spec.securityDefiner, ['search_path=""']], signature);
+            const body = normalized(row.body as string);
+            if ("exact" in spec.body) assert.equal(body, spec.body.exact, signature);
+            else assert.equal(createHash("sha256").update(body).digest("hex"), spec.body.sha256, `${signature} changed; review it, then update its pinned digest`);
+            assert.deepEqual({ public: row.public, anon: row.anon, authenticated: row.authenticated, service_role: row.service_role },
+                { public: false, anon: false, authenticated: false, service_role: spec.execute === "service_role" }, `${signature} grants`);
+        }
         const valid = async (provider: string, kind: string, value: string | null) => (await query("select public.membership_provider_identifier_valid($1,$2,$3) as ok", [provider, kind, value]))[0].ok;
         for (const entry of contract.providers) {
             for (const field of ["userId", "programId", "tierId"] as const) {
@@ -140,8 +187,8 @@ test("the SQL provider registry matches the TypeScript provider list and the sha
         assert.equal(await valid("boosty", "member", "1"), false);
         assert.equal(await valid("boosty", "user", null), null, "a null identifier stays nullable");
 
-        // Each non-Patreon provider accepts exactly the fixture's policy versions, has empty evidence in one of them
-        // and an identity arm; nothing else does.
+        // Each non-Patreon provider accepts exactly the fixture's policy versions and has empty evidence in one of them;
+        // nothing else does.
         for (const entry of others) {
             assert.deepEqual((await query("select public.membership_provider_policy_versions($1) as v", [entry.provider]))[0].v, entry.policyVersions);
             const empty = (await query("select public.membership_provider_empty_evidence($1) as e", [entry.provider]))[0].e as Row;
@@ -152,8 +199,6 @@ test("the SQL provider registry matches the TypeScript provider list and the sha
             assert.equal((await query("select public.membership_provider_empty_evidence($1) as e", [provider]))[0].e, null);
             assert.equal((await query("select public.membership_provider_policy_versions($1) as v", [provider]))[0].v, null);
         }
-        const identity = (await query("select pg_get_functiondef('public.membership_provider_identity'::regproc) as body"))[0].body as string;
-        assert.deepEqual([...identity.matchAll(/when '([a-z0-9-]+)' then/gu)].map(match => match[1]), others.map(entry => entry.provider));
         await assert.rejects(query("select public.membership_provider_identity(gen_random_uuid(), 'ko-fi')"), /Invalid funding provider/u);
     } finally { await db.close(); }
 });
