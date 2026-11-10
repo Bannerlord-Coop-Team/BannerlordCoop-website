@@ -91,9 +91,12 @@ Positive evidence lasts at most 24 hours and funds only **new allocation**.
 `max(administrativeBase, qualifyingPatreonOne) + administrativeBonus` is the backend
 reducer; never add an extra membership slot to an existing administrative base.
 Administrative suspension remains authoritative. Adequate independent grants bypass
-membership outages/configuration. Expiry/unlink/unknown evidence never Stop, delete,
-revoke administrative grants, transfer servers, or start a grace countdown. Existing
-owner Start/Stop/saves remain accessible. Beginning a new Patreon check invalidates
+membership outages/configuration. Expiry and unknown or stale evidence never Stop, delete,
+revoke administrative grants, transfer servers, or start a grace countdown. Confirmed loss
+of paid access, or unlinking or replacing the funding identity of a membership-funded
+server, does: the control plane starts its 72-hour removal grace for that server unless
+another qualifying membership takes over the funding or independent administrative quota
+covers it. Existing owner Start/Stop/saves remain accessible. Beginning a new Patreon check invalidates
 old positive evidence immediately, including cancellation or provider outage.
 
 ## Same-account flow and Edge commit
@@ -337,10 +340,11 @@ non-Patreon provider id or its adapter schema) must apply in PGlite, so top-leve
 migration that names none of those.
 
 A deployed control plane rejects a whole version 3 claim page if any hint names a
-provider it does not know, stalling every provider's hints. The control plane that knows
-a new provider must be **deployed before** this website emits that provider's hints:
-apply its CP migration and deploy the CP first, then the website migration, Edge
-functions and adapter. `refreshMode` is `oauth_reauthorization` for every provider today
+provider it does not know, stalling every provider's hints; and a control plane that knows
+the provider but whose policy has no entry for it never acknowledges that provider's
+hints. The control plane must be **deployed with the provider in its policy before** this
+website enables the provider's adapter: apply its CP migration, deploy the CP, add the
+policy entry, then enable the website adapter. `refreshMode` is `oauth_reauthorization` for every provider today
 and the 24-hour freshness window assumes daily evidence re-reads (Patreon webhooks,
 Boosty's 30-minute poll). A webhook-only provider such as Ko-fi would need a
 per-provider refresh mode and a daily re-assertion job; that is future work.
@@ -348,11 +352,36 @@ Also future work: `memberResource` is `"uuid" | "none"`; a provider whose member
 resource is not a UUID would need a per-provider member pattern in the registry, the
 fixture and the SQL helper.
 
-Rollout: apply the migration, then deploy the `control-plane-membership-v1` Edge
-function, then switch the control plane to its provider-list policy. A v2-speaking CP
-may only be enabled against a website that serves both. Before that switch a v2
-claim may deliver a Boosty tombstone hint without its provider; the old CP treats it as a
-Patreon hint, reads the current Patreon snapshot and acknowledges it, which is safe.
+Rollout, one sequence shared with ControlPlane's `membership-onboarding.md`
+(Configuration and rollout gates); each step is separately authorized:
+
+1. ControlPlane applies its migration 129 (`20261109130000_control_plane_funding_providers.sql`)
+   and deploys; with its legacy policy it still speaks wire version 1.
+2. This website applies `20261109140000_membership_funding_providers.sql`,
+   `20261110120000_boosty_membership_adapter.sql` and
+   `20261111120000_patreon_lapse_report_patreon_funding.sql` (which reads the provider
+   columns of migration 129, so it must follow it) and deploys the
+   `control-plane-membership-v1` Edge function. The Boosty adapter stays inert:
+   `BOOSTY_MEMBERSHIP_POLICY_JSON` and `BOOSTY_LINKING_ENABLED` unset, dispatch disabled.
+3. ControlPlane mirrors those three applied website migrations in
+   `ALREADY_APPLIED_EXTERNAL_MIGRATIONS` with exact bytes and provenance before its next
+   migration release; its release helper refuses unknown remote versions until then.
+4. ControlPlane switches to its provider-list policy with Patreon only, proving the
+   version 2 / version 3 exchange. Before that switch a v2 claim may deliver a Boosty
+   tombstone hint without its provider; the old CP treats it as a Patreon hint, reads the
+   current Patreon snapshot and acknowledges it, which is safe.
+5. ControlPlane adds the Boosty entry to its policy.
+6. Only then this website commissions Boosty ([Boosty membership adapter](boosty-membership.md#commissioning)):
+   `BOOSTY_MEMBERSHIP_POLICY_JSON`, the creator credential, dispatch, `BOOSTY_LINKING_ENABLED`,
+   and a test link confirmed through the control plane's Boosty snapshot.
+
+A Boosty hint claimed by a control plane whose policy has no Boosty entry fails with
+"Membership provider is not enabled" and is never acknowledged. The synchronizer passes
+it over on every cycle, the account's pending Boosty hints reach the website's 8 + 1
+per-provider bound, and that account's Boosty link calls then fail with `PT429`. So the
+CP policy must list Boosty **before** the website can emit any Boosty hint, and Boosty
+stays in the CP policy for as long as Boosty heads or hints can exist. To withdraw Boosty, disable linking and dispatch here first; ControlPlane
+removes its entry only after no Boosty head or unacknowledged Boosty hint remains.
 
 Website account operations overlap fresh Auth-user and session-context checks.
 Both must succeed, with any impersonation target matching the verified user,
