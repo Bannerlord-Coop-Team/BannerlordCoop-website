@@ -7,7 +7,7 @@ import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/ser
 
 const LOCALES = ["de", "en", "es", "fr", "ja", "ko", "pt-BR", "pt-PT", "ru", "tr", "zh-CN"] as const;
 const NEW_KEYS = [
-    "controls.warSailsSaveMismatch", "controls.warSailsUnsupported", "configEditor.warSailsOn", "configEditor.warSailsOff",
+    "controls.warSailsSaveMismatch", "controls.warSailsUnsupported",
     "campaigns.mode.legend", "campaigns.mode.classic", "campaigns.mode.classicHelp", "campaigns.mode.warSails", "campaigns.mode.warSailsHelp",
     "campaigns.switchToWarSails", "campaigns.switchToClassic", "mods.playersNeed.warSails",
 ];

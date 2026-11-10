@@ -170,8 +170,6 @@
   "configEditor.expectedExactlyServerconfigAndModconfig": "Erwartet wurden genau serverConfig und modConfig.",
   "configEditor.0TurnsAutosaveOff": "0 schaltet das automatische Speichern aus.",
   "configEditor.battleSizeHelp": "Gesamtzahl der Truppen beider Seiten in einer Schlacht.",
-  "configEditor.warSailsOn": "War Sails: Ein — von der aktiven Kampagne festgelegt",
-  "configEditor.warSailsOff": "War Sails: Aus — von der aktiven Kampagne festgelegt",
   "configEditor.serverSettings": "Servereinstellungen",
   "configEditor.difficulty": "Schwierigkeit",
   "configEditor.gameplayOptions": "Spieloptionen",
