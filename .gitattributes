@@ -3,6 +3,7 @@
 
 # Keep shell scripts LF so Windows deploys do not break Linux shebangs.
 *.sh text eol=lf
+test/fixtures/campaign-reset/*.json text eol=lf
 
 # This migration is mirrored and checksummed by ControlPlane's shared-ledger catalog.
 supabase/migrations/202611090002_patreon_lapse_report_links.sql text eol=lf

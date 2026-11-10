@@ -33,6 +33,43 @@ export type CampaignSelection = { serverId: string; activeSaveId: string | null;
 
 export type CampaignResetResult = { outcome: "enqueued" | "existing"; jobId: string; action: "reset-campaign" };
 
+export const CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION = "Contact support to update this server's runner, then request Reset Campaign again.";
+const RESET_STATES = ["queued", "running", "retry-wait", "succeeded", "failed", "cancelled"] as const;
+export type CampaignResetStatus = {
+    serverId: string;
+    jobId: string;
+    state: typeof RESET_STATES[number];
+    errorCode: "agent_capability_unavailable" | "queue_timeout" | "operation_failed" | null;
+    instruction: string | null;
+};
+
+/** Accepts only the named job's safe projection, including the fixed support instruction. */
+export function parseCampaignResetStatus(value: unknown, serverId: string, jobId: string): CampaignResetStatus {
+    requireUuid(serverId); requireUuid(jobId);
+    if (!isRecord(value) || !hasExactKeys(value, ["serverId", "jobId", "state", "errorCode", "instruction"])
+        || value.serverId !== serverId || value.jobId !== jobId || typeof value.state !== "string"
+        || !(RESET_STATES as readonly string[]).includes(value.state)) throw new Error("Invalid campaign reset status");
+    const terminal = value.state === "failed" || value.state === "cancelled";
+    if (!terminal) {
+        if (value.errorCode !== null || value.instruction !== null) throw new Error("Nonterminal campaign reset failure");
+    } else if (value.state === "failed" && value.errorCode === "agent_capability_unavailable") {
+        if (value.instruction !== CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION) throw new Error("Invalid campaign reset instruction");
+    } else if (typeof value.errorCode !== "string" || !["queue_timeout", "operation_failed"].includes(value.errorCode) || value.instruction !== null) {
+        throw new Error("Invalid campaign reset failure");
+    }
+    return value as CampaignResetStatus;
+}
+
+/** Fixed presentation shared by the authenticated action and its consumer checks. */
+export function campaignResetStatusMessage(status: CampaignResetStatus | null): string {
+    if (status === null) return "The reset status is not available from the hosting service yet. Your request has not been submitted again.";
+    if (status.state === "succeeded") return "Your fresh campaign is ready. Start the server when you want to play it.";
+    if (status.errorCode === "agent_capability_unavailable") return CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION;
+    if (status.errorCode === "queue_timeout") return "The campaign reset expired before it could start. Refresh before requesting another reset.";
+    if (status.state === "failed" || status.state === "cancelled") return "The campaign reset did not complete. Check your campaigns or contact support before trying again.";
+    return "Preparing your fresh campaign. This takes about a minute…";
+}
+
 export type CampaignMutation =
     | { action: "select-save"; serverId: string; saveId: string; expectedUpdatedAt: string }
     | { action: "reset-campaign"; serverId: string; expectedUpdatedAt: string; warSails?: true };
