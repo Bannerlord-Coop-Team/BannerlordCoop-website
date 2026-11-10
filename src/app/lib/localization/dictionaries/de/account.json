@@ -44,5 +44,20 @@
   "disconnect.confirm": "Trennen von {provider} bestätigen",
   "disconnect.cancel": "Abbrechen",
   "loading.label": "Konto wird geladen",
-  "loading.status": "Konto wird geladen…"
+  "loading.status": "Konto wird geladen…",
+  "boosty.benefits": "Verknüpfe dein Boosty-Abonnement, um es für Mitgliedervorteile und dein Serverkontingent zu nutzen.",
+  "boosty.linked": "Dein Boosty-Konto ist verknüpft.",
+  "boosty.nonqualifying": "Dein Boosty-Abonnement enthält keine qualifizierende Stufe.",
+  "boosty.checking": "Deine Boosty-Mitgliedschaft wird in Kürze geprüft.",
+  "boosty.start": "Boosty-Verknüpfungscode anfordern",
+  "boosty.restart": "Neuen Code anfordern",
+  "boosty.startPending": "Code wird erstellt…",
+  "boosty.codeLabel": "Dein Verknüpfungscode",
+  "boosty.codeInstructions": "Sende diesen Code als private Nachricht an {creator} auf Boosty, und zwar von dem Boosty-Konto, mit dem du abonniert hast. Er läuft um {expiresAt} ab. Die Verknüpfung ist meist innerhalb von zehn Minuten nach deiner Nachricht abgeschlossen.",
+  "boosty.codeWaiting": "Ein Verknüpfungscode wartet auf deine Nachricht. Falls du ihn nicht mehr hast, fordere einen neuen Code an.",
+  "boosty.conflict": "Dieses Boosty-Konto ist bereits mit einem anderen Website-Konto verknüpft. Trenne es zuerst dort und fordere dann einen neuen Code an.",
+  "boosty.superseded": "Dieser Code ist nicht mehr gültig. Fordere einen neuen Code an, um es erneut zu versuchen.",
+  "boosty.error": "Es konnte kein Boosty-Verknüpfungscode erstellt werden. Prüfe deine aktuelle Verbindung unten, bevor du es erneut versuchst.",
+  "boosty.disconnectError": "Boosty konnte nicht getrennt werden. Warte auf den aktuellen Status, bevor du es erneut versuchst.",
+  "disconnect.boostyExplanation": "Durch das Trennen entfällt die Boosty-Mitgliedschaftsberechtigung für neue Server. Bestehende Server und administrative Freigaben bleiben erhalten."
 }

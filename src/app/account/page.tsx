@@ -9,6 +9,10 @@ import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { LoadingButton } from "@/app/components/ui/LoadingButton";
 import type { AccountStatus } from "@/app/lib/hosting/membership-onboarding";
 import { getWebsiteAccountStatus } from "@/app/lib/hosting/website-account-status";
+import { BoostyConnection } from "@/app/account/BoostyConnection";
+import { BOOSTY_CODE_COOKIE, boostyLinkingEnabled, readBoostyLinkStatus } from "@/app/lib/hosting/boosty-link";
+import type { BoostyLinkStatus } from "../../../supabase/functions/_shared/boosty-account";
+import { cookies } from "next/headers";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -23,7 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 export const dynamic = "force-dynamic";
 /** Renders authenticated account status and localized connection controls without changing account authority. */
-export default async function AccountPage({ searchParams }: { searchParams: Promise<{ patreon?: string; discord?: string }> }) {
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ patreon?: string; discord?: string; boosty?: string }> }) {
     const supabase = await getSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) redirect("/login?next=/account");
@@ -38,6 +42,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             status = await getWebsiteAccountStatus(user.id, session.access_token);
         }
     } catch { /* Query parameters never establish current link state. */ }
+    const boosty = boostyLinkingEnabled() ? await loadBoosty(supabase, user.id) : null;
 
     // This dynamic server page takes one request-time snapshot; it is not a client render clock.
     // eslint-disable-next-line react-hooks/purity
@@ -59,7 +64,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             <div className="min-w-0"><p className="break-words font-display text-2xl font-semibold">{accountName}</p><p className="mt-1 text-sm leading-6 text-foreground-muted">{t("intro")}</p></div>
         </div>
         {!status && <p role="alert" className="mt-6 border-l-2 border-gold bg-gold/10 p-4 text-sm">{t("status.unavailable")}</p>}
-        {(params.patreon === "rate_limited" || params.discord === "rate_limited") && <p role="alert" className="mt-4">{t("error.rateLimited")}</p>}
+        {(params.patreon === "rate_limited" || params.discord === "rate_limited" || params.boosty === "rate_limited") && <p role="alert" className="mt-4">{t("error.rateLimited")}</p>}
         {[params.patreon, params.discord].includes("retry") && <p role="alert" className="mt-4">{t("error.retry")}</p>}
         {params.discord === "last_identity" && <p role="alert" className="mt-4 text-sm">{t("error.lastIdentity")}</p>}
         {params.discord === "disconnect_error" && <p role="alert" className="mt-4 text-sm">{t("error.discordDisconnect")}</p>}
@@ -116,6 +121,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                     )}
                     {status?.membership.linked && <DisconnectAccount provider="Patreon" action={disconnectPatreonAccount.bind(null, user.id)} />}
                 </section>
+                {boosty && <BoostyConnection accountId={user.id} status={boosty.status} code={boosty.code} result={params.boosty} t={t} buttonClass={primaryButton} />}
             </div>
         </section>
         <section className="mt-8 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="servers-heading">
@@ -124,6 +130,17 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             <Link href="/servers" prefetch={false} className={`${secondaryButton} mt-4`}>{t("servers.link")} <ArrowRight aria-hidden="true" className="size-4" /></Link>
         </section>
     </section></main><Footer /></div></LocalizationProvider>;
+}
+
+/** Loads configured Boosty status and the shown code; any failure hides the section rather than guessing. */
+async function loadBoosty(supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>, accountId: string) {
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session || session.user.id !== accountId) return null;
+        const code = (await cookies()).get(BOOSTY_CODE_COOKIE)?.value;
+        const status: BoostyLinkStatus = await readBoostyLinkStatus(supabase, session.access_token, code);
+        return status.configured ? { status, code: code ?? null } : null;
+    } catch { return null; }
 }
 
 /** Shows translated connection state while retaining the authoritative tri-state status. */

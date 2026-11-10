@@ -10,7 +10,7 @@ const buttonClass =
 
 /** Requires explicit localized confirmation before disconnecting the selected provider. */
 export function DisconnectAccount({provider, action, disabledReason,}: {
-    provider: "Discord" | "Patreon";
+    provider: "Discord" | "Patreon" | "Boosty";
     action: () => Promise<void>;
     disabledReason?: string;
 }) {
@@ -38,7 +38,7 @@ export function DisconnectAccount({provider, action, disabledReason,}: {
             {confirming && (
                 <form id={id} action={action} className="mt-3 rounded-sm border border-white/10 p-4">
                     <p className="text-sm leading-6 text-foreground-muted">
-                        {provider === "Patreon"
+                        {provider === "Boosty" ? t("disconnect.boostyExplanation") : provider === "Patreon"
                             ? t("disconnect.patreonExplanation")
                             : t("disconnect.discordExplanation")}
                     </p>

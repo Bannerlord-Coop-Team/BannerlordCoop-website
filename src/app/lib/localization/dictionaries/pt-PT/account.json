@@ -44,5 +44,20 @@
   "disconnect.confirm": "Confirmar a desassociação de {provider}",
   "disconnect.cancel": "Cancelar",
   "loading.label": "Carregamento da conta",
-  "loading.status": "A carregar a conta…"
+  "loading.status": "A carregar a conta…",
+  "boosty.benefits": "Associe a sua subscrição do Boosty para a utilizar nos benefícios de membro e na sua quota de servidores.",
+  "boosty.linked": "A sua conta do Boosty está associada.",
+  "boosty.nonqualifying": "A sua subscrição do Boosty não inclui um nível elegível.",
+  "boosty.checking": "A sua subscrição do Boosty será verificada em breve.",
+  "boosty.start": "Obter um código de associação do Boosty",
+  "boosty.restart": "Obter um novo código",
+  "boosty.startPending": "A criar o código…",
+  "boosty.codeLabel": "O seu código de associação",
+  "boosty.codeInstructions": "Envie este código como mensagem privada para {creator} no Boosty, a partir da conta do Boosty com que subscreve. Expira às {expiresAt}. A associação fica normalmente concluída nos dez minutos seguintes à sua mensagem.",
+  "boosty.codeWaiting": "Um código de associação aguarda a sua mensagem. Se já não o tiver, obtenha um novo código.",
+  "boosty.conflict": "Essa conta do Boosty já está associada a outra conta do site. Desligue-a primeiro aí e depois obtenha um novo código.",
+  "boosty.superseded": "Esse código já não é válido. Obtenha um novo código para tentar novamente.",
+  "boosty.error": "Não foi possível criar um código de associação do Boosty. Verifique a sua ligação atual abaixo antes de tentar novamente.",
+  "boosty.disconnectError": "Não foi possível desligar o Boosty. Aguarde o estado atual antes de tentar novamente.",
+  "disconnect.boostyExplanation": "Desligar remove a elegibilidade da subscrição do Boosty para novos servidores. Os servidores existentes e as concessões administrativas não são removidos."
 }

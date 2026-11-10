@@ -44,5 +44,20 @@
   "disconnect.confirm": "{provider} bağlantısını kesmeyi onayla",
   "disconnect.cancel": "İptal",
   "loading.label": "Hesap yükleniyor",
-  "loading.status": "Hesap yükleniyor…"
+  "loading.status": "Hesap yükleniyor…",
+  "boosty.benefits": "Boosty aboneliğini üyelik avantajları ve sunucu kotası için kullanmak üzere bağla.",
+  "boosty.linked": "Boosty hesabın bağlandı.",
+  "boosty.nonqualifying": "Boosty aboneliğin uygun bir seviye içermiyor.",
+  "boosty.checking": "Boosty üyeliğin kısa süre içinde kontrol edilecek.",
+  "boosty.start": "Boosty bağlantı kodu al",
+  "boosty.restart": "Yeni kod al",
+  "boosty.startPending": "Kod oluşturuluyor…",
+  "boosty.codeLabel": "Bağlantı kodun",
+  "boosty.codeInstructions": "Bu kodu, abone olduğun Boosty hesabından Boosty'de {creator} kullanıcısına özel mesaj olarak gönder. Kodun süresi {expiresAt} saatinde dolar. Bağlantı genellikle mesajından sonraki on dakika içinde tamamlanır.",
+  "boosty.codeWaiting": "Bir bağlantı kodu mesajını bekliyor. Kod artık sende değilse yeni bir kod al.",
+  "boosty.conflict": "Bu Boosty hesabı zaten başka bir web sitesi hesabına bağlı. Önce oradan bağlantıyı kes, ardından yeni bir kod al.",
+  "boosty.superseded": "Bu kod artık geçerli değil. Yeniden denemek için yeni bir kod al.",
+  "boosty.error": "Boosty bağlantı kodu oluşturulamadı. Yeniden denemeden önce aşağıdaki mevcut bağlantını kontrol et.",
+  "boosty.disconnectError": "Boosty bağlantısı kesilemedi. Yeniden denemeden önce mevcut durumu bekle.",
+  "disconnect.boostyExplanation": "Bağlantıyı kesmek, yeni sunucular için Boosty üyelik uygunluğunu kaldırır. Mevcut sunucular ve yönetici izinleri kaldırılmaz."
 }

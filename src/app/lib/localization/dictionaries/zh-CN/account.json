@@ -44,5 +44,20 @@
   "disconnect.confirm": "确认解除与 {provider} 的关联",
   "disconnect.cancel": "取消",
   "loading.label": "正在加载账户",
-  "loading.status": "正在加载账户…"
+  "loading.status": "正在加载账户…",
+  "boosty.benefits": "关联你的 Boosty 订阅，即可将其用于会员权益和服务器额度。",
+  "boosty.linked": "你的 Boosty 账户已关联。",
+  "boosty.nonqualifying": "你的 Boosty 订阅不包含符合条件的等级。",
+  "boosty.checking": "你的 Boosty 会员资格将很快得到验证。",
+  "boosty.start": "获取 Boosty 关联码",
+  "boosty.restart": "获取新代码",
+  "boosty.startPending": "正在创建代码…",
+  "boosty.codeLabel": "你的关联码",
+  "boosty.codeInstructions": "请使用你订阅时所用的 Boosty 账户，将此代码以私信发送给 Boosty 上的 {creator}。代码将于 {expiresAt} 过期。通常在你发送消息后十分钟内完成关联。",
+  "boosty.codeWaiting": "有一个关联码正在等待你的消息。如果你已不再持有该代码，请获取新代码。",
+  "boosty.conflict": "该 Boosty 账户已关联到另一个网站账户。请先在那里断开关联，然后获取新代码。",
+  "boosty.superseded": "该代码已失效。请获取新代码后重试。",
+  "boosty.error": "无法创建 Boosty 关联码。请先查看下方的当前连接状态，再重试。",
+  "boosty.disconnectError": "无法断开 Boosty。请等待当前状态更新后再重试。",
+  "disconnect.boostyExplanation": "断开后，Boosty 会员资格将不再可用于新服务器。现有服务器和管理员授予不会被移除。"
 }
