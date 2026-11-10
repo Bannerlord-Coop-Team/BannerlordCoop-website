@@ -85,15 +85,12 @@ function liveWarSails(warSails: boolean) {
     return modConfig;
 }
 
-it.each([[false, "War Sails: Off — set by the active campaign"], [true, "War Sails: On — set by the active campaign"]])(
-    "shows War Sails %s as a read-only line set by the active campaign, with no toggle", async (warSails, line) => {
+it.each([false, true])(
+    "shows no War Sails line or toggle when the active campaign sets it to %s", async (warSails) => {
         liveWarSails(warSails);
         await render();
-        const shown = field<HTMLElement>("config-modOptions-warSails");
-        expect(shown.tagName).toBe("P");
-        expect(shown.textContent).toBe(line);
-        expect(container.querySelector('input[id*="warSails"]')).toBeNull();
-        expect(container.textContent).not.toContain("Needs a campaign made with War Sails");
+        expect(container.querySelector('[id*="warSails"]')).toBeNull();
+        expect(container.textContent).not.toContain("War Sails");
     });
 
 it("sends back the War Sails value it read when saving gameplay settings, even after a JSON edit tries to flip it", async () => {

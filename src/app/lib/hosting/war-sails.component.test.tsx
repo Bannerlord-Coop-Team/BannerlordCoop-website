@@ -7,7 +7,7 @@ import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/ser
 
 const LOCALES = ["de", "en", "es", "fr", "ja", "ko", "pt-BR", "pt-PT", "ru", "tr", "zh-CN"] as const;
 const NEW_KEYS = [
-    "controls.warSailsSaveMismatch", "controls.warSailsUnsupported", "configEditor.warSailsOn", "configEditor.warSailsOff",
+    "controls.warSailsSaveMismatch", "controls.warSailsUnsupported",
     "campaigns.mode.legend", "campaigns.mode.classic", "campaigns.mode.classicHelp", "campaigns.mode.warSails", "campaigns.mode.warSailsHelp",
     "campaigns.switchToWarSails", "campaigns.switchToClassic", "mods.playersNeed.warSails",
 ];
@@ -39,7 +39,7 @@ it.each(LOCALES)("localizes every new War Sails string in %s, keeps the name in 
     for (const key of NEW_KEYS.filter(key => key !== "campaigns.mode.legend" && key !== "campaigns.mode.classic")) {
         expect(dictionary[key], key).toContain("War Sails");
     }
-    expect(dictionary["configEditor.warSailsHelp"]).toBeUndefined();
+    for (const key of ["configEditor.warSailsHelp", "configEditor.warSailsOn", "configEditor.warSailsOff"]) expect(dictionary[key], key).toBeUndefined();
     expect(dictionary["configuration.field.warSails"]).toBeUndefined();
     const t = createTranslator(locale, dictionary).t;
     expect(warSailsFailureMessage("war_sails_unsupported", t)).toBe(dictionary["controls.warSailsUnsupported"]);

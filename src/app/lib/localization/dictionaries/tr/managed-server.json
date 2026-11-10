@@ -170,8 +170,6 @@
   "configEditor.expectedExactlyServerconfigAndModconfig": "Yalnızca serverConfig ve modConfig bekleniyordu.",
   "configEditor.0TurnsAutosaveOff": "0, otomatik kaydetmeyi kapatır.",
   "configEditor.battleSizeHelp": "Bir savaşta her iki taraftaki toplam asker sayısı.",
-  "configEditor.warSailsOn": "War Sails: Açık — etkin sefer tarafından belirlenir",
-  "configEditor.warSailsOff": "War Sails: Kapalı — etkin sefer tarafından belirlenir",
   "configEditor.serverSettings": "Sunucu ayarları",
   "configEditor.difficulty": "Zorluk",
   "configEditor.gameplayOptions": "Oynanış seçenekleri",
