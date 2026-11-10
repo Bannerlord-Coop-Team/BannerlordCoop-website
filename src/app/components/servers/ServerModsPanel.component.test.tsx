@@ -17,7 +17,7 @@ beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.restoreAllMocks(); });
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 /** The baseline list with three owner mods: Alpha (enabled), Beta (disabled, depends on Alpha) and Gamma. */
 function mods() {
@@ -494,8 +494,11 @@ it("downloads the players' full load order as JSON, leaving out disabled and ded
     vi.stubGlobal("Blob", NodeBlob);
     vi.stubGlobal("URL", { createObjectURL: vi.fn((blob: NodeBlob) => { saved = blob; return "blob:mod-list"; }), revokeObjectURL: vi.fn() });
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { expect(this.download).toBe("BannerlordCoop-mod-list.json"); });
-    vi.useFakeTimers({ toFake: ["Date"] }).setSystemTime(new Date("2026-10-24T12:00:00.000Z"));
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] }).setSystemTime(new Date("2026-10-24T12:00:00.000Z"));
     await act(async () => downloadButton()!.click());
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(URL.revokeObjectURL).toHaveBeenCalledOnce();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:mod-list");
     vi.unstubAllGlobals();
     expect(click).toHaveBeenCalledOnce();
     expect(saved!.type).toBe("application/json");
@@ -520,10 +523,15 @@ it("offers no mod list download when players need no community mods", async () =
 /** Downloads the mod list and returns the parsed JSON file. */
 async function downloadedModList() {
     let saved: NodeBlob | undefined;
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     vi.stubGlobal("Blob", NodeBlob);
     vi.stubGlobal("URL", { createObjectURL: vi.fn((blob: NodeBlob) => { saved = blob; return "blob:mod-list"; }), revokeObjectURL: vi.fn() });
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { expect(this.download).toBe("BannerlordCoop-mod-list.json"); });
     await act(async () => downloadButton()!.click());
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(URL.revokeObjectURL).toHaveBeenCalledOnce();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:mod-list");
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     return JSON.parse(await saved!.text()) as { mods: { order: number; id: string; name: string; version: string; kind: string; playersOnly: boolean }[] };
 }
