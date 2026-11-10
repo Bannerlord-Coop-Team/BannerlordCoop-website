@@ -41,9 +41,13 @@ function exactKeys(value: unknown, keys: string[]): value is Record<string, unkn
 // Only the private operator email preserves contact addresses. Diagnostics keep redaction.
 function boundedGrantReason(value: string, includeEmail: boolean): string {
     const addresses = value.replace(/https?:\/\/\S+/giu, "[address redacted]");
-    return (includeEmail ? addresses : addresses.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/giu, "[email redacted]"))
-        .replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/giu, "[account redacted]")
-        .replace(/\b\d{17,20}\b/gu, "[identity redacted]")
+    const identities = (text: string) => text.replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/giu, "[account redacted]")
+        .replace(/\b\d{17,20}\b/gu, "[identity redacted]");
+    // Format original email tokens separately so numeric/UUID-shaped usernames stay complete.
+    const text = includeEmail
+        ? addresses.split(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/giu).map((part, index) => index % 2 === 1 ? part : identities(part)).join("")
+        : identities(addresses.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/giu, "[email redacted]"));
+    return text
         .replace(/[\x00-\x1f\x7f\u2028\u2029\u202a-\u202e\u2066-\u2069|]/gu, " ").replace(/\s+/gu, " ").trim().slice(0, 240);
 }
 

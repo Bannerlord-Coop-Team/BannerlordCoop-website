@@ -93,6 +93,19 @@ test("v3 validates bounded email fields without echoing rejected values, includi
     assert.match(message.html!, /account none \(no email\)/);
 });
 
+test("operator grant emails stay complete when their usernames resemble identities", () => {
+    const emails = ["12345678901234567890@example.test", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb@example.test"];
+    const value = wireV3(); Object.assign(value.servers[0], { independent_quota: 1,
+        grant_reason: `Grant for ${emails.join(" and ")} account cccccccc-cccc-4ccc-8ccc-cccccccccccc 192469416892432384` });
+    const report = classifyLapseServers(parseLapseInventory(value), new Set());
+    const message = lapseAlertMessage(report, envelope);
+    for (const body of [message.text, message.html!]) {
+        for (const email of emails) assert.ok(body.includes(email));
+        assert.match(body, /account \[account redacted\] \[identity redacted\]/u);
+    }
+    assert.doesNotMatch(lapseReportDiagnosticText(report), /@/u);
+});
+
 test("the offline CLI keeps account and grant emails out of stdout and stderr", async () => {
     const root = new URL("../../../", import.meta.url);
     const result = await promisify(execFile)(process.execPath, ["--import", "tsx", "scripts/patreon-lapse-report.ts", "--input", "tests/fixtures/patreon-lapse-emails-v3.json"], { cwd: root });
