@@ -255,9 +255,13 @@ same RLS and no client or service-role table grants. Outbox hints gain
 now applies per provider, and an acknowledgement repairs the newest head of its own
 provider, so one provider's backlog cannot starve another's revocation.
 
-No Boosty linking adapter exists yet. A Boosty snapshot of a live account without a
-head writes nothing and answers a constant `unlinked`/`unverified` head at generation
-and revision `"0"` with null identities. A deleted account (Auth 404) creates a
+A Boosty snapshot of a live account that never linked Boosty writes nothing and answers a
+constant `unlinked`/`unverified` head at generation and revision `"0"` with null
+identities. Linking (a one-time code sent by Boosty private message) and evidence polling
+are described in [Boosty membership adapter](boosty-membership.md);
+`20261110120000_boosty_membership_adapter.sql` replaces `membership_provider_fence` so it
+fences the head against the current `boosty_membership.links` binding with the same
+`identity_changed`/`unlinked` rules as Patreon. A deleted account (Auth 404) creates a
 `account_deleted` tombstone at generation 1 with its own Boosty hint, and the Auth
 deletion trigger tombstones every existing provider head after the Patreon head. Both
 use the Patreon fence's account lock and refuse resurrection.
