@@ -459,6 +459,34 @@ try {
     Remove-Item -LiteralPath $installRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+# A server folder directly under a drive root (D:\BannerlordCoop Dedicated Server) must install.
+$driveRootBacking = Join-Path ([IO.Path]::GetTempPath()) ('BannerlordCoopDriveRootTests-' + [guid]::NewGuid().ToString('N'))
+$driveLetter = [char[]]'QRSTUVWXYZ' | Where-Object { -not (Test-Path -LiteralPath "$($_):\") } | Select-Object -First 1
+if (-not $driveLetter) { throw 'No free drive letter is available for the drive-root installer test.' }
+New-Item -ItemType Directory -Path $driveRootBacking -Force | Out-Null
+& "$env:SystemRoot\System32\subst.exe" "$($driveLetter):" $driveRootBacking
+if ($LASTEXITCODE -ne 0) { throw 'subst could not map a drive for the drive-root installer test.' }
+try {
+    $fullRelease = $validManifest.server.PSObject.Copy()
+    $fullRelease.incremental = $null
+    foreach ($case in @(
+        @{ Name = 'incremental'; Release = $validManifest.server; Folder = 'Incremental Server' },
+        @{ Name = 'full'; Release = $fullRelease; Folder = 'Full Server' }
+    )) {
+        $rootServer = "$($driveLetter):\$($case.Folder)"
+        Install-Server $case.Release $rootServer 'unused.exe'
+        if (-not (Test-Path -LiteralPath (Join-Path $rootServer 'BannerlordCoopServer.exe') -PathType Leaf)) {
+            throw "A $($case.Name) server install directly under a drive root did not install."
+        }
+    }
+    if (@(Get-ChildItem -LiteralPath "$($driveLetter):\" -Force -Filter '.bannerlordcoop-installer-*').Count -ne 0) {
+        throw 'A drive-root server install left its staging folder behind.'
+    }
+} finally {
+    & "$env:SystemRoot\System32\subst.exe" "$($driveLetter):" /D
+    Remove-Item -LiteralPath $driveRootBacking -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 function New-GatewayWebError {
     param(
         [Parameter(Mandatory = $true)][int]$StatusCode,

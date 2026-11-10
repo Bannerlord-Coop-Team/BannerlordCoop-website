@@ -2013,6 +2013,17 @@ function Assert-ServerStopped {
     }
 }
 
+# Creates an empty staging folder beside the server folder, so the final move stays on one volume.
+# Uses CreateDirectory because New-Item rejects a drive root such as D:\ in Windows PowerShell 5.1.
+function New-ServerWorkPath {
+    param([Parameter(Mandatory = $true)][string]$ServerPath)
+
+    $parent = Split-Path -Parent $ServerPath
+    $work = Join-Path $parent ('.bannerlordcoop-installer-' + [guid]::NewGuid().ToString('N'))
+    [void][IO.Directory]::CreateDirectory($work)
+    return $work
+}
+
 function Install-ServerIncremental {
     param(
         [Parameter(Mandatory = $true)][object]$Release,
@@ -2021,10 +2032,7 @@ function Install-ServerIncremental {
     )
 
     Assert-ServerStopped $ServerPath
-    $parent = Split-Path -Parent $ServerPath
-    New-Item -ItemType Directory -Path $parent -Force | Out-Null
-    $work = Join-Path $parent ('.bannerlordcoop-installer-' + [guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Path $work -Force | Out-Null
+    $work = New-ServerWorkPath $ServerPath
     $incremental = $Release.incremental
     $installed = Get-ServerInstallState $ServerPath
     $compatibleFingerprints = @([string]$incremental.baseFingerprint) + @(
@@ -2152,10 +2160,7 @@ function Install-Server {
         Install-ServerIncremental $Release $ServerPath $SevenZip
         return
     }
-    $parent = Split-Path -Parent $ServerPath
-    New-Item -ItemType Directory -Path $parent -Force | Out-Null
-    $work = Join-Path $parent ('.bannerlordcoop-installer-' + [guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Path $work -Force | Out-Null
+    $work = New-ServerWorkPath $ServerPath
     try {
         Write-Host ''
         Write-Host 'Installing the Windows dedicated server...' -ForegroundColor Cyan
