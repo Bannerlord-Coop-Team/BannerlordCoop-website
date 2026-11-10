@@ -66,9 +66,8 @@ test("link codes are canonical, hash-only and matched only when exactly one appe
 test("only the allowlisted routes exist, each with an exact query", () => {
     assert.equal(BOOSTY_API_ORIGIN, "https://api.boosty.to");
     assert.equal(boostyUrl({ route: "subscribers", blog: "coop-team", offset: 200 }).href, "https://api.boosty.to/v1/blog/coop-team/subscribers?limit=100&offset=200&sort_by=on_time&order=gt&with_follow=false");
-    assert.equal(boostyUrl({ route: "dialogs", offset: null }).href, "https://api.boosty.to/v1/dialog/?limit=20");
+    // The first dialog page and message routes are pinned by the exact-request client test below.
     assert.equal(boostyUrl({ route: "dialogs", offset: "40" }).href, "https://api.boosty.to/v1/dialog/?limit=20&offset=40");
-    assert.equal(boostyUrl({ route: "messages", dialogId: "900" }).href, "https://api.boosty.to/v1/dialog/900/message/?limit=20");
     for (const bad of [{ route: "subscribers", blog: "../x", offset: 0 }, { route: "subscribers", blog: "coop-team", offset: -1 }, { route: "subscribers", blog: "coop-team", offset: 5001 },
         { route: "dialogs", offset: "1&x=1" }, { route: "messages", dialogId: "1/../2" }, { route: "messages", dialogId: "0" }, { route: "levels" }] as never[]) assert.throws(() => boostyUrl(bad), JSON.stringify(bad));
 });
@@ -89,10 +88,12 @@ test("the client sends exact GETs, replaces a rejected token once and reports a 
     await assert.rejects(denied.dialogs(null), BoostyAuthError);
     const outage = createBoostyApi({ blog: "coop-team", priceField: "RUB", credential: tokens("access-token-xxxxxx", null).provider,
         fetchImplementation: strictFetch([{ method: "GET", url: "https://api.boosty.to/v1/dialog/900/message/?limit=20", headers: apiHeaders("access-token-xxxxxx"), reply: () => new Response("busy", { status: 502 }) }]) });
-    await assert.rejects(outage.messages("900"), (error: Error) => !(error instanceof BoostyAuthError));
+    // A request mismatch inside the strict fake is an AssertionError, which must not pass as the expected failure.
+    const notFake = (error: Error) => !(error instanceof assert.AssertionError);
+    await assert.rejects(outage.messages("900"), (error: Error) => notFake(error) && !(error instanceof BoostyAuthError));
     const html = createBoostyApi({ blog: "coop-team", priceField: "RUB", credential: tokens("access-token-xxxxxx", null).provider,
         fetchImplementation: strictFetch([{ method: "GET", url: "https://api.boosty.to/v1/dialog/?limit=20", headers: apiHeaders("access-token-xxxxxx"), reply: () => new Response("<html>", { headers: { "content-type": "text/html" } }) }]) });
-    await assert.rejects(html.dialogs(null));
+    await assert.rejects(html.dialogs(null), notFake);
 });
 
 test("subscriber, dialog and message parsers read only the allowlisted subset and fail closed on identity", () => {

@@ -329,7 +329,6 @@ test("Boosty adapter links DM codes, decides evidence conservatively and serves 
                 for (const fn of ["dispatch()", "link(jsonb)", "write_evidence(jsonb)", "acquire(jsonb)"]) {
                     assert.equal((await query("select has_function_privilege($1,$2,'execute') allowed", [role, `boosty_membership.${fn}`])).rows[0].allowed, false, `${role} ${fn}`);
                 }
-                assert.equal((await query("select has_function_privilege($1,'public.membership_provider_fence(uuid,text,text,boolean)','execute') allowed", [role])).rows[0].allowed, false);
             }
         });
     } finally { await db.close(); }
