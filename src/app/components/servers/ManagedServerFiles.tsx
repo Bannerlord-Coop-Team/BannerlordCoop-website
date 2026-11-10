@@ -28,7 +28,7 @@ export function ManagedServerFiles({ userId, server, files, saves, backups, stat
             <section id="server-files" aria-label={t("files.saveConfig")}>
                 {canManage
                     ? <ManagedServerTransfers userId={userId} serverId={server.serverId} serverName={server.displayName} status={files} canImportConfig={server.accessRole === "owner" && !server.subscriptionHold} canEditConfig={server.accessRole === "owner" && !server.subscriptionHold} canExportSave={server.accessRole === "owner"} subscriptionRescue={server.accessRole === "owner" && server.subscriptionHold?.canExportSave === true}
-                        campaigns={<ManagedServerCampaigns userId={userId} serverId={server.serverId} status={files} canDelete={canManage} />} />
+                        campaigns={<ManagedServerCampaigns userId={userId} serverId={server.serverId} status={files} canDelete={canManage} warSailsCapable={server.warSailsCapable === true} />} />
                     : <ServerSaveConfigPanels saveNotice={readOnly} configNotice={readOnly} />}
             </section>
             <ManagedServerMaintenance serverId={server.serverId} userId={userId} canUpdate={canManage} releaseChannel={server.releaseChannel} />

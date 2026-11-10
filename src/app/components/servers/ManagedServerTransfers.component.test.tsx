@@ -355,7 +355,8 @@ it("downloads two correctly named native JSON files in one ZIP that each import 
     expect(JSON.parse(strFromU8(entries["mod-config.json"]))).toEqual(managedConfig.modConfig);
     for (const part of ["server", "mod"] as const) {
         const imported = readConfigurationFile(strFromU8(entries[`${part}-config.json`]), part);
-        expect(imported.ignoredSettings).toEqual([]);
+        // War Sails belongs to the campaign, so re-importing the gameplay file reports it as not imported.
+        expect(imported.ignoredSettings).toEqual(part === "mod" ? ["warSails"] : []);
         expect(applyConfigurationImport(managedConfig, imported.input)).toEqual(managedConfig);
     }
     expect(container.textContent).toContain("Extract All");

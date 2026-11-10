@@ -7,14 +7,15 @@ import { ManagedServerConfigEditor } from "./ManagedServerConfigEditor";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION as config } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { RunnerConfigurationFile, RunnerConfigurationPart } from "../../../../supabase/functions/_shared/server-configuration-contract";
 
-const mocks = vi.hoisted(() => ({ read: vi.fn(), readFiles: vi.fn(), save: vi.fn() }));
+const mocks = vi.hoisted(() => ({ read: vi.fn(), readFiles: vi.fn(), limit: vi.fn(), save: vi.fn(), shown: vi.fn() }));
+vi.mock("./ServerManagementWorkspace", () => ({ useServerWorkspaceSectionShown: mocks.shown }));
 vi.mock("@/app/servers/managed-server-config-actions", () => ({
     readManagedServerConfig: mocks.read,
     // One action reads both files, so each load is a single request rather than two queued ones.
     readManagedServerConfigFiles: async (serverId: string, userId: string) => {
         mocks.readFiles(serverId, userId);
         const [server, mod] = await Promise.all([mocks.read(serverId, "server", userId), mocks.read(serverId, "mod", userId)]);
-        return { server, mod };
+        return { server, mod, maximumBattleSize: mocks.limit() ?? 1000 };
     },
     saveManagedServerConfig: mocks.save,
 }));
@@ -74,6 +75,41 @@ it("loads the live runner files, defaults to the form and saves only the changed
     mocks.save.mockResolvedValue({ ok: true, file: { configPart: "server", revision: "d".repeat(64), settings: { ...saved, autosaveMinutes: 25 } } });
     await click("Save config");
     expect(mocks.save).toHaveBeenLastCalledWith(expect.objectContaining({ expectedRevision: "c".repeat(64) }), "owner");
+});
+
+/** Serves a live mod file whose War Sails value the active campaign set. */
+function liveWarSails(warSails: boolean) {
+    const modConfig = { ...config.modConfig, modOptions: { ...config.modConfig.modOptions, warSails } };
+    mocks.read.mockImplementation(async (_serverId: string, part: RunnerConfigurationPart) => ({ ok: true,
+        file: part === "mod" ? { configPart: "mod", revision: revisions.mod, settings: modConfig } : file(part) }));
+    return modConfig;
+}
+
+it.each([[false, "War Sails: Off — set by the active campaign"], [true, "War Sails: On — set by the active campaign"]])(
+    "shows War Sails %s as a read-only line set by the active campaign, with no toggle", async (warSails, line) => {
+        liveWarSails(warSails);
+        await render();
+        const shown = field<HTMLElement>("config-modOptions-warSails");
+        expect(shown.tagName).toBe("P");
+        expect(shown.textContent).toBe(line);
+        expect(container.querySelector('input[id*="warSails"]')).toBeNull();
+        expect(container.textContent).not.toContain("Needs a campaign made with War Sails");
+    });
+
+it("sends back the War Sails value it read when saving gameplay settings, even after a JSON edit tries to flip it", async () => {
+    const live = liveWarSails(true);
+    await render();
+    await click("JSON");
+    const edited = { serverConfig: liveServer, modConfig: { ...live, modOptions: { ...live.modOptions, warSails: false } } };
+    await type("config-json", JSON.stringify(edited));
+    // A War Sails-only edit is not a change: the active campaign owns that value.
+    expect(container.textContent).toContain("No pending changes");
+    await type("config-json", JSON.stringify({ ...edited, modConfig: { ...edited.modConfig, modOptions: { ...edited.modConfig.modOptions, battleSize: 600 } } }));
+    const saved = { ...live, modOptions: { ...live.modOptions, battleSize: 600 } };
+    mocks.save.mockResolvedValue({ ok: true, file: { configPart: "mod", revision: "c".repeat(64), settings: saved } });
+    await click("Save config");
+    expect(mocks.save).toHaveBeenCalledExactlyOnceWith({ requestId: expect.stringMatching(/^[0-9a-f-]{36}$/), serverId, configPart: "mod", expectedRevision: revisions.mod, settings: saved }, "owner");
+    expect((mocks.save.mock.calls[0]![0] as { settings: typeof saved }).settings.modOptions.warSails).toBe(true);
 });
 
 it("shows a form-shaped skeleton while the live configuration is loading", async () => {
@@ -251,7 +287,7 @@ vi.mock("@/app/lib/localization/server", () => ({
 it("edits the battle size within the range the game applies and saves it to the gameplay file", async () => {
     await render();
     expect(field<HTMLInputElement>("config-modOptions-battleSize").value).toBe("1000");
-    expect(container.textContent).toContain("Total troops across both sides of a battle, from 200 to 1,000.");
+    expect(container.textContent).toContain("Total troops on both sides of a battle.");
     await type("config-modOptions-battleSize", "1500");
     expect(container.textContent).toContain("Enter a value from 200 to 1,000.");
     expect(button("Save config").disabled).toBe(true);
@@ -260,4 +296,44 @@ it("edits the battle size within the range the game applies and saves it to the 
     mocks.save.mockResolvedValue({ ok: true, file: { configPart: "mod", revision: "c".repeat(64), settings: saved } });
     await click("Save config");
     expect(mocks.save).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ configPart: "mod", expectedRevision: revisions.mod, settings: saved }), "owner");
+});
+
+
+it("allows 1,500 only after the CP-backed read reports both enabled server mods", async () => {
+    mocks.limit.mockReturnValue(12000);
+    await render();
+    expect(field<HTMLInputElement>("config-modOptions-battleSize").max).toBe("12000");
+    expect(container.textContent).not.toContain("Limitless");
+    expect(container.textContent).not.toContain("FPS");
+    expect(container.textContent).not.toContain("12,000");
+    expect(container.textContent).toContain("Total troops on both sides of a battle.");
+    await type("config-modOptions-battleSize", "1500");
+    const saved = { ...config.modConfig, modOptions: { ...config.modConfig.modOptions, battleSize: 1500 } };
+    mocks.save.mockResolvedValue({ ok: true, file: { configPart: "mod", revision: "c".repeat(64), settings: saved } });
+    await click("Save config");
+    expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ settings: saved }), "owner");
+});
+
+it("refreshes the invisible limit after a mod-tab visit while preserving unsaved settings", async () => {
+    mocks.shown.mockReturnValue(false);
+    await render();
+    await type("config-serverConfig-autosaveMinutes", "25");
+    mocks.limit.mockReturnValue(12000);
+    mocks.shown.mockReturnValue(true);
+    await render();
+    expect(mocks.shown).toHaveBeenCalledWith("Save & config");
+    expect(field<HTMLInputElement>("config-modOptions-battleSize").max).toBe("12000");
+    expect(field<HTMLInputElement>("config-serverConfig-autosaveMinutes").value).toBe("25");
+    await type("config-modOptions-battleSize", "1500");
+    expect(button("Save config").disabled).toBe(false);
+    mocks.shown.mockReturnValue(false);
+    await render();
+    mocks.limit.mockReturnValue(1000);
+    mocks.shown.mockReturnValue(true);
+    await render();
+    expect(field<HTMLInputElement>("config-modOptions-battleSize").max).toBe("1000");
+    expect(field<HTMLInputElement>("config-modOptions-battleSize").value).toBe("1500");
+    expect(field<HTMLInputElement>("config-serverConfig-autosaveMinutes").value).toBe("25");
+    expect(button("Save config").disabled).toBe(true);
+    expect(container.textContent).not.toContain("Limitless");
 });

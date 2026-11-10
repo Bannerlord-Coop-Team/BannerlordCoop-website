@@ -1,0 +1,14 @@
+Subscription funding report as of 2026-11-09T14:00:00.000Z
+2 row(s) need review; 3 context row(s).
+
+Needs review:
+- server 11111111 (https://bannerlordcoop.com/admin/control-plane?view=server&serverId=11111111-1111-4111-8111-111111111111) / account aaaaaaaa (https://bannerlordcoop.com/admin?q=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa) | untracked/grandfathered | no current funding record; review exact funding identity
+- server 22222222 (https://bannerlordcoop.com/admin/control-plane?view=server&serverId=22222222-2222-4222-8222-222222222222) / account bbbbbbbb (https://bannerlordcoop.com/admin?q=bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb) | review_required | membership review_required; no active grace
+
+Context:
+- server 33333333 (https://bannerlordcoop.com/admin/control-plane?view=server&serverId=33333333-3333-4333-8333-333333333333) / account cccccccc (https://bannerlordcoop.com/admin?q=cccccccc-cccc-4ccc-8ccc-cccccccccccc) | in grace | deletion due 2026-11-10T14:00:00.000Z
+- server 44444444 (https://bannerlordcoop.com/admin/control-plane?view=server&serverId=44444444-4444-4444-8444-444444444444) / account dddddddd (https://bannerlordcoop.com/admin?q=dddddddd-dddd-4ddd-8ddd-dddddddddddd) | grant-backed | quota 2, usage 1 | grant reason: Trial & review <pending> | grant/quota recorded 2026-10-23T18:13:42.581Z
+- server 55555555 / account eeeeeeee (https://bannerlordcoop.com/admin?q=eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee) | deleted | recorded 2026-11-09T13:00:00.000Z
+
+Grant notes do not establish an expiry. Grace deadlines remain subject to ControlPlane verification.
+No action was taken automatically.

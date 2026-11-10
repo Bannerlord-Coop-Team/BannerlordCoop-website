@@ -127,11 +127,28 @@ class LinuxInstallerTests(unittest.TestCase):
             },
             "polls": [[200, TOKEN]],
             "artifacts": {},
-            "manifest": {"version": 1, "releaseDate": "2026-09-04", "headSha": HEAD},
+            "manifest": {
+                "version": 2,
+                "kind": "bannerlordcoop-nightly-publication",
+                "releaseDate": "2026-09-04",
+                "builtAt": "2026-09-04T12:34:56Z",
+                "headSha": HEAD,
+                "serverSha": "c" * 40,
+                "clientRunId": "12345678901",
+                "serverRunId": "12345678902",
+                "container": {
+                    "repository": "ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server",
+                    "manifestDigest": "sha256:" + "9" * 64,
+                    "digestReference": "ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server@sha256:" + "9" * 64,
+                    "immutableReference": "ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server:nightly-" + "c" * 12 + "-" + "a" * 12 + "-" + "9" * 64,
+                },
+            },
         }
         self.client = self.archive("client", {"Coop/SubModule.xml": "module", COOP_DLL: "new-client"})
         self.set_client_url(GATEWAY + f"/v1/artifacts/nightly/clients/{HEAD}/{self.client['sha256']}/Coop.7z")
         self.config["manifest"]["client"] = self.client
+        # Client-only manifests still carry the complete, validated release metadata.
+        self.configure_server()
 
     def write_executable(self, name, text):
         path = self.bin / name
@@ -154,7 +171,7 @@ class LinuxInstallerTests(unittest.TestCase):
     def configure_server(self, incremental=True, revision="first"):
         update_files = {key: value + revision for key, value in UPDATE_FILES.items()}
         server = self.archive("server", {**BASE_FILES, **update_files})
-        server["publicUrl"] = GATEWAY + "/v1/artifacts/nightly/BannerlordCoop-DedicatedServer-Win64.7z"
+        server["publicUrl"] = GATEWAY + f"/v1/artifacts/nightly/windows/full/{HEAD}/{'c' * 40}/{server['sha256']}/BannerlordCoop-DedicatedServer-Win64.7z"
         self.config["artifacts"][server["publicUrl"]] = "server.7z"
         if incremental:
             base = self.archive("server-base", BASE_FILES)
@@ -210,7 +227,8 @@ class LinuxInstallerTests(unittest.TestCase):
         self.assertEqual((self.modules / COOP_DLL).read_text(), "new-client")
         self.assertIn(self.client["publicUrl"], self.requests)
         self.assertNotIn(GATEWAY + "/v1/artifacts/nightly/Coop.7z", self.requests)
-        self.assertIn(GATEWAY + "/v1/manifests/client", self.requests)
+        self.assertIn(GATEWAY + "/v1/manifests/release", self.requests)
+        self.assertNotIn(GATEWAY + "/v1/manifests/client", self.requests)
 
     def test_legacy_client_still_installs(self):
         self.legacy_client()
@@ -288,12 +306,21 @@ class LinuxInstallerTests(unittest.TestCase):
                 self.run_installer(success=False)
                 self.assertEqual(target.read_text(), "old-client")
 
-    def test_full_server_and_client_install_together(self):
-        self.configure_server(incremental=False)
+    def test_server_and_client_install_together(self):
+        server = self.configure_server()
         self.run_installer(choice=3)
         self.assertEqual((self.modules / COOP_DLL).read_text(), "new-client")
         self.assertEqual((self.server / SERVER_DLL).read_text(), "server-dllfirst")
         self.assertIn(GATEWAY + "/v1/manifests/release", self.requests)
+        self.assertIn(server["incremental"]["base"]["publicUrl"], self.requests)
+        self.assertIn(server["incremental"]["update"]["publicUrl"], self.requests)
+        self.assertNotIn(server["publicUrl"], self.requests)
+
+    def test_full_only_server_metadata_is_rejected_before_download(self):
+        self.configure_server(incremental=False)
+        self.assertIn("incremental Windows server release metadata is invalid", self.run_installer(choice=2, success=False))
+        self.assertFalse(any("/artifacts/" in url for url in self.requests))
+        self.assertFalse(self.server.exists())
 
     def test_incremental_update_keeps_engine_saves_config_and_base_identity(self):
         self.configure_server()

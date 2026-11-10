@@ -8,6 +8,9 @@ import { MembershipNextStep } from "./MembershipNextStep";
 import { renderToStaticMarkup } from "react-dom/server";
 import { composeOnboarding, EMPTY_MEMBERSHIP, type WebsiteOnboardingSummary } from "@/app/lib/hosting/membership-onboarding";
 vi.mock("@/app/account/actions", () => ({ linkDiscordAccount: vi.fn(), linkPatreonAccount: vi.fn() }));
+const refresh = vi.hoisted(() => vi.fn());
+const router = { refresh };
+vi.mock("next/navigation", () => ({ useRouter: () => router }));
 
 it("resolves every membership status from dictionary data and preserves the Patreon return path", () => {
     const summary = composeOnboarding(null, null, null, null);
@@ -26,6 +29,28 @@ it("tells a linked patron below the hosting tier which tier includes a server", 
     const html = renderToStaticMarkup(<LocalizationProvider locale="en" messages={{ servers }}><MembershipNextStep summary={{ ...summary, status: "nonqualifying", nextAction: "connect_patreon" }} /></LocalizationProvider>);
     expect(html).toContain("$20/month Veteran tier or higher");
     expect(html).not.toContain("No qualifying subscription benefit");
+});
+it("reassures a confirmed patron and refreshes pending allowance without resubmitting authorization", async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    vi.useFakeTimers(); refresh.mockClear();
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const summary = { ...composeOnboarding(null, null, null, null), status: "sync_pending" as const, nextAction: "refresh_status" as const };
+    const view = (current: WebsiteOnboardingSummary) => <LocalizationProvider locale="en" messages={{ servers }}><MembershipNextStep summary={current} /></LocalizationProvider>;
+    try {
+        await act(async () => root.render(view(summary)));
+        expect(container.textContent).toContain("Your Patreon membership is confirmed");
+        expect(container.textContent).toContain("usually takes a few seconds; refreshing automatically");
+        expect(container.querySelector("form")).toBeNull();
+        await act(async () => vi.advanceTimersByTime(1_999));
+        expect(refresh).not.toHaveBeenCalled();
+        await act(async () => vi.advanceTimersByTime(1));
+        expect(refresh).toHaveBeenCalledTimes(1);
+        await act(async () => root.render(view({ ...summary, status: "eligible", nextAction: "choose_name_region" })));
+        await act(async () => vi.advanceTimersByTime(60_000));
+        expect(refresh).toHaveBeenCalledTimes(1);
+        expect(vi.getTimerCount()).toBe(0);
+    } finally { await act(async () => root.unmount()); vi.useRealTimers(); }
 });
 it("pending verification navigates back to account confirmation without OAuth or cookie mutation", async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });

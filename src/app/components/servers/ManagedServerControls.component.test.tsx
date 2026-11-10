@@ -2,7 +2,7 @@ import { createTranslator } from "@/app/lib/localization/translator";
 import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import * as serverActions from "@/app/servers/managed-server-actions";
 import { ManagedServerControls, ManagedServerPassword } from "./ManagedServerControls";
 import { ManagedServerMoveProvider, ManagedServerMoveStatus } from "./ManagedServerMoveStatus";
@@ -19,10 +19,14 @@ vi.mock("./ServerManagementWorkspace", async original => ({
     ...await original<typeof import("./ServerManagementWorkspace")>(), useRevealServerAddress: () => revealAddress,
 }));
 
-const { request, requestUpdate, requestPassword, beginPolling, startStatus, summary, router, statusSlot } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), requestPassword: vi.fn(), beginPolling: vi.fn(), startStatus: vi.fn(), summary: vi.fn(), router: { refresh: vi.fn() }, statusSlot: { current: undefined as HTMLElement | null | undefined } }));
+const { request, requestUpdate, requestPassword, buildStatus, beginPolling, startStatus, summary, router, statusSlot } = vi.hoisted(() => ({ request: vi.fn(), requestUpdate: vi.fn(), requestPassword: vi.fn(), buildStatus: vi.fn(), beginPolling: vi.fn(), startStatus: vi.fn(), summary: vi.fn(), router: { refresh: vi.fn() }, statusSlot: { current: undefined as HTMLElement | null | undefined } }));
 vi.mock("next/navigation", () => ({ useRouter: () => router }));
 vi.mock("@/app/lib/hosting/my-servers-server", () => ({ getMyServerStartStatus: startStatus, getMyServerSummary: summary, getMyServerDeletionStatus: deletionStatus }));
+vi.mock("@/app/servers/server-build-actions", () => ({ readServerBuildStatus: buildStatus }));
 afterEach(() => vi.useRealTimers());
+beforeEach(() => {
+    buildStatus.mockReset().mockResolvedValue({ serverId: "22222222-2222-4222-8222-222222222222", job: null });
+});
 
 it.each(["refused", "unknown", "masked", "success"])("renders the supported owner envelope for %s with zero console errors", async outcome => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -204,6 +208,18 @@ it("confirms and queues an immediate update with the displayed server revision",
     requestUpdate.mockReset().mockResolvedValue({
         outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "update",
     });
+    buildStatus.mockReset()
+        .mockResolvedValueOnce({ serverId: "22222222-2222-4222-8222-222222222222", job: null })
+        .mockResolvedValue({ serverId: "22222222-2222-4222-8222-222222222222", job: {
+            jobId: "55555555-5555-4555-8555-555555555555", state: "running", initiatedBy: "owner", ownerSelected: false,
+            phase: "backup", steps: [
+                { id: "queued", state: "done" }, { id: "stopping", state: "done" }, { id: "backup", state: "active" },
+                { id: "installing", state: "pending" }, { id: "starting", state: "pending" }, { id: "verifying", state: "pending" },
+            ], completedSteps: 2, totalSteps: 6, targetVersion: "0.1.11", previousVersion: "0.1.10",
+            progress: "Creating a safe restore point", backup: null, rolledBack: false, failureCode: null,
+            failureMessage: null, nextStep: null, attemptCount: 1, maximumAttempts: 3, nextRetryAt: null,
+            createdAt: "2026-09-20T12:00:00.000Z", updatedAt: "2026-09-20T12:00:10.000Z", completedAt: null,
+        } });
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     const container = document.createElement("div");
     const root = createRoot(container);
@@ -217,11 +233,41 @@ it("confirms and queues an immediate update with the displayed server revision",
             serverId: "22222222-2222-4222-8222-222222222222",
             expectedUpdatedAt: "2026-09-20T12:00:00.000Z",
         }, expect.any(String));
-        expect(container.textContent).toContain("Update queued");
+        expect(container.textContent).toContain("0.1.10");
+        expect(container.textContent).toContain("0.1.11");
+        expect(container.textContent).toContain("Creating a backup");
+        expect(container.textContent).not.toContain("55555555-5555-4555-8555-555555555555");
+        expect(container.querySelector('[aria-live="polite"]')).not.toBeNull();
     } finally {
         await act(async () => root.unmount());
         confirm.mockRestore();
     }
+});
+
+it("reattaches to an update already running after reload and keeps owner copy free of raw ids", async () => {
+    const serverId = "22222222-2222-4222-8222-222222222222";
+    const durableJobId = "55555555-5555-4555-8555-555555555555";
+    buildStatus.mockReset().mockResolvedValue({ serverId, job: {
+        jobId: durableJobId, state: "running", initiatedBy: "owner", ownerSelected: false, phase: "installing",
+        steps: [
+            { id: "queued", state: "done" }, { id: "stopping", state: "done" }, { id: "backup", state: "done" },
+            { id: "installing", state: "active" }, { id: "starting", state: "pending" }, { id: "verifying", state: "pending" },
+        ], completedSteps: 3, totalSteps: 6, targetVersion: "0.1.11", previousVersion: "0.1.10",
+        progress: "Installing the selected release", backup: null, rolledBack: false, failureCode: null,
+        failureMessage: null, nextStep: null, attemptCount: 1, maximumAttempts: 3, nextRetryAt: null,
+        createdAt: "2026-09-20T12:00:00.000Z", updatedAt: "2026-09-20T12:01:00.000Z", completedAt: null,
+    } });
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls serverId={serverId} displayName="Campaign"
+            accessRole="owner" operationState="updating" observedGameState="stopped" expectedUpdatedAt="2026-09-20T12:01:00.000Z" /></TestLocalization>));
+        expect(container.textContent).toContain("0.1.10");
+        expect(container.textContent).toContain("0.1.11");
+        expect(container.textContent).toContain("Installing 0.1.11");
+        expect(container.textContent).not.toContain(durableJobId);
+        expect(container.querySelector('[aria-live="polite"]')).not.toBeNull();
+    } finally { await act(async () => root.unmount()); }
 });
 
 it.each(["stable", "nightly"] as const)("refreshes the update revision only while the displayed channel is unchanged: %s", async channel => {
@@ -359,6 +405,25 @@ it.each(["failed", "retry-wait"] as const)("restores truthful %s progress after 
         expect(request).not.toHaveBeenCalled();
         expect(startStatus).toHaveBeenCalledTimes(state === "failed" ? 0 : 1);
     } finally { await act(async () => root.unmount()); }
+});
+
+it.each([
+    ["war_sails_save_mismatch", "This campaign's War Sails mode doesn't match. Select or start a campaign in the right mode."],
+    ["war_sails_unsupported", "This campaign uses War Sails, which this server's build can't run. Switch to the nightly channel or pick a Classic campaign."],
+] as const)("explains a %s failure insight and a failed Start with localized copy", async (failureCode, message) => {
+    vi.useFakeTimers();
+    const container = document.createElement("div"); const root = createRoot(container);
+    const receipt = { action: "start" as const, jobId: progressJobId, state: "failed" as const, phase: "failed" as const, progress: "Control plane English copy.",
+        attemptCount: 1, maximumAttempts: 3, nextRetryAt: null, stoppedRetrying: true, failureCode, recommendedAction: null };
+    const insight: OwnerRuntimeInsight = { desiredState: "stopped", observedAt: null, allowedActions: ["start"], crashLoopDetected: false,
+        failureCode, recommendedAction: null, failureMessage: "Control plane English copy.", recommendation: null, start: receipt };
+    startStatus.mockReset().mockResolvedValue({ serverId: progressServerId, ...receipt });
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="stopped" runtimeInsight={insight} /></TestLocalization>));
+        await act(async () => vi.advanceTimersByTimeAsync(0));
+        expect(container.textContent).toContain(message);
+        expect(container.textContent).not.toContain("Control plane English copy.");
+    } finally { await act(async () => root.unmount()); vi.useRealTimers(); }
 });
 
 it.each(["admin", "support"] as const)("keeps %s controls read-only while showing the safe failure insight", async accessRole => {
@@ -669,10 +734,14 @@ it.each([
     ["mod_load_failed", { modId: "Broken.Mod", reason: "missing-dll" }, "Mod Broken.Mod is missing a DLL listed in SubModule.xml. Upload the complete mod including its bin folder, or disable it in Mods. Then start again."],
     ["mod_load_failed", null, "A custom mod failed to load. Disable recently enabled mods and start again."],
     ["crash_loop_cooldown", null, "The server crashed repeatedly while starting, so Start is paused for about 25 minutes. Changing its enabled mods ends the pause now."],
+    ["war_sails_save_mismatch", null, "This campaign's War Sails mode doesn't match. Select or start a campaign in the right mode."],
+    ["war_sails_unsupported", null, "This campaign uses War Sails, which this server's build can't run. Switch to the nightly channel or pick a Classic campaign."],
 ])("shows a terminal %s Start refusal without following status", async (code, diagnosis, message) => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     beginPolling.mockClear();
-    const ownerCopy = code === "crash_loop_cooldown" ? message : "A custom mod failed to load. Disable recently enabled mods and start again.";
+    // War Sails refusals show the website's localized copy, never the control plane's English text.
+    const ownerCopy = code === "crash_loop_cooldown" ? message : code.startsWith("war_sails") ? "Control plane English copy."
+        : "A custom mod failed to load. Disable recently enabled mods and start again.";
     request.mockReset().mockRejectedValue(new MyServersApiError(code, ownerCopy, false, progressJobId));
     startStatus.mockReset().mockResolvedValue({ ...progress("starting", "failed", ownerCopy), ...(diagnosis ? { modLoadFailure: diagnosis } : {}) });
     const container = document.createElement("div"); const root = createRoot(container);
@@ -680,6 +749,7 @@ it.each([
         await act(async () => root.render(<TestLocalization>{<ManagedServerControls observedGameState="stopped" {...progressProps} />} </TestLocalization>));
         await act(async () => container.querySelector("button")!.click());
         expect(container.textContent).toContain(message);
+        expect(container.textContent).not.toContain("Control plane English copy.");
         expect(beginPolling).not.toHaveBeenCalled();
         expect(startStatus).toHaveBeenCalledTimes(code === "mod_load_failed" ? 1 : 0);
         expect(container.querySelector("button")!.disabled).toBe(false);

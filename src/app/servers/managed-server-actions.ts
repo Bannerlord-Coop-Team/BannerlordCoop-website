@@ -4,6 +4,7 @@ import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 import type { Translator } from "@/app/lib/localization/types";
 import { modLoadFailureMessage } from "@/app/components/servers/server-mods-messages";
+import { isWarSailsFailureCode, warSailsFailureMessage } from "@/app/lib/hosting/war-sails";
 
 import {
     getMyServerBackupStatus,
@@ -24,7 +25,7 @@ const SERVER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[
 const OPERATIONS = new Set<MyServerOperation>(["start", "stop", "restart-game"]);
 
 /** `checkStatus` asks the page to follow server status; `refresh` asks it to reload status once. */
-export type ManagedServerActionResult = { ok: boolean; message: string; operationId?: string; checkStatus?: boolean; refresh?: boolean };
+export type ManagedServerActionResult = { ok: boolean; message: string; operationId?: string; updateJobId?: string; checkStatus?: boolean; refresh?: boolean };
 
 // Authenticates and submits lifecycle operations with localized result presentation.
 export async function operateManagedServer(input: unknown): Promise<ManagedServerActionResult> {
@@ -69,7 +70,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
                 expectedUpdatedAt,
             }, crypto.randomUUID());
             revalidatePath("/servers");
-            return { ok: true, message: update.outcome === "existing"
+            return { ok: true, updateJobId: update.jobId, message: update.outcome === "existing"
                 ? t("action.actions.anUpdateIsAlreadyQueuedForThisServer")
                 : t("action.actions.updateQueuedABackupWillBeTakenBeforeTheSelected") };
         } else {
@@ -92,6 +93,10 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         // A diagnosed mod-load failure or an open crash breaker is terminal for this Start; retrying would not help.
         if (parsed.action === "start" && code === "mod_load_failed" && error instanceof MyServersApiError) {
             return { ok: false, message: await startModLoadFailureMessage(accessToken, parsed.serverId, error, t) };
+        }
+        // The campaign's War Sails mode cannot run as launched; the owner must pick another campaign or channel, not retry.
+        if ((parsed.action === "start" || parsed.action === "restart-game") && isWarSailsFailureCode(code)) {
+            return { ok: false, refresh: true, message: warSailsFailureMessage(code, t) };
         }
         if (parsed.action === "start" && code === "crash_loop_cooldown" && error instanceof MyServersApiError) {
             return { ok: false, refresh: true, message: error.message };

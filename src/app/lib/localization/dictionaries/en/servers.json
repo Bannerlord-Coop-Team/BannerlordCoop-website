@@ -4,7 +4,7 @@
   "membership.status.configuration_blocked": "Membership server setup is not configured yet. Contact support. Existing servers and independent grants are unaffected.",
   "membership.status.needs_patreon": "Connect Patreon to check your subscription benefits for this account.",
   "membership.status.verification_pending": "Verification is awaiting your account confirmation. Return to your account; do not launch another authorization.",
-  "membership.status.sync_pending": "Membership was checked; allocation synchronization is pending. Refresh status.",
+  "membership.status.sync_pending": "Your Patreon membership is confirmed. Your server allowance is being updated. This usually takes a few seconds; refreshing automatically.",
   "membership.status.nonqualifying": "Your Patreon membership doesn't include a server. Hosting needs the $20/month Veteran tier or higher. Upgrade on Patreon, then Check again.",
   "membership.status.verification_expired": "Check your membership again through Patreon authorization. Verification lasts at most 24 hours for new allocation only.",
   "membership.status.review_required": "Membership or allocation needs review. Contact support; existing servers remain available.",

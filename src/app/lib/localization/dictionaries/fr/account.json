@@ -27,7 +27,7 @@
   "membership.nightlyInstaller": "Les soutiens sur Patreon ont accès à l’installateur des versions nocturnes (voici comment l’utiliser)",
   "membership.reviewRequired": "Votre abonnement doit être examiné. Contactez l’assistance avant de réessayer.",
   "membership.verifyRequired": "Vérifiez votre abonnement avant de créer un nouveau serveur.",
-  "membership.syncPending": "Votre allocation de serveurs est en cours de mise à jour.",
+  "membership.syncPending": "Votre allocation de serveurs est en cours de mise à jour. Cela prend généralement quelques secondes ; le statut s’actualise automatiquement.",
   "membership.syncUnavailable": "Votre allocation de serveurs n’a pas pu être vérifiée.",
   "membership.expiry": "Vous devrez peut-être vérifier de nouveau votre abonnement avant de créer un nouveau serveur. Les serveurs existants ne sont pas arrêtés automatiquement lorsque la vérification expire.",
   "patreon.verifyPending": "Ouverture de Patreon…",

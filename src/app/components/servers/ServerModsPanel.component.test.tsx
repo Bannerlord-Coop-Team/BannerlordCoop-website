@@ -54,8 +54,8 @@ it("keeps an upload unknown when a suspended reconciliation read cannot confirm 
 });
 
 /** Renders the panel and waits for its first load. */
-async function render(catalog: ServerModCatalog, props: { canEdit?: boolean; active?: boolean } = {}) {
-    await act(async () => root.render(<TestLocalization><ServerModsPanel serverId={SERVER_ID} catalog={catalog} canEdit={props.canEdit ?? true} active={props.active ?? true} /></TestLocalization>));
+async function render(catalog: ServerModCatalog, props: { canEdit?: boolean; active?: boolean; warSails?: boolean | Promise<boolean> } = {}) {
+    await act(async () => root.render(<TestLocalization><ServerModsPanel serverId={SERVER_ID} catalog={catalog} canEdit={props.canEdit ?? true} active={props.active ?? true} warSails={props.warSails} /></TestLocalization>));
 }
 
 /** Reads the rendered load order as mod names. */
@@ -515,6 +515,44 @@ it("downloads the players' full load order as JSON, leaving out disabled and ded
 it("offers no mod list download when players need no community mods", async () => {
     await render(createMockServerModCatalog(sampleServerMods([sampleOwnerMod("Off", { enabled: false })])));
     expect(downloadButton()).toBeUndefined();
+});
+
+/** Downloads the mod list and returns the parsed JSON file. */
+async function downloadedModList() {
+    let saved: NodeBlob | undefined;
+    vi.stubGlobal("Blob", NodeBlob);
+    vi.stubGlobal("URL", { createObjectURL: vi.fn((blob: NodeBlob) => { saved = blob; return "blob:mod-list"; }), revokeObjectURL: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { expect(this.download).toBe("BannerlordCoop-mod-list.json"); });
+    await act(async () => downloadButton()!.click());
+    vi.unstubAllGlobals();
+    return JSON.parse(await saved!.text()) as { mods: { order: number; id: string; name: string; version: string; kind: string; playersOnly: boolean }[] };
+}
+
+it("tells players of a War Sails campaign to enable War Sails and lists NavalDLC after Coop in the view and the download", async () => {
+    await render(createMockServerModCatalog(runsOnMods()), { warSails: true });
+    expect(container.textContent).toContain("Players must enable War Sails (NavalDLC) to join this War Sails campaign, and disable any other official DLC.");
+    expect(container.textContent).not.toContain("Players must also disable any official DLC");
+    expect(playersNeed()[0]).toBe("War SailsNavalDLC");
+    const file = await downloadedModList();
+    expect(file.mods.map(mod => mod.id)).toEqual(["Native", "SandBoxCore", "SandBox", "Coop", "NavalDLC", "Bannerlord.Harmony", "ClientUi", "Gamma"]);
+    expect(file.mods[4]).toEqual({ order: 5, id: "NavalDLC", name: "War Sails", version: "", kind: "core", playersOnly: false });
+});
+
+it("offers the War Sails list download even when players need no community mods", async () => {
+    await render(createMockServerModCatalog(sampleServerMods([sampleOwnerMod("Off", { enabled: false })])), { warSails: true });
+    expect(container.textContent).toContain("Players need no community mods besides Bannerlord Co-op to join.");
+    expect(playersNeed()).toEqual(["War SailsNavalDLC"]);
+    expect((await downloadedModList()).mods.map(mod => [mod.id, mod.kind])).toEqual([["Native", "core"], ["SandBoxCore", "core"], ["SandBox", "core"], ["Coop", "coop"], ["NavalDLC", "core"]]);
+});
+
+it("waits for the page's campaign reads before showing what players need, and keeps today's copy for a Classic campaign", async () => {
+    let resolve!: (value: boolean) => void;
+    await render(createMockServerModCatalog(runsOnMods()), { warSails: new Promise<boolean>(done => { resolve = done; }) });
+    expect(container.textContent).not.toContain("Mods players need");
+    await act(async () => resolve(false));
+    expect(container.textContent).toContain("Players must also disable any official DLC, such as War Sails.");
+    expect(playersNeed()).not.toContain("War SailsNavalDLC");
+    expect((await downloadedModList()).mods.map(mod => mod.id)).not.toContain("NavalDLC");
 });
 
 it("shows where each owner mod runs, locks Harmony, and lists players-only mods as needed by players", async () => {

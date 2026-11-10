@@ -390,7 +390,27 @@ it.each([null, "v0.1.6", "0.1.6 hotfix"])("accepts installedVersion %j when pres
     }
 });
 
+it.each([true, false])("accepts warSailsCapable %j when present, alone and beside runtime insight; older summaries omit it", async warSailsCapable => {
+    for (const result of [summary, { ...summary, warSailsCapable }, { ...summary, warSailsCapable, installedVersion: "v0.1.6", runtimeInsight }]) {
+        vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), result));
+        expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual(result);
+    }
+});
+
+it.each(["war_sails_save_mismatch", "war_sails_unsupported"])("accepts the %s launch failure in the summary insight and a Start status", async failureCode => {
+    const start = { ...failedStartInsight, failureCode, recommendedAction: null };
+    const insight = { ...runtimeInsight, failureCode, recommendedAction: null, start };
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const request = input(init);
+        return accepted(request, request.operation === "server-summary" ? { ...summary, runtimeInsight: insight } : { serverId: server.serverId, ...start });
+    });
+    expect((await getMyServerSummary(TOKEN, server.serverId)).runtimeInsight?.failureCode).toBe(failureCode);
+    expect((await getMyServerStartStatus(TOKEN, server.serverId, startJobId)).failureCode).toBe(failureCode);
+});
+
 it.each([
+    { ...summary, warSailsCapable: null }, { ...summary, warSailsCapable: "true" }, { ...summary, warSailsCapable: 1 },
+    { ...summary, runtimeInsight: { ...runtimeInsight, failureCode: "war_sails_unknown" } },
     { ...summary, serverId: "22222222-2222-4222-8222-222222222222" },
     { ...summary, updatedAt: "yesterday" }, { ...summary, accessRole: "administrator" },
     { ...summary, operationState: "unbounded".repeat(20) }, { ...summary, observedGameState: "invalid" },

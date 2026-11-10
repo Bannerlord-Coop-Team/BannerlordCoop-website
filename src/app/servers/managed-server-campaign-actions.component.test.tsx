@@ -54,3 +54,23 @@ it("maps control plane rejections to guidance and marks state conflicts for refr
     mocks.list.mockRejectedValueOnce(new MyServersApiError("server_not_found", "Missing"));
     expect(await listManagedServerCampaigns(id, "owner")).toMatchObject({ ok: false, message: expect.stringContaining("unavailable") });
 });
+it("forwards a War Sails reset with warSails true and a Classic reset exactly as before", async () => {
+    mocks.reset.mockResolvedValue({ outcome: "enqueued", jobId: id, action: "reset-campaign" });
+    await changeManagedServerCampaign({ requestId: id, action: "reset-campaign", serverId: id, expectedUpdatedAt: updatedAt }, "owner");
+    await changeManagedServerCampaign({ requestId: id, action: "reset-campaign", serverId: id, expectedUpdatedAt: updatedAt, warSails: false }, "owner");
+    await changeManagedServerCampaign({ requestId: id, action: "reset-campaign", serverId: id, expectedUpdatedAt: updatedAt, warSails: true }, "owner");
+    const sent = mocks.reset.mock.calls.map(([, , input]) => JSON.stringify(input));
+    const classic = JSON.stringify({ action: "reset-campaign", serverId: id, expectedUpdatedAt: updatedAt });
+    expect(sent).toEqual([classic, classic, JSON.stringify({ action: "reset-campaign", serverId: id, expectedUpdatedAt: updatedAt, warSails: true })]);
+    expect(await changeManagedServerCampaign({ requestId: id, action: "reset-campaign", serverId: id, expectedUpdatedAt: updatedAt, warSails: "yes" }, "owner"))
+        .toMatchObject({ ok: false, notSubmitted: true });
+    expect(mocks.reset).toHaveBeenCalledTimes(3);
+});
+it("explains a War Sails capability refusal in the owner's language and lets them choose again", async () => {
+    mocks.reset.mockRejectedValueOnce(new MyServersApiError("war_sails_unsupported", "Control plane English copy.", false, undefined, true));
+    expect(await changeManagedServerCampaign({ requestId: id, action: "reset-campaign", serverId: id, expectedUpdatedAt: updatedAt, warSails: true }, "owner")).toEqual({ ok: false, notSubmitted: true, refresh: false,
+        message: "This campaign uses War Sails, which this server's build can't run. Switch to the nightly channel or pick a Classic campaign." });
+    mocks.select.mockRejectedValueOnce(new MyServersApiError("war_sails_save_mismatch", "Control plane English copy.", false, undefined, true));
+    expect(await changeManagedServerCampaign({ requestId: id, action: "select-save", serverId: id, saveId: id, expectedUpdatedAt: updatedAt }, "owner"))
+        .toMatchObject({ ok: false, message: "This campaign's War Sails mode doesn't match. Select or start a campaign in the right mode." });
+});

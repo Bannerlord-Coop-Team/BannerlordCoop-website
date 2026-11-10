@@ -509,6 +509,44 @@ it("reads the active campaign's autosaves for Backups and reports a failed read 
     expect(files?.props).toMatchObject({ autosaves: null, autosaveLoadError: undefined });
 });
 
+it("reads files and campaigns once and tells the Mods tab whether the active campaign uses War Sails", async () => {
+    const saveId = "77777777-7777-4777-8777-777777777777";
+    const updatedAt = "2026-10-16T10:00:00.000Z";
+    const savePage = (warSails?: boolean | null) => ({ serverId: managedId, updatedAt, activeSaveId: saveId, nextCursor: null, items: [
+        { saveId, displayName: "Northern March", byteSize: 4_096, createdAt: updatedAt, lastUsedAt: null, importedBy: "owner", ...(warSails === undefined ? {} : { warSails }) },
+    ] });
+    const withConfig = (warSails: boolean) => ({ managedConfig: { modConfig: { modOptions: { warSails } } } });
+    mocks.backups.mockResolvedValue([]);
+    mocks.backupStatus.mockResolvedValue({ serverId: managedId, updatedAt, operationState: "stopped", observedGameState: "stopped", job: null });
+    mocks.generations.mockResolvedValue({ serverId: managedId, saveId, items: [] });
+    for (const [files, saves, expected] of [
+        [withConfig(false), savePage(true), true], [withConfig(true), savePage(false), false],
+        [withConfig(true), savePage(), true], [withConfig(false), savePage(null), false], [null, savePage(), false],
+    ] as const) {
+        mocks.files.mockReset().mockResolvedValue(files);
+        mocks.saves.mockReset().mockResolvedValue(saves);
+        // Render the management page once, then find both consumers of its shared reads.
+        const management = await findServerElement(await page(), "ManagedServerManagementPage");
+        const rendered = await (management!.type as (props: unknown) => Promise<ReactNode>)(management!.props);
+        const mods = await findServerElement(rendered, "ManagedServerMods");
+        expect(await (mods?.props as { warSails?: Promise<boolean> }).warSails).toBe(expected);
+        expect(await findServerElement(rendered, "ManagedServerFiles")).not.toBeNull();
+        expect(mocks.files).toHaveBeenCalledOnce();
+        expect(mocks.saves).toHaveBeenCalledOnce();
+    }
+    // Failed reads keep today's copy rather than breaking the Mods tab.
+    mocks.files.mockRejectedValue(new Error("Files unavailable"));
+    mocks.saves.mockRejectedValue(new Error("Saves unavailable"));
+    expect(await ((await findServerElement(await page(), "ManagedServerMods"))?.props as { warSails?: Promise<boolean> }).warSails).toBe(false);
+});
+
+it.each(["admin", "support"])("gives the Mods tab no campaign read for read-only %s access", async (accessRole) => {
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, accessRole });
+    expect(((await findServerElement(await page(), "ManagedServerMods"))?.props as { warSails?: unknown }).warSails).toBeUndefined();
+    expect(mocks.files).not.toHaveBeenCalled();
+    expect(mocks.saves).not.toHaveBeenCalled();
+});
+
 const pageNotice = {
     noticeId: "66666666-6666-4666-8666-666666666666", kind: "administrator", severity: "info", title: "Maintenance tonight",
     body: "Expect a short outage.", parameters: {}, createdAt: "2026-10-18T09:00:00.000Z", expiresAt: null,
