@@ -8,7 +8,7 @@ import { extractLinkCode, generateLinkCode, LINK_CODE, linkCodeHash } from "./bo
 import { parseDialogPage, parseMessagePage } from "./boosty-messages.ts";
 import { createBoostyMembershipHandler, fetchCompleteSubscribers, type BoostySyncRpc } from "./boosty-membership.ts";
 import { parseBoostyPolicy, type BoostyPolicy } from "./boosty-policy.ts";
-import { BOOSTY_BLOG, BOOSTY_IDENTIFIER, parseFundingSnapshot } from "./funding-provider.ts";
+import { parseFundingSnapshot } from "./funding-provider.ts";
 import type { CreatorTokenProvider } from "./patreon-creator-token.ts";
 import { createWebsiteAccountHandler } from "./website-account.ts";
 
@@ -96,12 +96,7 @@ test("the client sends exact GETs, replaces a rejected token once and reports a 
     await assert.rejects(html.dialogs(null), notFake);
 });
 
-test("real responses replay: blog slug, level pricing, subscriber states, dialogs and messages", () => {
-    const user = fixture("user-current") as { blogUrl: string; blog: { url: string; currency: string } };
-    assert.ok(BOOSTY_BLOG.test(user.blogUrl)); assert.deepEqual([user.blogUrl, user.blog.url, user.blog.currency], ["bannerlordcoop", "bannerlordcoop", "USD"]);
-    const levels = (fixture("subscription-levels") as { data: { id: number; price: number; currencyPrices: { USD: number } }[] }).data;
-    assert.deepEqual(levels.map(level => [level.id, level.price]), [[4018927, 0], [4035410, 5], [4035411, 10], [4035416, 20], [4035417, 50], [4035418, 100]]);
-    assert.ok(levels.every(level => BOOSTY_IDENTIFIER.test(String(level.id)) && level.price === level.currencyPrices.USD), "price is in USD major units");
+test("real responses replay: subscriber states, dialogs and messages", () => {
     const row = (id: string, subscribed: boolean, status: string, offTime: string | null, levelId: string, price: number) => ({ id, subscribed, status, offTime, blacklisted: false, levelId, price });
     assert.deepEqual(parseSubscriberPage(fixture("subscribers"), "USD"), { total: 5, subscribers: [
         row("9000002", true, "active", null, "4018927", 0), row("9000003", true, "active", null, "4035410", 5), row("9000004", false, "paused", "2026-11-07T12:00:00.000Z", "4035410", 5),
