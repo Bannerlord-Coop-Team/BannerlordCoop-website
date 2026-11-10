@@ -9,12 +9,13 @@ import { createControlPlaneMembershipHandler } from "../supabase/functions/_shar
 import { FUNDING_PROVIDERS } from "../supabase/functions/_shared/funding-provider";
 import { sha256 } from "../supabase/functions/_shared/membership";
 
-const migration = "20261109140000_membership_funding_providers.sql";
+// The generic provider machinery and the Boosty adapter that supplies its identity arm ship together.
+const migrations = ["20261109140000_membership_funding_providers.sql", "20261110120000_boosty_membership_adapter.sql"];
 const history = ["20260907212654_create_patreon_links.sql", "20260907220000_patreon_website_roles.sql", "20260907230000_atomic_live_console_assignments.sql",
     "202609080002_membership_onboarding.sql", "202609080003_membership_role_locking.sql", "20260908030000_patreon_event_reconciliation.sql",
     "20260910200000_membership_receipt_claims.sql", "202609110001_edge_owned_link_commit.sql", "20260919010000_actionable_patreon_retries.sql",
     "202609220001_patreon_allocation_webhooks.sql", "202609280003_account_owned_membership.sql", "202609280006_membership_paid_access_end.sql",
-    "202610020001_membership_allocation_usd20.sql"];
+    "202610020001_membership_allocation_usd20.sql", "20261009170000_patreon_creator_token_refresh.sql"];
 const discord = "123456789012345678";
 const syncToken = "a".repeat(64);
 const memberId = "03ca69c3-ebea-4b9a-8fac-e4a837873254";
@@ -97,7 +98,7 @@ test("provider-scoped membership upgrade keeps Patreon exact and answers Boosty 
         const heads = (await query("select * from public.membership_heads order by account_id")).rows;
         const outbox = (await query("select * from public.membership_outbox order by sequence")).rows;
         assert.ok(outbox.some(row => row.claim_id === liveClaim) && outbox.some(row => row.receipt_id !== null) && outbox.some(row => row.receipt_id === null && row.claim_id === null));
-        await db.exec(await readFile(`supabase/migrations/${migration}`, "utf8"));
+        for (const name of migrations) await db.exec(await readFile(`supabase/migrations/${name}`, "utf8"));
 
         await t.test("upgrade leaves heads unchanged and labels every existing hint Patreon", async () => {
             assert.deepEqual((await query("select * from public.membership_heads order by account_id")).rows, heads);
@@ -153,10 +154,10 @@ test("provider-scoped membership upgrade keeps Patreon exact and answers Boosty 
             assert.equal(refused.status, 503);
         });
 
-        await t.test("Auth deletion tombstones Patreon and every existing provider head; live fences drop unadapted links", async () => {
+        await t.test("Auth deletion tombstones Patreon and every existing provider head; live fences drop heads whose link is gone", async () => {
             await drain();
             const id = await fresh(), other = await fresh();
-            // Simulates rows a future Boosty adapter would write; none can exist today.
+            // Linked heads whose Boosty link row no longer exists: a live fence must unlink them.
             for (const account of [id, other]) {
                 await query("insert into public.membership_provider_heads(account_id,provider,discord_user_id,provider_user_id,link_generation,revision,link_state,evidence) values($1,'boosty',$2,$3,4,7,'linked',public.membership_provider_empty_evidence('boosty') || '{\"verification\":\"qualifying\",\"programId\":\"coop\",\"tierIds\":[\"55\"]}'::jsonb)", [account, discord, account === id ? "77" : "78"]);
             }
@@ -208,6 +209,34 @@ test("provider-scoped membership upgrade keeps Patreon exact and answers Boosty 
             assert.deepEqual((await query("select provider,revision::text from public.membership_outbox where account_id=$1 and receipt_id is null order by sequence desc limit 1", [id])).rows, [{ provider: "boosty", revision: "10" }]);
         });
 
+        await t.test("the generic fence follows the adapter's identity lookup with Patreon's identity, Discord and tombstone rules", async () => {
+            await drain();
+            const id = await fresh();
+            const fence = async (discordUserId: string | null, deletedAccount = false) => await rpc("membership_funding_fence", [id, "boosty", discordUserId, deletedAccount]);
+            const head = async () => (await query("select provider_user_id,link_state,link_generation::text g,revision::text r from public.membership_provider_heads where account_id=$1", [id])).rows[0];
+            const hints = async () => (await query("select revision::text from public.membership_outbox where account_id=$1 and provider='boosty' and receipt_id is null order by sequence", [id])).rows.map(row => row.revision);
+            await query("insert into boosty_membership.links(account_id,boosty_user_id) values($1,'4242')", [id]);
+            // A binding the head has not seen yet is an identity change: a new generation, empty evidence and a hint.
+            assert.deepEqual(await fence(discord), { ...boostyUnlinked(id), discordUserId: discord, providerUserId: "4242", linkGeneration: "1", revision: "1", linkState: "identity_changed" });
+            assert.deepEqual(await fence(discord), { ...boostyUnlinked(id), discordUserId: discord, providerUserId: "4242", linkGeneration: "1", revision: "1", linkState: "identity_changed" }, "an unchanged fence writes nothing");
+            // Optional Discord metadata only bumps the revision and keeps the generation and evidence.
+            await query("update public.membership_provider_heads set evidence=evidence || '{\"verification\":\"qualifying\"}'::jsonb where account_id=$1", [id]);
+            const relabeled = await fence("999456789012345678");
+            assert.deepEqual([relabeled.linkGeneration, relabeled.revision, relabeled.verification, relabeled.discordUserId], ["1", "2", "qualifying", "999456789012345678"]);
+            await query("update boosty_membership.links set boosty_user_id='4343' where account_id=$1", [id]);
+            assert.deepEqual(await head(), { provider_user_id: "4242", link_state: "identity_changed", g: "1", r: "2" }, "the head changes only under a fence");
+            const changed = await fence(discord);
+            assert.deepEqual([changed.providerUserId, changed.linkState, changed.linkGeneration, changed.revision, changed.verification], ["4343", "identity_changed", "2", "3", "unverified"]);
+            await query("delete from boosty_membership.links where account_id=$1", [id]);
+            assert.deepEqual(await head(), { provider_user_id: "4343", link_state: "identity_changed", g: "2", r: "3" });
+            assert.deepEqual([(await fence(discord)).linkState, (await head()).g], ["unlinked", "3"]);
+            assert.equal((await fence(null, true)).linkState, "account_deleted");
+            await query("insert into boosty_membership.links(account_id,boosty_user_id) values($1,'4444')", [id]);
+            await assert.rejects(fence(discord), /cannot be resurrected/u);
+            assert.deepEqual(await head(), { provider_user_id: null, link_state: "account_deleted", g: "4", r: "5" });
+            assert.deepEqual(await hints(), ["1", "2", "3", "4", "5"], "every head change emits one hint for its own revision");
+        });
+
         await t.test("strict version 2 and 3 requests reject wrong keys, providers and versions without SQL", async () => {
             const accountId = patron, claimId = crypto.randomUUID(); edgeReads = 0;
             for (const bad of [
@@ -225,7 +254,7 @@ test("provider-scoped membership upgrade keeps Patreon exact and answers Boosty 
             assert.equal((await query("select relrowsecurity from pg_class where oid='public.membership_provider_heads'::regclass")).rows[0].relrowsecurity, true);
             for (const role of ["anon", "authenticated", "service_role"]) {
                 assert.equal((await query("select has_table_privilege($1,'public.membership_provider_heads','select') allowed", [role])).rows[0].allowed, false);
-                for (const fn of ["membership_notify_provider(uuid,text,boolean)", "membership_provider_fence(uuid,text,text,boolean)", "membership_provider_empty_evidence(text)"]) {
+                for (const fn of ["membership_notify_provider(uuid,text,boolean)", "membership_provider_fence(uuid,text,text,boolean)", "membership_provider_empty_evidence(text)", "membership_provider_identifier_valid(text,text,text)", "membership_provider_identity(uuid,text)"]) {
                     assert.equal((await query("select has_function_privilege($1,$2,'execute') allowed", [role, `public.${fn}`])).rows[0].allowed, false, `${role} ${fn}`);
                 }
                 for (const fn of ["membership_funding_fence(uuid,text,text,boolean)", "membership_funding_claim(uuid,integer)", "membership_ack(uuid,uuid)", "membership_ack_claim(uuid,uuid,uuid)"]) {
@@ -246,7 +275,7 @@ test("provider fences share the account lock and version 3 claims keep SKIP LOCK
     const rpc = async (client: pg.Client, name: string, args: unknown[]) => (await client.query(`select public.${name}(${args.map((_, i) => `$${i + 1}`).join(",")}) result`, args)).rows[0].result as Row;
     try {
         await owner.query("create schema auth; create table auth.users(id uuid primary key, email text, email_confirmed_at timestamptz, deleted_at timestamptz, banned_until timestamptz, raw_app_meta_data jsonb default '{}', updated_at timestamptz default now()); create role anon; create role authenticated; create role service_role;");
-        for (const name of [...history, migration]) await owner.query(await readFile(`supabase/migrations/${name}`, "utf8"));
+        for (const name of [...history, ...migrations]) await owner.query(await readFile(`supabase/migrations/${name}`, "utf8"));
         const id = crypto.randomUUID(), other = crypto.randomUUID();
         await owner.query("insert into auth.users(id) values($1),($2)", [id, other]);
         await t.test("a held account lock refuses the Boosty tombstone instead of waiting, then it commits once", async () => {
@@ -270,8 +299,6 @@ test("provider fences share the account lock and version 3 claims keep SKIP LOCK
             assert.ok(!secondEvents.some(event => event.eventId === firstEvents[0].eventId));
             assert.ok([...firstEvents, ...secondEvents].every(event => (FUNDING_PROVIDERS as readonly unknown[]).includes(event.provider)));
         });
-        // The Boosty adapter migration upgrades the same populated database.
-        for (const name of ["20261009170000_patreon_creator_token_refresh.sql", "20261110120000_boosty_membership_adapter.sql"]) await owner.query(await readFile(`supabase/migrations/${name}`, "utf8"));
         const sync = async (client: pg.Client, operation: string, input: Row) => (await client.query("select public.boosty_membership_sync($1,$2::jsonb) result", [operation, JSON.stringify(input)])).rows[0].result as Row | null;
         await t.test("concurrent Boosty workers get exactly one lease", async () => {
             for (let round = 0; round < 10; round++) {

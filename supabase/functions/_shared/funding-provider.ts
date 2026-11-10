@@ -27,11 +27,19 @@ export function isFundingProvider(value: unknown): value is FundingProvider {
     return typeof value === "string" && (FUNDING_PROVIDERS as readonly string[]).includes(value);
 }
 
-// Per-provider identifier grammar: Patreon IDs are decimal (member is a UUID); Boosty names no member.
-const GRAMMAR = {
-    patreon: { user: IDENTIFIER, program: IDENTIFIER, tier: IDENTIFIER, member: UUID, policies: [POLICY_VERSION, ALLOCATION_POLICY_VERSION] as string[] },
-    boosty: { user: BOOSTY_IDENTIFIER, program: BOOSTY_BLOG, tier: BOOSTY_IDENTIFIER, member: null, policies: [BOOSTY_POLICY_VERSION] as string[] },
-} as const;
+/** One provider's identifier grammar, member-resource rule and accepted policy versions. */
+export type FundingProviderGrammar = {
+    readonly userId: RegExp; readonly programId: RegExp; readonly tierId: RegExp;
+    readonly memberResource: "uuid" | "none"; readonly policyVersions: readonly string[];
+};
+
+// The provider registry, mirroring CP FUNDING_PROVIDER_GRAMMAR. `satisfies` makes a provider without an
+// entry a compile error. Patreon IDs are decimal (member is a UUID); Boosty names no member. The shared
+// fixture test/fixtures/cross-repo/funding-provider-contract-v1.json pins it and the SQL registry.
+export const FUNDING_PROVIDER_GRAMMAR = {
+    patreon: { userId: IDENTIFIER, programId: IDENTIFIER, tierId: IDENTIFIER, memberResource: "uuid", policyVersions: [POLICY_VERSION, ALLOCATION_POLICY_VERSION] },
+    boosty: { userId: BOOSTY_IDENTIFIER, programId: BOOSTY_BLOG, tierId: BOOSTY_IDENTIFIER, memberResource: "none", policyVersions: [BOOSTY_POLICY_VERSION] },
+} as const satisfies Record<FundingProvider, FundingProviderGrammar>;
 
 /** Reports whether a value is null or a string matching the pattern. */
 function nullableMatch(value: unknown, pattern: RegExp): boolean {
@@ -42,12 +50,12 @@ function nullableMatch(value: unknown, pattern: RegExp): boolean {
 export function parseFundingSnapshot(value: unknown, accountId: string, provider: FundingProvider): FundingSnapshot {
     if (!record(value) || !exact(value, [...(Object.hasOwn(value, "paidAccessEndedAt") ? ["paidAccessEndedAt"] : []), ...SNAPSHOT_KEYS])) throw new Error("Invalid funding snapshot");
     if (value.version !== 2 || value.provider !== provider || value.accountId !== accountId || !UUID.test(accountId)) throw new Error("Funding snapshot identity conflicted");
-    const grammar = GRAMMAR[provider];
+    const grammar: FundingProviderGrammar = FUNDING_PROVIDER_GRAMMAR[provider];
     if (typeof value.linkGeneration !== "string" || !DECIMAL.test(value.linkGeneration) || typeof value.revision !== "string" || !DECIMAL.test(value.revision)) throw new Error("Invalid generation");
-    if (!LINK_STATES.includes(value.linkState as string) || !VERIFICATIONS.includes(value.verification as string) || !grammar.policies.includes(value.policyVersion as string)) throw new Error("Invalid funding state");
-    if (!nullableMatch(value.discordUserId, /^[0-9]{17,20}$/u) || !nullableMatch(value.providerUserId, grammar.user) || !nullableMatch(value.programId, grammar.program)) throw new Error("Invalid identifier");
-    if (grammar.member === null ? value.memberId !== null : !nullableMatch(value.memberId, grammar.member)) throw new Error("Invalid member identifier");
-    if (!Array.isArray(value.tierIds) || value.tierIds.length > 50 || !value.tierIds.every(id => typeof id === "string" && grammar.tier.test(id)) || new Set(value.tierIds).size !== value.tierIds.length) throw new Error("Invalid tiers");
+    if (!LINK_STATES.includes(value.linkState as string) || !VERIFICATIONS.includes(value.verification as string) || !grammar.policyVersions.includes(value.policyVersion as string)) throw new Error("Invalid funding state");
+    if (!nullableMatch(value.discordUserId, /^[0-9]{17,20}$/u) || !nullableMatch(value.providerUserId, grammar.userId) || !nullableMatch(value.programId, grammar.programId)) throw new Error("Invalid identifier");
+    if (grammar.memberResource === "none" ? value.memberId !== null : !nullableMatch(value.memberId, UUID)) throw new Error("Invalid member identifier");
+    if (!Array.isArray(value.tierIds) || value.tierIds.length > 50 || !value.tierIds.every(id => typeof id === "string" && grammar.tierId.test(id)) || new Set(value.tierIds).size !== value.tierIds.length) throw new Error("Invalid tiers");
     for (const field of ["verifiedAt", "paidThroughAt"]) if (value[field] !== null && !timestamp(value[field])) throw new Error("Invalid timestamp");
     if (value.paidAccessEndedAt !== undefined && value.paidAccessEndedAt !== null && !timestamp(value.paidAccessEndedAt)) throw new Error("Invalid paid access end");
     if (!nullableMatch(value.evidenceSha256, HASH)) throw new Error("Invalid digest");

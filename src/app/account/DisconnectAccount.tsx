@@ -8,9 +8,17 @@ import { useFormStatus } from "react-dom";
 const buttonClass =
     "inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-white/20 px-4 py-2 text-sm text-foreground transition-colors hover:border-gold hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:opacity-50";
 
+// The explanation shown before disconnecting each sign-in or funding provider; a provider is one entry here.
+const DISCONNECT_EXPLANATIONS = {
+    Discord: "disconnect.discordExplanation",
+    Patreon: "disconnect.patreonExplanation",
+    Boosty: "disconnect.boostyExplanation",
+} as const;
+export type DisconnectProvider = keyof typeof DISCONNECT_EXPLANATIONS;
+
 /** Requires explicit localized confirmation before disconnecting the selected provider. */
 export function DisconnectAccount({provider, action, disabledReason,}: {
-    provider: "Discord" | "Patreon" | "Boosty";
+    provider: DisconnectProvider;
     action: () => Promise<void>;
     disabledReason?: string;
 }) {
@@ -38,9 +46,7 @@ export function DisconnectAccount({provider, action, disabledReason,}: {
             {confirming && (
                 <form id={id} action={action} className="mt-3 rounded-sm border border-white/10 p-4">
                     <p className="text-sm leading-6 text-foreground-muted">
-                        {provider === "Boosty" ? t("disconnect.boostyExplanation") : provider === "Patreon"
-                            ? t("disconnect.patreonExplanation")
-                            : t("disconnect.discordExplanation")}
+                        {t(DISCONNECT_EXPLANATIONS[provider])}
                     </p>
 
                     <ConfirmationButtons provider={provider}

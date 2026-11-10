@@ -5,6 +5,7 @@ import { parseFundingSnapshot } from "./funding-provider.ts";
 import { generateLinkCode, LINK_CODE, linkCodeHash } from "./boosty-link-code.ts";
 import type { membershipStore } from "./membership-store.ts";
 import type { BoostyPolicy } from "./boosty-policy.ts";
+import type { FundingAccountSurface } from "./funding-account.ts";
 
 type Store = ReturnType<typeof membershipStore>;
 type User = { accountId: string; discordUserId: string | null };
@@ -24,25 +25,29 @@ export function boostyLinkStatus(value: unknown, user: User, policy: BoostyPolic
         verifiedAt: snapshot.verifiedAt, pending: pending as { expiresAt: string; matches: boolean } | null, outcome: value.outcome };
 }
 
-/** Handles one Boosty operation, or returns null when the body is not a Boosty operation. */
-export async function boostyAccountOperation(store: Store, user: User, body: Record<string, unknown>, policy: BoostyPolicy | null, respond: (body: unknown, status?: number) => Response): Promise<Response | null> {
-    if (body.operation === "boosty-status" && (exact(body, ["operation"]) || (exact(body, ["operation", "code"]) && typeof body.code === "string" && LINK_CODE.test(body.code)))) {
-        if (policy === null) return respond({ version: 1, configured: false });
-        const codeHash = typeof body.code === "string" ? await linkCodeHash(body.code) : null;
-        return respond(boostyLinkStatus(await store.rpc("boosty_link_status", { p_account_id: user.accountId, p_discord_user_id: user.discordUserId, p_code_hash: codeHash }), user, policy));
-    }
-    if (body.operation === "boosty-start" && exact(body, ["operation"])) {
-        if (policy === null) return respond({ error: "not_configured" }, 409);
-        const code = generateLinkCode();
-        const started = await store.rpc("boosty_link_begin", { p_account_id: user.accountId, p_discord_user_id: user.discordUserId, p_code_hash: await linkCodeHash(code) });
-        if (!record(started) || !exact(started, ["expiresAt"]) || !timestamp(started.expiresAt)) throw new Error("Invalid Boosty code");
-        return respond({ code, expiresAt: started.expiresAt });
-    }
-    if (body.operation === "boosty-unlink" && exact(body, ["operation"])) {
-        await store.rpc("boosty_unlink", { p_account_id: user.accountId, p_discord_user_id: user.discordUserId });
-        return respond({ unlinked: true });
-    }
-    return null;
+/** Boosty's account-surface entry: status (with an optional shown code), issuing a DM code, and unlink. */
+export function boostyAccountSurface(store: Store, user: User, policy: BoostyPolicy | null, respond: (body: unknown, status?: number) => Response): FundingAccountSurface {
+    return { operationPrefix: "boosty-", operations: {
+        status: async body => {
+            if (!exact(body, ["operation"]) && !(exact(body, ["operation", "code"]) && typeof body.code === "string" && LINK_CODE.test(body.code))) return null;
+            if (policy === null) return respond({ version: 1, configured: false });
+            const codeHash = typeof body.code === "string" ? await linkCodeHash(body.code) : null;
+            return respond(boostyLinkStatus(await store.rpc("boosty_link_status", { p_account_id: user.accountId, p_discord_user_id: user.discordUserId, p_code_hash: codeHash }), user, policy));
+        },
+        start: async body => {
+            if (!exact(body, ["operation"])) return null;
+            if (policy === null) return respond({ error: "not_configured" }, 409);
+            const code = generateLinkCode();
+            const started = await store.rpc("boosty_link_begin", { p_account_id: user.accountId, p_discord_user_id: user.discordUserId, p_code_hash: await linkCodeHash(code) });
+            if (!record(started) || !exact(started, ["expiresAt"]) || !timestamp(started.expiresAt)) throw new Error("Invalid Boosty code");
+            return respond({ code, expiresAt: started.expiresAt });
+        },
+        unlink: async body => {
+            if (!exact(body, ["operation"])) return null;
+            await store.rpc("boosty_unlink", { p_account_id: user.accountId, p_discord_user_id: user.discordUserId });
+            return respond({ unlinked: true });
+        },
+    } };
 }
 
 /** Strictly validates the Edge's public Boosty status reply for the website server. */

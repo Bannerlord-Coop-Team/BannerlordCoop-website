@@ -258,13 +258,50 @@ provider, so one provider's backlog cannot starve another's revocation.
 A Boosty snapshot of a live account that never linked Boosty writes nothing and answers a
 constant `unlinked`/`unverified` head at generation and revision `"0"` with null
 identities. Linking (a one-time code sent by Boosty private message) and evidence polling
-are described in [Boosty membership adapter](boosty-membership.md);
-`20261110120000_boosty_membership_adapter.sql` replaces `membership_provider_fence` so it
-fences the head against the current `boosty_membership.links` binding with the same
-`identity_changed`/`unlinked` rules as Patreon. A deleted account (Auth 404) creates a
-`account_deleted` tombstone at generation 1 with its own Boosty hint, and the Auth
-deletion trigger tombstones every existing provider head after the Patreon head. Both
-use the Patreon fence's account lock and refuse resurrection.
+are described in [Boosty membership adapter](boosty-membership.md). The generic
+`membership_provider_fence` is defined once, in the provider migration: under the
+account lock it reads the provider's current binding through
+`membership_provider_identity(account, provider)` and fences the head with the same
+`identity_changed`/`unlinked` rules as Patreon. `20261110120000_boosty_membership_adapter.sql`
+supplies Boosty's arm of that lookup (`boosty_membership.links`); the two migrations ship
+together. A deleted account (Auth 404) creates an `account_deleted` tombstone at
+generation 1 with its own Boosty hint, and the Auth deletion trigger tombstones every
+existing provider head after the Patreon head. Both use the Patreon fence's account lock
+and refuse resurrection.
+
+#### Adding a funding provider
+
+The provider list, identifier grammars and policy versions are kept in one place per
+layer and checked against each other:
+
+- TypeScript: `FUNDING_PROVIDERS` and `FUNDING_PROVIDER_GRAMMAR` in
+  `_shared/funding-provider.ts` (`satisfies Record<FundingProvider, …>`, so a provider
+  without an entry fails to compile; the snapshot parser reads it).
+- SQL, in the provider migration: the `provider` CHECKs on `membership_outbox` (every
+  provider) and `membership_provider_heads` (every non-Patreon provider),
+  `membership_provider_identifier_valid(provider, kind, value)` (the only SQL copy of the
+  user/program/tier patterns; adapter tables and RPCs call it instead of repeating them),
+  and `membership_provider_empty_evidence(provider)` (empty evidence and policy version;
+  `NULL` means "not a provider"). The adapter adds one arm to
+  `membership_provider_identity`.
+- Account surface: one entry in `fundingAccountSurfaces` (`_shared/website-account.ts`,
+  `Record<FundingProvider, …>`; wire names are the provider id plus `-status`, `-start`
+  and `-unlink`, while Patreon keeps its legacy `status`/`unlink`), one section in
+  `src/app/account/funding-sections.tsx`, and one disconnect explanation in
+  `DisconnectAccount.tsx`.
+- `test/fixtures/cross-repo/funding-provider-contract-v1.json` is byte-identical to
+  ControlPlane's copy at the same path; `tests/funding-provider-contract.test.ts` pins its
+  SHA-256 and checks the TypeScript registry, the snapshot parser and the SQL registry
+  above against it. Change both repositories together and bump the fixture version.
+
+A deployed control plane rejects a whole version 3 claim page if any hint names a
+provider it does not know, stalling every provider's hints. The control plane that knows
+a new provider must be **deployed before** this website emits that provider's hints:
+apply its CP migration and deploy the CP first, then the website migration, Edge
+functions and adapter. `refreshMode` is `oauth_reauthorization` for every provider today
+and the 24-hour freshness window assumes daily evidence re-reads (Patreon webhooks,
+Boosty's 30-minute poll). A webhook-only provider such as Ko-fi would need a
+per-provider refresh mode and a daily re-assertion job; that is future work.
 
 Rollout: apply the migration, then deploy the `control-plane-membership-v1` Edge
 function, then switch the control plane to its provider-list policy. A v2-speaking CP

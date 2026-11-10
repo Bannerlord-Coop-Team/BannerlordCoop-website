@@ -4,20 +4,45 @@ begin;
 -- claim contract. public.membership_heads stays the Patreon head and the account
 -- anchor that Discord linking, completion receipts and the outbox reference, so every
 -- deployed Patreon and Discord RPC keeps its exact behavior. Other funding providers
--- get their own head table keyed by (account_id, provider). No linking adapter exists
--- for them yet: their heads are created only as account-deletion tombstones.
+-- get their own head table keyed by (account_id, provider).
+--
+-- This migration owns the provider-neutral machinery and the SQL provider registry:
+-- the provider CHECKs below, membership_provider_identifier_valid (identifier grammar)
+-- and membership_provider_empty_evidence (empty evidence and policy version). Each
+-- provider's adapter migration supplies its current link as one arm of
+-- public.membership_provider_identity(account, provider), which the generic fence
+-- calls; Boosty's is 20261110120000_boosty_membership_adapter.sql, which ships with
+-- this one. Adding a provider widens the CHECKs and adds one arm to each of those three
+-- functions. tests/funding-provider-contract.test.ts checks this registry against
+-- TypeScript FUNDING_PROVIDERS and the shared provider contract fixture.
+
+-- Identifier grammar of every non-Patreon funding provider by kind ('user', 'program',
+-- 'tier'); Patreon's identifiers keep their own historical tables. The only SQL copy of
+-- these patterns. A null value is null, so a nullable column stays nullable; an unknown
+-- provider or kind is never valid.
+create function public.membership_provider_identifier_valid(p_provider text, p_kind text, p_value text) returns boolean
+language sql immutable set search_path = '' as $$
+ select case p_provider || ':' || p_kind
+  when 'boosty:user' then p_value ~ '^[1-9][0-9]{0,19}$'
+  when 'boosty:program' then p_value ~ '^[a-z0-9][a-z0-9_-]{0,31}$'
+  when 'boosty:tier' then p_value ~ '^[1-9][0-9]{0,19}$'
+  else false end
+$$;
+
 create table public.membership_provider_heads (
  account_id uuid not null references public.membership_heads(account_id),
  provider text not null check (provider in ('boosty')),
  discord_user_id text check (discord_user_id ~ '^[0-9]{17,20}$'),
- -- Boosty user IDs; a provider added later widens this grammar in its own migration.
- provider_user_id text check (provider_user_id ~ '^[1-9][0-9]{0,19}$'),
+ provider_user_id text,
  link_generation bigint not null default 0 check (link_generation >= 0),
  revision bigint not null default 0 check (revision >= 0),
  link_state text not null default 'unlinked' check (link_state in ('linked','unlinked','identity_changed','account_deleted')),
  evidence jsonb not null check (jsonb_typeof(evidence) = 'object'),
  primary key (account_id, provider),
- unique (provider, provider_user_id)
+ unique (provider, provider_user_id),
+ -- Each provider's own user ID grammar.
+ constraint membership_provider_heads_provider_user_id_check
+  check (public.membership_provider_identifier_valid(provider, 'user', provider_user_id))
 );
 alter table public.membership_provider_heads enable row level security;
 revoke all on public.membership_provider_heads from public, anon, authenticated, service_role;
@@ -70,36 +95,41 @@ begin
  perform public.membership_notify_provider(p_account_id,'patreon',p_revocation);
 end $$;
 
--- Caller MUST first read the exact account via Auth admin API. Fences one non-Patreon
--- head with the same account lock, tombstone and Discord rules as membership_fence.
+-- Caller MUST first read the exact account via Auth admin API. Fences one non-Patreon head
+-- against the provider's current link, read through membership_provider_identity under the
+-- account lock, with the same lock, tombstone and Discord rules as membership_fence.
 create function public.membership_provider_fence(p_account_id uuid, p_provider text, p_discord_user_id text, p_deleted boolean) returns jsonb
 language plpgsql security definer set search_path = '' as $$
-declare h public.membership_provider_heads; state text;
+declare h public.membership_provider_heads; current_identity text; state text;
 begin
  perform set_config('lock_timeout',public.membership_lock_budget(),true);
- if p_provider is distinct from 'boosty' then raise exception 'Invalid funding provider'; end if;
+ -- The registry has empty evidence for every non-Patreon provider and for nothing else.
+ if public.membership_provider_empty_evidence(p_provider) is null then raise exception 'Invalid funding provider'; end if;
  if not pg_try_advisory_xact_lock(hashtextextended(p_account_id::text, 702)) then raise sqlstate '55P03' using message='membership_retry'; end if;
+ if not coalesce(p_deleted,false) then
+  current_identity := public.membership_provider_identity(p_account_id,p_provider);
+ end if;
  select * into h from public.membership_provider_heads where account_id=p_account_id and provider=p_provider for update;
  if not found then
-  -- A live account without a head never bound this provider: a constant generation-0 answer, no writes.
-  if not coalesce(p_deleted,false) then
+  -- A live account that never bound this provider: a constant generation-0 answer, no writes.
+  if not coalesce(p_deleted,false) and current_identity is null then
    h.account_id := p_account_id; h.provider := p_provider; h.link_generation := 0; h.revision := 0;
    h.link_state := 'unlinked'; h.evidence := public.membership_provider_empty_evidence(p_provider);
    return public.membership_provider_snapshot_json(h);
   end if;
-  -- A tombstone needs the account anchor that membership_outbox references.
+  -- A tombstone or a head for an existing link needs the anchor membership_outbox references.
   insert into public.membership_heads(account_id) values(p_account_id) on conflict do nothing;
   insert into public.membership_provider_heads(account_id,provider,evidence)
    values(p_account_id,p_provider,public.membership_provider_empty_evidence(p_provider)) returning * into h;
  end if;
- if p_deleted then state := 'account_deleted';
+ if p_deleted then current_identity := null; state := 'account_deleted';
  else
   if h.link_state='account_deleted' then raise exception 'Deleted account cannot be resurrected'; end if;
-  -- No linking adapter exists yet, so no account currently binds this provider.
-  state := 'unlinked';
+  state := case when current_identity is null then 'unlinked' else h.link_state end;
+  if current_identity is not null and h.provider_user_id is distinct from current_identity then state := 'identity_changed'; end if;
  end if;
- if h.provider_user_id is not null or h.link_state is distinct from state then
-  update public.membership_provider_heads set discord_user_id=case when p_deleted then null else p_discord_user_id end, provider_user_id=null,
+ if h.provider_user_id is distinct from current_identity or h.link_state is distinct from state then
+  update public.membership_provider_heads set discord_user_id=case when p_deleted then null else p_discord_user_id end, provider_user_id=current_identity,
    link_generation=link_generation+1, revision=revision+1, link_state=state, evidence=public.membership_provider_empty_evidence(p_provider)
    where account_id=p_account_id and provider=p_provider returning * into h;
   perform public.membership_notify_provider(p_account_id,p_provider,true);
@@ -225,7 +255,8 @@ end;
 $function$;
 
 -- Internal helpers have no client or service grants; CREATE OR REPLACE keeps existing grants.
-revoke all on function public.membership_provider_empty_evidence(text),
+revoke all on function public.membership_provider_identifier_valid(text,text,text),
+ public.membership_provider_empty_evidence(text),
  public.membership_provider_snapshot_json(public.membership_provider_heads),
  public.membership_notify_provider(uuid,text,boolean),
  public.membership_provider_fence(uuid,text,text,boolean) from public, anon, authenticated, service_role;

@@ -1,0 +1,28 @@
+{
+  "fixtureVersion": 1,
+  "contract": "membership-funding-providers",
+  "provenance": "Synthetic, hand-written from the reviewed provider registries: ControlPlane src/hosting/membership/funding-provider.ts FUNDING_PROVIDER_GRAMMAR and Website supabase/functions/_shared/funding-provider.ts FUNDING_PROVIDER_GRAMMAR. No live account, campaign, blog, tier or member identifier. Both repositories check in these exact bytes and validate their own registry and snapshot parser against them.",
+  "regexFlags": "u",
+  "providers": [
+    {
+      "provider": "patreon",
+      "userId": "^[1-9][0-9]{0,31}$",
+      "programId": "^[1-9][0-9]{0,31}$",
+      "tierId": "^[1-9][0-9]{0,31}$",
+      "memberResource": "uuid",
+      "policyVersions": ["patreon-paid-usd20-v1", "patreon-paid-usd50-v1"],
+      "valid": { "userId": "300", "programId": "100", "tierId": "200", "memberId": "03ca69c3-ebea-4b9a-8fac-e4a837873254" },
+      "invalid": { "userId": "0300", "programId": "coop-blog", "tierId": "-200", "memberId": "not-a-member" }
+    },
+    {
+      "provider": "boosty",
+      "userId": "^[1-9][0-9]{0,19}$",
+      "programId": "^[a-z0-9][a-z0-9_-]{0,31}$",
+      "tierId": "^[1-9][0-9]{0,19}$",
+      "memberResource": "none",
+      "policyVersions": ["boosty-paid-v1"],
+      "valid": { "userId": "9001", "programId": "coop-blog", "tierId": "700", "memberId": null },
+      "invalid": { "userId": "0900", "programId": "Coop-Blog", "tierId": "123456789012345678901", "memberId": "03ca69c3-ebea-4b9a-8fac-e4a837873254" }
+    }
+  ]
+}
