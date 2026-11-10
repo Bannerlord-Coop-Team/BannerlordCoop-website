@@ -1,10 +1,10 @@
 // Bounded client for Boosty's unofficial, undocumented internal API. Only the fixed routes below
-// exist; no caller supplies a path, host or query. BOOSTY_API_ORIGIN is UNVERIFIED: neither
-// unofficial client confirms it, so commissioning must confirm it against a captured response.
+// exist; no caller supplies a path, host or query. Checked against the real responses in
+// tests/fixtures/boosty.
 import { boundedJson, record } from "./membership.ts";
 import { BOOSTY_BLOG, BOOSTY_IDENTIFIER } from "./funding-provider.ts";
 import { fetchWithCreatorToken, type CreatorTokenProvider } from "./patreon-creator-token.ts";
-import { DIALOG_PAGE_SIZE, MESSAGE_PAGE_SIZE, parseDialogPage, parseMessagePage, type BoostyCodeMessage, type BoostyDialogPage } from "./boosty-messages.ts";
+import { DIALOG_PAGE_SIZE, MESSAGE_PAGE_SIZE, parseDialogPage, parseMessagePage, unixSeconds, type BoostyCodeMessage, type BoostyDialogPage } from "./boosty-messages.ts";
 import type { BoostyPriceField } from "./boosty-policy.ts";
 
 export const BOOSTY_API_ORIGIN = "https://api.boosty.to";
@@ -14,6 +14,7 @@ const MAX_RESPONSE_BYTES = 1_048_576;
 const MAX_OFFSET = SUBSCRIBER_PAGE_SIZE * MAX_SUBSCRIBER_PAGES;
 const DECIMAL_OFFSET = /^(0|[1-9][0-9]{0,19})$/u;
 const USER_AGENT = "BannerlordCoop - website membership sync";
+const STATUS = /^[a-z_]{1,32}$/u;
 
 /** Boosty refused the creator credential (HTTP 401/403 after one token replacement). */
 export class BoostyAuthError extends Error {}
@@ -49,7 +50,10 @@ export function boostyUrl(request: BoostyRoute): URL {
     }
 }
 
-export type BoostySubscriber = { id: string; subscribed: boolean | null; blacklisted: boolean | null; levelId: string | null; price: number | null };
+// `status` is Boosty's own state word ("active", "paused", "inactive"); `offTime` is when access ends or ended.
+export type BoostySubscriber = {
+    id: string; subscribed: boolean | null; status: string | null; offTime: string | null; blacklisted: boolean | null; levelId: string | null; price: number | null;
+};
 export type BoostySubscriberPage = { subscribers: BoostySubscriber[]; total: number };
 
 /** Reads an optional boolean: absent is the given default, any other type is unknown (null). */
@@ -71,7 +75,8 @@ export function parseSubscriberPage(value: unknown, field: BoostyPriceField): Bo
         const level = record(entry.level) ? entry.level : null;
         const levelId = level && Number.isSafeInteger(level.id) && (level.id as number) > 0 ? String(level.id)
             : Number.isSafeInteger(entry.levelId) && (entry.levelId as number) > 0 ? String(entry.levelId) : null;
-        return { id: String(entry.id), subscribed: flag(entry.subscribed, null), blacklisted: flag(entry.isBlackListed, false), levelId, price: level ? levelPrice(level, field) : null };
+        return { id: String(entry.id), subscribed: flag(entry.subscribed, null), status: typeof entry.status === "string" && STATUS.test(entry.status) ? entry.status : null,
+            offTime: unixSeconds(entry.offTime), blacklisted: flag(entry.isBlackListed, false), levelId, price: level ? levelPrice(level, field) : null };
     });
     return { subscribers, total: value.total as number };
 }

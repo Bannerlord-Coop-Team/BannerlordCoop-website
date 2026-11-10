@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { BoostyAuthError, boostyUrl, createBoostyApi, parseSubscriberPage, type BoostyApi, type BoostySubscriber } from "./boosty-api.ts";
 import { BOOSTY_TOKEN_URL, BoostyCredentialUnavailable, createBoostyCredential, type BoostyCredentialRpc } from "./boosty-credential.ts";
@@ -7,7 +8,7 @@ import { extractLinkCode, generateLinkCode, LINK_CODE, linkCodeHash } from "./bo
 import { parseDialogPage, parseMessagePage } from "./boosty-messages.ts";
 import { createBoostyMembershipHandler, fetchCompleteSubscribers, type BoostySyncRpc } from "./boosty-membership.ts";
 import { parseBoostyPolicy, type BoostyPolicy } from "./boosty-policy.ts";
-import { parseFundingSnapshot } from "./funding-provider.ts";
+import { BOOSTY_BLOG, BOOSTY_IDENTIFIER, parseFundingSnapshot } from "./funding-provider.ts";
 import type { CreatorTokenProvider } from "./patreon-creator-token.ts";
 import { createWebsiteAccountHandler } from "./website-account.ts";
 
@@ -15,6 +16,10 @@ const policy: BoostyPolicy = { blog: "coop-team", qualifyingLevelIds: ["555", "5
 const accountId = "aaaaaaaa-1111-4111-8111-111111111111";
 const head: LinkedBoostyHead = { accountId, providerUserId: "4242", linkGeneration: "3", absentSince: null };
 const polledAt = "2026-11-10T12:00:00.000Z";
+// Sanitized real responses (tests/fixtures/boosty/README.md); their timestamps are relative to polledAt.
+const fixture = (name: string): unknown => JSON.parse(readFileSync(`tests/fixtures/boosty/${name}.json`, "utf8"));
+const realPolicy: BoostyPolicy = { ...policy, blog: "bannerlordcoop", qualifyingLevelIds: ["4035410", "4035411", "4035416", "4035417", "4035418"], minimumPrice: 5, priceField: "USD" };
+const active = (id: string): BoostySubscriber => ({ id, subscribed: true, status: "active", offTime: null, blacklisted: false, levelId: "555", price: 500 });
 type Expected = { method: string; url: string; headers: Record<string, string>; body?: string; reply: () => Response };
 
 /** A strict fake transport: every request must equal the next expected one exactly, in order. */
@@ -70,15 +75,13 @@ test("only the allowlisted routes exist, each with an exact query", () => {
 });
 
 test("the client sends exact GETs, replaces a rejected token once and reports a surviving 401 as a credential failure", async () => {
-    const page = { data: [{ id: 4242, name: "x", email: "private@example.com", subscribed: true, isBlackListed: false, nextPayTime: 4_000_000_000, level: { id: 555, price: 7, currencyPrices: { RUB: 500, USD: 5 } } }], total: 1, offset: 0, limit: 100 };
-    const json = (body: unknown) => () => Response.json(body);
     const fetcher = strictFetch([
-        { method: "GET", url: "https://api.boosty.to/v1/blog/coop-team/subscribers?limit=100&offset=0&sort_by=on_time&order=gt&with_follow=false", headers: apiHeaders("old-access-token-x"), reply: () => new Response("", { status: 401 }) },
-        { method: "GET", url: "https://api.boosty.to/v1/blog/coop-team/subscribers?limit=100&offset=0&sort_by=on_time&order=gt&with_follow=false", headers: apiHeaders("new-access-token-x"), reply: json(page) },
+        { method: "GET", url: "https://api.boosty.to/v1/blog/bannerlordcoop/subscribers?limit=100&offset=0&sort_by=on_time&order=gt&with_follow=false", headers: apiHeaders("old-access-token-x"), reply: () => new Response("", { status: 401 }) },
+        { method: "GET", url: "https://api.boosty.to/v1/blog/bannerlordcoop/subscribers?limit=100&offset=0&sort_by=on_time&order=gt&with_follow=false", headers: apiHeaders("new-access-token-x"), reply: () => Response.json(fixture("subscribers")) },
     ]);
     const { provider, replaced } = tokens("old-access-token-x", "new-access-token-x");
-    const api = createBoostyApi({ blog: "coop-team", priceField: "RUB", credential: provider, fetchImplementation: fetcher });
-    assert.deepEqual(await api.subscribers(0), { subscribers: [{ id: "4242", subscribed: true, blacklisted: false, levelId: "555", price: 500 }], total: 1 });
+    const api = createBoostyApi({ blog: "bannerlordcoop", priceField: "USD", credential: provider, fetchImplementation: fetcher });
+    assert.deepEqual(await api.subscribers(0), parseSubscriberPage(fixture("subscribers"), "USD"));
     assert.deepEqual(replaced, ["old-access-token-x"]); assert.equal(fetcher.remaining(), 0);
     const rejected = strictFetch([{ method: "GET", url: "https://api.boosty.to/v1/dialog/?limit=20", headers: apiHeaders("old-access-token-x"), reply: () => new Response("", { status: 401 }) }]);
     const denied = createBoostyApi({ blog: "coop-team", priceField: "RUB", credential: tokens("old-access-token-x", null).provider, fetchImplementation: rejected });
@@ -93,36 +96,53 @@ test("the client sends exact GETs, replaces a rejected token once and reports a 
     await assert.rejects(html.dialogs(null), notFake);
 });
 
+test("real responses replay: blog slug, level pricing, subscriber states, dialogs and messages", () => {
+    const user = fixture("user-current") as { blogUrl: string; blog: { url: string; currency: string } };
+    assert.ok(BOOSTY_BLOG.test(user.blogUrl)); assert.deepEqual([user.blogUrl, user.blog.url, user.blog.currency], ["bannerlordcoop", "bannerlordcoop", "USD"]);
+    const levels = (fixture("subscription-levels") as { data: { id: number; price: number; currencyPrices: { USD: number } }[] }).data;
+    assert.deepEqual(levels.map(level => [level.id, level.price]), [[4018927, 0], [4035410, 5], [4035411, 10], [4035416, 20], [4035417, 50], [4035418, 100]]);
+    assert.ok(levels.every(level => BOOSTY_IDENTIFIER.test(String(level.id)) && level.price === level.currencyPrices.USD), "price is in USD major units");
+    const row = (id: string, subscribed: boolean, status: string, offTime: string | null, levelId: string, price: number) => ({ id, subscribed, status, offTime, blacklisted: false, levelId, price });
+    assert.deepEqual(parseSubscriberPage(fixture("subscribers"), "USD"), { total: 5, subscribers: [
+        row("9000002", true, "active", null, "4018927", 0), row("9000003", true, "active", null, "4035410", 5), row("9000004", false, "paused", "2026-11-07T12:00:00.000Z", "4035410", 5),
+        row("9000005", true, "active", "2026-11-11T12:00:00.000Z", "4035410", 5), row("9000006", false, "inactive", "2026-11-05T12:00:00.000Z", "4035410", 5)] });
+    assert.deepEqual(parseDialogPage(fixture("dialogs")), { nextOffset: "20", dialogs: [
+        { dialogId: "7000001", chatmateId: "9000007", lastMessageId: "5000001", lastMessageAt: "2026-11-04T12:00:00.000Z" },
+        { dialogId: "7000002", chatmateId: "9000008", lastMessageId: "5000002", lastMessageAt: "2026-11-01T12:00:00.000Z" }] });
+    assert.deepEqual(parseMessagePage(fixture("dialog-messages")), [{ messageId: "5000001", authorId: "9000007", messageAt: "2026-11-04T12:00:00.000Z", code: "BLC-AB12C-DE34F" }]);
+});
+
 test("subscriber, dialog and message parsers read only the allowlisted subset and fail closed on identity", () => {
-    assert.deepEqual(parseSubscriberPage({ data: [{ id: 1, subscribed: "yes", level: { id: 9, price: 300 } }, { id: 2 }, { id: 3, isBlackListed: 1, levelId: 7 }], total: 3 }, "price").subscribers, [
-        { id: "1", subscribed: null, blacklisted: false, levelId: "9", price: 300 }, { id: "2", subscribed: null, blacklisted: false, levelId: null, price: null },
-        { id: "3", subscribed: null, blacklisted: null, levelId: "7", price: null }]);
+    assert.deepEqual(parseSubscriberPage({ data: [{ id: 1, subscribed: "yes", status: "Active!", offTime: 1.5, level: { id: 9, price: 300 } }, { id: 2 }, { id: 3, isBlackListed: 1, levelId: 7 }], total: 3 }, "price").subscribers, [
+        { id: "1", subscribed: null, status: null, offTime: null, blacklisted: false, levelId: "9", price: 300 }, { id: "2", subscribed: null, status: null, offTime: null, blacklisted: false, levelId: null, price: null },
+        { id: "3", subscribed: null, status: null, offTime: null, blacklisted: null, levelId: "7", price: null }]);
     for (const bad of [{ data: [{ id: "1" }], total: 1 }, { data: [{ id: 0 }], total: 1 }, { data: [], total: -1 }, { data: Array.from({ length: 101 }, (_, i) => ({ id: i + 1 })), total: 101 }, { total: 0 }]) {
         assert.throws(() => parseSubscriberPage(bad, "RUB"), JSON.stringify(bad));
     }
-    assert.deepEqual(parseDialogPage({ data: [{ id: 900, chatmate: { id: 8888, name: "S" }, lastMessage: { id: 31, createdAt: 1_762_776_000 } }, { id: 901 }], extra: { offset: 20 } }), {
-        dialogs: [{ dialogId: "900", chatmateId: "8888", lastMessageId: "31", lastMessageAt: "2025-11-10T12:00:00.000Z" }, { dialogId: "901", chatmateId: null, lastMessageId: null, lastMessageAt: null }], nextOffset: "20" });
+    assert.deepEqual(parseDialogPage({ data: [{ id: 901 }], extra: { offset: 20 } }), { dialogs: [{ dialogId: "901", chatmateId: null, lastMessageId: null, lastMessageAt: null }], nextOffset: "20" });
     assert.deepEqual(parseDialogPage({ data: [] , extra: { offset: 20 } }), { dialogs: [], nextOffset: null });
     assert.throws(() => parseDialogPage({ data: [{ chatmate: { id: 1 } }] }));
     assert.deepEqual(parseMessagePage({ data: [
-        { id: 31, authorId: 8888, createdAt: 1_762_776_000, data: [{ type: "text", content: '["BLC-AB12C-DE34F","unstyled",[]]', modificator: "" }, { type: "text", content: "", modificator: "BLOCK_END" }] },
         { id: 32, author: { id: 1, name: "Creator" }, data: [{ type: "link", content: "BLC-AB12C-DE34F", url: "https://x" }] },
         { id: 33, authorId: 8888, isDeleted: true, data: [{ type: "text", content: "BLC-AB12C-DE34F" }] }, { authorId: 8888 }] }), [
-        { messageId: "31", authorId: "8888", messageAt: "2025-11-10T12:00:00.000Z", code: "BLC-AB12C-DE34F" },
         { messageId: "32", authorId: "1", messageAt: null, code: null }]);
 });
 
-test("evidence: qualifying, no-loss unsubscribe, two-poll absence, no-loss uncertainty and nextPayTime ignored", async () => {
-    const decide = (subscriber: BoostySubscriber | undefined, at = polledAt, absentSince: string | null = null) => decideBoostyEvidence(policy, { ...head, absentSince }, subscriber, at);
-    const listed = (overrides: Partial<BoostySubscriber> = {}): BoostySubscriber => ({ id: "4242", subscribed: true, blacklisted: false, levelId: "555", price: 500, ...overrides });
-    const qualifying = await decide(listed());
-    assert.deepEqual({ ...qualifying.evidence, evidenceSha256: "x" }, { verification: "qualifying", programId: "coop-team", memberId: null, tierIds: ["555"], verifiedAt: polledAt, paidThroughAt: null, policyVersion: "boosty-paid-v1", evidenceSha256: "x" });
+test("evidence: real subscriber states, two-poll absence, no-loss uncertainty and nextPayTime ignored", async () => {
+    const decide = (subscriber: BoostySubscriber | undefined, at = polledAt, absentSince: string | null = null) => decideBoostyEvidence(realPolicy, { ...head, absentSince }, subscriber, at);
+    const real = new Map(parseSubscriberPage(fixture("subscribers"), "USD").subscribers.map(subscriber => [subscriber.id, subscriber]));
+    const listed = (overrides: Partial<BoostySubscriber> = {}): BoostySubscriber => ({ ...real.get("9000003")!, ...overrides });
+    const facts = async (subscriber: BoostySubscriber) => { const { evidence } = await decide(subscriber); return [evidence.verification, evidence.tierIds, evidence.paidThroughAt, evidence.paidAccessEndedAt]; };
+    const qualifying = await decide(real.get("9000003"));
+    assert.deepEqual({ ...qualifying.evidence, evidenceSha256: "x" }, { verification: "qualifying", programId: "bannerlordcoop", memberId: null, tierIds: ["4035410"], verifiedAt: polledAt, paidThroughAt: null, policyVersion: "boosty-paid-v1", evidenceSha256: "x" });
     assert.match(qualifying.evidence.evidenceSha256, /^[a-f0-9]{64}$/u); assert.equal(qualifying.absentSince, null);
     assert.equal((await decide(listed())).evidence.evidenceSha256, qualifying.evidence.evidenceSha256, "the digest is deterministic");
-    const unsubscribed = await decide(listed({ subscribed: false }));
-    // Still listed after cancelling may still be paid access: nonqualifying for new allocation, never loss.
-    assert.deepEqual([unsubscribed.evidence.verification, unsubscribed.evidence.tierIds, unsubscribed.evidence.paidAccessEndedAt, unsubscribed.absentSince],
-        ["nonqualifying", [], undefined, null]);
+    assert.deepEqual(await facts(real.get("9000002")!), ["nonqualifying", ["4018927"], null, undefined], "a free follower");
+    assert.deepEqual(await facts(real.get("9000004")!), ["nonqualifying", [], null, undefined], "paused is not loss");
+    assert.deepEqual(await facts(real.get("9000005")!), ["qualifying", ["4035410"], "2026-11-11T12:00:00.000Z", undefined], "cancelled but paid until its offTime");
+    const lapsed = await decide(real.get("9000006"));
+    assert.deepEqual([lapsed.evidence.verification, lapsed.evidence.tierIds, lapsed.evidence.paidThroughAt, lapsed.evidence.paidAccessEndedAt, lapsed.absentSince],
+        ["nonqualifying", [], null, "2026-11-05T12:00:00.000Z", null], "a lapsed subscriber stays listed and its offTime is the loss");
     const firstAbsence = await decide(undefined);
     assert.deepEqual([firstAbsence.evidence.verification, firstAbsence.evidence.paidAccessEndedAt, firstAbsence.absentSince], ["nonqualifying", undefined, polledAt]);
     const soon = await decide(undefined, "2026-11-10T12:59:59.999Z", polledAt);
@@ -130,14 +150,16 @@ test("evidence: qualifying, no-loss unsubscribe, two-poll absence, no-loss uncer
     const confirmed = await decide(undefined, "2026-11-10T13:00:00.000Z", polledAt);
     assert.deepEqual([confirmed.evidence.verification, confirmed.evidence.tierIds, confirmed.evidence.paidAccessEndedAt, confirmed.absentSince], ["nonqualifying", [], "2026-11-10T13:00:00.000Z", polledAt]);
     for (const [name, overrides, verification, tiers] of [
-        ["blacklisted", { blacklisted: true }, "nonqualifying", []], ["other level", { levelId: "999" }, "nonqualifying", ["999"]], ["cheap", { price: 499 }, "nonqualifying", ["555"]],
+        ["blacklisted", { blacklisted: true }, "nonqualifying", []], ["other level", { levelId: "999" }, "nonqualifying", ["999"]], ["cheap", { price: 4 }, "nonqualifying", ["4035410"]],
         ["unknown subscribed", { subscribed: null }, "unknown", []], ["unknown blacklist", { blacklisted: null }, "unknown", []], ["no level", { levelId: null }, "unknown", []], ["no price", { price: null }, "unknown", []],
+        ["unknown status", { status: null }, "unknown", []], ["unsubscribed but active", { subscribed: false }, "unknown", []],
+        ["inactive without offTime", { subscribed: false, status: "inactive" }, "unknown", []], ["inactive until later", { subscribed: false, status: "inactive", offTime: "2026-11-11T12:00:00.000Z" }, "unknown", []],
     ] as const) {
         const decision = await decide(listed(overrides));
         assert.deepEqual([decision.evidence.verification, decision.evidence.tierIds, decision.evidence.paidAccessEndedAt, decision.absentSince], [verification, tiers, undefined, null], name);
     }
     // Every decided evidence object satisfies the CP version 2 Boosty grammar exactly.
-    for (const decision of [qualifying, unsubscribed, firstAbsence, confirmed]) {
+    for (const decision of [qualifying, lapsed, await decide(real.get("9000005")), firstAbsence, confirmed]) {
         parseFundingSnapshot({ version: 2, provider: "boosty", accountId, discordUserId: null, providerUserId: "4242", linkGeneration: "3", revision: "9", linkState: "linked", ...decision.evidence }, accountId, "boosty");
     }
     assert.equal(circuitBreakerTripped(policy, null, 0), false); assert.equal(circuitBreakerTripped(policy, 100, 75), false);
@@ -148,7 +170,7 @@ test("a subscriber list is complete only when it reaches its stated total withou
     const pages = (...results: { ids: number[]; total: number }[]): BoostyApi & { offsets: number[] } => {
         const offsets: number[] = [];
         return { offsets, dialogs: async () => { throw new Error("unused"); }, messages: async () => { throw new Error("unused"); },
-            subscribers: async offset => { offsets.push(offset); const next = results.shift()!; return { total: next.total, subscribers: next.ids.map(id => ({ id: String(id), subscribed: true, blacklisted: false, levelId: "555", price: 500 })) }; } };
+            subscribers: async offset => { offsets.push(offset); const next = results.shift()!; return { total: next.total, subscribers: next.ids.map(id => active(String(id))) }; } };
     };
     const full = pages({ ids: Array.from({ length: 100 }, (_, i) => i + 1), total: 150 }, { ids: Array.from({ length: 50 }, (_, i) => i + 101), total: 150 });
     assert.equal((await fetchCompleteSubscribers(full, Infinity, Date.now)).size, 150); assert.deepEqual(full.offsets, [0, 100]);
@@ -166,22 +188,22 @@ test("the credential seeds once, stores a rotated pair before using it and alert
         events.push(`rpc:${operation}`);
         if (operation === "read") return state;
         if (operation === "seed") { assert.deepEqual(input, { deviceId: "device-fixture-1", refreshToken: "refresh-token-fixture-1" }); state = { configured: true, deviceId: "device-fixture-1", refreshToken: "refresh-token-fixture-1", accessToken: null, generation: 1, refreshDue: true }; return { seeded: true }; }
-        if (operation === "rotate") { assert.deepEqual(input, { generation: 1, accessToken: "access-token-fixture-2", refreshToken: "refresh-token-fixture-2", expiresIn: 86400 }); state = { ...state, accessToken: "access-token-fixture-2", refreshToken: "refresh-token-fixture-2", generation: 2, refreshDue: false }; return { rotated: true }; }
+        if (operation === "rotate") { assert.deepEqual(input, { generation: 1, accessToken: "fixture-access-token-placeholder", refreshToken: "fixture-refresh-token-placeholder", expiresIn: 2_592_000 }); state = { ...state, accessToken: "fixture-access-token-placeholder", refreshToken: "fixture-refresh-token-placeholder", generation: 2, refreshDue: false }; return { rotated: true }; }
         assert.deepEqual(input, { generation: state.generation, reason: "rejected" }); return { recorded: true, alert: events.filter(event => event === "alert:rejected").length === 0 };
     };
     const fetcher = strictFetch([{ method: "POST", url: BOOSTY_TOKEN_URL, body: "device_id=device-fixture-1&device_os=web&grant_type=refresh_token&refresh_token=refresh-token-fixture-1",
         headers: { accept: "application/json", "content-type": "application/x-www-form-urlencoded", "user-agent": "BannerlordCoop - website membership sync" },
-        reply: () => { events.push("http:token"); return Response.json({ access_token: "access-token-fixture-2", refresh_token: "refresh-token-fixture-2", expires_in: 86400 }); } }]);
+        reply: () => { events.push("http:token"); return Response.json(fixture("oauth-token-refresh")); } }]);
     const logs: string[] = [];
     const credential = createBoostyCredential({ bootstrap: { deviceId: "device-fixture-1", refreshToken: "refresh-token-fixture-1" }, rpc, fetchImplementation: fetcher,
         alert: async reason => { events.push(`alert:${reason}`); }, log: message => logs.push(message) });
     assert.equal(BOOSTY_TOKEN_URL, "https://api.boosty.to/oauth/token/");
-    assert.equal(await credential.current(), "access-token-fixture-2");
+    assert.equal(await credential.current(), "fixture-access-token-placeholder");
     assert.deepEqual(events, ["rpc:read", "rpc:seed", "rpc:read", "http:token", "rpc:rotate"], "the rotated pair is stored before current() returns it");
-    assert.equal(await credential.current(), "access-token-fixture-2"); assert.equal(fetcher.remaining(), 0);
+    assert.equal(await credential.current(), "fixture-access-token-placeholder"); assert.equal(fetcher.remaining(), 0);
     await credential.reportFailure("rejected"); await credential.reportFailure("rejected");
     assert.deepEqual(events.filter(event => event.startsWith("alert")), ["alert:rejected"], "alerts are rate-limited by the store");
-    assert.ok(logs.every(line => !/token-fixture|device-fixture/u.test(line)));
+    assert.ok(logs.every(line => !/token-fixture|token-placeholder|device-fixture/u.test(line)));
 });
 
 test("refresh refusal, outage and an unstored rotation never yield a token or loss", async () => {
@@ -242,11 +264,11 @@ test("worker failures freeze evidence: no evidence write, stale-only marking, al
     const outage = harness({ subscribers: async () => { throw new Error("Boosty unavailable"); } });
     assert.deepEqual(await outage.wake(), { status: 503, code: "sync_incomplete" });
     assert.ok(!outage.operations().includes("evidence"));
-    const dropped = harness({ subscribers: async () => ({ subscribers: [{ id: "1", subscribed: true, blacklisted: false, levelId: "555", price: 500 }], total: 1 }) });
+    const dropped = harness({ subscribers: async () => ({ subscribers: [active("1")], total: 1 }) });
     assert.deepEqual(await dropped.wake(), { status: 503, code: "sync_incomplete" });
     assert.deepEqual(dropped.operations(), ["acquire", "linked", "stale", "polled", "release"]); assert.deepEqual(dropped.alerts, ["breaker_tripped"]);
     assert.deepEqual(dropped.calls.find(call => call.operation === "polled")?.input, { token: lease.token, complete: false, tripped: true, total: null });
-    const dialogFailure = harness({ dialogs: async () => { throw new Error("Boosty unavailable"); }, subscribers: async () => ({ subscribers: Array.from({ length: 100 }, (_, i) => ({ id: String(i + 1), subscribed: true, blacklisted: false, levelId: "555", price: 500 })), total: 100 }) });
+    const dialogFailure = harness({ dialogs: async () => { throw new Error("Boosty unavailable"); }, subscribers: async () => ({ subscribers: Array.from({ length: 100 }, (_, i) => active(String(i + 1))), total: 100 }) });
     assert.deepEqual(await dialogFailure.wake(), { status: 503, code: "sync_incomplete" });
     assert.deepEqual(dialogFailure.operations(), ["acquire", "linked", "evidence", "polled", "release"], "a failed link scan does not block a complete poll");
     const evidence = dialogFailure.calls.find(call => call.operation === "evidence")!.input.results as { evidence: { verification: string; paidAccessEndedAt?: string }; absentSince: string }[];

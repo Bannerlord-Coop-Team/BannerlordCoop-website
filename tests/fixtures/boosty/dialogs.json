@@ -1,0 +1,109 @@
+{
+  "data": [
+    {
+      "chatmate": {
+        "hasAvatar": true,
+        "isBlogger": false,
+        "id": 9000007,
+        "isOfficial": false,
+        "name": "Supporter 7",
+        "avatarUrl": "https://images.example.invalid/avatar/7.png",
+        "hasAdultContent": false,
+        "blogCurrency": "RUB",
+        "acceptedCurrencies": [],
+        "url": "supporter-7",
+        "currency": "USD"
+      },
+      "lastMessage": {
+        "attachments": {
+          "audios": {"count":0},
+          "files": {"count":0},
+          "videos": {"previewUrl":"","count":0},
+          "images": {"previewUrl":"","count":0},
+          "text": {"count":1}
+        },
+        "isFeePaid": false,
+        "previewType": "text",
+        "isDeleted": false,
+        "price": 0,
+        "createdAt": 1793793600,
+        "currencyPrices": {"USD":0,"RUB":0,"EUR":0},
+        "donation": {
+          "user": {
+            "isOfficial": false,
+            "name": "Supporter 7",
+            "avatarUrl": "https://images.example.invalid/avatar/7.png",
+            "hasAvatar": true,
+            "id": 9000007,
+            "email": "supporter7@example.invalid"
+          },
+          "targetId": 0,
+          "id": 3000001,
+          "bloggerId": 9000001,
+          "createdAt": 1793793600,
+          "type": "author",
+          "isFeePaid": false,
+          "amount": 20,
+          "currencyAmounts": {"RUB":1764,"EUR":18.99,"USD":20}
+        },
+        "data": [
+          {"modificator":"","content":"[\"My code: BLC-AB12C-DE34F\",\"unstyled\",[]]","type":"text"},
+          {"modificator":"BLOCK_END","content":"","type":"text"}
+        ],
+        "isPaid": false,
+        "teaser": [],
+        "isRead": true,
+        "authorId": 9000007,
+        "id": 5000001,
+        "dialogId": 7000001
+      },
+      "createdAt": 1793793600,
+      "unreadMsgCount": 0,
+      "id": 7000001
+    },
+    {
+      "createdAt": 1793448000,
+      "lastMessage": {
+        "data": [
+          {"modificator":"","content":"[\"Synthetic message 2\",\"unstyled\",[]]","type":"text"},
+          {"content":"","modificator":"BLOCK_END","type":"text"}
+        ],
+        "currencyPrices": {"USD":0,"RUB":0,"EUR":0},
+        "createdAt": 1793534400,
+        "dialogId": 7000002,
+        "id": 5000002,
+        "teaser": [],
+        "isRead": true,
+        "authorId": 9000001,
+        "isPaid": false,
+        "isDeleted": false,
+        "previewType": "text",
+        "isFeePaid": false,
+        "attachments": {
+          "audios": {"count":0},
+          "images": {"previewUrl":"","count":0},
+          "files": {"count":0},
+          "videos": {"count":0,"previewUrl":""},
+          "text": {"count":1}
+        },
+        "price": 0
+      },
+      "chatmate": {
+        "acceptedCurrencies": ["RUB","USD","EUR"],
+        "blogCurrency": "RUB",
+        "currency": "RUB",
+        "url": "supporter-8",
+        "isBlogger": true,
+        "hasAvatar": true,
+        "hasAdultContent": false,
+        "name": "Supporter 8",
+        "avatarUrl": "https://images.example.invalid/avatar/8.png",
+        "isOfficial": false,
+        "id": 9000008
+      },
+      "unreadMsgCount": 0,
+      "id": 7000002
+    }
+  ],
+  "extra": {"total":40,"offset":20}
+}

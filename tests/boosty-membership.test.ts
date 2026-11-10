@@ -33,7 +33,7 @@ type Row = Record<string, unknown>;
 
 /** Builds a qualifying listed subscriber for the fixture policy. */
 function subscriber(id: string, overrides: Partial<BoostySubscriber> = {}): BoostySubscriber {
-    return { id, subscribed: true, blacklisted: false, levelId: "555", price: 500, ...overrides };
+    return { id, subscribed: true, status: "active", offTime: null, blacklisted: false, levelId: "555", price: 500, ...overrides };
 }
 
 test("Boosty adapter links DM codes, decides evidence conservatively and serves CP v2 snapshots", async t => {
@@ -172,13 +172,17 @@ test("Boosty adapter links DM codes, decides evidence conservatively and serves 
             assert.deepEqual(await write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence, absentSince: null }]), { written: 1 });
             assert.equal((await cpSnapshot(id)).verification, "qualifying");
             assert.deepEqual(await write([{ accountId: id, providerUserId: "3131", linkGeneration: 0, evidence, absentSince: null }]), { written: 0 }, "a stale link generation is skipped");
-            for (const bad of [{ ...evidence, programId: "other" }, { ...evidence, tierIds: [] }, { ...evidence, verification: "nonqualifying", tierIds: [], paidAccessEndedAt: "2026-01-01T00:00:00.000Z" }, { ...evidence, extra: 1 }]) {
+            const earlier = new Date(Date.parse(verifiedAt) - 86_400_000).toISOString(), later = new Date(Date.parse(verifiedAt) + 86_400_000).toISOString();
+            const loss = { ...evidence, verification: "nonqualifying", tierIds: [], paidAccessEndedAt: earlier };
+            for (const bad of [{ ...evidence, programId: "other" }, { ...evidence, tierIds: [] }, { ...loss, paidAccessEndedAt: later }, { ...loss, paidThroughAt: later },
+                { ...evidence, paidThroughAt: earlier }, { ...evidence, verification: "nonqualifying", paidThroughAt: later }, { ...evidence, extra: 1 }]) {
                 await assert.rejects(write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence: bad, absentSince: null }]), /invalid_boosty_result/u, JSON.stringify(bad));
             }
-            const loss = { ...evidence, verification: "nonqualifying", tierIds: [], paidAccessEndedAt: verifiedAt };
+            assert.deepEqual(await write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence: { ...evidence, paidThroughAt: later }, absentSince: null }]), { written: 1 });
+            assert.equal((await cpSnapshot(id)).paidThroughAt, later);
             await write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence: loss, absentSince: verifiedAt }]);
             const lost = await cpSnapshot(id);
-            assert.equal(lost.paidAccessEndedAt, verifiedAt); assert.deepEqual(lost.tierIds, []);
+            assert.equal(lost.paidAccessEndedAt, earlier); assert.deepEqual(lost.tierIds, []);
             assert.equal((await query("select absent_since is not null recorded from boosty_membership.absences where account_id=$1", [id])).rows[0].recorded, true);
         });
 
@@ -266,13 +270,13 @@ test("Boosty adapter links DM codes, decides evidence conservatively and serves 
             assert.deepEqual([snapshot.providerUserId, snapshot.verification, snapshot.tierIds, snapshot.programId], ["8888", "qualifying", ["555"], "coop-team"]);
             // Not due again: the next wake reads dialogs only.
             calls.length = 0; assert.equal((await wake()).status, 200); assert.deepEqual(calls, ["dialogs:null"]);
-            // A cancelled but still listed subscription stops qualifying without being loss:
-            // its paid period may continue, and only confirmed absence from the list proves it ended.
+            // A lapsed subscriber stays listed as inactive; its past offTime is the confirmed loss.
             await query("update boosty_membership.sync_state set next_poll_at='-infinity'");
-            subscribers.set("8888", subscriber("8888", { subscribed: false }));
+            const offTime = new Date(Date.now() - 3_600_000).toISOString();
+            subscribers.set("8888", subscriber("8888", { subscribed: false, status: "inactive", offTime }));
             assert.equal((await wake()).status, 200);
-            const cancelled = await cpSnapshot(id);
-            assert.equal(cancelled.verification, "nonqualifying"); assert.equal(cancelled.paidAccessEndedAt, undefined);
+            const lapsed = await cpSnapshot(id);
+            assert.deepEqual([lapsed.verification, lapsed.tierIds, lapsed.paidAccessEndedAt], ["nonqualifying", [], offTime]);
             assert.deepEqual(alerts, []);
             assert.deepEqual((await accountCall({ operation: "boosty-unlink" })).body, { unlinked: true });
             assert.equal((await cpSnapshot(id)).linkState, "unlinked");

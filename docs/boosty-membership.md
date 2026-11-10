@@ -3,8 +3,8 @@
 The website links a website account to a Boosty subscriber and decides Boosty membership
 evidence for the control plane's version 2 snapshot (`provider: "boosty"`). Boosty has no
 official API: the adapter uses the internal web API called by the unofficial clients
-`beekamai/boosty-api` and `ath31st/boosty_api_rs`. Nothing here has run against Boosty yet;
-see [Unverified assumptions](#unverified-assumptions) and [Commissioning](#commissioning).
+`beekamai/boosty-api` and `ath31st/boosty_api_rs`. A read-only capture on 2026-11-10 confirmed
+the shapes it reads; see [API assumptions](#api-assumptions) and [Commissioning](#commissioning).
 
 ## Linking by DM code
 
@@ -27,15 +27,17 @@ bumps the generation; Auth deletion tombstones the head and frees the Boosty use
 
 The worker polls `GET /v1/blog/{blog}/subscribers` every 30 minutes (100 per page, at most 50
 pages). A list is complete only when it reaches its stated `total` with no duplicates and no
-change of `total`. Evidence uses `programId` = blog, `memberId: null`, `paidThroughAt: null`
-(`nextPayTime` is ignored) and `policyVersion: "boosty-paid-v1"`. After a complete poll:
+change of `total`. Evidence uses `programId` = blog, `memberId: null` and
+`policyVersion: "boosty-paid-v1"`; `nextPayTime` is never read. Former subscribers stay
+listed, so `status` and `offTime` decide loss. After a complete poll:
 
 | Observation | Evidence |
 | --- | --- |
-| subscribed, not blacklisted, qualifying level, price ≥ `minimumPrice` | `qualifying` |
-| listed but `subscribed: false` | `nonqualifying`, **not loss** (the paid period may continue) |
-| listed with another level, a lower price or blacklisted | `nonqualifying`, not loss |
-| listed with a missing or malformed field | `unknown` |
+| `subscribed`, `status: "active"`, not blacklisted, qualifying level, price ≥ `minimumPrice` | `qualifying`; `paidThroughAt` = `offTime` when it is in the future (cancelled, still paid) |
+| same, with another level (a free follower), a lower price or blacklisted | `nonqualifying`, not loss |
+| `subscribed: false`, `status: "inactive"`, `offTime` at or before the poll | `nonqualifying` with `paidAccessEndedAt` = `offTime` (loss) |
+| `status: "paused"` | `nonqualifying`, not loss |
+| any other combination, or a missing or malformed field | `unknown` |
 | absent from the first complete poll | `nonqualifying`, not loss; absence recorded |
 | still absent in a complete poll at least an hour later | `nonqualifying` with `paidAccessEndedAt` (loss) |
 
@@ -88,18 +90,23 @@ update boosty_membership.sync_state set dispatch_enabled = true where singleton;
 commit;
 ```
 
-## Unverified assumptions
+## API assumptions
 
-From the unofficial clients; confirm during commissioning:
+Confirmed by the 2026-11-10 capture ([fixtures](../tests/fixtures/boosty/README.md)):
 
-- API host `https://api.boosty.to`, the token endpoint's form fields
+- Host `https://api.boosty.to`, Bearer auth, the token endpoint's form fields
   (`device_id`, `device_os=web`, `grant_type=refresh_token`, `refresh_token`) and its
-  `{access_token, refresh_token, expires_in}` reply.
-- Subscriber fields `id`, `subscribed`, `isBlackListed`, `level.{id, price, currencyPrices}`,
-  `levelId`, the `{data, total}` envelope, and that `offset` counts rows.
+  `{access_token, refresh_token, expires_in}` reply; `expires_in` is seconds and the refresh
+  token rotates.
+- Subscriber fields `id`, `subscribed`, `status`, `offTime` (Unix seconds),
+  `isBlackListed`, `level.{id, price, currencyPrices}` (`price` in the blog currency, USD),
+  the `{data, total, offset, limit}` envelope, and that the request `offset` counts rows.
 - Dialog (`id`, `chatmate.id`, `lastMessage.{id, createdAt}`, `extra.offset`) and message
-  (`id`, `authorId`/`author.id`, `createdAt`, `isDeleted`, text blocks `data[].content`, plain
-  or Draft.js-encoded) shapes, increasing message ids, and newest-first ordering.
+  (`id`, `authorId`, `createdAt`, `isDeleted`, Draft.js-encoded text blocks) shapes, newest
+  dialog first.
+
+Still unconfirmed: the `levelId` and `author.id` fallbacks (absent from the capture) and that
+message ids increase.
 
 ## Commissioning
 
@@ -107,8 +114,7 @@ This is the last rollout step in [membership onboarding](membership-onboarding.m
 The control plane's policy must already list Boosty: a Boosty hint it cannot handle is never
 acknowledged, and the account's link calls soon fail with `PT429`.
 
-1. On an isolated machine with the creator's credential, capture and sanitize one response of
-   each route (subscribers, dialogs, messages, token refresh) and check them against the parsers.
+1. Done 2026-11-10: a read-only capture of each route is checked into `tests/fixtures/boosty`.
 2. Confirm the control plane lists Boosty, then set `BOOSTY_MEMBERSHIP_POLICY_JSON`, seed the
    credential and enable dispatch.
 3. Set `BOOSTY_LINKING_ENABLED`, link a test account and confirm the control plane's Boosty

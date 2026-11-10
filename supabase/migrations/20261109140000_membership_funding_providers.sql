@@ -15,8 +15,6 @@ begin;
 -- it with every adapter's branch (Boosty's is 20261110120000_boosty_membership_adapter.sql).
 -- Adding a provider is a new append-only migration that widens the CHECKs and re-creates
 -- the four registry functions with every existing provider's branch.
--- tests/funding-provider-contract.test.ts checks the registry against TypeScript
--- FUNDING_PROVIDERS and the shared provider contract fixture.
 
 -- Identifier grammar of every non-Patreon funding provider by kind ('user', 'program',
 -- 'tier'); Patreon's identifiers keep their own historical tables. The only SQL copy of

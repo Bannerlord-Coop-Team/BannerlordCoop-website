@@ -270,15 +270,19 @@ language sql immutable set search_path = '' as $$
   and (select count(*) from jsonb_object_keys(e)) = case when e ? 'paidAccessEndedAt' then 9 else 8 end
   and e ?& array['verification','programId','memberId','tierIds','verifiedAt','paidThroughAt','policyVersion','evidenceSha256']
   and e->>'verification' in ('qualifying','nonqualifying','unknown','review_required')
-  and e->>'programId' is not distinct from p_blog and e->'memberId'='null'::jsonb and e->'paidThroughAt'='null'::jsonb
+  and e->>'programId' is not distinct from p_blog and e->'memberId'='null'::jsonb
   and e->>'policyVersion'=any(public.membership_provider_policy_versions('boosty'))
   and jsonb_typeof(e->'tierIds')='array' and jsonb_array_length(e->'tierIds') <= 1
   and not exists(select 1 from jsonb_array_elements(e->'tierIds') t where jsonb_typeof(t)<>'string' or not public.membership_provider_identifier_valid('boosty','tier',t#>>'{}'))
   and jsonb_typeof(e->'verifiedAt')='string' and e->>'verifiedAt' ~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$'
   and jsonb_typeof(e->'evidenceSha256')='string' and e->>'evidenceSha256' ~ '^[a-f0-9]{64}$'
   and (e->>'verification'<>'qualifying' or jsonb_array_length(e->'tierIds')=1)
+  -- A cancelled but paid subscription qualifies until its future offTime; loss ends at or before the poll.
+  and (e->'paidThroughAt'='null'::jsonb or (e->>'verification'='qualifying' and jsonb_typeof(e->'paidThroughAt')='string'
+   and e->>'paidThroughAt' ~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$' and e->>'paidThroughAt' collate "C" > e->>'verifiedAt'))
   and (not e ? 'paidAccessEndedAt' or (e->>'verification'='nonqualifying' and e->'tierIds'='[]'::jsonb
-   and e->'paidAccessEndedAt'=e->'verifiedAt'))
+   and jsonb_typeof(e->'paidAccessEndedAt')='string' and e->>'paidAccessEndedAt' ~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$'
+   and e->>'paidAccessEndedAt' collate "C" <= e->>'verifiedAt'))
 $$;
 
 -- Writes decided evidence for linked heads after a complete poll. A head whose link changed

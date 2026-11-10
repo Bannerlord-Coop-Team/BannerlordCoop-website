@@ -1,0 +1,176 @@
+{
+  "nextId": null,
+  "data": [
+    {
+      "name": "Synthetic level 4018927",
+      "deleted": false,
+      "data": [],
+      "ownerId": 9000001,
+      "count": {"subscribers":14,"totalSubscribers":12},
+      "hasActivePromo": false,
+      "isArchived": false,
+      "isLimited": false,
+      "promos": [],
+      "price": 0,
+      "currencyPrices": {"EUR":0,"USD":0,"RUB":0},
+      "externalApps": {
+        "telegram": {"isConfigured":false},
+        "discord": {"data":{"role":{"name":"","id":""}},"isConfigured":false},
+        "max": {"isConfigured":false}
+      },
+      "isHidden": false,
+      "isThankMessageEnabled": false,
+      "flags": {"isArchived":false,"isLimited":false,"isHidden":false,"isThankMessageEnabled":false},
+      "createdAt": 1792929600,
+      "id": 4018927
+    },
+    {
+      "isThankMessageEnabled": false,
+      "isHidden": false,
+      "price": 5,
+      "isLimited": false,
+      "promos": [],
+      "externalApps": {
+        "discord": {"data":{"role":{"id":"1000000000000000001","name":"Synthetic role 1"}},"isConfigured":true},
+        "max": {"isConfigured":false},
+        "telegram": {"isConfigured":false}
+      },
+      "currencyPrices": {"USD":5,"RUB":441,"EUR":4.8},
+      "createdAt": 1793016000,
+      "id": 4035410,
+      "flags": {"isLimited":false,"isArchived":false,"isThankMessageEnabled":false,"isHidden":false},
+      "name": "Synthetic level 4035410",
+      "data": [
+        {"content":"[\"Synthetic level description\",\"unstyled\",[]]","type":"text","modificator":""},
+        {"modificator":"BLOCK_END","type":"text","content":""},
+        {"type":"text","content":"[\"Synthetic level description\",\"unstyled\",[]]","modificator":""},
+        {"type":"text","modificator":"BLOCK_END","content":""},
+        {"type":"text","modificator":"","content":"[\"Synthetic level description\",\"unstyled\",[]]"},
+        {"content":"","type":"text","modificator":"BLOCK_END"}
+      ],
+      "deleted": false,
+      "count": {"totalSubscribers":12,"subscribers":9},
+      "ownerId": 9000001,
+      "hasActivePromo": false,
+      "isArchived": false
+    },
+    {
+      "name": "Synthetic level 4035411",
+      "deleted": false,
+      "data": [
+        {"modificator":"","type":"text","content":"[\"Synthetic level description\",\"unstyled\",[]]"},
+        {"type":"text","modificator":"BLOCK_END","content":""},
+        {"content":"[\"Synthetic level description\",\"unstyled\",[]]","type":"text","modificator":""},
+        {"type":"text","content":"","modificator":"BLOCK_END"}
+      ],
+      "ownerId": 9000001,
+      "count": {"subscribers":1,"totalSubscribers":1},
+      "isArchived": false,
+      "hasActivePromo": false,
+      "promos": [],
+      "isLimited": false,
+      "price": 10,
+      "currencyPrices": {"EUR":9.5,"RUB":882,"USD":10},
+      "externalApps": {
+        "telegram": {"isConfigured":false},
+        "max": {"isConfigured":false},
+        "discord": {"data":{"role":{"name":"Synthetic role 1","id":"1000000000000000001"}},"isConfigured":true}
+      },
+      "isThankMessageEnabled": false,
+      "isHidden": false,
+      "flags": {"isHidden":false,"isThankMessageEnabled":false,"isLimited":false,"isArchived":false},
+      "id": 4035411,
+      "createdAt": 1793102400
+    },
+    {
+      "id": 4035416,
+      "createdAt": 1793188800,
+      "flags": {"isThankMessageEnabled":false,"isHidden":false,"isLimited":false,"isArchived":false},
+      "isHidden": false,
+      "isThankMessageEnabled": false,
+      "externalApps": {
+        "telegram": {"isConfigured":false},
+        "max": {"isConfigured":false},
+        "discord": {"isConfigured":true,"data":{"role":{"name":"Synthetic role 1","id":"1000000000000000001"}}}
+      },
+      "currencyPrices": {"EUR":19,"RUB":1764,"USD":20},
+      "price": 20,
+      "isLimited": false,
+      "promos": [],
+      "hasActivePromo": false,
+      "isArchived": false,
+      "count": {"subscribers":0,"totalSubscribers":0},
+      "ownerId": 9000001,
+      "deleted": false,
+      "data": [
+        {"type":"text","modificator":"","content":"[\"Synthetic level description\",\"unstyled\",[]]"},
+        {"modificator":"BLOCK_END","type":"text","content":""},
+        {"content":"[\"Synthetic level description\",\"unstyled\",[]]","type":"text","modificator":""},
+        {"modificator":"BLOCK_END","type":"text","content":""}
+      ],
+      "name": "Synthetic level 4035416"
+    },
+    {
+      "isArchived": false,
+      "hasActivePromo": false,
+      "ownerId": 9000001,
+      "count": {"totalSubscribers":0,"subscribers":0},
+      "data": [
+        {"type":"text","content":"[\"Synthetic level description\",\"unstyled\",[]]","modificator":""},
+        {"content":"","type":"text","modificator":"BLOCK_END"},
+        {"type":"text","modificator":"","content":"[\"Synthetic level description\",\"unstyled\",[]]"},
+        {"type":"text","modificator":"BLOCK_END","content":""},
+        {"type":"text","modificator":"","content":"[\"Synthetic level description\",\"unstyled\",[]]"},
+        {"modificator":"BLOCK_END","type":"text","content":""}
+      ],
+      "deleted": false,
+      "name": "Synthetic level 4035417",
+      "id": 4035417,
+      "createdAt": 1793275200,
+      "flags": {"isArchived":false,"isLimited":false,"isThankMessageEnabled":false,"isHidden":false},
+      "isThankMessageEnabled": false,
+      "isHidden": false,
+      "currencyPrices": {"USD":50,"RUB":4409,"EUR":48},
+      "externalApps": {
+        "max": {"isConfigured":false},
+        "discord": {"data":{"role":{"name":"Synthetic role 1","id":"1000000000000000001"}},"isConfigured":true},
+        "telegram": {"isConfigured":false}
+      },
+      "isLimited": false,
+      "promos": [],
+      "price": 50
+    },
+    {
+      "flags": {"isLimited":false,"isArchived":false,"isHidden":false,"isThankMessageEnabled":false},
+      "createdAt": 1793361600,
+      "id": 4035418,
+      "promos": [],
+      "isLimited": false,
+      "price": 100,
+      "currencyPrices": {"RUB":8817,"USD":100,"EUR":95},
+      "externalApps": {
+        "telegram": {"isConfigured":false},
+        "max": {"isConfigured":false},
+        "discord": {"data":{"role":{"id":"1000000000000000001","name":"Synthetic role 1"}},"isConfigured":true}
+      },
+      "isThankMessageEnabled": false,
+      "isHidden": false,
+      "ownerId": 9000001,
+      "count": {"subscribers":0,"totalSubscribers":0},
+      "hasActivePromo": false,
+      "isArchived": false,
+      "name": "Synthetic level 4035418",
+      "data": [
+        {"type":"text","modificator":"","content":"[\"Synthetic level description\",\"unstyled\",[]]"},
+        {"type":"text","content":"","modificator":"BLOCK_END"},
+        {"content":"[\"Synthetic level description\",\"unstyled\",[]]","type":"text","modificator":""},
+        {"content":"","type":"text","modificator":"BLOCK_END"},
+        {"modificator":"","type":"text","content":"[\"Synthetic level description\",\"unstyled\",[]]"},
+        {"modificator":"BLOCK_END","type":"text","content":""}
+      ],
+      "deleted": false
+    }
+  ],
+  "currentId": null,
+  "subscriptions": []
+}

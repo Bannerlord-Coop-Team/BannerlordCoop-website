@@ -1,7 +1,6 @@
-// UNVERIFIED Boosty dialog/message response parser, isolated so commissioning can confirm it
-// against a captured real response. Shapes follow the unofficial beekamai/boosty-api types:
+// Boosty dialog/message response parser, checked against the real responses in tests/fixtures/boosty:
 // dialogs `{data:[{id, chatmate:{id}, lastMessage:{id, createdAt}}], extra:{offset}}` and
-// messages `{data:[{id, authorId|author:{id}, createdAt, isDeleted, data:[{type:"text", content}]}]}`.
+// messages `{data:[{id, authorId, createdAt, isDeleted, data:[{type:"text", content}]}]}`.
 // Only that allowlisted subset is read; anything else in the body is ignored.
 import { record } from "./membership.ts";
 import { extractLinkCode } from "./boosty-link-code.ts";
@@ -22,7 +21,7 @@ function id(value: unknown): string | null {
 }
 
 /** Converts Boosty Unix seconds into a UTC millisecond timestamp, or null when absent or implausible. */
-function unixSeconds(value: unknown): string | null {
+export function unixSeconds(value: unknown): string | null {
     if (!Number.isSafeInteger(value) || (value as number) < 1_500_000_000 || (value as number) > 4_000_000_000) return null;
     return new Date((value as number) * 1000).toISOString();
 }
