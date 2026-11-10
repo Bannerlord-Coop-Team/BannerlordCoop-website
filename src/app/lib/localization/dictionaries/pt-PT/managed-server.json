@@ -170,8 +170,6 @@
   "configEditor.expectedExactlyServerconfigAndModconfig": "Eram esperados exatamente serverConfig e modConfig.",
   "configEditor.0TurnsAutosaveOff": "0 desativa a gravação automática.",
   "configEditor.battleSizeHelp": "Total de tropas dos dois lados de uma batalha.",
-  "configEditor.warSailsOn": "War Sails: Ativado — definido pela campanha ativa",
-  "configEditor.warSailsOff": "War Sails: Desativado — definido pela campanha ativa",
   "configEditor.serverSettings": "Definições do servidor",
   "configEditor.difficulty": "Dificuldade",
   "configEditor.gameplayOptions": "Opções de jogabilidade",

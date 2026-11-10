@@ -170,8 +170,6 @@
   "configEditor.expectedExactlyServerconfigAndModconfig": "对象必须且只能包含 serverConfig 和 modConfig。",
   "configEditor.0TurnsAutosaveOff": "设为 0 可关闭自动保存。",
   "configEditor.battleSizeHelp": "一场战斗中双方士兵的总数。",
-  "configEditor.warSailsOn": "War Sails：开 — 由当前战役决定",
-  "configEditor.warSailsOff": "War Sails：关 — 由当前战役决定",
   "configEditor.serverSettings": "服务器设置",
   "configEditor.difficulty": "难度",
   "configEditor.gameplayOptions": "游戏选项",

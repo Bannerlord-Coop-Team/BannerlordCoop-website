@@ -170,8 +170,6 @@
   "configEditor.expectedExactlyServerconfigAndModconfig": "serverConfigとmodConfigのみを指定してください。",
   "configEditor.0TurnsAutosaveOff": "0にすると自動保存が無効になります。",
   "configEditor.battleSizeHelp": "戦闘に参加する両軍の兵士の合計です。",
-  "configEditor.warSailsOn": "War Sails: オン — アクティブなキャンペーンによって設定されます",
-  "configEditor.warSailsOff": "War Sails: オフ — アクティブなキャンペーンによって設定されます",
   "configEditor.serverSettings": "サーバー設定",
   "configEditor.difficulty": "難易度",
   "configEditor.gameplayOptions": "ゲームプレイオプション",
