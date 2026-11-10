@@ -36,8 +36,7 @@ export type FundingProviderGrammar = {
 };
 
 // The provider registry, mirroring CP FUNDING_PROVIDER_GRAMMAR. `satisfies` makes a provider without an
-// entry a compile error. Patreon IDs are decimal (member is a UUID); Boosty names no member. The shared
-// fixture test/fixtures/cross-repo/funding-provider-contract-v1.json pins it and the SQL registry.
+// entry a compile error. Patreon IDs are decimal (member is a UUID); Boosty names no member.
 export const FUNDING_PROVIDER_GRAMMAR = {
     patreon: { userId: IDENTIFIER, programId: IDENTIFIER, tierId: IDENTIFIER, memberResource: "uuid", policyVersions: [POLICY_VERSION, ALLOCATION_POLICY_VERSION] },
     boosty: { userId: BOOSTY_IDENTIFIER, programId: BOOSTY_BLOG, tierId: BOOSTY_IDENTIFIER, memberResource: "none", policyVersions: [BOOSTY_POLICY_VERSION] },

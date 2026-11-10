@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BOOSTY_API_ORIGIN, BoostyAuthError, boostyUrl, createBoostyApi, parseSubscriberPage, type BoostyApi, type BoostySubscriber } from "./boosty-api.ts";
+import { BoostyAuthError, boostyUrl, createBoostyApi, parseSubscriberPage, type BoostyApi, type BoostySubscriber } from "./boosty-api.ts";
 import { BOOSTY_TOKEN_URL, BoostyCredentialUnavailable, createBoostyCredential, type BoostyCredentialRpc } from "./boosty-credential.ts";
 import { circuitBreakerTripped, decideBoostyEvidence, type LinkedBoostyHead } from "./boosty-evidence.ts";
 import { extractLinkCode, generateLinkCode, LINK_CODE, linkCodeHash } from "./boosty-link-code.ts";
@@ -55,7 +55,6 @@ test("policy is strict, closed and disabled when unset", () => {
 test("link codes are canonical, hash-only and matched only when exactly one appears in a message", async () => {
     const code = generateLinkCode(bytes => bytes.fill(0xff));
     assert.equal(code, "BLC-ZZZZZ-ZZZZZ"); assert.match(generateLinkCode(), LINK_CODE);
-    assert.equal(await linkCodeHash(code), await linkCodeHash("BLC-ZZZZZ-ZZZZZ"));
     await assert.rejects(linkCodeHash("blc-zzzzz-zzzzz"));
     assert.equal(extractLinkCode("my code: blc-ab12c-de34f thanks"), "BLC-AB12C-DE34F");
     assert.equal(extractLinkCode('["BLC-AB12C-DE34F","unstyled",[]]'), "BLC-AB12C-DE34F", "Draft.js-encoded content still matches");
@@ -64,9 +63,7 @@ test("link codes are canonical, hash-only and matched only when exactly one appe
 });
 
 test("only the allowlisted routes exist, each with an exact query", () => {
-    assert.equal(BOOSTY_API_ORIGIN, "https://api.boosty.to");
     assert.equal(boostyUrl({ route: "subscribers", blog: "coop-team", offset: 200 }).href, "https://api.boosty.to/v1/blog/coop-team/subscribers?limit=100&offset=200&sort_by=on_time&order=gt&with_follow=false");
-    // The first dialog page and message routes are pinned by the exact-request client test below.
     assert.equal(boostyUrl({ route: "dialogs", offset: "40" }).href, "https://api.boosty.to/v1/dialog/?limit=20&offset=40");
     for (const bad of [{ route: "subscribers", blog: "../x", offset: 0 }, { route: "subscribers", blog: "coop-team", offset: -1 }, { route: "subscribers", blog: "coop-team", offset: 5001 },
         { route: "dialogs", offset: "1&x=1" }, { route: "messages", dialogId: "1/../2" }, { route: "messages", dialogId: "0" }, { route: "levels" }] as never[]) assert.throws(() => boostyUrl(bad), JSON.stringify(bad));

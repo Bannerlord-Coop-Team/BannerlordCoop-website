@@ -232,13 +232,10 @@ the versions above, which stay byte-for-byte unchanged. The closed provider set 
 
 - `{"version":2,"operation":"snapshot","accountId":UUID,"provider":"patreon"|"boosty"}`
   returns the version 1 fields with `version:2`, `provider`, and
-  `providerUserId`/`programId` in place of `patreonUserId`/`campaignId`, validated
-  with the provider's grammar: Patreon user/campaign/tier IDs `^[1-9][0-9]{0,31}$` and a
-  UUID member; Boosty user/level IDs `^[1-9][0-9]{0,19}$`, a blog slug
-  `^[a-z0-9][a-z0-9_-]{0,31}$` and `memberId:null`; policy versions
-  `patreon-paid-usd20-v1`/`patreon-paid-usd50-v1` or `boosty-paid-v1`.
-  `paidAccessEndedAt` is present only when the evidence has it. A response for another
-  account or provider fails closed.
+  `providerUserId`/`programId` in place of `patreonUserId`/`campaignId`, validated with
+  the provider's identifier grammar and policy versions (Boosty: decimal user/level IDs,
+  a blog slug, `memberId:null`, `boosty-paid-v1`). `paidAccessEndedAt` is present only
+  when the evidence has it. A response for another account or provider fails closed.
 - A Patreon v2 snapshot is `membership_fence`'s v1 snapshot renamed field for field, with
   the same generation and revision, so the CP's v1 re-serialization hashes identically.
 - `{"version":3,"operation":"claim","claimId":UUID,"limit":1..50}` returns
@@ -247,113 +244,22 @@ the versions above, which stay byte-for-byte unchanged. The closed provider set 
   added; v2 claims keep omitting it. ACK v2 acknowledges hints claimed by either version.
 
 `20261109140000_membership_funding_providers.sql` keeps `membership_heads` as the
-Patreon head and the account anchor that Discord linking, completion receipts and the
-outbox reference, so every Patreon and Discord RPC keeps its behavior. Changing that
-table's key to `(account_id, provider)` would have required rebuilding three foreign
-keys, the global `patreon_user_id` uniqueness and every head-reading RPC. Other
-providers get `membership_provider_heads`, keyed by `(account_id, provider)`, with the
-same RLS and no client or service-role table grants. Outbox hints gain
-`provider` (existing rows become `patreon`) and are unique per
-`(account_id, provider, revision)`. The 8 ordinary + 1 reserved revocation hint bound
-now applies per provider, and an acknowledgement repairs the newest head of its own
-provider, so one provider's backlog cannot starve another's revocation.
+Patreon head and account anchor, so every Patreon and Discord RPC keeps its behavior.
+Other providers get `membership_provider_heads`, keyed by `(account_id, provider)`, with
+the same RLS and no client grants. Outbox hints gain `provider` (existing rows become
+`patreon`); the 8 + 1 revocation hint bound applies per provider, so one provider's
+backlog cannot starve another's revocation. A never-linked Boosty account answers a
+constant `unlinked` head at generation `"0"` without writing; an Auth deletion tombstones
+every provider head and refuses resurrection. Linking and evidence are described in
+[Boosty membership adapter](boosty-membership.md).
 
-A Boosty snapshot of a live account that never linked Boosty writes nothing and answers a
-constant `unlinked`/`unverified` head at generation and revision `"0"` with null
-identities. Linking (a one-time code sent by Boosty private message) and evidence polling
-are described in [Boosty membership adapter](boosty-membership.md). The generic
-`membership_provider_fence` is defined once, in the provider migration: under the
-account lock it reads the provider's current binding through
-`membership_provider_identity(account, provider)` and fences the head with the same
-`identity_changed`/`unlinked` rules as Patreon. The provider migration's lookup refuses
-every provider, so a live non-Patreon fence fails closed until an adapter is installed;
-`20261110120000_boosty_membership_adapter.sql` re-creates it with Boosty's branch
-(`boosty_membership.links`). A deleted account (Auth 404) creates an `account_deleted` tombstone at
-generation 1 with its own Boosty hint, and the Auth deletion trigger tombstones every
-existing provider head after the Patreon head. Both use the Patreon fence's account lock
-and refuse resurrection.
+Adding a provider means a new entry in `FUNDING_PROVIDER_GRAMMAR`, an account-surface
+entry, and a new append-only migration that widens the provider CHECKs and re-creates the
+SQL registry functions with every provider's branch. Keep ControlPlane's provider
+registry in step.
 
-#### Adding a funding provider
-
-The provider list, identifier grammars and policy versions are kept in one place per
-layer and checked against each other:
-
-- TypeScript: `FUNDING_PROVIDERS` and `FUNDING_PROVIDER_GRAMMAR` in
-  `_shared/funding-provider.ts` (`satisfies Record<FundingProvider, …>`, so a provider
-  without an entry fails to compile; the snapshot parser reads it).
-- SQL: the `provider` CHECKs on `membership_outbox` (every provider) and
-  `membership_provider_heads` (every non-Patreon provider),
-  `membership_provider_identifier_valid(provider, kind, value)` (the only SQL copy of the
-  user/program/tier patterns; adapter tables and RPCs call it instead of repeating them),
-  `membership_provider_policy_versions(provider)` (every accepted policy version, oldest
-  first, so stored evidence under an older version stays valid),
-  `membership_provider_empty_evidence(provider)` (empty evidence; `NULL` means "not a
-  provider") and `membership_provider_identity(account, provider)` (the current-link
-  lookup). Adapter tables check identifier columns with the helper, never a raw pattern.
-  Applied migrations are never edited: a new provider is a **new append-only migration**
-  that widens both CHECKs and re-creates all four functions with every existing
-  provider's branch plus its own. The drift test scans
-  `supabase/migrations` and replays every migration that names these objects, any
-  function it checks (including Patreon-era redefinitions of the fence, ack and
-  Auth-deletion functions), a non-Patreon provider id or its adapter schema, so the new
-  migration is covered automatically. Provider CHECKs must equal the generated
-  `provider = ANY (ARRAY[…])` definition exactly. It compares each registry function's whitespace-normalized body with
-  one generated from the fixture and the test's `ADAPTERS` entry (identity lookup and
-  empty-evidence version), pins the provider-neutral fence, notify, claim and ack bodies
-  by digest (a deliberate change updates the digest), and checks every one's language,
-  volatility, definer, `search_path` and EXECUTE grants, so a function re-created with
-  default `PUBLIC` EXECUTE fails.
-- Account surface, Edge: one entry in `fundingAccountSurfaces` (`_shared/website-account.ts`,
-  typed `Record<FundingProvider, …>`).
-- Account surface, wire names: derived as the provider id plus `-status`, `-start` and
-  `-unlink` (`_shared/funding-account.ts`). Patreon's legacy unprefixed `status`/`unlink`
-  is the single explicit exception.
-- Account surface, page: one section in `src/app/account/funding-sections.tsx`.
-- Account surface, disconnect: one explanation in `DisconnectAccount.tsx`.
-- `test/fixtures/cross-repo/funding-provider-contract-v1.json` is byte-identical to
-  ControlPlane's copy at the same path; `tests/funding-provider-contract.test.ts` pins its
-  SHA-256 and checks the TypeScript registry, the snapshot parser and the SQL registry
-  above against it. Change both repositories together, as below.
-
-**Fixture version policy.** Adding a provider, or changing a pattern, member rule or
-policy version, edits `funding-provider-contract-v1.json` in place in both repositories
-in one paired change and updates both digest pins (`CONTRACT_SHA256` in ControlPlane's
-`test/hosting-funding-provider-contract.test.ts` and in the website's
-`tests/funding-provider-contract.test.ts`); ControlPlane's paired harness
-`test/manual/website-membership-fixture.ts` also requires the two copies to be equal.
-Only a change to the fixture's own shape (a field added, renamed or re-typed) bumps
-`fixtureVersion`: the file is renamed to `-v2.json` and both tests' path, version and
-digest constants and the harness's `FUNDING_PROVIDER_CONTRACT` path change together.
-The tests enforce exactly this: they pin `fixtureVersion` 1, the `-v1.json` path and
-the digest.
-
-**Pattern and migration rules.** Registry patterns must contain no `'` or `\`: the
-website drift test generates the expected SQL bodies from the fixture and refuses both
-(write a literal dot as `[.]`, a digit as `[0-9]`). They must also be anchored and
-bounded, built only from literals and character classes with optional `?` or `{m,n}`
-quantifiers, with no groups, alternation, `*`, `+` or `{m,}`: ControlPlane's
-`longestMatch` refuses anything else, and the longest match must fit the 32-character
-`campaign_key`, `patreon_user_id` and `campaign_id` columns. Every website migration the
-drift test replays (any migration naming a registry object, a checked function, a
-non-Patreon provider id or its adapter schema) must apply in PGlite, so top-level
-`cron.schedule`, `create extension` and similar platform statements belong in a separate
-migration that names none of those.
-
-A deployed control plane rejects a whole version 3 claim page if any hint names a
-provider it does not know, stalling every provider's hints; and a control plane that knows
-the provider but whose policy has no entry for it never acknowledges that provider's
-hints. The control plane must be **deployed with the provider in its policy before** this
-website enables the provider's adapter: apply its CP migration, deploy the CP, add the
-policy entry, then enable the website adapter. `refreshMode` is `oauth_reauthorization` for every provider today
-and the 24-hour freshness window assumes daily evidence re-reads (Patreon webhooks,
-Boosty's 30-minute poll). A webhook-only provider such as Ko-fi would need a
-per-provider refresh mode and a daily re-assertion job; that is future work.
-Also future work: `memberResource` is `"uuid" | "none"`; a provider whose member
-resource is not a UUID would need a per-provider member pattern in the registry, the
-fixture and the SQL helper.
-
-Rollout, one sequence shared with ControlPlane's `membership-onboarding.md`
-(Configuration and rollout gates); each step is separately authorized:
+Rollout, one sequence shared with ControlPlane's `membership-onboarding.md`; each step is
+separately authorized:
 
 1. ControlPlane applies its migration 129 (`20261109130000_control_plane_funding_providers.sql`)
    and deploys; with its legacy policy it still speaks wire version 1.
@@ -361,27 +267,21 @@ Rollout, one sequence shared with ControlPlane's `membership-onboarding.md`
    `20261110120000_boosty_membership_adapter.sql` and
    `20261111120000_patreon_lapse_report_patreon_funding.sql` (which reads the provider
    columns of migration 129, so it must follow it) and deploys the
-   `control-plane-membership-v1` Edge function. The Boosty adapter stays inert:
+   `control-plane-membership-v1` Edge function. Boosty stays inert:
    `BOOSTY_MEMBERSHIP_POLICY_JSON` and `BOOSTY_LINKING_ENABLED` unset, dispatch disabled.
-3. ControlPlane mirrors those three applied website migrations in
-   `ALREADY_APPLIED_EXTERNAL_MIGRATIONS` with exact bytes and provenance before its next
-   migration release; its release helper refuses unknown remote versions until then.
-4. ControlPlane switches to its provider-list policy with Patreon only, proving the
-   version 2 / version 3 exchange. Before that switch a v2 claim may deliver a Boosty
-   tombstone hint without its provider; the old CP treats it as a Patreon hint, reads the
-   current Patreon snapshot and acknowledges it, which is safe.
+3. ControlPlane mirrors those three website migrations in
+   `ALREADY_APPLIED_EXTERNAL_MIGRATIONS` before its next migration release.
+4. ControlPlane switches to its provider-list policy with Patreon only.
 5. ControlPlane adds the Boosty entry to its policy.
 6. Only then this website commissions Boosty ([Boosty membership adapter](boosty-membership.md#commissioning)):
-   `BOOSTY_MEMBERSHIP_POLICY_JSON`, the creator credential, dispatch, `BOOSTY_LINKING_ENABLED`,
-   and a test link confirmed through the control plane's Boosty snapshot.
+   `BOOSTY_MEMBERSHIP_POLICY_JSON`, the creator credential, dispatch, then
+   `BOOSTY_LINKING_ENABLED`.
 
-A Boosty hint claimed by a control plane whose policy has no Boosty entry fails with
-"Membership provider is not enabled" and is never acknowledged. The synchronizer passes
-it over on every cycle, the account's pending Boosty hints reach the website's 8 + 1
-per-provider bound, and that account's Boosty link calls then fail with `PT429`. So the
-CP policy must list Boosty **before** the website can emit any Boosty hint, and Boosty
-stays in the CP policy for as long as Boosty heads or hints can exist. To withdraw Boosty, disable linking and dispatch here first; ControlPlane
-removes its entry only after no Boosty head or unacknowledged Boosty hint remains.
+The CP policy must list Boosty before the website emits any Boosty hint: a control plane
+without the entry never acknowledges Boosty hints, so the account's pending hints hit the
+per-provider bound and its Boosty link calls fail with `PT429`. To withdraw Boosty,
+disable linking and dispatch here first; ControlPlane removes its entry only after no
+Boosty head or unacknowledged Boosty hint remains.
 
 Website account operations overlap fresh Auth-user and session-context checks.
 Both must succeed, with any impersonation target matching the verified user,
