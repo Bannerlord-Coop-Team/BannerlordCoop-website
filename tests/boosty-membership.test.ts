@@ -1,15 +1,15 @@
 // Embedded PostgreSQL runs the real Boosty adapter migration on a populated membership schema,
 // then drives the real worker, website-account and CP handlers against it. No Boosty contact.
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 import { createControlPlaneMembershipHandler } from "../supabase/functions/_shared/control-plane-membership";
 import { parseFundingSnapshot } from "../supabase/functions/_shared/funding-provider";
 import { createBoostyMembershipHandler, type BoostyAdapter } from "../supabase/functions/_shared/boosty-membership";
-import { linkCodeHash } from "../supabase/functions/_shared/boosty-link-code";
 import { createWebsiteAccountHandler } from "../supabase/functions/_shared/website-account";
-import { parseBoostyLinkStatus } from "../supabase/functions/_shared/boosty-account";
+import { parseBoostyStatus } from "../supabase/functions/_shared/boosty-account";
 import type { BoostyApi, BoostySubscriber } from "../supabase/functions/_shared/boosty-api";
 import type { BoostyCredential } from "../supabase/functions/_shared/boosty-credential";
 import type { BoostyPolicy } from "../supabase/functions/_shared/boosty-policy";
@@ -20,7 +20,7 @@ const history = ["20260907212654_create_patreon_links.sql", "20260907220000_patr
     "202609220001_patreon_allocation_webhooks.sql", "202609280003_account_owned_membership.sql", "202609280006_membership_paid_access_end.sql",
     "202610020001_membership_allocation_usd20.sql", "20261009170000_patreon_creator_token_refresh.sql", "20261109140000_membership_funding_providers.sql"];
 const migration = "20261110120000_boosty_membership_adapter.sql";
-const policy: BoostyPolicy = { blog: "coop-team", qualifyingLevelIds: ["555"], minimumPrice: 500, priceField: "RUB", creatorName: "Coop Team", maximumDropFraction: 0.25, policyVersion: "boosty-paid-v1" };
+const policy: BoostyPolicy = { blog: "coop-team", qualifyingLevelIds: ["555"], minimumPrice: 500, priceField: "RUB", maximumDropFraction: 0.25, policyVersion: "boosty-paid-v1" };
 const syncToken = "a".repeat(64), syncSecret = "boosty-sync-secret-fixture";
 const vault = `create schema vault;
     create table vault.secrets(id uuid primary key default gen_random_uuid(), name text unique, description text, secret text);
@@ -31,35 +31,38 @@ const vault = `create schema vault;
     returns void language sql as $$ update vault.secrets set secret = coalesce(new_secret, secret) where id = secret_id; $$;`;
 type Row = Record<string, unknown>;
 
+/** Hashes an email the way the worker does: trimmed and lower-cased. */
+const emailHash = (email: string) => createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
+
 /** Builds a qualifying listed subscriber for the fixture policy. */
-function subscriber(id: string, overrides: Partial<BoostySubscriber> = {}): BoostySubscriber {
-    return { id, subscribed: true, status: "active", offTime: null, blacklisted: false, levelId: "555", price: 500, ...overrides };
+function subscriber(id: string, email: string, overrides: Partial<BoostySubscriber> = {}): BoostySubscriber {
+    return { id, emailSha256: emailHash(email), subscribed: true, status: "active", offTime: null, blacklisted: false, levelId: "555", price: 500, ...overrides };
 }
 
-test("Boosty adapter links DM codes, decides evidence conservatively and serves CP v2 snapshots", async t => {
+test("Boosty adapter links by email, decides evidence conservatively and serves CP v2 snapshots", async t => {
     const db = new PGlite();
     // Positional SQL and RPC helpers over the embedded database.
     const query = (sql: string, args: unknown[] = []) => db.query<Row>(sql, args);
     const rpc = async (name: string, args: unknown[]) => (await query(`select public.${name}(${args.map((_, i) => `$${i + 1}`).join(",")}) result`, args)).rows[0].result as Row;
     const sync = async (operation: string, input: Row) => (await query("select public.boosty_membership_sync($1,$2::jsonb) result", [operation, JSON.stringify(input)])).rows[0].result as Row | null;
-    // Creates a website account with an initialized Patreon head.
-    const fresh = async () => { const id = crypto.randomUUID(); await query("insert into auth.users(id) values($1)", [id]); await rpc("membership_fence", [id, null, false]); return id; };
-    // Issues a link code for an account and returns the code and its hash.
-    const issue = async (account: string, code = `BLC-${crypto.randomUUID().replace(/[^0-9a-f]/gu, "").slice(0, 5).toUpperCase().replace(/[ILOU]/gu, "7")}-ABCDE`) => {
-        await rpc("boosty_link_begin", [account, null, await linkCodeHash(code)]);
-        return { code, hash: await linkCodeHash(code) };
-    };
+    // Creates a website account with an initialized Patreon head and the given Auth email.
+    const fresh = async (email: string | null = null) => { const id = crypto.randomUUID(); await query("insert into auth.users(id,email) values($1,$2)", [id, email]); await rpc("membership_fence", [id, null, false]); return id; };
     // Runs one leased worker operation sequence and always releases the lease.
     const leased = async <T>(work: (token: string) => Promise<T>) => {
         const lease = await sync("acquire", { blog: policy.blog });
         assert.ok(lease && typeof lease.token === "string");
         try { return await work(lease.token as string); } finally { await sync("release", { token: lease.token }); }
     };
-    // Links one account to one Boosty user through the worker's link operation.
+    // Sends listed subscribers (Boosty user id, email) to the worker's match operation.
+    const match = (listed: [string, string][]) => leased(token => sync("match", { token, subscribers: listed.map(([boostyUserId, email]) => ({ boostyUserId, emailSha256: emailHash(email) })) }));
+    // Links one account to one Boosty user through an email match.
     const linkThrough = async (account: string, boostyUserId: string) => {
-        const { hash } = await issue(account);
-        return leased(token => sync("link", { token, dialogId: Number(boostyUserId), cursor: 10, matches: [{ messageId: 10, boostyUserId, codeHash: hash, messageAt: null }] }));
+        const email = `${boostyUserId}@example.invalid`;
+        await query("update auth.users set email=$2 where id=$1", [account, email]);
+        assert.deepEqual(await match([[boostyUserId, email]]), { linked: 1, released: 0 });
     };
+    // Reads the account's Boosty head, or undefined when none was written.
+    const head = async (account: string) => (await query("select link_state, link_generation::text, revision::text, provider_user_id, evidence->>'verification' verification from public.membership_provider_heads where account_id=$1 and provider='boosty'", [account])).rows[0];
     const deleted = new Set<string>();
     // Serves Auth admin lookups from the fixture and forwards closed RPC names to the embedded database.
     const edgeFetch: typeof fetch = async (input, init) => {
@@ -69,7 +72,7 @@ test("Boosty adapter links DM codes, decides evidence conservatively and serves 
         if (path === "/auth/v1/user") return Response.json({ id: viewer, identities: [] });
         if (path === "/rest/v1/rpc/website_session_context") return Response.json({ impersonationId: null });
         const name = path.replace("/rest/v1/rpc/", "");
-        assert.ok(["membership_funding_fence", "boosty_link_status", "boosty_link_begin", "boosty_unlink"].includes(name), name);
+        assert.equal(name, "membership_funding_fence");
         try { return Response.json(await rpc(name, Object.values(JSON.parse(String(init?.body))))); }
         catch (error) { return Response.json({ code: (error as { code?: string }).code ?? "XX000", message: "refused" }, { status: (error as { code?: string }).code === "PT429" ? 429 : 400 }); }
     };
@@ -101,66 +104,47 @@ test("Boosty adapter links DM codes, decides evidence conservatively and serves 
             assert.equal((await rpc("membership_funding_fence", [tombstoned, "boosty", null, true])).linkState, "account_deleted");
         });
 
-        await t.test("link codes: one pending per account, 5 per hour, hash-only storage and linked accounts refused", async () => {
-            const id = await fresh();
-            const first = await issue(id, "BLC-AAAAA-AAAAA");
-            let status = await rpc("boosty_link_status", [id, null, first.hash]);
-            assert.equal((status.pending as Row).matches, true);
-            await issue(id, "BLC-BBBBB-BBBBB");
-            status = await rpc("boosty_link_status", [id, null, first.hash]);
-            assert.equal((status.pending as Row).matches, false, "a new code replaces the pending one");
-            assert.equal((await query("select count(*)::int n from boosty_membership.link_codes where code_hash like 'BLC%'")).rows[0].n, 0, "only hashes are stored");
-            for (const code of ["BLC-CCCCC-CCCCC", "BLC-DDDDD-DDDDD", "BLC-EEEEE-EEEEE"]) await issue(id, code);
-            await assert.rejects(issue(id, "BLC-FFFFF-FFFFF"), { code: "PT429" });
-            await query("update boosty_membership.link_codes set window_started_at=window_started_at-interval '61 minutes' where account_id=$1", [id]);
-            await issue(id, "BLC-FFFFF-FFFFF");
-            await query("update boosty_membership.link_codes set expires_at=clock_timestamp()-interval '1 second', issued_at=clock_timestamp()-interval '31 minutes' where account_id=$1", [id]);
-            assert.equal((await rpc("boosty_link_status", [id, null, null])).pending, null, "an expired code is not pending");
-            await linkThrough(await fresh(), "9100").then(async () => {
-                const linked = (await query("select account_id from boosty_membership.links where boosty_user_id='9100'")).rows[0].account_id as string;
-                await assert.rejects(issue(linked, "BLC-GGGGG-GGGGG"), /already linked/u);
-            });
-        });
-
-        await t.test("an exact pending code links the sender, bumps generation and emits a Boosty hint", async () => {
-            const id = await fresh();
-            const result = await linkThrough(id, "4242");
-            assert.deepEqual(result, { linked: 1, refused: 0 });
-            const head = (await query("select link_state, link_generation::text, revision::text, provider_user_id, evidence->>'verification' verification from public.membership_provider_heads where account_id=$1", [id])).rows[0];
-            assert.deepEqual(head, { link_state: "linked", link_generation: "1", revision: "1", provider_user_id: "4242", verification: "unknown" });
+        await t.test("an email match links case- and whitespace-insensitively, bumps generation and emits a Boosty hint", async () => {
+            const id = await fresh("Fan@Example.INVALID");
+            assert.deepEqual(await match([["4242", "  fan@example.invalid "]]), { linked: 1, released: 0 });
+            assert.deepEqual(await head(id), { link_state: "linked", link_generation: "1", revision: "1", provider_user_id: "4242", verification: "unknown" });
             assert.deepEqual((await query("select provider, revision::text from public.membership_outbox where account_id=$1 and receipt_id is null", [id])).rows, [{ provider: "boosty", revision: "1" }]);
             const snapshot = await cpSnapshot(id);
             assert.equal(snapshot.linkState, "linked"); assert.equal(snapshot.providerUserId, "4242"); assert.equal(snapshot.verification, "unknown");
-            assert.equal((await query("select next_poll_at <= clock_timestamp() due from boosty_membership.sync_state")).rows[0].due, true, "linking schedules a poll");
+            assert.deepEqual(await match([["4242", "fan@example.invalid"]]), { linked: 0, released: 0 }, "a repeated match is a no-op");
+            const stranger = await fresh("stranger@example.invalid");
+            assert.deepEqual(await match([["4343", "nobody@example.invalid"]]), { linked: 0, released: 0 });
+            assert.equal(await head(stranger), undefined, "no match leaves the account unlinked");
+            await assert.rejects(match([["0", "x@example.invalid"]]), /invalid_boosty_subscribers/u);
         });
 
-        await t.test("expired, unknown and superseded codes never link; a Boosty user bound elsewhere is refused, not moved", async () => {
-            const owner = await fresh(), other = await fresh();
-            await linkThrough(owner, "7777");
-            const { hash } = await issue(other);
-            assert.deepEqual(await leased(token => sync("link", { token, dialogId: 77, cursor: 20, matches: [{ messageId: 20, boostyUserId: "7777", codeHash: hash, messageAt: null }] })), { linked: 0, refused: 1 });
+        await t.test("an email shared by two accounts links neither, and a linked Boosty user is not moved", async () => {
+            const first = await fresh("twin@example.invalid"), second = await fresh("TWIN@example.invalid");
+            assert.deepEqual(await match([["7070", "twin@example.invalid"]]), { linked: 0, released: 0 });
+            assert.deepEqual([await head(first), await head(second)], [undefined, undefined]);
+            const owner = await fresh("owner@example.invalid");
+            assert.deepEqual(await match([["7777", "owner@example.invalid"]]), { linked: 1, released: 0 });
+            const copycat = await fresh("owner@example.invalid");
+            assert.deepEqual(await match([["7777", "owner@example.invalid"]]), { linked: 0, released: 0 }, "a second account with the same email changes nothing");
             assert.equal((await query("select account_id from boosty_membership.links where boosty_user_id='7777'")).rows[0].account_id, owner);
-            assert.equal((await rpc("boosty_link_status", [other, null, null])).outcome, "conflict");
-            const late = await fresh(), lateCode = await issue(late);
-            await query("update boosty_membership.link_codes set issued_at=clock_timestamp()-interval '40 minutes', expires_at=clock_timestamp()-interval '10 minutes' where account_id=$1", [late]);
-            assert.deepEqual(await leased(token => sync("link", { token, dialogId: 78, cursor: 1, matches: [{ messageId: 1, boostyUserId: "7878", codeHash: lateCode.hash, messageAt: null }] })), { linked: 0, refused: 0 });
-            const sentInTime = new Date(Date.now() - 20 * 60_000).toISOString();
-            assert.deepEqual(await leased(token => sync("link", { token, dialogId: 78, cursor: 2, matches: [{ messageId: 2, boostyUserId: "7878", codeHash: lateCode.hash, messageAt: sentInTime }] })), { linked: 1, refused: 0 }, "a message sent while live links within the grace hour");
-            const unknown = await linkCodeHash("BLC-ZZZZZ-ZZZZZ");
-            assert.deepEqual(await leased(token => sync("link", { token, dialogId: 79, cursor: 1, matches: [{ messageId: 1, boostyUserId: "7979", codeHash: unknown, messageAt: null }] })), { linked: 0, refused: 0 });
-            const raced = await fresh(), racedCode = await issue(raced);
-            await query("insert into public.membership_provider_heads(account_id,provider,link_generation,revision,evidence) values($1,'boosty',3,3,public.membership_provider_empty_evidence('boosty'))", [raced]);
-            assert.deepEqual(await leased(token => sync("link", { token, dialogId: 80, cursor: 1, matches: [{ messageId: 1, boostyUserId: "8080", codeHash: racedCode.hash, messageAt: null }] })), { linked: 0, refused: 1 });
-            assert.equal((await rpc("boosty_link_status", [raced, null, null])).outcome, "superseded");
+            assert.equal(await head(copycat), undefined);
+            assert.deepEqual(await match([["7878", "owner@example.invalid"]]), { linked: 0, released: 0 }, "the email now belongs to two accounts");
+            assert.deepEqual(await match([]), { linked: 0, released: 0 }, "an unlisted subscriber keeps its link");
+            assert.equal((await head(owner)).link_state, "linked");
         });
 
-        await t.test("dialog cursors read only new messages and skip dialogs whose newest message is over an hour old", async () => {
-            const old = new Date(Date.now() - 2 * 3_600_000).toISOString(), recent = new Date().toISOString();
-            const due = await leased(token => sync("dialogs", { token, dialogs: [{ dialogId: 501, lastMessageId: 9, lastMessageAt: old }, { dialogId: 502, lastMessageId: 9, lastMessageAt: recent }, { dialogId: 503, lastMessageId: 4, lastMessageAt: null }] }));
-            assert.deepEqual(due, { due: [{ dialogId: 502, cursor: 0 }, { dialogId: 503, cursor: 0 }] });
-            await leased(token => sync("link", { token, dialogId: 502, cursor: 9, matches: [] }));
-            assert.deepEqual(await leased(token => sync("dialogs", { token, dialogs: [{ dialogId: 501, lastMessageId: 9, lastMessageAt: recent }, { dialogId: 502, lastMessageId: 9, lastMessageAt: recent }] })), { due: [] });
-            await assert.rejects(leased(token => sync("link", { token, dialogId: 502, cursor: 9, matches: [{ messageId: 10, boostyUserId: "1", codeHash: "a".repeat(64), messageAt: null }] })), /invalid_boosty_match/u);
+        await t.test("an email change releases the link through the unlink fence, then the new owner of the email links", async () => {
+            const before = await fresh("mover@example.invalid");
+            await match([["6060", "mover@example.invalid"]]);
+            await query("update auth.users set email='moved@example.invalid' where id=$1", [before]);
+            const next = await fresh("mover@example.invalid");
+            assert.deepEqual(await match([["6060", "mover@example.invalid"]]), { linked: 1, released: 1 });
+            assert.deepEqual(await head(before), { link_state: "unlinked", link_generation: "2", revision: "2", provider_user_id: null, verification: "unverified" });
+            assert.deepEqual((await query("select revision::text from public.membership_outbox where account_id=$1 and provider='boosty' and receipt_id is null order by sequence", [before])).rows.map(row => row.revision), ["1", "2"]);
+            assert.deepEqual([(await head(next)).link_state, (await head(next)).provider_user_id], ["linked", "6060"]);
+            await query("update auth.users set email='elsewhere@example.invalid' where id=$1", [next]);
+            assert.deepEqual(await match([["6060", "Mover@example.invalid"]]), { linked: 0, released: 1 }, "an email change on either side releases");
+            assert.equal((await cpSnapshot(next)).linkState, "unlinked");
         });
 
         await t.test("evidence writes are validated, fenced by link generation and satisfy the CP Boosty grammar", async () => {
@@ -209,12 +193,8 @@ test("Boosty adapter links DM codes, decides evidence conservatively and serves 
             await query("update boosty_membership.sync_state set last_complete_count=null, next_poll_at='-infinity'");
         });
 
-        await t.test("unlink and Auth deletion release the binding and fence the head", async () => {
-            const id = await fresh(); viewer = id;
-            await linkThrough(id, "5151");
-            const unlinked = await rpc("boosty_unlink", [id, null]);
-            assert.deepEqual([unlinked.linkState, unlinked.linkGeneration, unlinked.providerUserId], ["unlinked", "2", null]);
-            assert.equal((await query("select count(*)::int n from boosty_membership.links where account_id=$1", [id])).rows[0].n, 0);
+        await t.test("Auth deletion releases the binding and tombstones the head", async () => {
+            const id = await fresh();
             await linkThrough(id, "5151");
             await query("delete from auth.users where id=$1", [id]); deleted.add(id);
             assert.equal((await query("select count(*)::int n from boosty_membership.links where boosty_user_id='5151'")).rows[0].n, 0);
@@ -233,53 +213,42 @@ test("Boosty adapter links DM codes, decides evidence conservatively and serves 
             assert.deepEqual(await credential("failed", { generation: 2, reason: "unavailable" }), { recorded: true, alert: false });
         });
 
-        await t.test("the worker links a DM code, polls a complete list and the CP sees qualifying evidence", async () => {
-            const id = await fresh(); viewer = id;
+        await t.test("the worker links by email, polls a complete list and the CP sees qualifying evidence", async () => {
+            const id = await fresh("Supporter@Example.invalid"); viewer = id;
+            const shared = await fresh("dup@example.invalid");
             const account = createWebsiteAccountHandler({ supabaseUrl: "https://wfvqnijwuyqjibhlcrhz.supabase.co", serviceRoleKey: "synthetic-service-key", policy: null, boosty: policy, fetch: edgeFetch });
-            // Sends one authenticated website-account request as the fixture viewer.
-            const accountCall = async (body: unknown) => {
-                const response = await account(new Request("https://edge-runtime.supabase.com/website-account", { method: "POST", headers: { Authorization: "Bearer synthetic-user-jwt", "Content-Type": "application/json" }, body: JSON.stringify(body) }));
-                return { status: response.status, body: await response.json() as Row };
+            // Reads the fixture viewer's public Boosty status through the real website-account handler.
+            const status = async () => {
+                const response = await account(new Request("https://edge-runtime.supabase.com/website-account", { method: "POST", headers: { Authorization: "Bearer synthetic-user-jwt", "Content-Type": "application/json" }, body: JSON.stringify({ operation: "boosty-status" }) }));
+                return parseBoostyStatus(await response.json());
             };
-            const started = await accountCall({ operation: "boosty-start" });
-            assert.equal(started.status, 200);
-            const code = started.body.code as string;
-            assert.match(code, /^BLC-[0-9A-HJKMNP-TV-Z]{5}-[0-9A-HJKMNP-TV-Z]{5}$/u);
-            const pending = parseBoostyLinkStatus((await accountCall({ operation: "boosty-status", code })).body);
-            assert.ok(pending.configured && pending.pending?.matches === true && !pending.linked && pending.creatorName === "Coop Team");
-            const now = Math.floor(Date.now() / 1000);
-            const subscribers = new Map<string, BoostySubscriber>([["8888", subscriber("8888")]]);
+            assert.deepEqual(await status(), { version: 1, configured: true, linked: false, verification: "unverified" });
+            // Two subscribers sharing one email are ambiguous: neither links.
+            const subscribers = new Map<string, BoostySubscriber>([["8888", subscriber("8888", "supporter@example.invalid")],
+                ["9991", subscriber("9991", "dup@example.invalid")], ["9992", subscriber("9992", "dup@example.invalid")]]);
             const calls: string[] = [];
-            const api: BoostyApi = {
-                dialogs: async offset => { calls.push(`dialogs:${offset}`); return { dialogs: [{ dialogId: "900", chatmateId: "8888", lastMessageId: "31", lastMessageAt: new Date(now * 1000).toISOString() }], nextOffset: null }; },
-                messages: async dialogId => { calls.push(`messages:${dialogId}`); return [
-                    { messageId: "30", authorId: "1", messageAt: null, code }, // the creator's own reply never links
-                    { messageId: "31", authorId: "8888", messageAt: null, code }]; },
-                subscribers: async offset => { calls.push(`subscribers:${offset}`); return { subscribers: [...subscribers.values()], total: subscribers.size }; },
-            };
+            const api: BoostyApi = { subscribers: async offset => { calls.push(`subscribers:${offset}`); return { subscribers: [...subscribers.values()], total: subscribers.size }; } };
             const credential: BoostyCredential = { current: async () => "access", replace: async () => null, reportFailure: async () => undefined };
             const adapter: BoostyAdapter = { policy, credential, api };
             const alerts: string[] = [];
             const worker = createBoostyMembershipHandler({ adapter, syncSecret, rpc: sync, alert: async kind => { alerts.push(kind); } });
             const wake = () => worker(new Request("https://edge-runtime.supabase.com/boosty-membership", { method: "POST", headers: { "x-boosty-sync-key": syncSecret } }));
             assert.equal((await wake()).status, 200);
-            assert.deepEqual(calls, ["dialogs:null", "messages:900", "subscribers:0"]);
-            const linked = parseBoostyLinkStatus((await accountCall({ operation: "boosty-status" })).body);
-            assert.ok(linked.configured && linked.linked && linked.verification === "qualifying");
+            assert.deepEqual(calls, ["subscribers:0"]);
+            assert.deepEqual(await status(), { version: 1, configured: true, linked: true, verification: "qualifying" }, "linked and decided in the same poll");
             const snapshot = await cpSnapshot(id);
             assert.deepEqual([snapshot.providerUserId, snapshot.verification, snapshot.tierIds, snapshot.programId], ["8888", "qualifying", ["555"], "coop-team"]);
-            // Not due again: the next wake reads dialogs only.
-            calls.length = 0; assert.equal((await wake()).status, 200); assert.deepEqual(calls, ["dialogs:null"]);
+            assert.equal(await head(shared), undefined);
+            // Not due again: the next wake reads nothing from Boosty.
+            calls.length = 0; assert.equal((await wake()).status, 200); assert.deepEqual(calls, []);
             // A lapsed subscriber stays listed as inactive; its past offTime is the confirmed loss.
             await query("update boosty_membership.sync_state set next_poll_at='-infinity'");
             const offTime = new Date(Date.now() - 3_600_000).toISOString();
-            subscribers.set("8888", subscriber("8888", { subscribed: false, status: "inactive", offTime }));
+            subscribers.set("8888", subscriber("8888", "supporter@example.invalid", { subscribed: false, status: "inactive", offTime }));
             assert.equal((await wake()).status, 200);
             const lapsed = await cpSnapshot(id);
             assert.deepEqual([lapsed.verification, lapsed.tierIds, lapsed.paidAccessEndedAt], ["nonqualifying", [], offTime]);
             assert.deepEqual(alerts, []);
-            assert.deepEqual((await accountCall({ operation: "boosty-unlink" })).body, { unlinked: true });
-            assert.equal((await cpSnapshot(id)).linkState, "unlinked");
         });
 
         await t.test("the cron dispatcher posts one authenticated wakeup only when enabled and configured", async () => {
@@ -301,7 +270,7 @@ test("Boosty adapter links DM codes, decides evidence conservatively and serves 
 
         await t.test("client roles cannot execute the private membership functions", async () => {
             for (const role of ["anon", "authenticated"]) {
-                for (const fn of ["membership_funding_fence(uuid,text,text,boolean)", "membership_funding_claim(uuid,integer)", "boosty_link_begin(uuid,text,text)", "boosty_membership_sync(text,jsonb)", "boosty_creator_credential(text,jsonb)"]) {
+                for (const fn of ["membership_funding_fence(uuid,text,text,boolean)", "membership_funding_claim(uuid,integer)", "boosty_membership_sync(text,jsonb)", "boosty_creator_credential(text,jsonb)"]) {
                     assert.equal((await query("select has_function_privilege($1,$2,'execute') allowed", [role, `public.${fn}`])).rows[0].allowed, false, `${role} ${fn}`);
                 }
             }

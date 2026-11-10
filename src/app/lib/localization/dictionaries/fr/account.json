@@ -45,19 +45,8 @@
   "disconnect.cancel": "Annuler",
   "loading.label": "Chargement du compte",
   "loading.status": "Chargement du compte…",
-  "boosty.benefits": "Associez votre abonnement Boosty pour l’utiliser pour les avantages de membre et votre quota de serveurs.",
-  "boosty.linked": "Votre compte Boosty est associé.",
+  "boosty.linked": "Votre abonnement Boosty est associé via l’adresse e-mail de votre compte.",
+  "boosty.notFound": "Aucun abonnement Boosty n’utilise l’adresse e-mail de ce compte. Pour en associer un, abonnez-vous sur Boosty avec la même adresse e-mail.",
   "boosty.nonqualifying": "Votre abonnement Boosty n’inclut pas de niveau éligible.",
-  "boosty.checking": "Votre adhésion Boosty sera vérifiée sous peu.",
-  "boosty.start": "Obtenir un code d’association Boosty",
-  "boosty.restart": "Obtenir un nouveau code",
-  "boosty.startPending": "Création du code…",
-  "boosty.codeLabel": "Votre code d’association",
-  "boosty.codeInstructions": "Envoyez ce code en message privé à {creator} sur Boosty, depuis le compte Boosty avec lequel vous êtes abonné. Il expire à {expiresAt}. L’association se termine généralement dans les dix minutes suivant votre message.",
-  "boosty.codeWaiting": "Un code d’association attend votre message. Si vous ne l’avez plus, obtenez un nouveau code.",
-  "boosty.conflict": "Ce compte Boosty est déjà associé à un autre compte du site. Dissociez-le d’abord là-bas, puis obtenez un nouveau code.",
-  "boosty.superseded": "Ce code n’est plus valide. Obtenez un nouveau code pour réessayer.",
-  "boosty.error": "Impossible de créer un code d’association Boosty. Vérifiez votre connexion actuelle ci-dessous avant de réessayer.",
-  "boosty.disconnectError": "Impossible de déconnecter Boosty. Attendez l’état actuel avant de réessayer.",
-  "disconnect.boostyExplanation": "La déconnexion retire l’éligibilité de l’adhésion Boosty pour les nouveaux serveurs. Les serveurs existants et les attributions administratives ne sont pas supprimés."
+  "boosty.checking": "Votre adhésion Boosty sera vérifiée sous peu."
 }

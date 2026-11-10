@@ -45,19 +45,8 @@
   "disconnect.cancel": "キャンセル",
   "loading.label": "アカウントを読み込み中",
   "loading.status": "アカウントを読み込み中…",
-  "boosty.benefits": "Boosty のサブスクリプションをリンクすると、メンバー特典とサーバー枠に利用できます。",
-  "boosty.linked": "Boosty アカウントはリンクされています。",
+  "boosty.linked": "Boosty のサブスクリプションはアカウントのメールアドレスでリンクされています。",
+  "boosty.notFound": "このアカウントのメールアドレスを使う Boosty のサブスクリプションはありません。リンクするには、同じメールアドレスで Boosty に登録してください。",
   "boosty.nonqualifying": "Boosty のサブスクリプションに対象のレベルが含まれていません。",
-  "boosty.checking": "Boosty のメンバーシップはまもなく確認されます。",
-  "boosty.start": "Boosty のリンクコードを取得",
-  "boosty.restart": "新しいコードを取得",
-  "boosty.startPending": "コードを作成中…",
-  "boosty.codeLabel": "リンクコード",
-  "boosty.codeInstructions": "このコードを、購読している Boosty アカウントから Boosty の {creator} へプライベートメッセージとして送信してください。有効期限は {expiresAt} です。通常、メッセージ送信から 10 分以内にリンクが完了します。",
-  "boosty.codeWaiting": "リンクコードがメッセージを待っています。コードが手元にない場合は、新しいコードを取得してください。",
-  "boosty.conflict": "その Boosty アカウントは既に別のウェブサイトアカウントにリンクされています。先にそちらで接続を解除してから、新しいコードを取得してください。",
-  "boosty.superseded": "そのコードは無効になりました。新しいコードを取得してやり直してください。",
-  "boosty.error": "Boosty のリンクコードを作成できませんでした。再試行する前に、下の現在の接続状況を確認してください。",
-  "boosty.disconnectError": "Boosty の接続を解除できませんでした。現在の状態を確認してから再試行してください。",
-  "disconnect.boostyExplanation": "接続を解除すると、新しいサーバーに対する Boosty メンバーシップの資格がなくなります。既存のサーバーと管理者による付与は削除されません。"
+  "boosty.checking": "Boosty のメンバーシップはまもなく確認されます。"
 }

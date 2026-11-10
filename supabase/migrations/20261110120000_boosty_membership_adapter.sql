@@ -1,6 +1,6 @@
 begin;
 
--- Boosty membership adapter: DM link codes, the creator credential in Supabase Vault, the
+-- Boosty membership adapter: email-matched links, the creator credential in Supabase Vault, the
 -- subscriber poll's durable state, and Boosty's arm of the provider identity lookup that the
 -- generic fence (20261109140000_membership_funding_providers.sql) reads. Identifiers are
 -- checked by that migration's membership_provider_identifier_valid, never a local pattern.
@@ -35,28 +35,6 @@ create table boosty_membership.links (
  linked_at timestamptz not null default clock_timestamp()
 );
 
--- One link code per account: only its SHA-256 is stored. A code is pending while outcome
--- is null and it has not expired. The window columns bound issuance per account.
-create table boosty_membership.link_codes (
- account_id uuid primary key references auth.users(id) on delete cascade,
- code_hash text not null check (code_hash ~ '^[a-f0-9]{64}$'),
- issued_at timestamptz not null,
- expires_at timestamptz not null,
- expected_generation bigint not null check (expected_generation >= 0),
- outcome text check (outcome in ('linked','conflict','superseded')),
- window_started_at timestamptz not null,
- issue_count integer not null check (issue_count between 1 and 5),
- check (expires_at > issued_at)
-);
-create unique index boosty_link_codes_pending_hash on boosty_membership.link_codes(code_hash) where outcome is null;
-
--- Highest processed message per Boosty dialog, so each message is matched at most once.
-create table boosty_membership.dialog_cursors (
- dialog_id bigint primary key check (dialog_id > 0),
- last_message_id bigint not null check (last_message_id >= 0),
- updated_at timestamptz not null default clock_timestamp()
-);
-
 -- First complete poll that did not list a linked subscriber; cleared when listed again.
 create table boosty_membership.absences (
  account_id uuid primary key references auth.users(id) on delete cascade,
@@ -82,8 +60,6 @@ create table boosty_membership.creator_credential (
 
 alter table boosty_membership.sync_state enable row level security;
 alter table boosty_membership.links enable row level security;
-alter table boosty_membership.link_codes enable row level security;
-alter table boosty_membership.dialog_cursors enable row level security;
 alter table boosty_membership.absences enable row level security;
 alter table boosty_membership.creator_credential enable row level security;
 revoke all on all tables in schema boosty_membership from public, anon, authenticated, service_role;
@@ -100,60 +76,6 @@ begin
   when 'boosty' then return (select boosty_user_id from boosty_membership.links where account_id=p_account_id);
   else raise exception 'Invalid funding provider';
  end case;
-end $$;
-
--- Website account status for Boosty: the fenced head plus the account's link-code state.
--- p_code_hash (the browser's code, hashed by the Edge) only reports whether it is the pending one.
-create function public.boosty_link_status(p_account_id uuid, p_discord_user_id text, p_code_hash text) returns jsonb
-language plpgsql security definer set search_path = '' as $$
-declare snapshot jsonb; c boosty_membership.link_codes; pending boolean;
-begin
- perform set_config('lock_timeout',public.membership_lock_budget(),true);
- if p_code_hash is not null and p_code_hash !~ '^[a-f0-9]{64}$' then raise exception 'Invalid link code'; end if;
- snapshot := public.membership_provider_fence(p_account_id,'boosty',p_discord_user_id,false);
- select * into c from boosty_membership.link_codes where account_id=p_account_id;
- pending := c.account_id is not null and c.outcome is null and c.expires_at > clock_timestamp();
- return jsonb_build_object('snapshot',snapshot,
-  'pending',case when pending then jsonb_build_object('expiresAt',to_char(c.expires_at at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),'matches',c.code_hash=p_code_hash) else null end,
-  'outcome',case when c.outcome in ('conflict','superseded') then c.outcome end);
-end $$;
-
--- Issues a 30-minute link code for an unlinked live account. A new code replaces the pending
--- one; at most 5 codes per account per hour. Only the code's hash reaches the database.
-create function public.boosty_link_begin(p_account_id uuid, p_discord_user_id text, p_code_hash text) returns jsonb
-language plpgsql security definer set search_path = '' as $$
-declare snapshot jsonb; c boosty_membership.link_codes; now_at timestamptz := clock_timestamp(); expires timestamptz;
-begin
- perform set_config('lock_timeout',public.membership_lock_budget(),true);
- if p_code_hash is null or p_code_hash !~ '^[a-f0-9]{64}$' then raise exception 'Invalid link code'; end if;
- snapshot := public.membership_provider_fence(p_account_id,'boosty',p_discord_user_id,false);
- if snapshot->>'linkState' <> 'unlinked' or exists(select 1 from boosty_membership.links where account_id=p_account_id) then
-  raise exception 'Boosty account already linked';
- end if;
- select * into c from boosty_membership.link_codes where account_id=p_account_id for update;
- if found and c.window_started_at > now_at - interval '1 hour' and c.issue_count >= 5 then
-  raise sqlstate 'PT429' using message='membership_rate_limited';
- end if;
- expires := now_at + interval '30 minutes';
- insert into boosty_membership.link_codes(account_id,code_hash,issued_at,expires_at,expected_generation,outcome,window_started_at,issue_count)
-  values(p_account_id,p_code_hash,now_at,expires,(snapshot->>'linkGeneration')::bigint,null,now_at,1)
-  on conflict(account_id) do update set code_hash=excluded.code_hash, issued_at=excluded.issued_at, expires_at=excluded.expires_at,
-   expected_generation=excluded.expected_generation, outcome=null,
-   window_started_at=case when boosty_membership.link_codes.window_started_at > now_at - interval '1 hour' then boosty_membership.link_codes.window_started_at else now_at end,
-   issue_count=case when boosty_membership.link_codes.window_started_at > now_at - interval '1 hour' then boosty_membership.link_codes.issue_count + 1 else 1 end;
- return jsonb_build_object('expiresAt',to_char(expires at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'));
-end $$;
-
--- Owner unlink: drops the binding and any pending code, then fences the head to unlinked.
-create function public.boosty_unlink(p_account_id uuid, p_discord_user_id text) returns jsonb
-language plpgsql security definer set search_path = '' as $$
-begin
- perform set_config('lock_timeout',public.membership_lock_budget(),true);
- if not pg_try_advisory_xact_lock(hashtextextended(p_account_id::text, 702)) then raise sqlstate '55P03' using message='membership_retry'; end if;
- delete from boosty_membership.link_codes where account_id=p_account_id;
- delete from boosty_membership.absences where account_id=p_account_id;
- delete from boosty_membership.links where account_id=p_account_id;
- return public.membership_provider_fence(p_account_id,'boosty',p_discord_user_id,false);
 end $$;
 
 -- Refuses a worker call whose lease is not the current, live one.
@@ -181,76 +103,57 @@ begin
   'now',to_char(clock_timestamp() at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'));
 end $$;
 
--- Returns the dialogs that may hold unprocessed messages. A dialog whose newest message is over
--- an hour old cannot carry a live code, so its cursor advances without a read.
-create function boosty_membership.dialogs(p_input jsonb) returns jsonb
-language plpgsql security definer set search_path = '' as $$
-declare d record; due jsonb := '[]'::jsonb; cursor_id bigint;
-begin
- if jsonb_typeof(p_input->'dialogs') <> 'array' or jsonb_array_length(p_input->'dialogs') > 100 then raise exception 'invalid_boosty_dialogs'; end if;
- for d in select * from jsonb_to_recordset(p_input->'dialogs') as x("dialogId" bigint, "lastMessageId" bigint, "lastMessageAt" timestamptz) loop
-  if d."dialogId" is null or d."dialogId" < 1 or d."lastMessageId" is null or d."lastMessageId" < 1 then raise exception 'invalid_boosty_dialog'; end if;
-  select last_message_id into cursor_id from boosty_membership.dialog_cursors where dialog_id=d."dialogId";
-  if cursor_id is not null and cursor_id >= d."lastMessageId" then continue; end if;
-  if d."lastMessageAt" is not null and d."lastMessageAt" < clock_timestamp() - interval '1 hour' then
-   insert into boosty_membership.dialog_cursors(dialog_id,last_message_id) values(d."dialogId",d."lastMessageId")
-    on conflict(dialog_id) do update set last_message_id=greatest(boosty_membership.dialog_cursors.last_message_id,excluded.last_message_id),updated_at=clock_timestamp();
-   continue;
-  end if;
-  due := due || jsonb_build_array(jsonb_build_object('dialogId',d."dialogId",'cursor',coalesce(cursor_id,0)));
- end loop;
- return jsonb_build_object('due',due);
-end $$;
+-- SHA-256 of a normalized (trimmed, lower-case) email; the worker hashes Boosty's emails the same way.
+create function boosty_membership.email_sha256(p_email text) returns text
+language sql immutable set search_path = '' as $$ select encode(sha256(convert_to(lower(btrim(p_email)),'UTF8')),'hex') $$;
 
--- Applies code matches from one dialog and advances its cursor. Only an exact pending code
--- links; a Boosty user bound to another account is refused (the owner must unlink there).
-create function boosty_membership.link(p_input jsonb) returns jsonb
+-- After a complete poll, links Boosty users to website accounts by email. Neither email is verified,
+-- by design. The input lists each subscriber whose normalized email is unique in the list, as its
+-- SHA-256. A link whose subscriber now lists another email is released (its head fences to
+-- unlinked); then a subscriber links when exactly one account has its email and neither side is
+-- linked. A busy account waits for the next poll.
+create function boosty_membership.match(p_input jsonb) returns jsonb
 language plpgsql security definer set search_path = '' as $$
-declare m record; c boosty_membership.link_codes; h public.membership_provider_heads; generation bigint;
- linked integer := 0; refused integer := 0; dialog bigint := (p_input->>'dialogId')::bigint; through bigint := (p_input->>'cursor')::bigint;
+declare r record; h public.membership_provider_heads; linked integer := 0; released integer := 0;
 begin
- if dialog is null or dialog < 1 or through is null or through < 1 or jsonb_typeof(p_input->'matches') <> 'array' or jsonb_array_length(p_input->'matches') > 20 then
-  raise exception 'invalid_boosty_matches';
+ if jsonb_typeof(p_input->'subscribers') <> 'array' or jsonb_array_length(p_input->'subscribers') > 1000
+  or exists(select 1 from jsonb_to_recordset(p_input->'subscribers') as x("boostyUserId" text, "emailSha256" text)
+   where not coalesce(public.membership_provider_identifier_valid('boosty','user',x."boostyUserId"),false) or coalesce(x."emailSha256",'') !~ '^[a-f0-9]{64}$') then
+  raise exception 'invalid_boosty_subscribers';
  end if;
- for m in select * from jsonb_to_recordset(p_input->'matches') as x("messageId" bigint, "boostyUserId" text, "codeHash" text, "messageAt" timestamptz) loop
-  if m."messageId" is null or m."messageId" < 1 or m."messageId" > through or not public.membership_provider_identifier_valid('boosty','user',m."boostyUserId") or m."codeHash" !~ '^[a-f0-9]{64}$' then
-   raise exception 'invalid_boosty_match';
-  end if;
-  select * into c from boosty_membership.link_codes where code_hash=m."codeHash" and outcome is null for update;
-  if not found then continue; end if;
-  -- Live now, or sent while live and processed within an hour of expiry.
-  if not (c.expires_at > clock_timestamp() or (m."messageAt" is not null and m."messageAt" between c.issued_at and c.expires_at
-    and clock_timestamp() < c.expires_at + interval '1 hour')) then continue; end if;
-  if not pg_try_advisory_xact_lock(hashtextextended(c.account_id::text, 702)) then raise sqlstate '55P03' using message='membership_retry'; end if;
-  select * into h from public.membership_provider_heads where account_id=c.account_id and provider='boosty' for update;
-  generation := coalesce(h.link_generation,0);
-  if exists(select 1 from boosty_membership.links where account_id=c.account_id) or generation <> c.expected_generation
-   or h.link_state = 'account_deleted' then
-   update boosty_membership.link_codes set outcome='superseded' where account_id=c.account_id; refused := refused + 1; continue;
-  end if;
-  if exists(select 1 from boosty_membership.links where boosty_user_id=m."boostyUserId") then
-   update boosty_membership.link_codes set outcome='conflict' where account_id=c.account_id; refused := refused + 1; continue;
-  end if;
-  insert into boosty_membership.links(account_id,boosty_user_id) values(c.account_id,m."boostyUserId");
-  delete from boosty_membership.absences where account_id=c.account_id;
+ for r in select k.account_id from boosty_membership.links k
+  join jsonb_to_recordset(p_input->'subscribers') as x("boostyUserId" text, "emailSha256" text) on x."boostyUserId"=k.boosty_user_id
+  left join auth.users u on u.id=k.account_id
+  where boosty_membership.email_sha256(u.email) is distinct from x."emailSha256" order by k.account_id loop
+  if not pg_try_advisory_xact_lock(hashtextextended(r.account_id::text, 702)) then continue; end if;
+  delete from boosty_membership.absences where account_id=r.account_id;
+  delete from boosty_membership.links where account_id=r.account_id;
+  perform public.membership_provider_fence(r.account_id,'boosty',(select discord_user_id from public.membership_provider_heads where account_id=r.account_id and provider='boosty'),false);
+  released := released + 1;
+ end loop;
+ for r in select (array_agg(u.id))[1] account_id, x."boostyUserId" boosty_user_id
+  from jsonb_to_recordset(p_input->'subscribers') as x("boostyUserId" text, "emailSha256" text)
+  join auth.users u on boosty_membership.email_sha256(u.email)=x."emailSha256"
+  group by x."boostyUserId" having count(*)=1 order by 1 loop
+  if exists(select 1 from boosty_membership.links where account_id=r.account_id or boosty_user_id=r.boosty_user_id) then continue; end if;
+  if not pg_try_advisory_xact_lock(hashtextextended(r.account_id::text, 702)) then continue; end if;
+  select * into h from public.membership_provider_heads where account_id=r.account_id and provider='boosty' for update;
+  if h.link_state = 'account_deleted' then continue; end if;
+  insert into boosty_membership.links(account_id,boosty_user_id) values(r.account_id,r.boosty_user_id);
+  delete from boosty_membership.absences where account_id=r.account_id;
   if h.account_id is null then
-   insert into public.membership_heads(account_id) values(c.account_id) on conflict do nothing;
-   insert into public.membership_provider_heads(account_id,provider,evidence)
-    values(c.account_id,'boosty',public.membership_provider_empty_evidence('boosty')) returning * into h;
+   insert into public.membership_heads(account_id) values(r.account_id) on conflict do nothing;
+   insert into public.membership_provider_heads(account_id,provider,evidence) values(r.account_id,'boosty',public.membership_provider_empty_evidence('boosty'));
   end if;
-  -- Evidence starts unknown; the next subscriber poll (scheduled now) decides it.
-  update public.membership_provider_heads set provider_user_id=m."boostyUserId", link_state='linked',
+  -- Evidence starts unknown; this poll's evidence write decides it.
+  update public.membership_provider_heads set provider_user_id=r.boosty_user_id, link_state='linked',
    link_generation=link_generation+1, revision=revision+1,
    evidence=public.membership_provider_empty_evidence('boosty') || '{"verification":"unknown"}'::jsonb
-   where account_id=c.account_id and provider='boosty';
-  perform public.membership_notify_provider(c.account_id,'boosty',true);
-  update boosty_membership.link_codes set outcome='linked' where account_id=c.account_id;
-  update boosty_membership.sync_state set next_poll_at=clock_timestamp() where singleton;
+   where account_id=r.account_id and provider='boosty';
+  perform public.membership_notify_provider(r.account_id,'boosty',true);
   linked := linked + 1;
  end loop;
- insert into boosty_membership.dialog_cursors(dialog_id,last_message_id) values(dialog,through)
-  on conflict(dialog_id) do update set last_message_id=greatest(boosty_membership.dialog_cursors.last_message_id,excluded.last_message_id),updated_at=clock_timestamp();
- return jsonb_build_object('linked',linked,'refused',refused);
+ return jsonb_build_object('linked',linked,'released',released);
 end $$;
 
 -- Linked heads the subscriber poll must decide, with their absence state. Bounded to 5001
@@ -372,12 +275,11 @@ begin
  perform set_config('lock_timeout',public.membership_lock_budget(),true);
  if p_input is null or jsonb_typeof(p_input) <> 'object' or octet_length(p_input::text) > 262144 then raise exception 'invalid_boosty_request'; end if;
  if p_operation = 'acquire' then return boosty_membership.acquire(p_input); end if;
- if p_operation not in ('dialogs','link','linked','evidence','stale','polled','release') then raise exception 'invalid_boosty_operation'; end if;
+ if p_operation not in ('match','linked','evidence','stale','polled','release') then raise exception 'invalid_boosty_operation'; end if;
  if p_operation = 'release' then return boosty_membership.release(p_input); end if;
  perform boosty_membership.require_lease((p_input->>'token')::uuid);
  return case p_operation
-  when 'dialogs' then boosty_membership.dialogs(p_input)
-  when 'link' then boosty_membership.link(p_input)
+  when 'match' then boosty_membership.match(p_input)
   when 'linked' then boosty_membership.linked(p_input)
   when 'evidence' then boosty_membership.write_evidence(p_input)
   when 'stale' then boosty_membership.stale(p_input)
@@ -466,9 +368,7 @@ begin
 end $function$;
 
 revoke all on all functions in schema boosty_membership from public, anon, authenticated, service_role;
-revoke all on function public.boosty_link_status(uuid,text,text), public.boosty_link_begin(uuid,text,text), public.boosty_unlink(uuid,text),
- public.boosty_membership_sync(text,jsonb), public.boosty_creator_credential(text,jsonb) from public, anon, authenticated;
-grant execute on function public.boosty_link_status(uuid,text,text), public.boosty_link_begin(uuid,text,text), public.boosty_unlink(uuid,text),
- public.boosty_membership_sync(text,jsonb), public.boosty_creator_credential(text,jsonb) to service_role;
+revoke all on function public.boosty_membership_sync(text,jsonb), public.boosty_creator_credential(text,jsonb) from public, anon, authenticated;
+grant execute on function public.boosty_membership_sync(text,jsonb), public.boosty_creator_credential(text,jsonb) to service_role;
 
 commit;

@@ -253,10 +253,9 @@ constant `unlinked` head at generation `"0"` without writing; an Auth deletion t
 every provider head and refuses resurrection. Linking and evidence are described in
 [Boosty membership adapter](boosty-membership.md).
 
-Adding a provider means a new entry in `FUNDING_PROVIDER_GRAMMAR`, an account-surface
-entry, and a new append-only migration that widens the provider CHECKs and re-creates the
-SQL registry functions with every provider's branch. Keep ControlPlane's provider
-registry in step.
+Adding a provider means a new entry in `FUNDING_PROVIDER_GRAMMAR` and a new append-only
+migration that widens the provider CHECKs and re-creates the SQL registry functions with
+every provider's branch. Keep ControlPlane's provider registry in step.
 
 Rollout, one sequence shared with ControlPlane's `membership-onboarding.md`; each step is
 separately authorized:
@@ -268,20 +267,19 @@ separately authorized:
    `20261111120000_patreon_lapse_report_patreon_funding.sql` (which reads the provider
    columns of migration 129, so it must follow it) and deploys the
    `control-plane-membership-v1` Edge function. Boosty stays inert:
-   `BOOSTY_MEMBERSHIP_POLICY_JSON` and `BOOSTY_LINKING_ENABLED` unset, dispatch disabled.
+   `BOOSTY_MEMBERSHIP_POLICY_JSON` and `BOOSTY_STATUS_ENABLED` unset, dispatch disabled.
 3. ControlPlane mirrors those three website migrations in
    `ALREADY_APPLIED_EXTERNAL_MIGRATIONS` before its next migration release.
 4. ControlPlane switches to its provider-list policy with Patreon only.
 5. ControlPlane adds the Boosty entry to its policy.
 6. Only then this website commissions Boosty ([Boosty membership adapter](boosty-membership.md#commissioning)):
    `BOOSTY_MEMBERSHIP_POLICY_JSON`, the creator credential, dispatch, then
-   `BOOSTY_LINKING_ENABLED`.
+   `BOOSTY_STATUS_ENABLED`.
 
 The CP policy must list Boosty before the website emits any Boosty hint: a control plane
 without the entry never acknowledges Boosty hints, so the account's pending hints hit the
-per-provider bound and its Boosty link calls fail with `PT429`. To withdraw Boosty,
-disable linking and dispatch here first; ControlPlane removes its entry only after no
-Boosty head or unacknowledged Boosty hint remains.
+per-provider bound. To withdraw Boosty, disable the status display and dispatch here first;
+ControlPlane removes its entry only after no Boosty head or unacknowledged Boosty hint remains.
 
 Website account operations overlap fresh Auth-user and session-context checks.
 Both must succeed, with any impersonation target matching the verified user,

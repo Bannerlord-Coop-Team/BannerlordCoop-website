@@ -1,6 +1,7 @@
 // Embedded PostgreSQL upgrades a populated membership schema to provider-scoped heads
 // and hints, then drives the real CP Edge handler against it. No remote credentials.
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { PGlite } from "@electric-sql/pglite";
@@ -252,19 +253,16 @@ test("provider fences share the account lock and version 3 claims keep SKIP LOCK
                 assert.equal(leases.filter(lease => lease !== null).length, 1, `round ${round}`);
             }
         });
-        await t.test("a code match for a locked account refuses with 55P03 and commits nothing, then links once", async () => {
+        await t.test("an email match for a locked account is skipped without waiting, then links once", async () => {
             const account = crypto.randomUUID();
-            await owner.query("insert into auth.users(id) values($1)", [account]);
-            const hash = "d".repeat(64);
-            await rpc(owner, "boosty_link_begin", [account, null, hash]);
+            await owner.query("insert into auth.users(id,email) values($1,'locked@example.invalid')", [account]);
             const lease = await sync(peer, "acquire", { blog: "coop-team" });
-            const link = () => sync(peer, "link", { token: lease!.token, dialogId: 77, cursor: 5, matches: [{ messageId: 5, boostyUserId: "7070", codeHash: hash, messageAt: null }] });
+            const match = () => sync(peer, "match", { token: lease!.token, subscribers: [{ boostyUserId: "7070", emailSha256: createHash("sha256").update("locked@example.invalid").digest("hex") }] });
             await owner.query("begin");
             await rpc(owner, "membership_fence", [account, null, false]);
-            await assert.rejects(link(), { code: "55P03" });
+            assert.deepEqual(await match(), { linked: 0, released: 0 });
             await owner.query("commit");
-            assert.equal((await owner.query("select count(*)::int n from boosty_membership.dialog_cursors where dialog_id=77")).rows[0].n, 0, "the cursor did not move past the unprocessed match");
-            assert.deepEqual(await link(), { linked: 1, refused: 0 });
+            assert.deepEqual(await match(), { linked: 1, released: 0 });
             await sync(peer, "release", { token: lease!.token });
             assert.equal((await rpc(owner, "membership_funding_fence", [account, "boosty", null, false])).providerUserId, "7070");
         });

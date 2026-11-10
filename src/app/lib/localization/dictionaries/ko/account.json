@@ -45,19 +45,8 @@
   "disconnect.cancel": "취소",
   "loading.label": "계정 불러오는 중",
   "loading.status": "계정 불러오는 중…",
-  "boosty.benefits": "Boosty 구독을 연결하면 멤버십 혜택과 서버 할당량에 사용할 수 있습니다.",
-  "boosty.linked": "Boosty 계정이 연결되었습니다.",
+  "boosty.linked": "Boosty 구독이 계정 이메일로 연결되었습니다.",
+  "boosty.notFound": "이 계정의 이메일을 사용하는 Boosty 구독이 없습니다. 연결하려면 같은 이메일로 Boosty에서 구독하세요.",
   "boosty.nonqualifying": "Boosty 구독에 자격을 충족하는 등급이 포함되어 있지 않습니다.",
-  "boosty.checking": "Boosty 멤버십이 곧 확인됩니다.",
-  "boosty.start": "Boosty 연결 코드 받기",
-  "boosty.restart": "새 코드 받기",
-  "boosty.startPending": "코드 생성 중…",
-  "boosty.codeLabel": "연결 코드",
-  "boosty.codeInstructions": "구독 중인 Boosty 계정에서 Boosty의 {creator}에게 이 코드를 개인 메시지로 보내세요. 코드는 {expiresAt}에 만료됩니다. 보통 메시지를 보낸 후 10분 이내에 연결이 완료됩니다.",
-  "boosty.codeWaiting": "연결 코드가 메시지를 기다리고 있습니다. 코드가 없다면 새 코드를 받으세요.",
-  "boosty.conflict": "이 Boosty 계정은 이미 다른 웹사이트 계정에 연결되어 있습니다. 먼저 그 계정에서 연결을 해제한 후 새 코드를 받으세요.",
-  "boosty.superseded": "이 코드는 더 이상 유효하지 않습니다. 새 코드를 받아 다시 시도하세요.",
-  "boosty.error": "Boosty 연결 코드를 만들 수 없습니다. 다시 시도하기 전에 아래의 현재 연결 상태를 확인하세요.",
-  "boosty.disconnectError": "Boosty 연결을 해제할 수 없습니다. 현재 상태를 확인한 후 다시 시도하세요.",
-  "disconnect.boostyExplanation": "연결을 해제하면 새 서버에 대한 Boosty 멤버십 자격이 사라집니다. 기존 서버와 관리자 권한 부여는 제거되지 않습니다."
+  "boosty.checking": "Boosty 멤버십이 곧 확인됩니다."
 }

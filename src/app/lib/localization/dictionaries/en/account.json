@@ -45,19 +45,8 @@
   "disconnect.cancel": "Cancel",
   "loading.label": "Loading account",
   "loading.status": "Loading account…",
-  "boosty.benefits": "Link your Boosty subscription to use it for membership benefits and server allowance.",
-  "boosty.linked": "Your Boosty account is linked.",
+  "boosty.linked": "Your Boosty subscription is linked through your account email.",
+  "boosty.notFound": "No Boosty subscription uses this account's email. To link one, subscribe on Boosty with the same email.",
   "boosty.nonqualifying": "Your Boosty subscription does not include a qualifying level.",
-  "boosty.checking": "Your Boosty membership will be checked shortly.",
-  "boosty.start": "Get a Boosty link code",
-  "boosty.restart": "Get a new code",
-  "boosty.startPending": "Creating code…",
-  "boosty.codeLabel": "Your link code",
-  "boosty.codeInstructions": "Send this code as a private message to {creator} on Boosty, from the Boosty account you subscribe with. It expires at {expiresAt}. Linking usually completes within ten minutes of your message.",
-  "boosty.codeWaiting": "A link code is waiting for your message. If you no longer have it, get a new code.",
-  "boosty.conflict": "That Boosty account is already linked to another website account. Disconnect it there first, then get a new code.",
-  "boosty.superseded": "That code is no longer valid. Get a new code to try again.",
-  "boosty.error": "A Boosty link code could not be created. Check your current connection below before trying again.",
-  "boosty.disconnectError": "Boosty could not be disconnected. Wait for the current status before trying again.",
-  "disconnect.boostyExplanation": "Disconnecting removes Boosty membership eligibility for new servers. Existing servers and administrative grants are not removed."
+  "boosty.checking": "Your Boosty membership will be checked shortly."
 }

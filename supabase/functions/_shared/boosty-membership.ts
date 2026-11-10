@@ -1,13 +1,13 @@
-// Scheduled Boosty worker: links DM'd codes, then (when due) polls the complete subscriber list
-// and writes evidence. Any failed, partial or suspicious poll writes no loss: only evidence older
-// than 24 hours becomes unknown, so an API break freezes evidence instead of removing servers.
+// Scheduled Boosty worker: when due, polls the complete subscriber list, links subscribers to
+// website accounts by email and writes evidence. Any failed, partial or suspicious poll writes no
+// link or loss: only evidence older than 24 hours becomes unknown, so an API break freezes evidence
+// instead of removing servers.
 import { createHash, timingSafeEqual } from "node:crypto";
 import { boundedJson, record, timestamp, UUID } from "./membership.ts";
 import { checkDatabaseContention, DatabaseContention } from "./database-contention.ts";
 import { BoostyAuthError, MAX_SUBSCRIBER_PAGES, type BoostyApi, type BoostySubscriber } from "./boosty-api.ts";
 import { BoostyCredentialUnavailable, serviceRpcEndpoint, type BoostyCredential } from "./boosty-credential.ts";
 import { circuitBreakerTripped, decideBoostyEvidence, type LinkedBoostyHead } from "./boosty-evidence.ts";
-import { linkCodeHash } from "./boosty-link-code.ts";
 import type { BoostyPolicy } from "./boosty-policy.ts";
 import { BOOSTY_IDENTIFIER } from "./funding-provider.ts";
 
@@ -15,10 +15,9 @@ export type BoostySyncRpc = (operation: string, input: Record<string, unknown>) 
 export type BoostyAlert = "breaker_tripped";
 /** A configured adapter: reviewed policy, creator credential and the bounded API client. */
 export type BoostyAdapter = { policy: BoostyPolicy; credential: BoostyCredential; api: BoostyApi };
-const MAX_DIALOG_PAGES = 5;
-const MAX_DUE_DIALOGS = 20;
 const MAX_LINKED_HEADS = 5000;
 const EVIDENCE_BATCH = 200;
+const MATCH_BATCH = 1000;
 const RUN_BUDGET_MS = 25_000;
 const DECIMAL = /^(0|[1-9][0-9]{0,19})$/u;
 
@@ -83,50 +82,34 @@ export function createBoostyMembershipHandler(options: {
 
     /** Binds one configured adapter to the run phases below. */
     function runnerFor(adapter: BoostyAdapter) {
-        /** Reads new dialog messages and applies exact code matches; returns after the bounded scan. */
-        async function linkCodes(token: string, deadline: number) {
-            const dialogs: { dialogId: string; chatmateId: string | null; lastMessageId: string; lastMessageAt: string | null }[] = [];
-            let offset: string | null = null;
-            for (let page = 0; page < MAX_DIALOG_PAGES && now() < deadline; page++) {
-                const result = await adapter.api.dialogs(offset);
-                for (const dialog of result.dialogs) if (dialog.lastMessageId !== null) dialogs.push({ ...dialog, lastMessageId: dialog.lastMessageId });
-                if (result.nextOffset === null || result.nextOffset === offset) break;
-                offset = result.nextOffset;
-            }
-            if (dialogs.length === 0) return;
-            const due = await options.rpc("dialogs", { token, dialogs: dialogs.map(({ dialogId, lastMessageId, lastMessageAt }) => ({ dialogId: Number(dialogId), lastMessageId: Number(lastMessageId), lastMessageAt })) });
-            if (!record(due) || !Array.isArray(due.due)) throw new Error("invalid_boosty_due");
-            for (const entry of due.due.slice(0, MAX_DUE_DIALOGS)) {
-                if (now() > deadline) return;
-                if (!record(entry) || !Number.isSafeInteger(entry.dialogId) || !Number.isSafeInteger(entry.cursor)) throw new Error("invalid_boosty_due");
-                const dialog = dialogs.find(value => value.dialogId === String(entry.dialogId));
-                if (!dialog) continue;
-                const messages = (await adapter.api.messages(dialog.dialogId)).filter(message => Number(message.messageId) > (entry.cursor as number));
-                if (messages.length === 0) continue;
-                // Only the counterparty's own messages can link; the creator's replies never do.
-                const matches = await Promise.all(messages.filter(message => message.code !== null && dialog.chatmateId !== null && message.authorId === dialog.chatmateId)
-                    .slice(0, 20).map(async message => ({ messageId: Number(message.messageId), boostyUserId: message.authorId, codeHash: await linkCodeHash(message.code!), messageAt: message.messageAt })));
-                const cursor = Math.max(...messages.map(message => Number(message.messageId)));
-                await options.rpc("link", { token, dialogId: entry.dialogId, cursor, matches });
+        /** Sends each subscriber whose email is unique in the complete list for matching; a shared email links no one. */
+        async function matchEmails(token: string, subscribers: Map<string, BoostySubscriber>) {
+            const counts = new Map<string, number>();
+            for (const { emailSha256 } of subscribers.values()) if (emailSha256 !== null) counts.set(emailSha256, (counts.get(emailSha256) ?? 0) + 1);
+            const unique = [...subscribers.values()].filter(({ emailSha256 }) => emailSha256 !== null && counts.get(emailSha256) === 1)
+                .map(({ id, emailSha256 }) => ({ boostyUserId: id, emailSha256 }));
+            for (let index = 0; index < unique.length; index += MATCH_BATCH) {
+                await options.rpc("match", { token, subscribers: unique.slice(index, index + MATCH_BATCH) });
             }
         }
 
-        /** Polls the complete subscriber list and writes evidence, or freezes evidence when it cannot. */
+        /** Polls the complete subscriber list, matches emails and writes evidence, or freezes evidence when it cannot. */
         async function poll(token: string, lastCompleteCount: number | null, deadline: number): Promise<boolean> {
             let subscribers: Map<string, BoostySubscriber>;
             let heads: LinkedBoostyHead[];
             try {
-                heads = parseLinked(await options.rpc("linked", { token }));
                 subscribers = await fetchCompleteSubscribers(adapter.api, deadline, now);
+                if (circuitBreakerTripped(adapter.policy, lastCompleteCount, subscribers.size)) {
+                    log("Boosty subscriber count dropped past the circuit breaker");
+                    await freeze(token, true);
+                    return false;
+                }
+                await matchEmails(token, subscribers);
+                heads = parseLinked(await options.rpc("linked", { token }));
             } catch (error) {
                 if (!(error instanceof IncompletePoll)) throw error;
                 log("Boosty subscriber poll incomplete");
                 await freeze(token, false);
-                return false;
-            }
-            if (circuitBreakerTripped(adapter.policy, lastCompleteCount, subscribers.size)) {
-                log("Boosty subscriber count dropped past the circuit breaker");
-                await freeze(token, true);
                 return false;
             }
             const polledAt = new Date(now()).toISOString();
@@ -139,40 +122,30 @@ export function createBoostyMembershipHandler(options: {
         }
 
         /** Marks only stale evidence unknown and records the failed poll; alerts on a breaker trip. */
-        async function freeze(token: string, tripped: boolean, recordPoll = true) {
+        async function freeze(token: string, tripped: boolean) {
             await options.rpc("stale", { token });
-            if (!recordPoll) return;
             const recorded = await options.rpc("polled", { token, complete: false, tripped, total: null });
             if (tripped && record(recorded) && recorded.alert === true) await options.alert("breaker_tripped").catch(() => log("Boosty operator alert could not be sent"));
         }
 
         /** Stops the run after a credential failure: records a rejection (alerting) and freezes evidence. */
-        async function credentialFailure(token: string, error: unknown, pollDue: boolean) {
+        async function credentialFailure(token: string, error: unknown) {
             if (error instanceof BoostyAuthError) await adapter.credential.reportFailure("rejected");
-            await freeze(token, false, pollDue);
+            await freeze(token, false);
             return reply(503, "credential_unavailable");
         }
 
-        /** One leased run: the link scan, then the poll when due. Neither phase's failure writes loss. */
+        /** One leased run: the poll when due. A failed poll writes no link or loss. */
         async function run(token: string, lease: ReturnType<typeof parseLease>, deadline: number): Promise<Response> {
-            let code = "synced";
-            try { await linkCodes(token, deadline); }
+            if (!lease.pollDue) return reply(200, "synced");
+            try { return await poll(token, lease.lastCompleteCount, deadline) ? reply(200, "synced") : reply(503, "sync_incomplete"); }
             catch (error) {
                 if (error instanceof DatabaseContention) throw error;
-                if (error instanceof BoostyAuthError || error instanceof BoostyCredentialUnavailable) return credentialFailure(token, error, lease.pollDue);
-                log("Boosty link scan failed");
-                code = "sync_incomplete";
-            }
-            if (!lease.pollDue) return reply(code === "synced" ? 200 : 503, code);
-            try { if (!await poll(token, lease.lastCompleteCount, deadline)) code = "sync_incomplete"; }
-            catch (error) {
-                if (error instanceof DatabaseContention) throw error;
-                if (error instanceof BoostyAuthError || error instanceof BoostyCredentialUnavailable) return credentialFailure(token, error, true);
+                if (error instanceof BoostyAuthError || error instanceof BoostyCredentialUnavailable) return credentialFailure(token, error);
                 log("Boosty subscriber poll failed");
                 await freeze(token, false);
-                code = "sync_incomplete";
+                return reply(503, "sync_incomplete");
             }
-            return reply(code === "synced" ? 200 : 503, code);
         }
         return run;
     }

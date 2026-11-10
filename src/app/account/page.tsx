@@ -9,8 +9,9 @@ import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { LoadingButton } from "@/app/components/ui/LoadingButton";
 import type { AccountStatus } from "@/app/lib/hosting/membership-onboarding";
 import { getWebsiteAccountStatus } from "@/app/lib/hosting/website-account-status";
-import { loadFundingSections, SECTION_PROVIDERS, type SectionProvider } from "@/app/account/funding-sections";
-import { Fragment } from "react";
+import { boostyStatusEnabled, readBoostyStatus } from "@/app/lib/hosting/boosty-status";
+import { BoostyConnection } from "@/app/account/BoostyConnection";
+import type { BoostyStatus } from "../../../supabase/functions/_shared/boosty-account";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -25,7 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 export const dynamic = "force-dynamic";
 /** Renders authenticated account status and localized connection controls without changing account authority. */
-export default async function AccountPage({ searchParams }: { searchParams: Promise<{ patreon?: string; discord?: string } & Partial<Record<SectionProvider, string>>> }) {
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ patreon?: string; discord?: string }> }) {
     const supabase = await getSupabaseServerClient();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) redirect("/login?next=/account");
@@ -34,10 +35,13 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     const messages = await getMessages(["account"], locale);
     const params = await searchParams;
     let status: AccountStatus | null = null;
+    let boosty: BoostyStatus | null = null;
     try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session && session.user.id === user.id) {
-            status = await getWebsiteAccountStatus(user.id, session.access_token);
+            // An unread or unreadable Boosty status hides its section rather than guessing it.
+            [status, boosty] = await Promise.all([getWebsiteAccountStatus(user.id, session.access_token),
+                boostyStatusEnabled() ? readBoostyStatus(supabase, session.access_token).catch(() => null) : null]);
         }
     } catch { /* Query parameters never establish current link state. */ }
 
@@ -51,7 +55,6 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     const needsStatusUpdates = !status || status.verificationPending || status.membership.sync === "pending"
         || status.membership.linked && status.membership.sync === "unavailable";
     const primaryButton = "inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-gold px-5 py-3 text-sm font-semibold text-background transition-colors hover:bg-gold/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-background";
-    const fundingSections = await loadFundingSections({ supabase, accountId: user.id, t, buttonClass: primaryButton }, params);
     const secondaryButton = "inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-white/20 px-4 py-2 text-sm text-foreground transition-colors hover:border-gold hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold";
 
     return <LocalizationProvider locale={locale} messages={messages}><div className="flex min-h-svh flex-col bg-background text-foreground"><Navbar viewer={Promise.resolve({ user })} /><main className="flex-1"><section className="mx-auto w-full max-w-3xl px-5 py-12 sm:px-8 sm:py-16" aria-labelledby="account-heading">
@@ -62,7 +65,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
             <div className="min-w-0"><p className="break-words font-display text-2xl font-semibold">{accountName}</p><p className="mt-1 text-sm leading-6 text-foreground-muted">{t("intro")}</p></div>
         </div>
         {!status && <p role="alert" className="mt-6 border-l-2 border-gold bg-gold/10 p-4 text-sm">{t("status.unavailable")}</p>}
-        {[params.patreon, params.discord, ...SECTION_PROVIDERS.map(provider => params[provider])].includes("rate_limited") && <p role="alert" className="mt-4">{t("error.rateLimited")}</p>}
+        {(params.patreon === "rate_limited" || params.discord === "rate_limited") && <p role="alert" className="mt-4">{t("error.rateLimited")}</p>}
         {[params.patreon, params.discord].includes("retry") && <p role="alert" className="mt-4">{t("error.retry")}</p>}
         {params.discord === "last_identity" && <p role="alert" className="mt-4 text-sm">{t("error.lastIdentity")}</p>}
         {params.discord === "disconnect_error" && <p role="alert" className="mt-4 text-sm">{t("error.discordDisconnect")}</p>}
@@ -119,7 +122,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                     )}
                     {status?.membership.linked && <DisconnectAccount provider="Patreon" action={disconnectPatreonAccount.bind(null, user.id)} />}
                 </section>
-                {fundingSections.map(({ provider, node }) => <Fragment key={provider}>{node}</Fragment>)}
+                {boosty?.configured && <BoostyConnection status={boosty} t={t} />}
             </div>
         </section>
         <section className="mt-8 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="servers-heading">

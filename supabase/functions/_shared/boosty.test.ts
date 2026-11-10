@@ -1,25 +1,25 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { BoostyAuthError, boostyUrl, createBoostyApi, parseSubscriberPage, type BoostyApi, type BoostySubscriber } from "./boosty-api.ts";
+import { createHash } from "node:crypto";
+import { BoostyAuthError, subscribersUrl, createBoostyApi, parseSubscriberPage, type BoostyApi, type BoostySubscriber } from "./boosty-api.ts";
 import { BOOSTY_TOKEN_URL, BoostyCredentialUnavailable, createBoostyCredential, type BoostyCredentialRpc } from "./boosty-credential.ts";
 import { circuitBreakerTripped, decideBoostyEvidence, type LinkedBoostyHead } from "./boosty-evidence.ts";
-import { extractLinkCode, generateLinkCode, LINK_CODE, linkCodeHash } from "./boosty-link-code.ts";
-import { parseDialogPage, parseMessagePage } from "./boosty-messages.ts";
 import { createBoostyMembershipHandler, fetchCompleteSubscribers, type BoostySyncRpc } from "./boosty-membership.ts";
 import { parseBoostyPolicy, type BoostyPolicy } from "./boosty-policy.ts";
 import { parseFundingSnapshot } from "./funding-provider.ts";
 import type { CreatorTokenProvider } from "./patreon-creator-token.ts";
 import { createWebsiteAccountHandler } from "./website-account.ts";
 
-const policy: BoostyPolicy = { blog: "coop-team", qualifyingLevelIds: ["555", "556"], minimumPrice: 500, priceField: "RUB", creatorName: "Coop Team", maximumDropFraction: 0.25, policyVersion: "boosty-paid-v1" };
+const policy: BoostyPolicy = { blog: "coop-team", qualifyingLevelIds: ["555", "556"], minimumPrice: 500, priceField: "RUB", maximumDropFraction: 0.25, policyVersion: "boosty-paid-v1" };
 const accountId = "aaaaaaaa-1111-4111-8111-111111111111";
 const head: LinkedBoostyHead = { accountId, providerUserId: "4242", linkGeneration: "3", absentSince: null };
 const polledAt = "2026-11-10T12:00:00.000Z";
 // Sanitized real responses (tests/fixtures/boosty/README.md); their timestamps are relative to polledAt.
 const fixture = (name: string): unknown => JSON.parse(readFileSync(`tests/fixtures/boosty/${name}.json`, "utf8"));
 const realPolicy: BoostyPolicy = { ...policy, blog: "bannerlordcoop", qualifyingLevelIds: ["4035410", "4035411", "4035416", "4035417", "4035418"], minimumPrice: 5, priceField: "USD" };
-const active = (id: string): BoostySubscriber => ({ id, subscribed: true, status: "active", offTime: null, blacklisted: false, levelId: "555", price: 500 });
+const emailHash = (email: string) => createHash("sha256").update(email).digest("hex");
+const active = (id: string, email: string | null = null): BoostySubscriber => ({ id, emailSha256: email === null ? null : emailHash(email), subscribed: true, status: "active", offTime: null, blacklisted: false, levelId: "555", price: 500 });
 type Expected = { method: string; url: string; headers: Record<string, string>; body?: string; reply: () => Response };
 
 /** A strict fake transport: every request must equal the next expected one exactly, in order. */
@@ -52,26 +52,14 @@ test("policy is strict, closed and disabled when unset", () => {
     assert.equal(parseBoostyPolicy(undefined), null); assert.equal(parseBoostyPolicy(" "), null);
     assert.deepEqual(parseBoostyPolicy(JSON.stringify(policy)), policy);
     for (const bad of [{ ...policy, blog: "Coop" }, { ...policy, qualifyingLevelIds: [] }, { ...policy, qualifyingLevelIds: ["1", "1"] }, { ...policy, minimumPrice: 0 }, { ...policy, minimumPrice: 1.5 },
-        { ...policy, priceField: "GBP" }, { ...policy, creatorName: "" }, { ...policy, creatorName: "a\nb" }, { ...policy, maximumDropFraction: 1 }, { ...policy, policyVersion: "patreon-paid-usd20-v1" }, { ...policy, extra: true }]) {
+        { ...policy, priceField: "GBP" }, { ...policy, maximumDropFraction: 1 }, { ...policy, policyVersion: "patreon-paid-usd20-v1" }, { ...policy, extra: true }]) {
         assert.throws(() => parseBoostyPolicy(JSON.stringify(bad)), JSON.stringify(bad));
     }
 });
 
-test("link codes are canonical, hash-only and matched only when exactly one appears in a message", async () => {
-    const code = generateLinkCode(bytes => bytes.fill(0xff));
-    assert.equal(code, "BLC-ZZZZZ-ZZZZZ"); assert.match(generateLinkCode(), LINK_CODE);
-    await assert.rejects(linkCodeHash("blc-zzzzz-zzzzz"));
-    assert.equal(extractLinkCode("my code: blc-ab12c-de34f thanks"), "BLC-AB12C-DE34F");
-    assert.equal(extractLinkCode('["BLC-AB12C-DE34F","unstyled",[]]'), "BLC-AB12C-DE34F", "Draft.js-encoded content still matches");
-    assert.equal(extractLinkCode("BLC-AB12C-DE34F and again BLC-AB12C-DE34F"), "BLC-AB12C-DE34F");
-    for (const text of ["", "BLC-AB12C-DE34F BLC-AB12C-DE34G", "XBLC-AB12C-DE34F", "BLC-AB12C-DE34FF", "BLC-AB1IC-DE34F", "BLC-AB12-DE34F"]) assert.equal(extractLinkCode(text), null, text);
-});
-
-test("only the allowlisted routes exist, each with an exact query", () => {
-    assert.equal(boostyUrl({ route: "subscribers", blog: "coop-team", offset: 200 }).href, "https://api.boosty.to/v1/blog/coop-team/subscribers?limit=100&offset=200&sort_by=on_time&order=gt&with_follow=false");
-    assert.equal(boostyUrl({ route: "dialogs", offset: "40" }).href, "https://api.boosty.to/v1/dialog/?limit=20&offset=40");
-    for (const bad of [{ route: "subscribers", blog: "../x", offset: 0 }, { route: "subscribers", blog: "coop-team", offset: -1 }, { route: "subscribers", blog: "coop-team", offset: 5001 },
-        { route: "dialogs", offset: "1&x=1" }, { route: "messages", dialogId: "1/../2" }, { route: "messages", dialogId: "0" }, { route: "levels" }] as never[]) assert.throws(() => boostyUrl(bad), JSON.stringify(bad));
+test("the only route is the subscriber page, with an exact query", () => {
+    assert.equal(subscribersUrl("coop-team", 200).href, "https://api.boosty.to/v1/blog/coop-team/subscribers?limit=100&offset=200&sort_by=on_time&order=gt&with_follow=false");
+    for (const [blog, offset] of [["../x", 0], ["coop-team", -1], ["coop-team", 5001], ["coop-team", 1.5]] as const) assert.throws(() => subscribersUrl(blog, offset), `${blog} ${offset}`);
 });
 
 test("the client sends exact GETs, replaces a rejected token once and reports a surviving 401 as a credential failure", async () => {
@@ -83,44 +71,32 @@ test("the client sends exact GETs, replaces a rejected token once and reports a 
     const api = createBoostyApi({ blog: "bannerlordcoop", priceField: "USD", credential: provider, fetchImplementation: fetcher });
     assert.deepEqual(await api.subscribers(0), parseSubscriberPage(fixture("subscribers"), "USD"));
     assert.deepEqual(replaced, ["old-access-token-x"]); assert.equal(fetcher.remaining(), 0);
-    const rejected = strictFetch([{ method: "GET", url: "https://api.boosty.to/v1/dialog/?limit=20", headers: apiHeaders("old-access-token-x"), reply: () => new Response("", { status: 401 }) }]);
-    const denied = createBoostyApi({ blog: "coop-team", priceField: "RUB", credential: tokens("old-access-token-x", null).provider, fetchImplementation: rejected });
-    await assert.rejects(denied.dialogs(null), BoostyAuthError);
-    const outage = createBoostyApi({ blog: "coop-team", priceField: "RUB", credential: tokens("access-token-xxxxxx", null).provider,
-        fetchImplementation: strictFetch([{ method: "GET", url: "https://api.boosty.to/v1/dialog/900/message/?limit=20", headers: apiHeaders("access-token-xxxxxx"), reply: () => new Response("busy", { status: 502 }) }]) });
+    const page = "https://api.boosty.to/v1/blog/coop-team/subscribers?limit=100&offset=0&sort_by=on_time&order=gt&with_follow=false";
+    const once = (token: string, reply: () => Response) => createBoostyApi({ blog: "coop-team", priceField: "RUB", credential: tokens(token, null).provider,
+        fetchImplementation: strictFetch([{ method: "GET", url: page, headers: apiHeaders(token), reply }]) });
+    await assert.rejects(once("old-access-token-x", () => new Response("", { status: 401 })).subscribers(0), BoostyAuthError);
     // A request mismatch inside the strict fake is an AssertionError, which must not pass as the expected failure.
     const notFake = (error: Error) => !(error instanceof assert.AssertionError);
-    await assert.rejects(outage.messages("900"), (error: Error) => notFake(error) && !(error instanceof BoostyAuthError));
-    const html = createBoostyApi({ blog: "coop-team", priceField: "RUB", credential: tokens("access-token-xxxxxx", null).provider,
-        fetchImplementation: strictFetch([{ method: "GET", url: "https://api.boosty.to/v1/dialog/?limit=20", headers: apiHeaders("access-token-xxxxxx"), reply: () => new Response("<html>", { headers: { "content-type": "text/html" } }) }]) });
-    await assert.rejects(html.dialogs(null), notFake);
+    await assert.rejects(once("access-token-xxxxxx", () => new Response("busy", { status: 502 })).subscribers(0), (error: Error) => notFake(error) && !(error instanceof BoostyAuthError));
+    await assert.rejects(once("access-token-xxxxxx", () => new Response("<html>", { headers: { "content-type": "text/html" } })).subscribers(0), notFake);
 });
 
-test("real responses replay: subscriber states, dialogs and messages", () => {
-    const row = (id: string, subscribed: boolean, status: string, offTime: string | null, levelId: string, price: number) => ({ id, subscribed, status, offTime, blacklisted: false, levelId, price });
+test("real responses replay: subscriber states and hashed emails", () => {
+    const row = (id: string, subscribed: boolean, status: string, offTime: string | null, levelId: string, price: number) =>
+        ({ id, emailSha256: emailHash(`supporter${id.slice(-1)}@example.invalid`), subscribed, status, offTime, blacklisted: false, levelId, price });
     assert.deepEqual(parseSubscriberPage(fixture("subscribers"), "USD"), { total: 5, subscribers: [
         row("9000002", true, "active", null, "4018927", 0), row("9000003", true, "active", null, "4035410", 5), row("9000004", false, "paused", "2026-11-07T12:00:00.000Z", "4035410", 5),
         row("9000005", true, "active", "2026-11-11T12:00:00.000Z", "4035410", 5), row("9000006", false, "inactive", "2026-11-05T12:00:00.000Z", "4035410", 5)] });
-    assert.deepEqual(parseDialogPage(fixture("dialogs")), { nextOffset: "20", dialogs: [
-        { dialogId: "7000001", chatmateId: "9000007", lastMessageId: "5000001", lastMessageAt: "2026-11-04T12:00:00.000Z" },
-        { dialogId: "7000002", chatmateId: "9000008", lastMessageId: "5000002", lastMessageAt: "2026-11-01T12:00:00.000Z" }] });
-    assert.deepEqual(parseMessagePage(fixture("dialog-messages")), [{ messageId: "5000001", authorId: "9000007", messageAt: "2026-11-04T12:00:00.000Z", code: "BLC-AB12C-DE34F" }]);
 });
 
-test("subscriber, dialog and message parsers read only the allowlisted subset and fail closed on identity", () => {
-    assert.deepEqual(parseSubscriberPage({ data: [{ id: 1, subscribed: "yes", status: "Active!", offTime: 1.5, level: { id: 9, price: 300 } }, { id: 2 }, { id: 3, isBlackListed: 1, levelId: 7 }], total: 3 }, "price").subscribers, [
-        { id: "1", subscribed: null, status: null, offTime: null, blacklisted: false, levelId: "9", price: 300 }, { id: "2", subscribed: null, status: null, offTime: null, blacklisted: false, levelId: null, price: null },
-        { id: "3", subscribed: null, status: null, offTime: null, blacklisted: null, levelId: "7", price: null }]);
+test("the subscriber parser reads only the allowlisted subset, hashes a normalized email and fails closed on identity", () => {
+    assert.deepEqual(parseSubscriberPage({ data: [{ id: 1, email: " Supporter@Example.INVALID ", subscribed: "yes", status: "Active!", offTime: 1.5, level: { id: 9, price: 300 } }, { id: 2, email: "  " }, { id: 3, email: 7, isBlackListed: 1, levelId: 7 }], total: 3 }, "price").subscribers, [
+        { id: "1", emailSha256: emailHash("supporter@example.invalid"), subscribed: null, status: null, offTime: null, blacklisted: false, levelId: "9", price: 300 },
+        { id: "2", emailSha256: null, subscribed: null, status: null, offTime: null, blacklisted: false, levelId: null, price: null },
+        { id: "3", emailSha256: null, subscribed: null, status: null, offTime: null, blacklisted: null, levelId: "7", price: null }]);
     for (const bad of [{ data: [{ id: "1" }], total: 1 }, { data: [{ id: 0 }], total: 1 }, { data: [], total: -1 }, { data: Array.from({ length: 101 }, (_, i) => ({ id: i + 1 })), total: 101 }, { total: 0 }]) {
         assert.throws(() => parseSubscriberPage(bad, "RUB"), JSON.stringify(bad));
     }
-    assert.deepEqual(parseDialogPage({ data: [{ id: 901 }], extra: { offset: 20 } }), { dialogs: [{ dialogId: "901", chatmateId: null, lastMessageId: null, lastMessageAt: null }], nextOffset: "20" });
-    assert.deepEqual(parseDialogPage({ data: [] , extra: { offset: 20 } }), { dialogs: [], nextOffset: null });
-    assert.throws(() => parseDialogPage({ data: [{ chatmate: { id: 1 } }] }));
-    assert.deepEqual(parseMessagePage({ data: [
-        { id: 32, author: { id: 1, name: "Creator" }, data: [{ type: "link", content: "BLC-AB12C-DE34F", url: "https://x" }] },
-        { id: 33, authorId: 8888, isDeleted: true, data: [{ type: "text", content: "BLC-AB12C-DE34F" }] }, { authorId: 8888 }] }), [
-        { messageId: "32", authorId: "1", messageAt: null, code: null }]);
 });
 
 test("evidence: real subscriber states, two-poll absence, no-loss uncertainty and nextPayTime ignored", async () => {
@@ -164,8 +140,7 @@ test("evidence: real subscriber states, two-poll absence, no-loss uncertainty an
 test("a subscriber list is complete only when it reaches its stated total without duplicates", async () => {
     const pages = (...results: { ids: number[]; total: number }[]): BoostyApi & { offsets: number[] } => {
         const offsets: number[] = [];
-        return { offsets, dialogs: async () => { throw new Error("unused"); }, messages: async () => { throw new Error("unused"); },
-            subscribers: async offset => { offsets.push(offset); const next = results.shift()!; return { total: next.total, subscribers: next.ids.map(id => active(String(id))) }; } };
+        return { offsets, subscribers: async offset => { offsets.push(offset); const next = results.shift()!; return { total: next.total, subscribers: next.ids.map(id => active(String(id))) }; } };
     };
     const full = pages({ ids: Array.from({ length: 100 }, (_, i) => i + 1), total: 150 }, { ids: Array.from({ length: 50 }, (_, i) => i + 101), total: 150 });
     assert.equal((await fetchCompleteSubscribers(full, Infinity, Date.now)).size, 150); assert.deepEqual(full.offsets, [0, 100]);
@@ -224,7 +199,7 @@ test("refresh refusal, outage and an unstored rotation never yield a token or lo
     assert.deepEqual(alerts, ["unavailable"]); assert.equal(reads, 2, "an unacknowledged rotation is checked against the store before giving up");
 });
 
-test("worker failures freeze evidence: no evidence write, stale-only marking, alerts and closed replies", async () => {
+test("worker failures freeze evidence without links or loss; a complete poll matches unique emails first", async () => {
     const syncSecret = "boosty-sync-secret-fixture";
     const lease = { token: "bbbbbbbb-1111-4111-8111-111111111111", pollDue: true, lastCompleteCount: 100, now: polledAt };
     // Builds a worker over a recording RPC and the given API behavior.
@@ -237,7 +212,7 @@ test("worker failures freeze evidence: no evidence write, stale-only marking, al
             if (operation === "polled") return { alert: true };
             return {};
         };
-        const fullApi: BoostyApi = { dialogs: async () => ({ dialogs: [], nextOffset: null }), messages: async () => [], subscribers: async () => ({ subscribers: [], total: 0 }), ...api };
+        const fullApi: BoostyApi = { subscribers: async () => ({ subscribers: [], total: 0 }), ...api };
         const handler = createBoostyMembershipHandler({ adapter: { policy, api: fullApi, credential: { current: async () => "a", replace: async () => null, reportFailure: credential.reportFailure ?? (async reason => { reports.push(reason); }) } },
             syncSecret, rpc, alert: async kind => { alerts.push(kind); }, log: () => undefined });
         const wake = async (key = syncSecret, method = "POST") => { const response = await handler(new Request("https://edge.invalid/boosty-membership", { method, headers: { "x-boosty-sync-key": key } })); return { status: response.status, code: (await response.json() as { code: string }).code }; };
@@ -252,25 +227,35 @@ test("worker failures freeze evidence: no evidence write, stale-only marking, al
 
     const rejected = harness({ subscribers: async () => { throw new BoostyAuthError("x"); } });
     assert.deepEqual(await rejected.wake(), { status: 503, code: "credential_unavailable" });
-    assert.deepEqual(rejected.operations(), ["acquire", "linked", "stale", "polled", "release"]); assert.deepEqual(rejected.reports, ["rejected"]);
+    assert.deepEqual(rejected.operations(), ["acquire", "stale", "polled", "release"]); assert.deepEqual(rejected.reports, ["rejected"]);
     const shortList = harness({ subscribers: async () => ({ subscribers: [], total: 3 }) });
     assert.deepEqual(await shortList.wake(), { status: 503, code: "sync_incomplete" });
-    assert.deepEqual(shortList.operations(), ["acquire", "linked", "stale", "polled", "release"]); assert.deepEqual(shortList.alerts, []);
+    assert.deepEqual(shortList.operations(), ["acquire", "stale", "polled", "release"]); assert.deepEqual(shortList.alerts, []);
     const outage = harness({ subscribers: async () => { throw new Error("Boosty unavailable"); } });
     assert.deepEqual(await outage.wake(), { status: 503, code: "sync_incomplete" });
-    assert.ok(!outage.operations().includes("evidence"));
+    assert.deepEqual(outage.operations(), ["acquire", "stale", "polled", "release"]);
     const dropped = harness({ subscribers: async () => ({ subscribers: [active("1")], total: 1 }) });
     assert.deepEqual(await dropped.wake(), { status: 503, code: "sync_incomplete" });
-    assert.deepEqual(dropped.operations(), ["acquire", "linked", "stale", "polled", "release"]); assert.deepEqual(dropped.alerts, ["breaker_tripped"]);
+    assert.deepEqual(dropped.operations(), ["acquire", "stale", "polled", "release"]); assert.deepEqual(dropped.alerts, ["breaker_tripped"]);
     assert.deepEqual(dropped.calls.find(call => call.operation === "polled")?.input, { token: lease.token, complete: false, tripped: true, total: null });
-    const dialogFailure = harness({ dialogs: async () => { throw new Error("Boosty unavailable"); }, subscribers: async () => ({ subscribers: Array.from({ length: 100 }, (_, i) => active(String(i + 1))), total: 100 }) });
-    assert.deepEqual(await dialogFailure.wake(), { status: 503, code: "sync_incomplete" });
-    assert.deepEqual(dialogFailure.operations(), ["acquire", "linked", "evidence", "polled", "release"], "a failed link scan does not block a complete poll");
-    const evidence = dialogFailure.calls.find(call => call.operation === "evidence")!.input.results as { evidence: { verification: string; paidAccessEndedAt?: string }; absentSince: string }[];
+    // Emails shared by two subscribers, and missing emails, are never sent for matching.
+    const listed = [active("1", "one@example.invalid"), active("2", "shared@example.invalid"), active("3", "shared@example.invalid"), active("4"),
+        ...Array.from({ length: 96 }, (_, i) => active(String(i + 5), `s${i + 5}@example.invalid`))];
+    const complete = harness({ subscribers: async () => ({ subscribers: listed, total: 100 }) });
+    assert.deepEqual(await complete.wake(), { status: 200, code: "synced" });
+    assert.deepEqual(complete.operations(), ["acquire", "match", "linked", "evidence", "polled", "release"], "links are matched before linked heads are read");
+    const matched = complete.calls.find(call => call.operation === "match")!.input.subscribers as { boostyUserId: string; emailSha256: string }[];
+    assert.deepEqual(matched.map(entry => entry.boostyUserId), ["1", ...Array.from({ length: 96 }, (_, i) => String(i + 5))]);
+    assert.deepEqual(matched[0], { boostyUserId: "1", emailSha256: emailHash("one@example.invalid") });
+    const evidence = complete.calls.find(call => call.operation === "evidence")!.input.results as { evidence: { verification: string; paidAccessEndedAt?: string }; absentSince: string }[];
     assert.deepEqual([evidence[0].evidence.verification, evidence[0].evidence.paidAccessEndedAt, typeof evidence[0].absentSince], ["nonqualifying", undefined, "string"], "a first absence is not loss");
+    const notDue = harness({ subscribers: async () => { throw new Error("not called"); } });
+    lease.pollDue = false;
+    assert.deepEqual(await notDue.wake(), { status: 200, code: "synced" });
+    assert.deepEqual(notDue.operations(), ["acquire", "release"]);
 });
 
-test("website-account Boosty operations are strict and inert while the adapter is unconfigured", async () => {
+test("website-account Boosty status is strict and inert while the adapter is unconfigured", async () => {
     const paths: string[] = [];
     const handler = createWebsiteAccountHandler({ supabaseUrl: "https://project.supabase.co", serviceRoleKey: "synthetic-service-key", policy: null, boosty: null,
         fetch: async input => {
@@ -282,7 +267,6 @@ test("website-account Boosty operations are strict and inert while the adapter i
     // Sends one authenticated website-account request.
     const call = async (body: unknown) => { const response = await handler(new Request("https://project.supabase.co/functions/v1/website-account", { method: "POST", headers: { Authorization: "Bearer synthetic", "Content-Type": "application/json" }, body: JSON.stringify(body) })); return { status: response.status, body: await response.json() }; };
     assert.deepEqual(await call({ operation: "boosty-status" }), { status: 200, body: { version: 1, configured: false } });
-    assert.deepEqual(await call({ operation: "boosty-start" }), { status: 409, body: { error: "not_configured" } });
-    for (const bad of [{ operation: "boosty-status", code: "BLC-AB12C-DE34F", extra: 1 }, { operation: "boosty-status", code: "blc-ab12c-de34f" }, { operation: "boosty-link" }]) assert.equal((await call(bad)).status, 400);
+    for (const bad of [{ operation: "boosty-status", extra: 1 }, { operation: "boosty-start" }, { operation: "boosty-unlink" }]) assert.equal((await call(bad)).status, 400);
     assert.ok(paths.every(path => !path.startsWith("/rest/v1/rpc/boosty")));
 });

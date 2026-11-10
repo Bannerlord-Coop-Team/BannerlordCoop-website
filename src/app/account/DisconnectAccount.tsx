@@ -4,24 +4,13 @@ import { useTranslations } from "@/app/lib/localization/client";
 import { LoadingSpinner } from "@/app/components/ui/LoadingSpinner";
 import { useId, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
-import type { FundingProvider } from "../../../supabase/functions/_shared/funding-provider";
 
 const buttonClass =
     "inline-flex min-h-11 items-center justify-center gap-2 rounded-sm border border-white/20 px-4 py-2 text-sm text-foreground transition-colors hover:border-gold hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold disabled:cursor-not-allowed disabled:opacity-50";
 
-// Every funding provider's display name; a provider missing here fails to compile.
-const FUNDING_DISPLAY_NAMES = { patreon: "Patreon", boosty: "Boosty" } as const satisfies Record<FundingProvider, string>;
-export type DisconnectProvider = "Discord" | (typeof FUNDING_DISPLAY_NAMES)[FundingProvider];
-// The explanation shown before disconnecting each sign-in or funding provider; one entry is required per provider.
-const DISCONNECT_EXPLANATIONS = {
-    Discord: "disconnect.discordExplanation",
-    [FUNDING_DISPLAY_NAMES.patreon]: "disconnect.patreonExplanation",
-    [FUNDING_DISPLAY_NAMES.boosty]: "disconnect.boostyExplanation",
-} as const satisfies Record<DisconnectProvider, string>;
-
 /** Requires explicit localized confirmation before disconnecting the selected provider. */
 export function DisconnectAccount({provider, action, disabledReason,}: {
-    provider: DisconnectProvider;
+    provider: "Discord" | "Patreon";
     action: () => Promise<void>;
     disabledReason?: string;
 }) {
@@ -49,7 +38,9 @@ export function DisconnectAccount({provider, action, disabledReason,}: {
             {confirming && (
                 <form id={id} action={action} className="mt-3 rounded-sm border border-white/10 p-4">
                     <p className="text-sm leading-6 text-foreground-muted">
-                        {t(DISCONNECT_EXPLANATIONS[provider])}
+                        {provider === "Patreon"
+                            ? t("disconnect.patreonExplanation")
+                            : t("disconnect.discordExplanation")}
                     </p>
 
                     <ConfirmationButtons provider={provider}

@@ -6,22 +6,31 @@ official API: the adapter uses the internal web API called by the unofficial cli
 `beekamai/boosty-api` and `ath31st/boosty_api_rs`. A read-only capture on 2026-11-10 confirmed
 the shapes it reads; see [API assumptions](#api-assumptions) and [Commissioning](#commissioning).
 
-## Linking by DM code
+## Linking by email
 
-1. On `/account` the owner presses **Get a Boosty link code**. `website-account`
-   (`boosty-start`) issues `BLC-XXXXX-XXXXX` (50 random bits); the database stores only its
-   SHA-256, and the page keeps the code in an httpOnly cookie for 30 minutes.
-2. The owner sends the code by Boosty private message to the creator (`creatorName`).
-3. The `boosty-membership` worker reads new messages in the creator's dialogs. A message links
-   only if it holds exactly one code, that code is pending for an account, and the author is the
-   dialog's counterparty, so the creator's own replies never link. The head becomes `linked`
-   with a new generation and a Boosty hint; evidence is `unknown` until the next poll, which
-   linking schedules immediately.
+Each complete subscriber poll links subscribers to website accounts by email: Boosty's
+`email` and the account's Supabase Auth email, both trimmed and lower-cased. Neither email is
+verified, by design: whoever subscribes on Boosty with an account's email funds that account.
+Supporters must subscribe with the same email they use on the website. The worker hashes
+Boosty's emails on receipt and sends only SHA-256 digests to the database; no email is stored.
 
-One pending code per account, at most 5 per hour (then HTTP 429), 30-minute lifetime (a message
-sent while live is accepted up to an hour later). A Boosty user already linked to another
-account is refused (`conflict`), never moved, as with Patreon. Unlink drops the binding and
-bumps the generation; Auth deletion tombstones the head and frees the Boosty user.
+- A subscriber links only when its email is unique among subscribers and exactly one account
+  has it, and neither side is already linked. Ambiguous emails are skipped silently.
+- The head becomes `linked` with a new generation and a Boosty hint, and the same poll decides
+  its evidence.
+- A link is released when its subscriber is listed with an email that is no longer the
+  account's (either side changed it): the binding is dropped and the head fences to
+  `unlinked` with a new generation, so the control plane sees an identity change. That same
+  poll may then link the subscriber to the account that now has the email.
+- A second account taking a linked email does not move the link: the email is then ambiguous
+  and the existing link stays. A subscriber missing from the list keeps its link; absence is
+  decided as evidence below.
+- Auth deletion tombstones the head and frees the Boosty user.
+
+With `BOOSTY_STATUS_ENABLED=true` on the website server, `/account` shows a read-only Boosty
+status (linked through your email, or subscribe on Boosty with this email) once
+`website-account` has the Boosty policy. There is no unlink: the next poll would link the
+account again.
 
 ## Evidence
 
@@ -43,18 +52,19 @@ listed, so `status` and `offTime` decide loss. After a complete poll:
 
 Safeguards: nothing else writes loss. A failed page, incomplete list, budget overrun,
 credential failure or circuit-breaker trip (a complete list more than `maximumDropFraction`
-shorter than the last one) writes no evidence; only evidence older than 24 hours becomes
+shorter than the last one) writes no evidence and changes no link; only evidence older than 24 hours becomes
 `unknown`. A trip holds the baseline and alerts operators at most every 6 hours.
 
 ## Configuration
 
 - `BOOSTY_MEMBERSHIP_POLICY_JSON` (Edge, read by `website-account` and `boosty-membership`):
-  `{"blog","qualifyingLevelIds","minimumPrice","priceField":"price"|"RUB"|"USD"|"EUR","creatorName","maximumDropFraction","policyVersion":"boosty-paid-v1"}`.
+  `{"blog","qualifyingLevelIds","minimumPrice","priceField":"price"|"RUB"|"USD"|"EUR","maximumDropFraction","policyVersion":"boosty-paid-v1"}`.
   The blog and level ids must match the control plane's Boosty policy entry.
+- Website server: `BOOSTY_STATUS_ENABLED=true` shows the read-only Boosty status on `/account`;
+  it gates only that display, never linking.
 - `boosty-membership` only: `BOOSTY_SYNC_SECRET` (header `x-boosty-sync-key`),
   `BOOSTY_DEVICE_ID` and `BOOSTY_REFRESH_TOKEN` (seed the credential store once), `SMTP_PASS`,
   `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.
-- Website server: `BOOSTY_LINKING_ENABLED=true` shows the Boosty section on `/account`.
 
 Without the policy and both seeds the adapter answers `503 not_configured`.
 
@@ -98,27 +108,23 @@ Confirmed by the 2026-11-10 capture ([fixtures](../tests/fixtures/boosty/README.
   (`device_id`, `device_os=web`, `grant_type=refresh_token`, `refresh_token`) and its
   `{access_token, refresh_token, expires_in}` reply; `expires_in` is seconds and the refresh
   token rotates.
-- Subscriber fields `id`, `subscribed`, `status`, `offTime` (Unix seconds),
+- Subscriber fields `id`, `email`, `subscribed`, `status`, `offTime` (Unix seconds),
   `isBlackListed`, `level.{id, price, currencyPrices}` (`price` in the blog currency, USD),
   the `{data, total, offset, limit}` envelope, and that the request `offset` counts rows.
-- Dialog (`id`, `chatmate.id`, `lastMessage.{id, createdAt}`, `extra.offset`) and message
-  (`id`, `authorId`, `createdAt`, `isDeleted`, Draft.js-encoded text blocks) shapes, newest
-  dialog first.
 
-Still unconfirmed: the `levelId` and `author.id` fallbacks (absent from the capture) and that
-message ids increase.
+Still unconfirmed: the `levelId` fallback (absent from the capture).
 
 ## Commissioning
 
 This is the last rollout step in [membership onboarding](membership-onboarding.md#funding-providers-snapshot-v2-claim-v3).
 The control plane's policy must already list Boosty: a Boosty hint it cannot handle is never
-acknowledged, and the account's link calls soon fail with `PT429`.
+acknowledged, and the account's pending Boosty hints soon hit their bound.
 
 1. Done 2026-11-10: a read-only capture of each route is checked into `tests/fixtures/boosty`.
 2. Confirm the control plane lists Boosty, then set `BOOSTY_MEMBERSHIP_POLICY_JSON`, seed the
    credential and enable dispatch.
-3. Set `BOOSTY_LINKING_ENABLED`, link a test account and confirm the control plane's Boosty
-   snapshot and the acknowledgement of its hint.
+3. Subscribe a test account's email on Boosty, wait for a poll and confirm the control plane's
+   Boosty snapshot and the acknowledgement of its hint, then set `BOOSTY_STATUS_ENABLED`.
 
-To withdraw Boosty, unset `BOOSTY_LINKING_ENABLED` and disable dispatch first; the control plane
+To withdraw Boosty, unset `BOOSTY_STATUS_ENABLED` and disable dispatch first; the control plane
 removes its Boosty entry only after no Boosty head or unacknowledged hint remains.
