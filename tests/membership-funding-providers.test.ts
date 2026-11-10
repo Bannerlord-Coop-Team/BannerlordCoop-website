@@ -270,5 +270,31 @@ test("provider fences share the account lock and version 3 claims keep SKIP LOCK
             assert.ok(!secondEvents.some(event => event.eventId === firstEvents[0].eventId));
             assert.ok([...firstEvents, ...secondEvents].every(event => (FUNDING_PROVIDERS as readonly unknown[]).includes(event.provider)));
         });
+        // The Boosty adapter migration upgrades the same populated database.
+        for (const name of ["20261009170000_patreon_creator_token_refresh.sql", "20261110120000_boosty_membership_adapter.sql"]) await owner.query(await readFile(`supabase/migrations/${name}`, "utf8"));
+        const sync = async (client: pg.Client, operation: string, input: Row) => (await client.query("select public.boosty_membership_sync($1,$2::jsonb) result", [operation, JSON.stringify(input)])).rows[0].result as Row | null;
+        await t.test("concurrent Boosty workers get exactly one lease", async () => {
+            for (let round = 0; round < 10; round++) {
+                const leases = await Promise.all([sync(owner, "acquire", { blog: "coop-team" }), sync(peer, "acquire", { blog: "coop-team" })]);
+                for (const lease of leases) if (lease !== null) await sync(owner, "release", { token: lease.token });
+                assert.equal(leases.filter(lease => lease !== null).length, 1, `round ${round}`);
+            }
+        });
+        await t.test("a code match for a locked account refuses with 55P03 and commits nothing, then links once", async () => {
+            const account = crypto.randomUUID();
+            await owner.query("insert into auth.users(id) values($1)", [account]);
+            const hash = "d".repeat(64);
+            await rpc(owner, "boosty_link_begin", [account, null, hash]);
+            const lease = await sync(peer, "acquire", { blog: "coop-team" });
+            const link = () => sync(peer, "link", { token: lease!.token, dialogId: 77, cursor: 5, matches: [{ messageId: 5, boostyUserId: "7070", codeHash: hash, messageAt: null }] });
+            await owner.query("begin");
+            await rpc(owner, "membership_fence", [account, null, false]);
+            await assert.rejects(link(), { code: "55P03" });
+            await owner.query("commit");
+            assert.equal((await owner.query("select count(*)::int n from boosty_membership.dialog_cursors where dialog_id=77")).rows[0].n, 0, "the cursor did not move past the unprocessed match");
+            assert.deepEqual(await link(), { linked: 1, refused: 0 });
+            await sync(peer, "release", { token: lease!.token });
+            assert.equal((await rpc(owner, "membership_funding_fence", [account, "boosty", null, false])).providerUserId, "7070");
+        });
     } finally { await owner.end(); await peer.end(); }
 });

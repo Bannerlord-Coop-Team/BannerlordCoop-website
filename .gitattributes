@@ -9,3 +9,4 @@ supabase/migrations/202611090002_patreon_lapse_report_links.sql text eol=lf
 
 # Mirrored into ControlPlane's shared Supabase ledger; keep its bytes stable across checkouts.
 supabase/migrations/20261109140000_membership_funding_providers.sql text eol=lf
+supabase/migrations/20261110120000_boosty_membership_adapter.sql text eol=lf

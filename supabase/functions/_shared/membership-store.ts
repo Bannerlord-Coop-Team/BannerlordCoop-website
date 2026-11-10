@@ -66,6 +66,6 @@ export function membershipStore(config: StoreConfig) {
             if (!record(response) || response.id !== accountId) throw new Error("Auth account mismatch");
             return { discordUserId: optionalDiscord(response), deleted: false };
         },
-        rpc(name: "membership_fence" | "membership_funding_fence" | "membership_funding_claim" | "membership_begin" | "membership_complete" | "membership_unlink" | "membership_changes" | "membership_claim" | "membership_ack" | "membership_ack_claim" | "membership_status" | "membership_discord_begin" | "membership_discord_confirm" | "membership_discord_check", body: Record<string, unknown>) { return request(`/rest/v1/rpc/${name}`, { method: "POST", body: JSON.stringify(body) }); },
+        rpc(name: "membership_fence" | "membership_funding_fence" | "membership_funding_claim" | "membership_begin" | "membership_complete" | "membership_unlink" | "membership_changes" | "membership_claim" | "membership_ack" | "membership_ack_claim" | "membership_status" | "membership_discord_begin" | "membership_discord_confirm" | "membership_discord_check" | "boosty_link_status" | "boosty_link_begin" | "boosty_unlink", body: Record<string, unknown>) { return request(`/rest/v1/rpc/${name}`, { method: "POST", body: JSON.stringify(body) }); },
     };
 }

@@ -1,6 +1,8 @@
 import { DatabaseContention, databaseContentionResponse } from "./database-contention.ts";
 import { boundedJson, exact, HASH, parseSnapshot, randomToken, record, sha256, validUntil, type Policy } from "./membership.ts";
 import { membershipStore, MembershipRateLimit, membershipRateLimitResponse, type StoreConfig } from "./membership-store.ts";
+import { boostyAccountOperation } from "./boosty-account.ts";
+import type { BoostyPolicy } from "./boosty-policy.ts";
 /** The Edge Function and website server share the same bounded public status projection. */
 export function websiteAccountStatus(value: unknown, user: { accountId: string; discordUserId: string | null }, configured: boolean) {
     if (!record(value) || typeof value.pending !== "boolean" || typeof value.verificationPending !== "boolean") throw new Error("Invalid status");
@@ -8,7 +10,7 @@ export function websiteAccountStatus(value: unknown, user: { accountId: string; 
     if (s.accountId !== user.accountId || s.discordUserId !== user.discordUserId) throw new Error("Account status identity mismatch");
     return { version: 1, accountId: user.accountId, hasDiscord: user.discordUserId !== null, configured, verificationPending: value.verificationPending, membership: { linked: s.patreonUserId !== null, verification: s.verification, sync: value.pending ? "pending" : s.revision === "0" ? "not_needed" : "applied", verifiedAt: s.verifiedAt, validUntil: validUntil(s), retryAt: null, refreshMode: "oauth_reauthorization" } };
 }
-export function createWebsiteAccountHandler(config: StoreConfig & { policy: Policy | null }) {
+export function createWebsiteAccountHandler(config: StoreConfig & { policy: Policy | null; boosty?: BoostyPolicy | null }) {
     const store = membershipStore(config);
     const response = (body: unknown, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" } });
     return async (request: Request) => {
@@ -38,7 +40,8 @@ export function createWebsiteAccountHandler(config: StoreConfig & { policy: Poli
             if (body.operation === "discord-confirm" && exact(body, ["operation", "token"]) && typeof body.token === "string" && HASH.test(body.token)) {
                 return response(await store.rpc("membership_discord_confirm", { p_account_id: user.accountId, p_token_hash: await sha256(body.token), p_discord_user_id: user.discordUserId }));
             }
-            return response({ error: "invalid_request" }, 400);
+            // Boosty operations are additive; they never change the Patreon/Discord contract above.
+            return await boostyAccountOperation(store, user, body, config.boosty ?? null, response) ?? response({ error: "invalid_request" }, 400);
         } catch (error) { return error instanceof DatabaseContention ? databaseContentionResponse() : error instanceof MembershipRateLimit ? membershipRateLimitResponse() : response({ error: "account_unavailable" }, 503); }
     };
 }
