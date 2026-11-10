@@ -282,23 +282,32 @@ layer and checked against each other:
   `membership_provider_heads` (every non-Patreon provider),
   `membership_provider_identifier_valid(provider, kind, value)` (the only SQL copy of the
   user/program/tier patterns; adapter tables and RPCs call it instead of repeating them),
-  `membership_provider_empty_evidence(provider)` (empty evidence and policy version; `NULL`
-  means "not a provider") and `membership_provider_identity(account, provider)` (the
-  current-link lookup). Applied migrations are never edited: a new provider is a **new
-  append-only migration** that widens both CHECKs and re-creates all three functions with
-  every existing provider's branch plus its own. The drift test scans
+  `membership_provider_policy_versions(provider)` (every accepted policy version, oldest
+  first, so stored evidence under an older version stays valid),
+  `membership_provider_empty_evidence(provider)` (empty evidence; `NULL` means "not a
+  provider") and `membership_provider_identity(account, provider)` (the current-link
+  lookup). Adapter tables check identifier columns with the helper, never a raw pattern.
+  Applied migrations are never edited: a new provider is a **new append-only migration**
+  that widens both CHECKs and re-creates all four functions with every existing
+  provider's branch plus its own. The drift test scans
   `supabase/migrations` and replays every migration that names these objects, so the new
   migration is covered automatically.
-- Account surface: one entry in `fundingAccountSurfaces` (`_shared/website-account.ts`,
-  `Record<FundingProvider, …>`). Wire names are derived as the provider id plus `-status`,
-  `-start` and `-unlink` (`_shared/funding-account.ts`); Patreon's legacy unprefixed
-  `status`/`unlink` is the single explicit exception, one section in
-  `src/app/account/funding-sections.tsx`, and one disconnect explanation in
-  `DisconnectAccount.tsx`.
+- Account surface, Edge: one entry in `fundingAccountSurfaces` (`_shared/website-account.ts`,
+  typed `Record<FundingProvider, …>`).
+- Account surface, wire names: derived as the provider id plus `-status`, `-start` and
+  `-unlink` (`_shared/funding-account.ts`). Patreon's legacy unprefixed `status`/`unlink`
+  is the single explicit exception.
+- Account surface, page: one section in `src/app/account/funding-sections.tsx`.
+- Account surface, disconnect: one explanation in `DisconnectAccount.tsx`.
 - `test/fixtures/cross-repo/funding-provider-contract-v1.json` is byte-identical to
   ControlPlane's copy at the same path; `tests/funding-provider-contract.test.ts` pins its
   SHA-256 and checks the TypeScript registry, the snapshot parser and the SQL registry
-  above against it. Change both repositories together and bump the fixture version.
+  above against it. Change both repositories together. Bumping the fixture version means
+  renaming the file (`-v2.json`, keeping `-v1.json` while older peers still validate
+  against it) and updating, in the same change, the path and digest constants of this
+  test, of ControlPlane's `test/hosting-funding-provider-contract.test.ts`, and the
+  `FUNDING_PROVIDER_CONTRACT` path of ControlPlane's paired harness
+  `test/manual/website-membership-fixture.ts`.
 
 A deployed control plane rejects a whole version 3 claim page if any hint names a
 provider it does not know, stalling every provider's hints. The control plane that knows

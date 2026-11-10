@@ -11,15 +11,30 @@ import { FUNDING_ACCOUNT_ACTIONS, fundingAccountOperation, fundingAccountOperati
 const CONTRACT_PATH = "test/fixtures/cross-repo/funding-provider-contract-v1.json";
 const CONTRACT_SHA256 = "2038c8a4892896457b5ec53ca526b97d479b4c52757c2a65169d6b7783633366";
 const KINDS = { userId: "user", programId: "program", tierId: "tier" } as const;
-// Schema the membership chain needs that never names a registry object. Every migration that does name one
-// is found by scanning the directory, so a later migration re-creating a registry function or altering a
-// provider CHECK is always replayed (and must apply) here; the drift test cannot pass on a stale schema.
+// Schema the membership chain needs that never names a registry object. Every migration that does name one,
+// a non-Patreon provider id or its adapter schema is found by scanning the directory, so a later migration
+// re-creating a registry function or altering a provider or identifier CHECK is always replayed (and must
+// apply) here; the drift test cannot pass on a stale schema.
 const PREREQUISITES = ["20260907212654_create_patreon_links.sql", "20260907220000_patreon_website_roles.sql", "20260907230000_atomic_live_console_assignments.sql",
     "202609080002_membership_onboarding.sql", "202609080003_membership_role_locking.sql", "20260908030000_patreon_event_reconciliation.sql",
     "20260910200000_membership_receipt_claims.sql", "202609110001_edge_owned_link_commit.sql", "20260919010000_actionable_patreon_retries.sql",
     "202609220001_patreon_allocation_webhooks.sql", "202609280003_account_owned_membership.sql", "202609280006_membership_paid_access_end.sql",
     "202610020001_membership_allocation_usd20.sql", "20261009170000_patreon_creator_token_refresh.sql"];
-const REGISTRY_OBJECTS = /membership_provider_identifier_valid|membership_provider_identity|membership_provider_empty_evidence|membership_provider_heads|membership_provider_fence|membership_provider_snapshot_json|membership_notify_provider|membership_outbox/u;
+type AdapterProvider = Exclude<FundingProvider, "patreon">;
+type IdentifierColumn = { table: string; column: string; kind: "user" | "program" | "tier" };
+// Each non-Patreon provider's adapter schema and the identifier columns it stores; a missing provider fails to compile.
+const ADAPTERS: Record<AdapterProvider, { schema: string; identifiers: IdentifierColumn[] }> = {
+    boosty: { schema: "boosty_membership", identifiers: [
+        { table: "boosty_membership.links", column: "boosty_user_id", kind: "user" },
+        { table: "boosty_membership.absences", column: "boosty_user_id", kind: "user" },
+        { table: "boosty_membership.sync_state", column: "blog", kind: "program" },
+    ] },
+};
+const ADAPTER_PROVIDERS = FUNDING_PROVIDERS.filter((provider): provider is AdapterProvider => provider !== "patreon");
+const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+// Patreon's own name appears throughout its historical tables, which keep their own CHECKs outside this registry.
+const REGISTRY_OBJECTS = new RegExp(["membership_provider_", "membership_notify_provider", "membership_outbox",
+    ...ADAPTER_PROVIDERS.flatMap(provider => [provider, ADAPTERS[provider].schema])].map(escape).join("|"), "u");
 type Identifiers = { userId: string; programId: string; tierId: string; memberId: string | null };
 type ContractProvider = { provider: FundingProvider; userId: string; programId: string; tierId: string; memberResource: "uuid" | "none"; policyVersions: string[]; valid: Identifiers; invalid: Identifiers };
 type Row = Record<string, unknown>;
@@ -94,6 +109,22 @@ test("the SQL provider registry matches the TypeScript provider list and the sha
             assert.deepEqual(checkedProviders(check.definition as string), expected, check.table as string);
         }
 
+        // Storage-level identifier CHECKs: exactly the expected set, each calling the helper, and no other CHECK
+        // (such as a raw `~` pattern) on any identifier column, so SQL never admits an id the parsers reject.
+        const schemas = ["public", ...ADAPTER_PROVIDERS.map(provider => ADAPTERS[provider].schema)];
+        const expected = [{ table: "membership_provider_heads", column: "provider_user_id", definition: "CHECK (membership_provider_identifier_valid(provider, 'user'::text, provider_user_id))" },
+            ...ADAPTER_PROVIDERS.flatMap(provider => ADAPTERS[provider].identifiers.map(({ table, column, kind }) =>
+                ({ table, column, definition: `CHECK (membership_provider_identifier_valid('${provider}'::text, '${kind}'::text, ${column}))` })))];
+        const definitions = async (where: string, args: unknown[]) => (await query(`select c.conrelid::regclass::text as "table", replace(pg_get_constraintdef(c.oid), 'public.', '') as definition
+            from pg_constraint c where c.contype = 'c' and c.connamespace = any(select oid from pg_namespace where nspname = any($1::text[])) and ${where} order by 1, 2`, [schemas, ...args]))
+            .map(row => ({ table: row.table as string, definition: row.definition as string }));
+        assert.deepEqual(await definitions("pg_get_constraintdef(c.oid) like '%membership_provider_identifier_valid%'", []),
+            expected.map(({ table, definition }) => ({ table, definition })).sort((a, b) => a.table < b.table ? -1 : a.table > b.table ? 1 : a.definition < b.definition ? -1 : 1));
+        for (const { table, column, definition } of expected) {
+            const onColumn = await definitions("c.conrelid = $2::regclass and exists(select 1 from pg_attribute a where a.attrelid = c.conrelid and a.attnum = any(c.conkey) and a.attname = $3)", [table, column]);
+            assert.deepEqual(onColumn, [{ table, definition }], `${table}.${column} is checked only by the identifier helper`);
+        }
+
         // The single SQL grammar helper has one arm per non-Patreon provider and kind, with the fixture's pattern.
         const helper = (await query("select pg_get_functiondef('public.membership_provider_identifier_valid'::regproc) as body"))[0].body as string;
         const arms = [...helper.matchAll(/when '([a-z0-9-]+):([a-z]+)' then p_value ~ '([^']+)'/gu)].map(([, provider, kind, pattern]) => ({ provider, kind, pattern }));
@@ -109,12 +140,18 @@ test("the SQL provider registry matches the TypeScript provider list and the sha
         assert.equal(await valid("boosty", "member", "1"), false);
         assert.equal(await valid("boosty", "user", null), null, "a null identifier stays nullable");
 
-        // Each non-Patreon provider has empty evidence in its first policy version and an identity arm; nothing else does.
+        // Each non-Patreon provider accepts exactly the fixture's policy versions, has empty evidence in one of them
+        // and an identity arm; nothing else does.
         for (const entry of others) {
+            assert.deepEqual((await query("select public.membership_provider_policy_versions($1) as v", [entry.provider]))[0].v, entry.policyVersions);
             const empty = (await query("select public.membership_provider_empty_evidence($1) as e", [entry.provider]))[0].e as Row;
-            assert.deepEqual([empty.policyVersion, empty.memberId], [entry.policyVersions[0], null]);
+            assert.ok(entry.policyVersions.includes(empty.policyVersion as string), entry.provider);
+            assert.equal(empty.memberId, null);
         }
-        for (const provider of ["patreon", "ko-fi", null]) assert.equal((await query("select public.membership_provider_empty_evidence($1) as e", [provider]))[0].e, null);
+        for (const provider of ["patreon", "ko-fi", null]) {
+            assert.equal((await query("select public.membership_provider_empty_evidence($1) as e", [provider]))[0].e, null);
+            assert.equal((await query("select public.membership_provider_policy_versions($1) as v", [provider]))[0].v, null);
+        }
         const identity = (await query("select pg_get_functiondef('public.membership_provider_identity'::regproc) as body"))[0].body as string;
         assert.deepEqual([...identity.matchAll(/when '([a-z0-9-]+)' then/gu)].map(match => match[1]), others.map(entry => entry.provider));
         await assert.rejects(query("select public.membership_provider_identity(gen_random_uuid(), 'ko-fi')"), /Invalid funding provider/u);

@@ -271,7 +271,7 @@ language sql immutable set search_path = '' as $$
   and e ?& array['verification','programId','memberId','tierIds','verifiedAt','paidThroughAt','policyVersion','evidenceSha256']
   and e->>'verification' in ('qualifying','nonqualifying','unknown','review_required')
   and e->>'programId' is not distinct from p_blog and e->'memberId'='null'::jsonb and e->'paidThroughAt'='null'::jsonb
-  and e->>'policyVersion'=public.membership_provider_empty_evidence('boosty')->>'policyVersion'
+  and e->>'policyVersion'=any(public.membership_provider_policy_versions('boosty'))
   and jsonb_typeof(e->'tierIds')='array' and jsonb_array_length(e->'tierIds') <= 1
   and not exists(select 1 from jsonb_array_elements(e->'tierIds') t where jsonb_typeof(t)<>'string' or not public.membership_provider_identifier_valid('boosty','tier',t#>>'{}'))
   and jsonb_typeof(e->'verifiedAt')='string' and e->>'verifiedAt' ~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$'

@@ -7,13 +7,14 @@ begin;
 -- get their own head table keyed by (account_id, provider).
 --
 -- This migration owns the provider-neutral machinery and the SQL provider registry:
--- the provider CHECKs below, membership_provider_identifier_valid (identifier grammar)
--- and membership_provider_empty_evidence (empty evidence and policy version), plus
+-- the provider CHECKs below, membership_provider_identifier_valid (identifier grammar),
+-- membership_provider_policy_versions (accepted policy versions),
+-- membership_provider_empty_evidence (empty evidence) and
 -- public.membership_provider_identity(account, provider), the current-link lookup the
 -- generic fence calls. Here it refuses every provider; each adapter migration re-creates
 -- it with every adapter's branch (Boosty's is 20261110120000_boosty_membership_adapter.sql).
 -- Adding a provider is a new append-only migration that widens the CHECKs and re-creates
--- the three registry functions with every existing provider's branch.
+-- the four registry functions with every existing provider's branch.
 -- tests/funding-provider-contract.test.ts checks the registry against TypeScript
 -- FUNDING_PROVIDERS and the shared provider contract fixture.
 
@@ -28,6 +29,14 @@ language sql immutable set search_path = '' as $$
   when 'boosty:program' then p_value ~ '^[a-z0-9][a-z0-9_-]{0,31}$'
   when 'boosty:tier' then p_value ~ '^[1-9][0-9]{0,19}$'
   else false end
+$$;
+
+-- Every policy version a non-Patreon provider's stored evidence may carry, oldest first; NULL
+-- for anything else. Adding a version appends to the list so evidence stored under an older one
+-- stays valid; the empty evidence below names one of them.
+create function public.membership_provider_policy_versions(p_provider text) returns text[]
+language sql immutable set search_path = '' as $$
+ select case p_provider when 'boosty' then array['boosty-paid-v1'] end
 $$;
 
 create table public.membership_provider_heads (
@@ -266,6 +275,7 @@ $function$;
 
 -- Internal helpers have no client or service grants; CREATE OR REPLACE keeps existing grants.
 revoke all on function public.membership_provider_identifier_valid(text,text,text),
+ public.membership_provider_policy_versions(text),
  public.membership_provider_identity(uuid,text),
  public.membership_provider_empty_evidence(text),
  public.membership_provider_snapshot_json(public.membership_provider_heads),
