@@ -6,7 +6,8 @@ import { PGlite } from "@electric-sql/pglite";
 import { createLapseInventoryLoader, parseLapseInventory } from "../_shared/patreon-lapse-inventory.ts";
 import { classifyLapseServers } from "../_shared/patreon-lapse-alert.ts";
 
-// Existing column/usage definitions from CP 33a693c01471b3ebd10b8e8afc945b0292f089e2.
+// Existing column/usage definitions from CP 33a693c01471b3ebd10b8e8afc945b0292f089e2, plus the `provider` columns
+// CP migration 129 (20261109130000_control_plane_funding_providers.sql) adds with the same 'patreon' default.
 // Execute the real append-only Website RPC migration, without a production connection.
 const schema = `
 create role anon; create role authenticated; create role service_role;
@@ -15,8 +16,10 @@ create table control_plane.managed_servers(server_id text primary key, guild_id 
 create table control_plane.hosting_entitlements(guild_id text, discord_user_id text, base_quota bigint, bonus_quota bigint, updated_at text);
 create table control_plane.hosting_website_accounts(account_id text, principal_id text);
 create table public.patreon_accounts(user_id uuid, patreon_user_id text);
-create table control_plane.hosting_subscription_grace(server_id text primary key, owner_id text, grace_id text, due_at text, campaign_id text);
-create table control_plane.hosting_membership_sources(account_id text, guild_id text, campaign_key text, snapshot_json text, updated_at text);
+create table control_plane.hosting_subscription_grace(server_id text primary key, owner_id text, grace_id text, due_at text, campaign_id text,
+  provider text not null default 'patreon');
+create table control_plane.hosting_membership_sources(account_id text, guild_id text, campaign_key text, snapshot_json text, updated_at text,
+  provider text not null default 'patreon');
 create table control_plane.hosting_jobs(job_id text primary key, state text);
 create table control_plane.hosting_role_restoration_authorizations(server_id text, restoration_job_id text, consumed_at text, invalidated_at text);
 create table control_plane.audit_events(audit_sequence bigint primary key, target_discord_user_id text, action text, reason text, occurred_at text);
@@ -27,6 +30,7 @@ create function public.patreon_lapse_server_owners() returns integer language sq
 `;
 const migration = readFile(new URL("../../migrations/202611080001_patreon_lapse_report_inventory.sql", import.meta.url), "utf8");
 const linksMigration = readFile(new URL("../../migrations/202611090002_patreon_lapse_report_links.sql", import.meta.url), "utf8");
+const patreonOnlyMigration = readFile(new URL("../../migrations/20261111120000_patreon_lapse_report_patreon_funding.sql", import.meta.url), "utf8");
 const owner = "supabase:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const account = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const server = "11111111-1111-4111-8111-111111111111";
@@ -204,6 +208,46 @@ test("overflow is explicit and refused, while an empty result remains valid", as
     } finally { await db.close(); }
 });
 
+test("the Patreon-only report drops servers funded by another provider and keeps every Patreon row exact", async () => {
+    const db = await database();
+    try {
+        const other = "supabase:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", otherAccount = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+        const otherServer = "55555555-5555-4555-8555-555555555555", unfunded = "66666666-6666-4666-8666-666666666666";
+        // A Patreon-funded server in grace, a server funded by another provider whose owner has no Patreon pledge, and an
+        // unfunded server whose account holds a Patreon source and a newer non-Patreon source.
+        await db.query("insert into control_plane.managed_servers values($1,'guild',$2,null,'running'),($3,'guild',$4,null,'running'),($5,'guild',$2,null,'running')", [server, owner, otherServer, other, unfunded]);
+        await db.query("insert into control_plane.hosting_website_accounts values($1,$2),($3,$4)", [account, owner, otherAccount, other]);
+        await db.query("insert into public.patreon_accounts values($1,'42')", [account]);
+        await db.query("insert into control_plane.hosting_subscription_grace values($1,$2,'grace','2026-11-10T00:00:00.000Z','100','patreon'),($3,$4,null,null,'coop-blog','boosty')", [server, owner, otherServer, other]);
+        await db.query(`insert into control_plane.hosting_membership_sources values
+            ($1,'guild','100','{"verification":"nonqualifying"}','2026-11-08T12:00:00.000Z','patreon'),
+            ($1,'guild','coop-blog','{"verification":"qualifying"}','2026-11-09T12:00:00.000Z','boosty'),
+            ($2,'guild','coop-blog','{"verification":"qualifying"}','2026-11-09T12:00:00.000Z','boosty')`, [account, otherAccount]);
+        await db.exec(await migration); await db.exec(await linksMigration);
+        const before = parseLapseInventory(await readV2(db));
+        // The defect: before the fix the other provider's server is an actionable review_required Patreon row.
+        const otherBefore = classifyLapseServers(before, new Set()).rows.find(row => row.serverId === otherServer);
+        assert.deepEqual([otherBefore?.classification, otherBefore?.actionable, otherBefore?.verification], ["review_required", true, "qualifying"]);
+        assert.equal(before.servers.find(row => row.serverId === unfunded)?.verification, "qualifying", "the newer non-Patreon source leaked into the Patreon report");
+        const definition = async () => (await db.query("select pg_get_function_identity_arguments(p.oid) args, pg_get_function_result(p.oid) result, l.lanname, p.provolatile, p.prosecdef, p.proconfig, p.proacl::text from pg_proc p join pg_language l on l.oid = p.prolang where p.oid = 'public.patreon_lapse_report_inventory_v2()'::regprocedure")).rows;
+        const beforeDefinition = await definition();
+        const beforeState = await state(db);
+        await db.exec(await patreonOnlyMigration); await db.exec(await patreonOnlyMigration);
+        assert.deepEqual(await definition(), beforeDefinition, "signature, language, volatility, definer, search_path and grants are unchanged");
+        assert.deepEqual(await state(db), beforeState);
+        await db.exec("begin read only; set local role service_role");
+        const after = parseLapseInventory(await readV2(db));
+        await db.exec("rollback");
+        assert.deepEqual(after.servers.map(row => row.serverId), [server, unfunded]);
+        assert.deepEqual(after.servers[0], before.servers.find(row => row.serverId === server), "the Patreon-funded row is unchanged");
+        assert.deepEqual(after.servers[1], { ...before.servers.find(row => row.serverId === unfunded), verification: "nonqualifying" }, "verification comes from the Patreon source");
+        assert.deepEqual(classifyLapseServers(after, new Set()).rows.map(row => row.serverId).sort(), [server, unfunded].sort());
+        for (const role of ["anon", "authenticated"]) {
+            await db.exec(`set role ${role}`); await assert.rejects(readV2(db), /permission denied/u); await db.exec("reset role");
+        }
+    } finally { await db.close(); }
+});
+
 test("the real RPC output round-trips through the HTTP loader for nonempty and empty results", async () => {
     const db = await database();
     const requests: string[] = [];
@@ -224,6 +268,7 @@ test("the real RPC output round-trips through the HTTP loader for nonempty and e
     try {
         await db.exec(await migration);
         await db.exec(await linksMigration);
+        await db.exec(await patreonOnlyMigration);
         await new Promise<void>(resolve => http.listen(0, "127.0.0.1", resolve));
         const address = http.address();
         assert.ok(address && typeof address !== "string");

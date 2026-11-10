@@ -158,7 +158,21 @@ These come from unofficial clients and must be confirmed during commissioning:
 
 ## Commissioning
 
-With the creator's credential on an isolated machine, capture and sanitize one response of each
-route (subscribers page, dialog list, message page, token refresh), check them against the
-parsers and add them as fixtures before setting `BOOSTY_MEMBERSHIP_POLICY_JSON`. Then link a test
-account end to end and confirm the control plane's version 2 Boosty snapshot.
+Commissioning is the last step of the rollout sequence in
+[membership onboarding](membership-onboarding.md) (Funding providers). Before any step here,
+the control plane must be deployed with a provider-list `HOSTING_MEMBERSHIP_POLICY_JSON`
+that already contains the Boosty entry (blog, qualifying level IDs, `boosty-paid-v1`). A
+Boosty hint reaching a control plane without that entry is never acknowledged; the
+account's pending Boosty hints fill the 8 + 1 per-provider bound and its link calls then fail
+with `PT429`.
+
+1. With the creator's credential on an isolated machine, capture and sanitize one response of
+   each route (subscribers page, dialog list, message page, token refresh), check them against
+   the parsers and add them as fixtures.
+2. Confirm the control plane's policy lists Boosty, then set `BOOSTY_MEMBERSHIP_POLICY_JSON`,
+   seed the creator credential and enable dispatch.
+3. Set `BOOSTY_LINKING_ENABLED`, link a test account end to end and confirm the control plane's
+   version 2 Boosty snapshot and the acknowledgement of its hint.
+
+To withdraw Boosty, unset `BOOSTY_LINKING_ENABLED` and disable dispatch first; the control
+plane removes its Boosty entry only after no Boosty head or unacknowledged hint remains.
