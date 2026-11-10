@@ -92,9 +92,10 @@ uses the explicitly configured private `PATREON_LAPSE_REPORT_RECIPIENTS`, never
 an account email, and scheduler authentication still precedes every read. Email
 addresses do not enter link URLs, subjects, scheduler responses, logs, audits or
 journals. The offline dry-run CLI uses `lapseReportDiagnosticText`: it removes
-account contacts and redacts each original bounded grant note before applying
-the 240-character diagnostic display limit. Operator note formatting has its own
-display limit; diagnostics never attempt to redact a clipped operator string.
+account contacts and replaces every free-form grant note with the fixed marker
+`[grant note omitted in diagnostics; see operator email]`. No part of the note
+is copied into diagnostics, including quoted or Unicode contacts and fragments.
+Operator email note formatting and its display bounds remain unchanged.
 Failure logs remain generic,
 even if an underlying SMTP/DB error contains a private body. No shared/global
 redaction module changes.

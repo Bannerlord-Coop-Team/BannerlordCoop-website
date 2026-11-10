@@ -15,7 +15,7 @@ export type LapseServer = {
     fundingRecorded: boolean;
     graceDueAt: string | null;
     verification: MembershipVerification | null;
-    // v3 retains the bounded original note; each output sink sanitizes before display truncation.
+    // v3 retains the bounded original for operator mail; diagnostics omit this field.
     grantReason: string | null;
     grantRecordedAt: string | null;
 };
@@ -45,7 +45,7 @@ function exactKeys(value: unknown, keys: string[]): value is Record<string, unkn
         && Object.keys(value).length === keys.length && keys.every(key => Object.hasOwn(value, key));
 }
 
-// Only the private operator email preserves contact addresses. Diagnostics keep redaction.
+// Legacy fixture sanitization and private operator formatting; diagnostics omit notes entirely.
 function boundedGrantReason(value: string, includeEmail: boolean): string {
     const addresses = value.replace(/https?:\/\/\S+/giu, "[address redacted]");
     const identities = (text: string) => text.replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/giu, "[account redacted]")

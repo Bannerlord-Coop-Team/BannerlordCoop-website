@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { boundedJson } from "./membership.ts";
-import { isLapseDisplayContact, isLapseTimestamp, LAPSE_UUID, operatorGrantReason, reportGrantReason, type LapseInventory, type LapseServer } from "./patreon-lapse-inventory.ts";
+import { isLapseDisplayContact, isLapseTimestamp, LAPSE_UUID, operatorGrantReason, type LapseInventory, type LapseServer } from "./patreon-lapse-inventory.ts";
 import { isEmailAddress, type SmtpMessage } from "./smtp.ts";
 
 export type LapseClassification = "grant-backed" | "in grace" | "review_required" | "untracked/grandfathered" | "deleted";
@@ -149,10 +149,10 @@ export function lapseAlertMessage(report: LapseReport, envelope: AlertEnvelope):
     };
 }
 
-// Redact the original bounded note before truncating; a clipped email cannot be safely re-redacted.
+// Free-form grant notes never enter diagnostics, regardless of contact syntax or display limits.
 export function lapseReportDiagnosticText(report: LapseReport): string {
     return lapseReportText({ ...report, rows: report.rows.map(row => ({ ...row, accountEmail: null,
-        grantReason: row.grantReason === null ? null : reportGrantReason(row.grantReason) })) });
+        grantReason: row.grantReason === null ? null : "[grant note omitted in diagnostics; see operator email]" })) });
 }
 
 function record(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value); }

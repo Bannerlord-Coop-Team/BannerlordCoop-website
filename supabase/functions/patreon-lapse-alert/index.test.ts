@@ -31,6 +31,38 @@ const serverId = "11111111-1111-4111-8111-111111111111";
 const accountId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const wireV2 = () => ({ ...wire(), version: 2, servers: wire().servers.map(server => ({ ...server, server_id: serverId, account_id: accountId })) });
 const wireV3 = () => ({ ...wireV2(), version: 3, servers: wireV2().servers.map(server => ({ ...server, account_email: "owner@example.test" })) });
+const privateGrantFragments = ["victim", "müller", "mü", "bücher", "example.test", "bücher.example", "@", "private-note-context"];
+
+for (const [name, email, html] of [["quoted local part", '"victim"@example.test', "&quot;victim&quot;@example.test"],
+    ["Unicode domain", "victim@bücher.example", "victim@bücher.example"], ["Unicode local part", "müller@example.test", "müller@example.test"]]) {
+    test(`diagnostics omit the entire grant note for a ${name} contact while operator mail preserves it`, () => {
+        const value = wireV3(); Object.assign(value.servers[0], { account_email: email, independent_quota: 1, grant_reason: `Grant for ${email}; private-note-context` });
+        const report = classifyLapseServers(parseLapseInventory(value), new Set());
+        const diagnostic = lapseReportDiagnosticText(report);
+        for (const fragment of privateGrantFragments) assert.ok(!diagnostic.includes(fragment), `diagnostics contain ${fragment}`);
+        assert.match(diagnostic, /grant reason: \[grant note omitted in diagnostics; see operator email\]/u);
+        const message = lapseAlertMessage(report, envelope);
+        assert.ok(message.text.includes(`account aaaaaaaa (${email})`));
+        assert.ok(message.text.includes(`grant reason: Grant for ${email}; private-note-context`));
+        assert.ok(message.html!.includes(`aaaaaaaa</a> (${html})`));
+        assert.ok(message.html!.includes(`grant reason: Grant for ${html}; private-note-context`));
+        assert.deepEqual(message.to, envelope.recipients);
+    });
+
+    test(`the diagnostic CLI omits every grant-contact fragment for a ${name}`, async () => {
+        const directory = await mkdtemp(join(tmpdir(), "lapse-private-grant-"));
+        const input = join(directory, "inventory.json");
+        try {
+            const value = wireV3(); Object.assign(value.servers[0], { account_email: email, independent_quota: 1, grant_reason: `Grant for ${email}; private-note-context` });
+            await writeFile(input, JSON.stringify({ version: 1, qualifyingPatreonUserIds: [], inventory: value }));
+            const result = await promisify(execFile)(process.execPath, ["--import", "tsx", "scripts/patreon-lapse-report.ts", "--input", input], { cwd: new URL("../../../", import.meta.url) });
+            for (const fragment of privateGrantFragments) assert.ok(!(result.stdout + result.stderr).includes(fragment), `CLI contains ${fragment}`);
+            assert.match(result.stdout, /grant reason: \[grant note omitted in diagnostics; see operator email\]/u);
+        } finally {
+            await unlink(input); await rmdir(directory);
+        }
+    });
+}
 
 test("renders production admin links with full UUIDs, short labels and URLs in the text alternative", () => {
     const report = classifyLapseServers(parseLapseInventory(wireV2()), new Set());
@@ -76,7 +108,7 @@ test("v3 preserves grant emails only, escapes HTML and keeps controls, URLs and 
     }
     const diagnostic = lapseReportDiagnosticText(report);
     assert.doesNotMatch(diagnostic, /@/);
-    assert.match(diagnostic, /\[email redacted\]/);
+    assert.match(diagnostic, /\[grant note omitted in diagnostics; see operator email\]/u);
 });
 
 test("v3 normalizes bad bounded contacts to no email in parsing and direct rendering", () => {
@@ -95,7 +127,7 @@ test("v3 normalizes bad bounded contacts to no email in parsing and direct rende
     assert.match(message.html!, /account none \(no email\)/);
 });
 
-test("diagnostics redact complete grant contacts before the 240-character display boundary", () => {
+test("diagnostics omit grant notes at every 240-character display boundary", () => {
     for (const email of ["victim@example.test", "o'connor@example.test", "first!last@example.test"]) {
         for (const length of [0, 205, 230, 237, 239, 240, 300]) {
             const value = wireV3(); Object.assign(value.servers[0], { independent_quota: 1, grant_reason: "x".repeat(length) + ` ${email}` });
@@ -182,7 +214,7 @@ test("the offline CLI keeps account and grant emails out of stdout and stderr", 
     const root = new URL("../../../", import.meta.url);
     const result = await promisify(execFile)(process.execPath, ["--import", "tsx", "scripts/patreon-lapse-report.ts", "--input", "tests/fixtures/patreon-lapse-emails-v3.json"], { cwd: root });
     assert.match(result.stdout, /DRY RUN/);
-    assert.match(result.stdout, /grant reason: Grant for \[email redacted\]/);
+    assert.match(result.stdout, /grant reason: \[grant note omitted in diagnostics; see operator email\]/u);
     assert.doesNotMatch(result.stdout + result.stderr, /@/);
 });
 
