@@ -492,10 +492,14 @@ it("downloads the players' full load order as JSON, leaving out disabled and ded
     await render(createMockServerModCatalog(runsOnMods()));
     let saved: NodeBlob | undefined;
     vi.stubGlobal("Blob", NodeBlob);
-    vi.stubGlobal("URL", { createObjectURL: vi.fn((blob: NodeBlob) => { saved = blob; return "blob:mod-list"; }), revokeObjectURL: vi.fn() });
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", { createObjectURL: vi.fn((blob: NodeBlob) => { saved = blob; return "blob:mod-list"; }), revokeObjectURL });
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { expect(this.download).toBe("BannerlordCoop-mod-list.json"); });
-    vi.useFakeTimers({ toFake: ["Date"] }).setSystemTime(new Date("2026-10-24T12:00:00.000Z"));
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] }).setSystemTime(new Date("2026-10-24T12:00:00.000Z"));
     await act(async () => downloadButton()!.click());
+    // Flush the deferred revoke while the stub is installed, so it never fires after teardown.
+    vi.advanceTimersByTime(1_000);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:mod-list");
     vi.unstubAllGlobals();
     expect(click).toHaveBeenCalledOnce();
     expect(saved!.type).toBe("application/json");
@@ -523,7 +527,11 @@ async function downloadedModList() {
     vi.stubGlobal("Blob", NodeBlob);
     vi.stubGlobal("URL", { createObjectURL: vi.fn((blob: NodeBlob) => { saved = blob; return "blob:mod-list"; }), revokeObjectURL: vi.fn() });
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { expect(this.download).toBe("BannerlordCoop-mod-list.json"); });
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     await act(async () => downloadButton()!.click());
+    // Flush the deferred revoke while the stub is installed, so it never fires after teardown.
+    vi.advanceTimersByTime(1_000);
+    vi.useRealTimers();
     vi.unstubAllGlobals();
     return JSON.parse(await saved!.text()) as { mods: { order: number; id: string; name: string; version: string; kind: string; playersOnly: boolean }[] };
 }
