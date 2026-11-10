@@ -6,3 +6,4 @@
 
 # This migration is mirrored and checksummed by ControlPlane's shared-ledger catalog.
 supabase/migrations/202611090002_patreon_lapse_report_links.sql text eol=lf
+supabase/migrations/202611100001_patreon_lapse_report_emails.sql text eol=lf

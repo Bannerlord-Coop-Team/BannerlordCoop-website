@@ -11,6 +11,8 @@ import { classifyLapseServers } from "../_shared/patreon-lapse-alert.ts";
 const schema = `
 create role anon; create role authenticated; create role service_role;
 create schema control_plane;
+create schema auth;
+create table auth.users(id uuid primary key, email text, deleted_at timestamptz);
 create table control_plane.managed_servers(server_id text primary key, guild_id text, owner_discord_user_id text, soft_deleted_at text, operation_state text);
 create table control_plane.hosting_entitlements(guild_id text, discord_user_id text, base_quota bigint, bonus_quota bigint, updated_at text);
 create table control_plane.hosting_website_accounts(account_id text, principal_id text);
@@ -27,6 +29,7 @@ create function public.patreon_lapse_server_owners() returns integer language sq
 `;
 const migration = readFile(new URL("../../migrations/202611080001_patreon_lapse_report_inventory.sql", import.meta.url), "utf8");
 const linksMigration = readFile(new URL("../../migrations/202611090002_patreon_lapse_report_links.sql", import.meta.url), "utf8");
+const emailsMigration = readFile(new URL("../../migrations/202611100001_patreon_lapse_report_emails.sql", import.meta.url), "utf8");
 const owner = "supabase:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const account = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const server = "11111111-1111-4111-8111-111111111111";
@@ -40,14 +43,60 @@ async function read(db: PGlite) {
 async function readV2(db: PGlite) {
     return (await db.query<{ inventory: unknown }>("select public.patreon_lapse_report_inventory_v2() inventory")).rows[0].inventory;
 }
+async function readV3(db: PGlite) {
+    return (await db.query<{ inventory: unknown }>("select public.patreon_lapse_report_inventory_v3() inventory")).rows[0].inventory;
+}
 async function state(db: PGlite) {
     const snapshot: Record<string, unknown> = {};
     for (const table of ["managed_servers", "hosting_entitlements", "hosting_website_accounts", "hosting_subscription_grace", "hosting_membership_sources", "hosting_jobs", "hosting_role_restoration_authorizations", "audit_events", "hosting_history_audit_facts"]) {
         snapshot[table] = (await db.query(`select * from control_plane.${table}`)).rows;
     }
     snapshot.patreon_accounts = (await db.query("select * from public.patreon_accounts")).rows;
+    snapshot.auth_users = (await db.query("select * from auth.users")).rows;
     return snapshot;
 }
+
+test("v3 batches account contacts including retained deleted accounts, preserves older RPCs/state and denies public access", async () => {
+    const db = await database();
+    try {
+        const deleted = new Date(Date.now() - 60_000).toISOString();
+        const retainedAccount = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+        const missingAccount = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+        const blankAccount = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+        await db.query(`insert into control_plane.managed_servers values
+            ($1,'guild',$2,null,'running'),
+            ('22222222-2222-4222-8222-222222222222','guild',$2,$3,'deleted'),
+            ('33333333-3333-4333-8333-333333333333','guild','retained',$3,'deleted'),
+            ('44444444-4444-4444-8444-444444444444','guild','missing',$3,'deleted'),
+            ('55555555-5555-4555-8555-555555555555','guild','unbound',null,'stopped'),
+            ('66666666-6666-4666-8666-666666666666','guild','blank',null,'stopped')`, [server, owner, deleted]);
+        await db.query("insert into control_plane.hosting_website_accounts values($1,$2),($3,'retained'),($4,'missing'),($5,'blank')", [account, owner, retainedAccount, missingAccount, blankAccount]);
+        await db.query("insert into auth.users values($1,'owner@example.test',null),($2,'deleted@example.test',$3),($4,'  ',null)", [account, retainedAccount, deleted, blankAccount]);
+        await db.query("insert into control_plane.hosting_entitlements values('guild',$1,2,0,'2026-10-23T18:13:42.581Z')", [owner]);
+        await db.query("insert into control_plane.audit_events values(1,$1,'hosting.admin.quota_changed','Grant for grant@example.test','2026-10-23T18:13:42.581Z')", [owner]);
+        await db.exec(await migration); await db.exec(await linksMigration);
+        const before = await state(db);
+        const old = [await read(db), await readV2(db)];
+        await db.exec(await emailsMigration); await db.exec(await emailsMigration);
+        await db.exec("begin read only; set local role service_role");
+        const result = parseLapseInventory(await readV3(db));
+        await db.exec("rollback");
+        assert.equal(result.version, 3);
+        assert.deepEqual(result.servers.map(row => row.accountEmail), ["owner@example.test", "owner@example.test", "deleted@example.test", null, null, null]);
+        assert.equal(result.servers[0].grantReason, "Grant for grant@example.test");
+        assert.deepEqual(await state(db), before);
+        const normalize = (value: unknown) => JSON.stringify(value).replace(/"observed_at":"[^"]+"/u, '"observed_at":"CLOCK"');
+        assert.deepEqual([await read(db), await readV2(db)].map(normalize), old.map(normalize));
+        const functions = await db.query<{ provolatile: string; prosecdef: boolean; proconfig: string[] }>("select provolatile, prosecdef, proconfig from pg_proc where oid = 'public.patreon_lapse_report_inventory_v3()'::regprocedure");
+        assert.deepEqual(functions.rows, [{ provolatile: "s", prosecdef: true, proconfig: ['search_path=""'] }]);
+        for (const role of ["anon", "authenticated"]) {
+            await db.exec(`set role ${role}`); await assert.rejects(readV3(db), /permission denied/u); await db.exec("reset role");
+        }
+        await db.exec("set role service_role");
+        await assert.rejects(db.query("select * from auth.users"), /permission denied/u);
+        await db.exec("reset role");
+    } finally { await db.close(); }
+});
 
 test("UUID migration replays read-only, retains v1 byte-for-byte and changes no classification, redaction, state or callers", async () => {
     const db = await database();
@@ -195,12 +244,17 @@ test("overflow is explicit and refused, while an empty result remains valid", as
     const db = await database();
     try {
         await db.exec(await migration);
+        await db.exec(await linksMigration); await db.exec(await emailsMigration);
         assert.equal(parseLapseInventory(await read(db)).servers.length, 0);
+        assert.equal(parseLapseInventory(await readV3(db)).servers.length, 0);
         await db.exec(`insert into control_plane.managed_servers
             select lpad(to_hex(n),8,'0') || '-0000-4000-8000-000000000000', 'guild','owner',null,'stopped' from generate_series(1,1001) n`);
         const raw = await read(db) as { truncated: boolean; servers: unknown[] };
         assert.equal(raw.truncated, true); assert.equal(raw.servers.length, 1000);
         assert.throws(() => parseLapseInventory(raw), /incomplete/u);
+        const rawV3 = await readV3(db) as { truncated: boolean; servers: unknown[] };
+        assert.equal(rawV3.truncated, true); assert.equal(rawV3.servers.length, 1000);
+        assert.throws(() => parseLapseInventory(rawV3), /incomplete/u);
     } finally { await db.close(); }
 });
 
@@ -210,7 +264,7 @@ test("the real RPC output round-trips through the HTTP loader for nonempty and e
     const http = createServer(async (request, response) => {
         try {
             assert.equal(request.method, "POST");
-            assert.equal(request.url, "/rest/v1/rpc/patreon_lapse_report_inventory_v2");
+            assert.equal(request.url, "/rest/v1/rpc/patreon_lapse_report_inventory_v3");
             assert.equal(request.headers.authorization, "Bearer fixture-service-key");
             assert.equal(request.headers.apikey, "fixture-service-key");
             assert.equal(request.headers["content-type"], "application/json");
@@ -218,22 +272,26 @@ test("the real RPC output round-trips through the HTTP loader for nonempty and e
             for await (const chunk of request) { body += String(chunk); assert.ok(body.length <= 16); }
             assert.equal(body, "{}"); requests.push(body);
             response.writeHead(200, { "content-type": "application/json" });
-            response.end(JSON.stringify(await readV2(db)));
+            response.end(JSON.stringify(await readV3(db)));
         } catch { response.writeHead(500); response.end(); }
     });
     try {
         await db.exec(await migration);
         await db.exec(await linksMigration);
+        await db.exec(await emailsMigration);
         await new Promise<void>(resolve => http.listen(0, "127.0.0.1", resolve));
         const address = http.address();
         assert.ok(address && typeof address !== "string");
         const load = createLapseInventoryLoader(fetch, `http://127.0.0.1:${address.port}`, "fixture-service-key");
         assert.equal((await load()).servers.length, 0);
         await db.query("insert into control_plane.managed_servers values($1,'guild',$2,null,'running')", [server, owner]);
+        await db.query("insert into control_plane.hosting_website_accounts values($1,$2)", [account, owner]);
+        await db.query("insert into auth.users values($1,'owner@example.test',null)", [account]);
         const result = classifyLapseServers(await load(), new Set());
         assert.equal(result.rows[0].classification, "untracked/grandfathered");
         assert.equal(result.rows[0].serverPrefix, "11111111");
         assert.equal(result.rows[0].serverId, server);
+        assert.equal(result.rows[0].accountEmail, "owner@example.test");
         assert.deepEqual(requests, ["{}", "{}"]);
     } finally {
         await new Promise<void>((resolve, reject) => http.close(error => error ? reject(error) : resolve()));

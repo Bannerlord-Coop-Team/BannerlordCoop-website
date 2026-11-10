@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import test from "node:test";
 import {
-    classifyLapseServers, createPatreonLapseAlertHandler, fetchQualifyingPatrons, lapseAlertMessage, lapseReportHtml, lapseReportText, parseLapseReportRecipients,
+    classifyLapseServers, createPatreonLapseAlertHandler, fetchQualifyingPatrons, lapseAlertMessage, lapseReportDiagnosticText, lapseReportHtml, lapseReportText, parseLapseReportRecipients,
 } from "../_shared/patreon-lapse-alert.ts";
 import {
     createLapseInventoryLoader, parseLapseInventory, type LapseInventory, type LapseServer,
@@ -26,6 +28,7 @@ const wire = () => ({ version: 1, observed_at: at, truncated: false, servers: [{
 const serverId = "11111111-1111-4111-8111-111111111111";
 const accountId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const wireV2 = () => ({ ...wire(), version: 2, servers: wire().servers.map(server => ({ ...server, server_id: serverId, account_id: accountId })) });
+const wireV3 = () => ({ ...wireV2(), version: 3, servers: wireV2().servers.map(server => ({ ...server, account_email: "owner@example.test" })) });
 
 test("renders production admin links with full UUIDs, short labels and URLs in the text alternative", () => {
     const report = classifyLapseServers(parseLapseInventory(wireV2()), new Set());
@@ -33,8 +36,69 @@ test("renders production admin links with full UUIDs, short labels and URLs in t
     assert.match(message.html!, /server <a href="https:\/\/bannerlordcoop\.com\/admin\/control-plane\?view=server&amp;serverId=11111111-1111-4111-8111-111111111111">11111111<\/a>/);
     assert.match(message.html!, /account <a href="https:\/\/bannerlordcoop\.com\/admin\?q=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa">aaaaaaaa<\/a>/);
     assert.match(message.text, /server 11111111 \(https:\/\/bannerlordcoop\.com\/admin\/control-plane\?view=server&serverId=11111111-1111-4111-8111-111111111111\)/);
-    assert.match(message.text, /account aaaaaaaa \(https:\/\/bannerlordcoop\.com\/admin\?q=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa\)/);
+    assert.match(message.text, /account aaaaaaaa \(no email\) \(https:\/\/bannerlordcoop\.com\/admin\?q=aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa\)/);
     assert.doesNotMatch(message.html! + message.text, /@|patreonUserId|patreon_user_id/);
+});
+
+test("operator mail shows account emails beside links in all five states, missing contacts, and deleted accounts", async () => {
+    const fixture = JSON.parse(await readFile(new URL("../../../tests/fixtures/patreon-lapse-emails-v3.json", import.meta.url), "utf8"));
+    const report = classifyLapseServers(parseLapseInventory(fixture.inventory), new Set());
+    const message = lapseAlertMessage(report, envelope);
+    assert.deepEqual(report.rows.map(row => row.classification), ["untracked/grandfathered", "review_required", "in grace", "grant-backed", "deleted", "deleted"]);
+    for (const row of report.rows) {
+        const email = row.accountEmail ?? "no email";
+        assert.ok(message.text.includes(`account ${row.accountPrefix} (${email}) (https://bannerlordcoop.com/admin?q=${row.accountId})`));
+        assert.ok(message.html!.includes(`">${row.accountPrefix}</a> (${email})`));
+    }
+    for (const body of [message.text, message.html!]) {
+        assert.match(body, /grant reason: Grant for grant@example.test/);
+        assert.doesNotMatch(body, /\[email redacted\]/);
+        assert.match(body, /deleted@example.test/);
+        assert.match(body, /\(no email\)/);
+    }
+    assert.deepEqual(message.to, envelope.recipients);
+    assert.doesNotMatch(message.subject, /@/);
+    assert.equal([...message.html!.matchAll(/href=/gu)].length, 10);
+});
+
+test("v3 preserves grant emails only, escapes HTML and keeps controls, URLs and other identities sanitized", () => {
+    const value = wireV3();
+    Object.assign(value.servers[0], { independent_quota: 1,
+        grant_reason: '<script>"x"</script> & \'Trial\' private@example.test https://evil.test/name 192469416892432384 bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb\n| forged\u202e' });
+    const report = classifyLapseServers(parseLapseInventory(value), new Set());
+    const message = lapseAlertMessage(report, envelope);
+    assert.match(message.html!, /&lt;script&gt;&quot;x&quot;&lt;\/script&gt; &amp; &#39;Trial&#39; private@example.test/);
+    for (const body of [message.text, message.html!]) {
+        assert.match(body, /private@example.test/);
+        assert.doesNotMatch(body, /evil\.test|192469416892432384|bbbbbbbb-bbbb|\n\| forged|\u202e/u);
+    }
+    const diagnostic = lapseReportDiagnosticText(report);
+    assert.doesNotMatch(diagnostic, /@/);
+    assert.match(diagnostic, /\[email redacted\]/);
+});
+
+test("v3 validates bounded email fields without echoing rejected values, including direct rendering", () => {
+    for (const bad of ["", "invalid", "owner@example.test\r\nBcc: other@example.test", '<b>owner@example.test</b>', "a".repeat(255) + "@example.test", 123]) {
+        const value = wireV3(); Object.assign(value.servers[0], { account_email: bad });
+        assert.throws(() => parseLapseInventory(value), { message: "Invalid lapse inventory contact" });
+        const direct = classifyLapseServers(inventory([row({ accountEmail: bad as string })]), new Set());
+        assert.throws(() => lapseReportHtml(direct), { message: "Invalid lapse report contact" });
+        assert.throws(() => lapseReportText(direct), { message: "Invalid lapse report contact" });
+    }
+    const unbound = wireV3(); Object.assign(unbound.servers[0], { account_id: null, account_prefix: null });
+    assert.throws(() => parseLapseInventory(unbound), { message: "Invalid lapse inventory contact" });
+    Object.assign(unbound.servers[0], { account_email: null });
+    const message = lapseAlertMessage(classifyLapseServers(parseLapseInventory(unbound), new Set()), envelope);
+    assert.match(message.text, /account none \(no email\)/);
+    assert.match(message.html!, /account none \(no email\)/);
+});
+
+test("the offline CLI keeps account and grant emails out of stdout and stderr", async () => {
+    const root = new URL("../../../", import.meta.url);
+    const result = await promisify(execFile)(process.execPath, ["--import", "tsx", "scripts/patreon-lapse-report.ts", "--input", "tests/fixtures/patreon-lapse-emails-v3.json"], { cwd: root });
+    assert.match(result.stdout, /DRY RUN/);
+    assert.match(result.stdout, /grant reason: Grant for \[email redacted\]/);
+    assert.doesNotMatch(result.stdout + result.stderr, /@/);
 });
 
 test("escapes HTML in grant notes and keeps their PII and URL redaction in both alternatives", () => {
@@ -168,20 +232,22 @@ test("redacts grant contact/identity fields and prevents multiline report inject
 });
 
 test("inventory loader makes exactly one fixed read RPC request, including meaningful empty success", async () => {
-    for (const servers of [wireV2().servers, []]) {
+    for (const servers of [wireV3().servers, []]) {
         let calls = 0;
         const fetcher: typeof fetch = async (url, init) => {
             calls++;
-            assert.equal(String(url), "https://project.example.test/rest/v1/rpc/patreon_lapse_report_inventory_v2");
+            assert.equal(String(url), "https://project.example.test/rest/v1/rpc/patreon_lapse_report_inventory_v3");
             assert.equal(init?.method, "POST"); assert.equal(init?.body, "{}"); assert.equal(init?.redirect, "error");
             assert.deepEqual(init?.headers, { apikey: "fixture-service-key", authorization: "Bearer fixture-service-key", "content-type": "application/json" });
             assert.ok(init?.signal instanceof AbortSignal);
-            return json({ ...wireV2(), servers });
+            return json({ ...wireV3(), servers });
         };
         const result = await createLapseInventoryLoader(fetcher, "https://project.example.test/unused", "fixture-service-key")();
         assert.equal(result.servers.length, servers.length); assert.equal(calls, 1);
     }
-    await assert.rejects(createLapseInventoryLoader(async () => json(wire()), "https://project.example.test", "fixture-service-key")(), /UUIDs are required/u);
+    for (const legacy of [wire(), wireV2()]) {
+        await assert.rejects(createLapseInventoryLoader(async () => json(legacy), "https://project.example.test", "fixture-service-key")(), /contacts are required/u);
+    }
 });
 
 test("Patreon uses exact paginated GETs, active USD20 selection, and refuses incomplete or looping pages", async () => {
@@ -227,6 +293,31 @@ test("scheduler authenticates before reads, sends only the classified report, an
             alert: async () => assert.fail("must not send partial report"),
         });
         assert.equal((await failure(request())).status, 503);
+        assert.deepEqual(errors, [["Patreon lapse report could not be completed"]]);
+    } finally { console.error = original; }
+});
+
+test("private account and grant contacts never become recipients, scheduler output or failure logs", async () => {
+    const value = wireV3(); Object.assign(value.servers[0], { independent_quota: 1, grant_reason: "Grant for grant@example.test" });
+    const errors: unknown[][] = [];
+    const original = console.error;
+    console.error = (...values) => { errors.push(values); };
+    try {
+        for (const fail of [false, true]) {
+            const handler = createPatreonLapseAlertHandler({ syncSecret: secret,
+                loadInventory: async () => parseLapseInventory(value), loadPatrons: async () => new Set(),
+                alert: async report => {
+                    const message = lapseAlertMessage(report, envelope);
+                    assert.deepEqual(message.to, ["recipient@example.test"]);
+                    assert.match(message.text, /owner@example.test/);
+                    assert.match(message.html!, /grant@example.test/);
+                    if (fail) throw new Error(message.text);
+                },
+            });
+            const response = await handler(new Request("https://fixture.test", { method: "POST", headers: { "x-patreon-sync-key": secret } }));
+            assert.equal(response.status, fail ? 503 : 200);
+            assert.doesNotMatch(await response.text(), /@/);
+        }
         assert.deepEqual(errors, [["Patreon lapse report could not be completed"]]);
     } finally { console.error = original; }
 });

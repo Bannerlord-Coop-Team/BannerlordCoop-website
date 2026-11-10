@@ -1,10 +1,10 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { boundedJson } from "./membership.ts";
-import { isLapseTimestamp, LAPSE_UUID, reportGrantReason, type LapseInventory, type LapseServer } from "./patreon-lapse-inventory.ts";
+import { isLapseTimestamp, LAPSE_UUID, operatorGrantReason, reportGrantReason, type LapseInventory, type LapseServer } from "./patreon-lapse-inventory.ts";
 import { isEmailAddress, type SmtpMessage } from "./smtp.ts";
 
 export type LapseClassification = "grant-backed" | "in grace" | "review_required" | "untracked/grandfathered" | "deleted";
-// UUIDs support admin links; provider identity, owner email and server name never leave the classifier.
+// UUIDs and account emails are for private operator mail; provider identity and server name stay out.
 export type LapseReportRow = Omit<LapseServer, "patreonUserId"> & {
     classification: LapseClassification;
     actionable: boolean;
@@ -40,6 +40,7 @@ export function classifyLapseServers(inventory: LapseInventory, patrons: Readonl
             : !server.fundingRecorded ? "untracked/grandfathered" : "review_required";
         rows.push({
             ...(server.serverId === undefined ? {} : { serverId: server.serverId, accountId: server.accountId }),
+            ...(server.accountEmail === undefined ? {} : { accountEmail: server.accountEmail }),
             serverPrefix: server.serverPrefix, accountPrefix: server.accountPrefix, deletedAt: server.deletedAt,
             independentQuota: server.independentQuota, ownerUsage: server.ownerUsage, fundingRecorded: server.fundingRecorded,
             graceDueAt: server.graceDueAt, verification: server.verification,
@@ -58,7 +59,7 @@ function rowDetails(row: LapseReportRow): string {
     switch (row.classification) {
         case "grant-backed":
             return ` | grant-backed | quota ${row.independentQuota}, usage ${row.ownerUsage}`
-                + ` | grant reason: ${row.grantReason ? reportGrantReason(row.grantReason) : "historical grant; reason not retained"}`
+                + ` | grant reason: ${row.grantReason ? operatorGrantReason(row.grantReason) : "historical grant; reason not retained"}`
                 + ` | grant/quota recorded ${row.grantRecordedAt ?? "date not retained"}`;
         case "in grace":
             return ` | in grace | deletion due ${row.graceDueAt}`
@@ -88,7 +89,13 @@ function identityLink(row: LapseReportRow, kind: "server" | "account"): string |
 function identityText(row: LapseReportRow, kind: "server" | "account"): string {
     const prefix = kind === "server" ? row.serverPrefix : row.accountPrefix ?? "none";
     const link = identityLink(row, kind);
-    return `${kind} ${prefix}${link === null ? "" : ` (${link})`}`;
+    return `${kind} ${prefix}${kind === "account" ? ` (${accountEmail(row)})` : ""}${link === null ? "" : ` (${link})`}`;
+}
+
+function accountEmail(row: LapseReportRow): string {
+    if (row.accountEmail === undefined || row.accountEmail === null) return "no email";
+    if (!isEmailAddress(row.accountEmail)) throw new Error("Invalid lapse report contact");
+    return row.accountEmail;
 }
 
 function rowLine(row: LapseReportRow): string {
@@ -102,7 +109,8 @@ function escapeHtml(value: string): string {
 function identityHtml(row: LapseReportRow, kind: "server" | "account"): string {
     const prefix = kind === "server" ? row.serverPrefix : row.accountPrefix ?? "none";
     const link = identityLink(row, kind);
-    return `${kind} ${link === null ? escapeHtml(prefix) : `<a href="${escapeHtml(link)}">${escapeHtml(prefix)}</a>`}`;
+    return `${kind} ${link === null ? escapeHtml(prefix) : `<a href="${escapeHtml(link)}">${escapeHtml(prefix)}</a>`}`
+        + (kind === "account" ? ` (${escapeHtml(accountEmail(row))})` : "");
 }
 
 export function lapseReportHtml(report: LapseReport): string {
@@ -141,6 +149,12 @@ export function lapseAlertMessage(report: LapseReport, envelope: AlertEnvelope):
         text: lapseReportText(report),
         html: lapseReportHtml(report),
     };
+}
+
+// Console/dry-run output must not reuse the private email body's contact fields.
+export function lapseReportDiagnosticText(report: LapseReport): string {
+    return lapseReportText({ ...report, rows: report.rows.map(row => ({ ...row, accountEmail: null,
+        grantReason: row.grantReason === null ? null : reportGrantReason(row.grantReason) })) });
 }
 
 function record(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value); }
