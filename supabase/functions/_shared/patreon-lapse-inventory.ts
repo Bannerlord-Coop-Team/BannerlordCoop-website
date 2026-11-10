@@ -1,5 +1,4 @@
 import { boundedJson } from "./membership.ts";
-import { isEmailAddress } from "./smtp.ts";
 
 export type MembershipVerification = "qualifying" | "nonqualifying" | "unknown" | "review_required" | "unverified";
 export type LapseServer = {
@@ -16,6 +15,7 @@ export type LapseServer = {
     fundingRecorded: boolean;
     graceDueAt: string | null;
     verification: MembershipVerification | null;
+    // v3 retains the bounded original note; each output sink sanitizes before display truncation.
     grantReason: string | null;
     grantRecordedAt: string | null;
 };
@@ -27,6 +27,13 @@ const PREFIX = /^[0-9a-f]{8}$/u;
 export const LAPSE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const PROVIDER_ID = /^\d{1,32}$/u;
 const VERIFICATIONS: readonly unknown[] = ["qualifying", "nonqualifying", "unknown", "review_required", "unverified", null];
+const GRANT_EMAIL = /([A-Z0-9.!#$%&'*+\/=?^_`{|}~-]+@[A-Z0-9.-]+\.[A-Z]{2,})/giu;
+
+// Body text only: Auth contact characters do not need to satisfy the SMTP-envelope subset.
+export function isLapseDisplayContact(value: unknown): value is string {
+    return typeof value === "string" && value.length <= 254 && /^[^\s@<>]+@[^\s@<>]+$/u.test(value)
+        && !/\p{C}/u.test(value);
+}
 
 export function isLapseTimestamp(value: unknown): value is string {
     return typeof value === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(value)
@@ -45,8 +52,8 @@ function boundedGrantReason(value: string, includeEmail: boolean): string {
         .replace(/\b\d{17,20}\b/gu, "[identity redacted]");
     // Format original email tokens separately so numeric/UUID-shaped usernames stay complete.
     const text = includeEmail
-        ? addresses.split(/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/giu).map((part, index) => index % 2 === 1 ? part : identities(part)).join("")
-        : identities(addresses.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/giu, "[email redacted]"));
+        ? addresses.split(GRANT_EMAIL).map((part, index) => index % 2 === 1 ? part : identities(part)).join("")
+        : identities(addresses.replace(GRANT_EMAIL, "[email redacted]"));
     return text
         .replace(/[\x00-\x1f\x7f\u2028\u2029\u202a-\u202e\u2066-\u2069|]/gu, " ").replace(/\s+/gu, " ").trim().slice(0, 240);
 }
@@ -84,21 +91,17 @@ export function parseLapseInventory(value: unknown): LapseInventory {
                     && row.account_id.toLowerCase().slice(0, 8) === row.account_prefix))) {
             throw new Error("Invalid lapse inventory identity");
         }
-        if (value.version === 3 && (!(row.account_email === null || isEmailAddress(row.account_email))
-            || row.account_id === null && row.account_email !== null)) {
-            throw new Error("Invalid lapse inventory contact");
-        }
         prefixes.add(row.server_prefix);
         return {
             ...(value.version !== 1 ? { serverId: row.server_id === null ? null : (row.server_id as string).toLowerCase(),
                 accountId: row.account_id === null ? null : (row.account_id as string).toLowerCase() } : {}),
-            ...(value.version === 3 ? { accountEmail: row.account_email as string | null } : {}),
+            ...(value.version === 3 ? { accountEmail: row.account_id !== null && isLapseDisplayContact(row.account_email) ? row.account_email : null } : {}),
             serverPrefix: row.server_prefix, accountPrefix: row.account_prefix as string | null,
             patreonUserId: row.patreon_user_id as string | null, deletedAt: row.deleted_at as string | null,
             independentQuota: row.independent_quota as number, ownerUsage: row.owner_usage as number,
             fundingRecorded: row.funding_recorded, graceDueAt: row.grace_due_at as string | null,
             verification: row.verification as MembershipVerification | null,
-            grantReason: row.grant_reason === null ? null : (value.version === 3 ? operatorGrantReason : reportGrantReason)(row.grant_reason as string),
+            grantReason: row.grant_reason === null ? null : value.version === 3 ? row.grant_reason as string : reportGrantReason(row.grant_reason as string),
             grantRecordedAt: row.grant_recorded_at as string | null,
         };
     });

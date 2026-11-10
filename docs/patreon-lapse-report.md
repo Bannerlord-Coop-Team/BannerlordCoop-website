@@ -78,7 +78,11 @@ inventory once, resolves its distinct account UUIDs against `auth.users` in one
 batch, and returns one `account_email` field per row. The Edge loader awaits one
 bounded RPC per report, with no per-line account requests. Existing 1000-row,
 overflow, 2 MiB response and timeout limits remain. Empty/blank or missing Auth
-emails become null; invalid or oversized addresses fail the report privately.
+emails become null. Display contacts accept Auth address characters such as
+apostrophe and exclamation mark, independently of the stricter SMTP recipient
+grammar. A malformed, oversized or control-character-bearing contact becomes
+`(no email)` for that row; it never suppresses the other rows or the report.
+HTML escaping still applies to every displayed contact.
 The lookup includes retained deleted Auth rows; a removed Auth row shows
 `(no email)` while preserving any existing account link and deleted-server rules.
 The older RPCs and all durable rows remain unchanged.
@@ -88,7 +92,10 @@ uses the explicitly configured private `PATREON_LAPSE_REPORT_RECIPIENTS`, never
 an account email, and scheduler authentication still precedes every read. Email
 addresses do not enter link URLs, subjects, scheduler responses, logs, audits or
 journals. The offline dry-run CLI uses `lapseReportDiagnosticText`: it removes
-account contacts and keeps grant-email redaction. Failure logs remain generic,
+account contacts and redacts each original bounded grant note before applying
+the 240-character diagnostic display limit. Operator note formatting has its own
+display limit; diagnostics never attempt to redact a clipped operator string.
+Failure logs remain generic,
 even if an underlying SMTP/DB error contains a private body. No shared/global
 redaction module changes.
 

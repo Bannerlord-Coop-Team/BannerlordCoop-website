@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { boundedJson } from "./membership.ts";
-import { isLapseTimestamp, LAPSE_UUID, operatorGrantReason, reportGrantReason, type LapseInventory, type LapseServer } from "./patreon-lapse-inventory.ts";
+import { isLapseDisplayContact, isLapseTimestamp, LAPSE_UUID, operatorGrantReason, reportGrantReason, type LapseInventory, type LapseServer } from "./patreon-lapse-inventory.ts";
 import { isEmailAddress, type SmtpMessage } from "./smtp.ts";
 
 export type LapseClassification = "grant-backed" | "in grace" | "review_required" | "untracked/grandfathered" | "deleted";
@@ -93,9 +93,7 @@ function identityText(row: LapseReportRow, kind: "server" | "account"): string {
 }
 
 function accountEmail(row: LapseReportRow): string {
-    if (row.accountEmail === undefined || row.accountEmail === null) return "no email";
-    if (!isEmailAddress(row.accountEmail)) throw new Error("Invalid lapse report contact");
-    return row.accountEmail;
+    return row.accountId !== null && isLapseDisplayContact(row.accountEmail) ? row.accountEmail : "no email";
 }
 
 function rowLine(row: LapseReportRow): string {
@@ -151,7 +149,7 @@ export function lapseAlertMessage(report: LapseReport, envelope: AlertEnvelope):
     };
 }
 
-// Console/dry-run output must not reuse the private email body's contact fields.
+// Redact the original bounded note before truncating; a clipped email cannot be safely re-redacted.
 export function lapseReportDiagnosticText(report: LapseReport): string {
     return lapseReportText({ ...report, rows: report.rows.map(row => ({ ...row, accountEmail: null,
         grantReason: row.grantReason === null ? null : reportGrantReason(row.grantReason) })) });
