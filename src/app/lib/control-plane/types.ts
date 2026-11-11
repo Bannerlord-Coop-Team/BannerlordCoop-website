@@ -246,6 +246,14 @@ export type HostingAdminVpsHost = {
     totalSlots: number;
     runningServers: number;
     availableServers: number;
+    provenServers?: number;
+    slotAvailability?: {
+        ready: number;
+        launchProven: number;
+        storageObservedAt: string | null;
+        reasons: Array<"storage_evidence_missing" | "storage_evidence_stale" | "storage_identity_changed" | "storage_reserve"
+            | "slot_target" | "runner_onboarding" | "runner_update" | "host_decommission" | "native_ram_commission">;
+    };
     occupiedSlots: Array<{
         slotIndex: number;
         gamePort: number;
