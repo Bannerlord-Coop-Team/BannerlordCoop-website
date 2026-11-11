@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "contract": "managed-hosting.campaign-reset-status",
+  "fixtureSha256": "087b62286e600dbe715f6d809946bbd3db5e8aaf9db900c48e2679fe3da99b4a",
+  "captureSha256": "922f6965ae5b58e13e6e0785d4df36e48265b0e05c81eba8a15566d7a3af27ca",
+  "producer": {
+    "repository": "Bannerlord-Coop-Team/BannerlordCoop.ControlPlane",
+    "pullRequest": "https://github.com/Bannerlord-Coop-Team/BannerlordCoop.ControlPlane/pull/1034",
+    "captureHead": "524ba2f1565367209933aaa900c4b46b837c2a6d",
+    "sources": {
+      "src/hosting/control-plane/web/control-plane-web-user-contract.ts": "26c6473473efbe373c41e4afd0b55e11fac5762f34d27e7f4782bf2e8331d44e",
+      "src/hosting/control-plane/web/control-plane-web-admin-server.ts": "0d90bef1d5aa9208cbf92c6b9d709f073a7d90e9a889d5084b2cc454888833d4",
+      "src/hosting/lifecycle/workflow.ts": "a2c099b4bc3ec80d39620614d1846d8d2b1d83f8f86b0a46d8dc6ed6a726db13"
+    }
+  },
+  "consumer": {
+    "repository": "Bannerlord-Coop-Team/BannerlordCoop-website",
+    "pullRequest": "https://github.com/Bannerlord-Coop-Team/BannerlordCoop-website/pull/444",
+    "captureHead": "65b89c19aa85053b55573b06c5f6d3283da93595",
+    "sources": {
+      "supabase/functions/_shared/server-campaign-contract.ts": "f93fca96f5a508f6361b9de2b81e271448bac7cbb96a6de11499c11145196598",
+      "supabase/functions/_shared/my-servers.ts": "db953e983c36b8d083b04556a531722b36a660f2219f12a300c5b42012feed00",
+      "src/app/lib/hosting/server-campaigns.ts": "d10f6200cc1da25e297789e274c5f6828973b22c1e5b1bc781065fdd10c279c3",
+      "src/app/servers/managed-server-campaign-actions.ts": "e0eb6aeb6ca61992cd6085934a36172b7627458eea3eddb96cd829ea5b579233",
+      "src/app/components/servers/ManagedServerCampaigns.tsx": "dde139f0f8fea0260eb7b9e23f23c2f50b5828c24774db74c89b2943b2418fba"
+    }
+  },
+  "olderProducerHead": "80d0fc26e84178c216cc8f3be15cb632d47f7f69",
+  "capture": {
+    "kind": "isolated synthetic runtime; real implementations",
+    "command": "node --import tsx manual-paired-reset-status.mjs <control-plane-clone> <website-clone> <80d0fc26-clone> <capture-path>",
+    "transport": "Website client -> real my-servers Edge handler -> loopback CP owner HTTP -> IPC -> runtime -> migrated ephemeral PGlite",
+    "sanitization": "All accounts, servers, jobs, tokens, releases and state are synthetic. Authorization headers are redacted. v1.json replaces generated server/job IDs with fixed synthetic UUIDs; the capture retains generated synthetic IDs.",
+    "observedCases": [
+      "one reset submission",
+      "queued status",
+      "legacy-native safe refusal",
+      "unrelated identity refused",
+      "older CP unsupported operation"
+    ],
+    "additionalCases": "Other states/errors in v1.json are declared protocol boundary cases, not claims of captured production responses.",
+    "finalHeads": "Capture pins implementation commits and their source digests. Both final tested PR heads and a fresh cross-repo run with exact commands are recorded in paired PR evidence after fixture/test/documentation commits.",
+    "sourceDigestEncoding": "sha256 of UTF-8 source with CRLF normalized to LF",
+    "limits": "Real Website client and Edge handler, CP owner HTTP/IPC/runtime and migrated PGlite. Synthetic auth/release/runner/storage; loopback HTTP via injected transport. Not proven: deployed Edge/JWT verification/TLS, browser, installed runner/CRIU/Podman, public UDP, gameplay or production."
+  }
+}

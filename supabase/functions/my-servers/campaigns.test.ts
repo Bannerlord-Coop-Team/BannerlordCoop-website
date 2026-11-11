@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createMyServersHandler } from "../_shared/my-servers.ts";
-import { parseCampaignMutation, parseCampaignPage } from "../_shared/server-campaign-contract.ts";
+import { parseCampaignMutation, parseCampaignPage, parseCampaignResetStatus } from "../_shared/server-campaign-contract.ts";
+import { readFileSync } from "node:fs";
+
+const resetFixture = JSON.parse(readFileSync(new URL("../../../test/fixtures/campaign-reset/v1.json", import.meta.url), "utf8"));
 
 const requestId = "aaaaaaaa-1111-4111-8111-111111111111";
 const serverId = "bbbbbbbb-1111-4111-8111-111111111111";
@@ -13,6 +16,49 @@ const page = { serverId, updatedAt, activeSaveId: saveId, items: [campaign], nex
 function handler(fetchImplementation: typeof fetch) { return createMyServersHandler({ allowedOrigins: ["https://website.test"], controlPlaneUrl: "https://cp.test", fetchImplementation, waitUntil: () => undefined }); }
 function get(query: string) { return new Request(`https://edge.test/my-servers?${query}`, { headers: { authorization: `Bearer ${token}`, "x-request-id": requestId } }); }
 function post(body: unknown, id = true) { return new Request("https://edge.test/my-servers", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}`, ...(id ? { "x-request-id": requestId } : {}) }, body: JSON.stringify(body) }); }
+
+test("reset status forwards the exact authorized read and strictly consumes the shared versioned contract", async () => {
+    assert.equal(resetFixture.schemaVersion, 1);
+    const query = `resource=reset-campaign-status&serverId=${serverId}&jobId=${requestId}`;
+    const base = { serverId, jobId: requestId, state: "queued", errorCode: null, instruction: null };
+    const results = [
+        ...resetFixture.states.map((state: string) => ({ ...base, state })),
+        ...resetFixture.terminalFailures.map(({ state, errorCode, instruction }: Record<string, unknown>) => ({ ...base, state, errorCode, instruction })),
+    ];
+    for (const result of results) {
+        let calls = 0;
+        const response = await handler(async (url, init) => {
+            calls++;
+            assert.equal(String(url), "https://cp.test/v1/user/control-plane");
+            assert.equal(init?.method, "POST");
+            assert.equal(new Headers(init.headers).get("authorization"), `Bearer ${token}`);
+            assert.deepEqual(JSON.parse(String(init.body)), { version: 1, requestId, operation: "reset-campaign-status", input: { serverId, jobId: requestId } });
+            return Response.json({ version: 1, requestId, ok: true, result });
+        })(get(query));
+        assert.equal(response.status, 200); assert.equal(calls, 1);
+        assert.deepEqual((await response.json()).result, parseCampaignResetStatus(result, serverId, requestId));
+    }
+    for (const result of [
+        { ...base, serverId: saveId }, { ...base, jobId: saveId }, { ...base, state: ["queued"] }, { ...base, state: "claimed" },
+        { ...base, payload: "private/worker-details" }, { ...base, errorCode: "operation_failed" }, { ...base, instruction: "private" },
+        { ...base, state: "failed" }, { ...base, state: "failed", errorCode: ["operation_failed"] },
+        { ...base, state: "failed", errorCode: "private_error" },
+        { ...base, state: "failed", errorCode: "agent_capability_unavailable", instruction: "raw runner details" },
+        { ...base, state: "cancelled", errorCode: "agent_capability_unavailable", instruction: resetFixture.terminalFailures[0].instruction },
+    ]) {
+        assert.throws(() => parseCampaignResetStatus(result, serverId, requestId));
+        assert.equal((await handler(async () => Response.json({ version: 1, requestId, ok: true, result }))(get(query))).status, 502);
+    }
+    for (const invalid of [query + "&actor=administrator", query + `&jobId=${requestId}`, `resource=reset-campaign-status&serverId=${serverId}`, query.replace(requestId, "not-a-job")]) {
+        assert.equal((await handler(async () => { throw Error("Unexpected upstream read"); })(get(invalid))).status, 400);
+    }
+    for (const peer of resetFixture.unsupported) {
+        const response = await handler(async () => Response.json({ version: 1, requestId, ok: false,
+            error: { code: peer.code, message: "The requested operation is unavailable.", retryable: peer.retryable } }, { status: peer.status }))(get(query));
+        assert.equal(response.status, peer.status);
+        assert.equal((await response.json()).error.code, peer.code);
+    }
+});
 
 test("delete-save-status validates exact keys, identities, states and bounded codes without changing deletion admission", async () => {
     const query = `resource=delete-save-status&serverId=${serverId}&jobId=${requestId}`;

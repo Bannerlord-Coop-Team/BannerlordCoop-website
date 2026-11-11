@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 1,
+  "cpHead": "524ba2f1565367209933aaa900c4b46b837c2a6d",
+  "websiteHead": "65b89c19aa85053b55573b06c5f6d3283da93595",
+  "legacyHead": "80d0fc26e84178c216cc8f3be15cb632d47f7f69",
+  "fixtureSha256": "087b62286e600dbe715f6d809946bbd3db5e8aaf9db900c48e2679fe3da99b4a",
+  "edgeRequests": [
+    {
+      "method": "POST",
+      "path": "/functions/v1/my-servers",
+      "body": {
+        "action": "reset-campaign",
+        "serverId": "ff153061-7dfe-5958-85be-da86661253f9",
+        "expectedUpdatedAt": "2026-11-10T19:59:07.045Z"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/functions/v1/my-servers?resource=reset-campaign-status&serverId=ff153061-7dfe-5958-85be-da86661253f9&jobId=e60cf080-c3ed-4bb3-a74c-57ad1433665e"
+    },
+    {
+      "method": "GET",
+      "path": "/functions/v1/my-servers?resource=reset-campaign-status&serverId=ff153061-7dfe-5958-85be-da86661253f9&jobId=e60cf080-c3ed-4bb3-a74c-57ad1433665e"
+    },
+    {
+      "method": "GET",
+      "path": "/functions/v1/my-servers?resource=reset-campaign-status&serverId=ff153061-7dfe-5958-85be-da86661253f9&jobId=e60cf080-c3ed-4bb3-a74c-57ad1433665e"
+    },
+    {
+      "method": "GET",
+      "path": "/functions/v1/my-servers?resource=reset-campaign-status&serverId=11111111-1111-4111-8111-111111111111&jobId=22222222-2222-4222-8222-222222222222"
+    }
+  ],
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/user/control-plane",
+        "headers": {
+          "authorization": "[synthetic website identity]",
+          "content-type": "application/json",
+          "x-request-id": "b68118e6-c1c7-4281-878e-922b5766927f"
+        },
+        "body": {
+          "version": 1,
+          "requestId": "b68118e6-c1c7-4281-878e-922b5766927f",
+          "operation": "reset-campaign",
+          "input": {
+            "serverId": "ff153061-7dfe-5958-85be-da86661253f9",
+            "expectedUpdatedAt": "2026-11-10T19:59:07.045Z"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "version": 1,
+          "requestId": "b68118e6-c1c7-4281-878e-922b5766927f",
+          "ok": true,
+          "result": {
+            "outcome": "enqueued",
+            "jobId": "e60cf080-c3ed-4bb3-a74c-57ad1433665e",
+            "action": "reset-campaign"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/user/control-plane",
+        "headers": {
+          "authorization": "[synthetic website identity]",
+          "content-type": "application/json",
+          "x-request-id": "48e6483b-51e1-497b-8d95-a7f253afbec0"
+        },
+        "body": {
+          "version": 1,
+          "requestId": "48e6483b-51e1-497b-8d95-a7f253afbec0",
+          "operation": "reset-campaign-status",
+          "input": {
+            "serverId": "ff153061-7dfe-5958-85be-da86661253f9",
+            "jobId": "e60cf080-c3ed-4bb3-a74c-57ad1433665e"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "version": 1,
+          "requestId": "48e6483b-51e1-497b-8d95-a7f253afbec0",
+          "ok": true,
+          "result": {
+            "serverId": "ff153061-7dfe-5958-85be-da86661253f9",
+            "jobId": "e60cf080-c3ed-4bb3-a74c-57ad1433665e",
+            "state": "queued",
+            "errorCode": null,
+            "instruction": null
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/user/control-plane",
+        "headers": {
+          "authorization": "[synthetic website identity]",
+          "content-type": "application/json",
+          "x-request-id": "697c7741-f296-4f5c-9e72-1016b76a9134"
+        },
+        "body": {
+          "version": 1,
+          "requestId": "697c7741-f296-4f5c-9e72-1016b76a9134",
+          "operation": "reset-campaign-status",
+          "input": {
+            "serverId": "ff153061-7dfe-5958-85be-da86661253f9",
+            "jobId": "e60cf080-c3ed-4bb3-a74c-57ad1433665e"
+          }
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "version": 1,
+          "requestId": "697c7741-f296-4f5c-9e72-1016b76a9134",
+          "ok": true,
+          "result": {
+            "serverId": "ff153061-7dfe-5958-85be-da86661253f9",
+            "jobId": "e60cf080-c3ed-4bb3-a74c-57ad1433665e",
+            "state": "failed",
+            "errorCode": "agent_capability_unavailable",
+            "instruction": "Contact support to update this server's runner, then request Reset Campaign again."
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/user/control-plane",
+        "headers": {
+          "authorization": "[synthetic website identity]",
+          "content-type": "application/json",
+          "x-request-id": "33e52fa2-b3d4-48e7-9d0b-99d3db9b4eeb"
+        },
+        "body": {
+          "version": 1,
+          "requestId": "33e52fa2-b3d4-48e7-9d0b-99d3db9b4eeb",
+          "operation": "reset-campaign-status",
+          "input": {
+            "serverId": "ff153061-7dfe-5958-85be-da86661253f9",
+            "jobId": "e60cf080-c3ed-4bb3-a74c-57ad1433665e"
+          }
+        }
+      },
+      "response": {
+        "status": 404,
+        "body": {
+          "version": 1,
+          "requestId": "33e52fa2-b3d4-48e7-9d0b-99d3db9b4eeb",
+          "ok": false,
+          "error": {
+            "code": "server_not_found",
+            "message": "Managed server is unavailable.",
+            "retryable": false
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "POST",
+        "path": "/v1/user/control-plane",
+        "headers": {
+          "authorization": "[synthetic website identity]",
+          "content-type": "application/json",
+          "x-request-id": "5a1adc4f-6c49-49cf-8245-508e400be08c"
+        },
+        "body": {
+          "version": 1,
+          "requestId": "5a1adc4f-6c49-49cf-8245-508e400be08c",
+          "operation": "reset-campaign-status",
+          "input": {
+            "serverId": "11111111-1111-4111-8111-111111111111",
+            "jobId": "22222222-2222-4222-8222-222222222222"
+          }
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "version": 1,
+          "requestId": "5a1adc4f-6c49-49cf-8245-508e400be08c",
+          "ok": false,
+          "error": {
+            "code": "invalid_request",
+            "message": "The control plane request is invalid.",
+            "retryable": false
+          }
+        }
+      }
+    }
+  ],
+  "assertions": {
+    "activeSaveUnchanged": true,
+    "purgeCalls": 0,
+    "initializeCalls": 0,
+    "resetSubmissions": 1,
+    "unauthorizedRead": "404 server_not_found",
+    "readerFirst": true
+  },
+  "limits": "Real Website client and Edge handler, CP owner HTTP/IPC/runtime and migrated PGlite. Synthetic auth/release/runner/storage; loopback HTTP via injected transport. Not proven: deployed Edge/JWT verification/TLS, browser, installed runner/CRIU/Podman, public UDP, gameplay or production."
+}

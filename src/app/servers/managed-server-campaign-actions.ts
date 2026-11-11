@@ -6,15 +6,34 @@ import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 import { revalidatePath } from "next/cache";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
-import { listMyServerCampaigns, resetMyServerCampaign, selectMyServerCampaign } from "@/app/lib/hosting/server-campaigns";
+import { getMyServerCampaignResetStatus, listMyServerCampaigns, resetMyServerCampaign, selectMyServerCampaign } from "@/app/lib/hosting/server-campaigns";
 import { requireUuid } from "../../../supabase/functions/_shared/server-file-contract";
-import { parseCampaignMutation, type CampaignPage, type CampaignResetResult, type CampaignSelection } from "../../../supabase/functions/_shared/server-campaign-contract";
+import { campaignResetStatusMessage, parseCampaignMutation, type CampaignPage, type CampaignResetResult, type CampaignResetStatus, type CampaignSelection } from "../../../supabase/functions/_shared/server-campaign-contract";
 
 export type ManagedServerCampaignList = { ok: true; campaigns: Omit<CampaignPage, "nextCursor"> } | { ok: false; message: string };
 export type ManagedServerCampaignChange =
     | { ok: true; selection: CampaignSelection }
     | { ok: true; reset: CampaignResetResult }
     | { ok: false; message: string; refresh: boolean; notSubmitted: boolean };
+
+export type ManagedServerCampaignResetRead =
+    | { ok: true; status: CampaignResetStatus | null; message: string }
+    | { ok: false; message: string; retryable: boolean };
+
+/** Reads the existing job, checking the current page account on every poll; never submits Reset again. */
+export async function readManagedServerCampaignReset(serverId: string, jobId: string, expectedUserId: string): Promise<ManagedServerCampaignResetRead> {
+    try {
+        requireUuid(serverId); requireUuid(jobId);
+        const status = await getMyServerCampaignResetStatus(await currentToken(expectedUserId), serverId, jobId);
+        return { ok: true, status, message: campaignResetStatusMessage(status) };
+    } catch (error) {
+        return { ok: false,
+            message: error instanceof MyServersApiError && ["server_not_found", "forbidden"].includes(error.code)
+                ? "This server is unavailable or your access changed."
+                : "The campaign reset status could not be confirmed. Check your campaigns or contact support before trying again.",
+            retryable: error instanceof MyServersApiError && error.retryable };
+    }
+}
 
 async function currentToken(expectedUserId: string) {
     const supabase = await getSupabaseServerClient();
