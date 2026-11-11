@@ -263,7 +263,7 @@ it("delivers only directory and shared server namespaces and resolves metadata/l
         const page = await ServersPage();
         expect(Object.keys(page.props.messages)).toEqual(["servers", "server-common"]);
         expect(page.props.locale).toBe("en");
-        expect(await generateMetadata()).toEqual({ title: "Directory metadata", description: "Directory description" });
+        expect(await generateMetadata()).toEqual({ title: "Directory metadata", description: "Directory description", alternates: { canonical: "/servers" } });
         const stream = await renderToReadableStream(page);
         await stream.allReady;
         expect(await new Response(stream).text()).toContain("Localized directory");
