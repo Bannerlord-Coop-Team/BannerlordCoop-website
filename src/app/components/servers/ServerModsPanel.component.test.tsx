@@ -563,10 +563,13 @@ it("offers no mod list download when players need no community mods", async () =
 /** Downloads the mod list and returns the parsed JSON file. */
 async function downloadedModList() {
     let saved: NodeBlob | undefined;
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     vi.stubGlobal("Blob", NodeBlob);
     vi.stubGlobal("URL", { createObjectURL: vi.fn((blob: NodeBlob) => { saved = blob; return "blob:mod-list"; }), revokeObjectURL: vi.fn() });
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { expect(this.download).toBe("BannerlordCoop-mod-list.json"); });
     await act(async () => downloadButton()!.click());
+    await act(async () => { vi.advanceTimersByTime(1_000); });
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:mod-list");
     vi.unstubAllGlobals();
     return JSON.parse(await saved!.text()) as { mods: { order: number; id: string; name: string; version: string; kind: string; playersOnly: boolean }[] };
 }
