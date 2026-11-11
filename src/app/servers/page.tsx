@@ -32,7 +32,7 @@ export const dynamic = "force-dynamic";
 /** Resolves directory metadata from the same explicit locale as its content. */
 export async function generateMetadata(): Promise<Metadata> {
     const { t } = await getTranslations("servers");
-    return { title: t("metadata.title"), description: t("metadata.description") };
+    return { title: t("metadata.title"), description: t("metadata.description"), alternates: { canonical: "/servers" } };
 }
 
 /** Starts independent requests without holding the directory shell behind account status. */

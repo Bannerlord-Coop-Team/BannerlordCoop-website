@@ -30,6 +30,7 @@ const definition: LocaleDefinition = {
         "server-wireframe": () => import("../dictionaries/pt-PT/server-wireframe.json"),
         // Loads the support namespace only when requested.
         "support": () => import("../dictionaries/pt-PT/support.json"),
+        "hosting": () => import("../dictionaries/pt-PT/hosting.json"),
         // Loads the not-found namespace only when requested.
         "not-found": () => import("../dictionaries/pt-PT/not-found.json"),
     },
