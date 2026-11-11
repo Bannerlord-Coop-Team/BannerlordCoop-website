@@ -168,9 +168,9 @@ export function RelocateDialog({ row, targets, onClose, onQueued, preselected, r
             {targets.length === 0 ? <p className="mt-5 text-sm text-foreground-muted">There is no other VPS to move this server to.</p> : <div className="mt-5 space-y-4">
                 <label className="block text-xs text-foreground-muted">Region
                     <select value={region} disabled={pending} onChange={(event) => { setRegion(event.target.value); setHost(ANY_HOST); }} className={selectClass}>
-                        {region === "" && <option value="" disabled>Every region is full</option>}
+                        {region === "" && <option value="" disabled>No relocation candidates available</option>}
                         {targets.map((option) => <option key={option.region} value={option.region} disabled={option.freeSlots === 0}>
-                            {option.label}{option.freeSlots === 0 ? " (full)" : ""}
+                            {option.label}{option.freeSlots === 0 ? " (unavailable)" : ""}
                         </option>)}
                     </select>
                 </label>
@@ -178,7 +178,7 @@ export function RelocateDialog({ row, targets, onClose, onQueued, preselected, r
                     <select value={host} disabled={pending || target === undefined} onChange={(event) => setHost(event.target.value)} className={selectClass}>
                         <option value={ANY_HOST}>Any free slot</option>
                         {target?.hosts.map((option) => <option key={option.name} value={option.name} disabled={option.freeSlots === 0}>
-                            {option.name} · {option.freeSlots === 0 ? "full" : `${option.freeSlots} free`}
+                            {option.name} · {option.freeSlots === 0 ? "unavailable" : `${option.freeSlots} candidates`}
                         </option>)}
                     </select>
                 </label>

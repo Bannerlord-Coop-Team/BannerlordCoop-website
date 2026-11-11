@@ -100,7 +100,7 @@ it("places each server on its VPS slot and keeps relocations ahead of other acti
     ]);
 });
 
-it("offers other hosts by catalog region, with full regions and hosts marked", () => {
+it("offers other hosts by catalog region, with unavailable regions and hosts marked", () => {
     expect(relocationTargets(hosts, catalog, "vps-uk-a")).toEqual([
         { region: "france", label: "France", freeSlots: 1, hosts: [{ name: "vps-fr-a", freeSlots: 1 }, { name: "vps-fr-b", freeSlots: 0 }] },
         { region: "germany", label: "Germany", freeSlots: 0, hosts: [{ name: "vps-de-a", freeSlots: 0 }] },
