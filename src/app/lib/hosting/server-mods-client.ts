@@ -55,9 +55,16 @@ export function createServerModCatalog(dependencies: ServerModCatalogDependencie
     }
 
     async function pendingUpload(serverId: string): Promise<PendingServerModUpload | null> {
-        const stored = pendingUploads.get(serverId) ?? await dependencies.resumeStore?.get(serverId);
-        if (stored) pendingUploads.set(serverId, stored);
-        return stored ?? null;
+        const pending = pendingUploads.get(serverId);
+        if (pending) return pending;
+        try {
+            const stored = await dependencies.resumeStore?.get(serverId);
+            if (stored) pendingUploads.set(serverId, stored);
+            return stored ?? null;
+        } catch {
+            // Persistent resume is optional; a small in-memory archive must not require browser storage.
+            return null;
+        }
     }
 
     async function remember(upload: PendingServerModUpload) {

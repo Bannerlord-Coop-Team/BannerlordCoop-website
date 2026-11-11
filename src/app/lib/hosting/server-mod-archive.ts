@@ -80,13 +80,16 @@ export async function buildResumableModArchive(
 ): Promise<ServerModArchive> {
     const entries = folderEntries(files);
     // Small files remain usable where local browser storage is unavailable; larger files fail before allocating.
-    if (options.writer === undefined && typeof indexedDB === "undefined") {
-        if (entries.totalBytes <= SMALL_MEMORY_FALLBACK_BYTES) return buildModArchive(files, options);
-        throw new ModArchiveError("browser-storage");
+    if (options.writer === undefined) {
+        try {
+            await prunePreparedModArchives();
+        } catch {
+            if (entries.totalBytes <= SMALL_MEMORY_FALLBACK_BYTES) return buildModArchive(files, options);
+            throw new ModArchiveError("browser-storage");
+        }
     }
     const manifest = readSubModuleIdentity(await readText(entries.submodule), options.parseXml ?? defaultXmlParser);
     const paths = archivePaths(entries.files, manifest.id);
-    if (options.writer === undefined) await prunePreparedModArchives();
     const writer = options.writer ?? createPreparedModArchiveWriter();
     let pending = Promise.resolve();
     let failure: unknown;

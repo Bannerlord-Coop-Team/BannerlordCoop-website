@@ -230,7 +230,10 @@ clearer feedback; the runner remains authoritative.
   stored ZIP in at most 8 MiB IndexedDB parts, with incremental SHA-256. It never
   allocates a whole large file/archive. Stored entries have a 1:1 ratio; the
   runner retains its 100:1 entry/aggregate bomb limits and CRC/path/type checks.
-  The legacy in-memory fallback is capped at 100 MiB; larger uploads require
+  The legacy in-memory fallback is capped at 100 MiB and remains available when
+  IndexedDB is absent or cannot be opened. Resume metadata reads are optional;
+  an in-memory upload can pause/resume in the same tab but cannot survive reload.
+  Larger uploads require
   local browser storage and show a clear refusal if it is unavailable/full.
 - A fixed timestamp makes the same folder produce the same archive and sha256.
 
