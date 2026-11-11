@@ -9,11 +9,12 @@ const MIB = 1_048_576;
 /** Exact size of every upload chunk except the last. */
 export const MOD_UPLOAD_CHUNK_BYTES = 8 * MIB;
 /** Largest accepted compressed module archive. */
-export const MOD_UPLOAD_MAXIMUM_BYTES = 100 * MIB;
+export const MOD_UPLOAD_MAXIMUM_BYTES = 3_000_000_000;
 /** Chunk count of the largest accepted archive. */
 export const MOD_UPLOAD_MAXIMUM_CHUNKS = Math.ceil(MOD_UPLOAD_MAXIMUM_BYTES / MOD_UPLOAD_CHUNK_BYTES);
 /** Archive bounds the runner enforces (section 8); the website checks them early for clearer feedback. */
-export const MOD_ARCHIVE_MAXIMUM_UNCOMPRESSED_BYTES = 512 * MIB;
+export const MOD_ARCHIVE_MAXIMUM_UNCOMPRESSED_BYTES = 3_000_000_000;
+export const MOD_INSTALLED_QUOTA_BYTES = 5_000_000_000;
 export const MOD_ARCHIVE_MAXIMUM_ENTRIES = 5_000;
 export const MOD_ARCHIVE_MAXIMUM_PATH_BYTES = 240;
 export const MOD_ARCHIVE_MAXIMUM_PATH_DEPTH = 16;
@@ -126,15 +127,15 @@ export const MOD_UPLOAD_ACTIVE_STATUSES = ["receiving", "validating", "transferr
 export type ModUploadStatus =
     | { uploadId: string; status: "installed"; state: ModsState }
     | { uploadId: string; status: "rejected"; error: string }
-    | { uploadId: string; status: string };
+    | { uploadId: string; status: string; receivedIndices?: number[]; receivedBytes?: number };
 
 /** The validated JSON body of one route, exactly as the control plane receives it. */
 export type ModsRequest =
     | { route: "list"; body: { serverId: string } }
     | { route: "load-order"; body: { requestId: string; serverId: string; expectedRevision: string; mods: ModOrderEntry[] } }
-    | { route: "uploads"; body: { requestId: string; serverId: string; expectedRevision: string; manifest: ModUploadManifest; totalBytes: number; sha256: string } }
+    | { route: "uploads"; body: { requestId: string; serverId: string; expectedRevision: string; manifest: ModUploadManifest; totalBytes: number; uncompressedBytes?: number; sha256: string } }
     | { route: "complete"; body: { requestId: string; uploadId: string; expectedRevision: string } }
-    | { route: "status"; body: { serverId: string; uploadId: string } }
+    | { route: "status"; body: { serverId: string; uploadId: string; includeReceivedChunks?: true } }
     | { route: "delete"; body: { requestId: string; serverId: string; expectedRevision: string; modId: string } };
 
 /** Whether a value names one of the six JSON routes. */
@@ -213,13 +214,15 @@ export function parseModsRequest(route: ModJsonRoute, value: unknown): ModsReque
             requireMutationIdentity(value);
             return { route, body: { requestId: value.requestId, serverId: value.serverId, expectedRevision: value.expectedRevision, mods: parseLoadOrder(value.mods) } };
         case "uploads":
-            exact(value, ["requestId", "serverId", "expectedRevision", "manifest", "totalBytes", "sha256"]);
+            exact(value, ["requestId", "serverId", "expectedRevision", "manifest", "totalBytes", "sha256", ...(value.uncompressedBytes === undefined ? [] : ["uncompressedBytes"])]);
             requireMutationIdentity(value);
             if (!Number.isSafeInteger(value.totalBytes) || (value.totalBytes as number) < 1 || (value.totalBytes as number) > MOD_UPLOAD_MAXIMUM_BYTES) throw new Error("Invalid archive size");
             if (typeof value.sha256 !== "string" || !CALLER_SHA256.test(value.sha256)) throw new Error("Invalid archive digest");
+            if (value.uncompressedBytes !== undefined && (!boundedInteger(value.uncompressedBytes, MOD_ARCHIVE_MAXIMUM_UNCOMPRESSED_BYTES) || value.uncompressedBytes === 0)) throw new Error("Invalid extracted size");
             return { route, body: {
                 requestId: value.requestId, serverId: value.serverId, expectedRevision: value.expectedRevision,
                 manifest: parseUploadManifest(value.manifest), totalBytes: value.totalBytes as number, sha256: value.sha256.toLowerCase(),
+                ...(value.uncompressedBytes === undefined ? {} : { uncompressedBytes: value.uncompressedBytes as number }),
             } };
         case "complete":
             exact(value, ["requestId", "uploadId", "expectedRevision"]);
@@ -228,10 +231,12 @@ export function parseModsRequest(route: ModJsonRoute, value: unknown): ModsReque
             requireRevision(value.expectedRevision);
             return { route, body: { requestId: value.requestId, uploadId: value.uploadId, expectedRevision: value.expectedRevision } };
         case "status":
-            exact(value, ["serverId", "uploadId"]);
+            exact(value, ["serverId", "uploadId", ...(value.includeReceivedChunks === undefined ? [] : ["includeReceivedChunks"])]);
+            if (value.includeReceivedChunks !== undefined && value.includeReceivedChunks !== true) throw new Error("Invalid resume request");
             requireUuid(value.serverId);
             requireUuid(value.uploadId);
-            return { route, body: { serverId: value.serverId, uploadId: value.uploadId } };
+            return { route, body: { serverId: value.serverId, uploadId: value.uploadId,
+                ...(value.includeReceivedChunks === undefined ? {} : { includeReceivedChunks: true }) } };
         case "delete":
             exact(value, ["requestId", "serverId", "expectedRevision", "modId"]);
             requireMutationIdentity(value);
@@ -324,6 +329,15 @@ export function parseModUploadStatus(value: unknown, uploadId?: string): ModUplo
         exact(value, ["uploadId", "status", "error"]);
         if (typeof value.error !== "string" || !ERROR_CODE.test(value.error)) throw new Error("Invalid rejection code");
         return { uploadId: id, status: "rejected", error: value.error };
+    }
+    if (value.status === "receiving" && (value.receivedIndices !== undefined || value.receivedBytes !== undefined)) {
+        exact(value, ["uploadId", "status", ...(value.receivedIndices === undefined ? [] : ["receivedIndices"]), ...(value.receivedBytes === undefined ? [] : ["receivedBytes"])]);
+        if (value.receivedIndices !== undefined && (!Array.isArray(value.receivedIndices) || value.receivedIndices.length > MOD_UPLOAD_MAXIMUM_CHUNKS
+            || value.receivedIndices.some(index => !boundedInteger(index, MOD_UPLOAD_MAXIMUM_CHUNKS - 1))
+            || new Set(value.receivedIndices).size !== value.receivedIndices.length)) throw new Error("Invalid resume indices");
+        if (value.receivedBytes !== undefined && !boundedInteger(value.receivedBytes, MOD_UPLOAD_MAXIMUM_BYTES)) throw new Error("Invalid resume bytes");
+        return { uploadId: id, status: "receiving", ...(value.receivedIndices === undefined ? {} : { receivedIndices: value.receivedIndices as number[] }),
+            ...(value.receivedBytes === undefined ? {} : { receivedBytes: value.receivedBytes as number }) };
     }
     exact(value, ["uploadId", "status"]);
     return { uploadId: id, status: value.status };

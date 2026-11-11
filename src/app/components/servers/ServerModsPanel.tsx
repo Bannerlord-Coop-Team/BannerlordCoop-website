@@ -6,16 +6,17 @@ import { Suspense, use, useEffect, useEffectEvent, useId, useRef, useState, type
 import { Download, FlaskConical, Lock, Menu, Puzzle, RefreshCw, Trash2, Upload } from "lucide-react";
 
 import { useTranslations } from "@/app/lib/localization/client";
-import { buildModArchive, ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
+import { buildResumableModArchive, ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
+import { discardPreparedModArchive } from "@/app/lib/hosting/server-mod-upload-cache";
 import {
     canChooseServerModRunsOn, canMoveServerMod, changedServerModRunsOn, enabledOwnerModCount, findServerMod, isOwnerMod, isPlayersOnlyAgainstDefault,
     moveServerMod, sameServerModOrder, serverModListFile, serverModLoadOrder, serverModsPlayersNeed, ServerModsError, setServerModRunsOn,
-    toggleServerMod,
-    type ServerMod, type ServerModArchive, type ServerModCatalog, type ServerModListFile, type ServerModRunsOn, type ServerModsState, type ServerModUploadProgress,
+    toggleServerMod, serverModArchiveSize,
+    type PendingServerModUpload, type ServerMod, type ServerModArchive, type ServerModCatalog, type ServerModListFile, type ServerModRunsOn, type ServerModsState, type ServerModUploadProgress,
 } from "@/app/lib/hosting/server-mods";
 import { createBrowserServerModCatalog } from "@/app/lib/hosting/server-mods-transport";
 import { WAR_SAILS_MODULE } from "@/app/lib/hosting/war-sails";
-import { MOD_MAXIMUM_ENABLED_OWNER_MODS } from "../../../../supabase/functions/_shared/server-mods-contract";
+import { MOD_INSTALLED_QUOTA_BYTES, MOD_MAXIMUM_ENABLED_OWNER_MODS } from "../../../../supabase/functions/_shared/server-mods-contract";
 import { useServerWorkspaceSectionShown } from "./ServerManagementWorkspace";
 import { archiveProblemMessage, describeModIssue, lockedRunsOnMessage, modsErrorMessage } from "./server-mods-messages";
 import { fileButtonClass, fileIconButtonClass, filePrimaryButtonClass } from "./server-file-styles";
@@ -67,6 +68,10 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true, onC
     const [draggingId, setDraggingId] = useState<string | null>(null);
     const [announcement, setAnnouncement] = useState("");
     const [notice, setNotice] = useState<Notice | null>(null);
+    const [pendingUpload, setPendingUpload] = useState<PendingServerModUpload | null>(null);
+    const [uploadName, setUploadName] = useState("");
+    const uploadController = useRef<AbortController | null>(null);
+    useEffect(() => () => uploadController.current?.abort(), []);
 
     useEffect(() => {
         const id = pendingFocusId.current;
@@ -106,6 +111,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true, onC
         setBusy("loading");
         try {
             apply(await catalog.listServerMods(serverId));
+            setPendingUpload(await catalog.pendingServerModUpload?.(serverId).catch(() => null) ?? null);
         } catch (error) {
             setLoadFailed(error instanceof ServerModsError && error.code === "server_suspended" ? t("state.suspended")
                 : error instanceof ServerModsError ? modsErrorMessage(error, t) : t("mods.error.other"));
@@ -134,12 +140,17 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true, onC
             onChanged?.();
         } catch (error) {
             if (error instanceof ServerModsError && error.code === CANCELLED) return;
+            if (error instanceof ServerModsError && error.code === "upload_paused") {
+                setNotice({ tone: "info", text: t("mods.uploadPaused") });
+                return;
+            }
             const message = error instanceof ServerModsError ? modsErrorMessage(error, t) : error instanceof ModArchiveError ? archiveProblemMessage(error, t) : t("mods.error.other");
             setNotice({ tone: "error", text: message });
             if (!(error instanceof ModArchiveError)) await reconcile(error);
         } finally {
             setBusy(null);
             setProgress(null);
+            setPendingUpload(await catalog.pendingServerModUpload?.(serverId).catch(() => null) ?? null);
         }
     }
 
@@ -281,15 +292,26 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true, onC
         const picked: { archive?: ServerModArchive; replaced?: boolean } = {};
         await change("preparing", async () => {
             // Let the browser paint the preparing state between file reads and before compressing.
-            const archive = picked.archive = await buildModArchive(files, { yieldToBrowser: () => new Promise(resolve => setTimeout(resolve, 0)) });
+            const archive = picked.archive = await buildResumableModArchive(files, { yieldToBrowser: () => new Promise(resolve => setTimeout(resolve, 0)) });
+            setUploadName(archive.manifest.name);
             const existing = findServerMod(loaded.mods, archive.manifest.id);
             picked.replaced = existing !== undefined;
             if (existing && !window.confirm(t("mods.confirmReplace", { name: existing.name, current: existing.version, version: archive.manifest.version }))) {
+                if (archive.source) await discardPreparedModArchive(archive.source.id);
                 throw new ServerModsError(CANCELLED);
             }
             setBusy("uploading");
-            return catalog.uploadServerMod(serverId, revision, archive, setProgress);
+            uploadController.current = new AbortController();
+            return catalog.uploadServerMod(serverId, revision, archive, setProgress, { signal: uploadController.current.signal });
         }, state => installedMessage(state, picked.archive!, picked.replaced === true));
+    }
+
+    async function resumeUpload() {
+        if (!pendingUpload || !catalog.resumeServerModUpload) return;
+        uploadController.current = new AbortController();
+        setUploadName(pendingUpload.archive.manifest.name);
+        await change("uploading", () => catalog.resumeServerModUpload!(serverId, setProgress, { signal: uploadController.current!.signal }),
+            state => installedMessage(state, pendingUpload.archive, pendingUpload.session?.replaces === true));
     }
 
     /** Names the installed mod, saying when it replaced a version or was left disabled by a dependency or limit rule. */
@@ -309,12 +331,22 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true, onC
         actions={canEdit && <>
             <input ref={input => { uploadRef.current = input; if (input) input.webkitdirectory = true; }} type="file" hidden aria-label={t("mods.folderInput")} onChange={upload} />
             <button type="button" disabled={busyNow || !settled} onClick={() => void load()} className={fileButtonClass}><RefreshCw className="size-4" aria-hidden="true" />{t("mods.refresh")}</button>
-            <button type="button" disabled={busyNow || !settled} onClick={() => uploadRef.current?.click()} className={filePrimaryButtonClass}><Upload className="size-4" aria-hidden="true" />{t("mods.upload")}</button>
+            <button type="button" disabled={busyNow || !settled || pendingUpload !== null} onClick={() => uploadRef.current?.click()} className={filePrimaryButtonClass}><Upload className="size-4" aria-hidden="true" />{t("mods.upload")}</button>
         </>}>
         {!canEdit && <p className="p-5 text-sm leading-6 text-foreground-muted">{t("mods.readOnly")}</p>}
         <div className="space-y-3 border-b border-white/10 px-5 py-3 empty:hidden">
+            {loaded && <div className="space-y-2 text-sm">
+                <div className="flex flex-wrap justify-between gap-2"><span>{t("mods.storage")}</span><span className="text-foreground-muted">{t("mods.storageUsage", { used: modStorageSize(loaded.mods.filter(isOwnerMod).reduce((bytes, mod) => bytes + mod.sizeBytes, 0)) })}</span></div>
+                <progress className="h-1.5 w-full accent-gold" value={loaded.mods.filter(isOwnerMod).reduce((bytes, mod) => bytes + mod.sizeBytes, 0)} max={MOD_INSTALLED_QUOTA_BYTES} aria-label={t("mods.storage")} />
+                <p className="text-xs text-foreground-muted">{t("mods.limits")}</p>
+            </div>}
             {loaded?.restartRequired && <p role="status" className={workspaceNoticeClass}>{t("mods.restartRequired")}</p>}
-            {progress && <UploadProgress progress={progress} />}
+            {progress && <UploadProgress progress={progress} name={uploadName} onPause={progress.phase === "uploading" ? () => uploadController.current?.abort() : undefined} />}
+            {!progress && pendingUpload && busy === null && <div className="space-y-2 rounded-lg border border-white/10 p-3">
+                <p className="text-sm font-medium">{pendingUpload.archive.manifest.name}</p>
+                <p className="text-xs text-foreground-muted">{t("mods.uploadPaused")} {t("mods.uploadAmount", { sent: modStorageSize(pendingUpload.sentBytes ?? 0), total: modStorageSize(serverModArchiveSize(pendingUpload.archive)) })}</p>
+                <button type="button" onClick={() => void resumeUpload()} className={filePrimaryButtonClass}>{t("mods.resumeUpload")}</button>
+            </div>}
             {busy === "preparing" && <p role="status" className="text-sm text-foreground-muted">{t("mods.phase.preparing")}</p>}
             {saving && <p role="status" className="text-sm text-foreground-muted">{t("mods.saving")}</p>}
             {notice && !saving && <p aria-live="polite" className={`text-sm ${notice.tone === "error" ? "text-red-300" : "text-foreground-muted"}`}>{notice.text}</p>}
@@ -429,13 +461,22 @@ function downloadModList(file: ServerModListFile) {
 }
 
 /** Shows the current upload phase, with a percentage while chunks are sent. */
-function UploadProgress({ progress }: { progress: ServerModUploadProgress }) {
+function modStorageSize(bytes: number): string {
+    const unit = bytes >= 1_000_000_000 ? "GB" : "MB";
+    const value = bytes / (unit === "GB" ? 1_000_000_000 : 1_000_000);
+    return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value)} ${unit}`;
+}
+
+function UploadProgress({ progress, name, onPause }: { progress: ServerModUploadProgress; name: string; onPause?: () => void }) {
     const { t } = useTranslations("managed-server");
     const percent = progress.totalBytes === 0 ? 0 : Math.floor(progress.sentBytes / progress.totalBytes * 100);
     const label = progress.phase === "uploading" ? t("mods.phase.uploading", { percent }) : t(`mods.phase.${progress.phase}`);
-    return <div className="w-full" role="status">
+    return <div className="w-full space-y-2 rounded-lg border border-white/10 p-3" role="status">
+        <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{name}</p>
+            {onPause && <button type="button" onClick={onPause} className={fileButtonClass}>{t("mods.pauseUpload")}</button>}</div>
         <p className="text-sm text-foreground-muted">{label}</p>
         {progress.phase === "uploading" && <progress className="mt-2 h-1.5 w-full accent-gold" max={100} value={percent} aria-label={label} />}
+        <p className="text-xs text-foreground-muted">{t("mods.uploadAmount", { sent: modStorageSize(progress.sentBytes), total: modStorageSize(progress.totalBytes) })}</p>
     </div>;
 }
 
