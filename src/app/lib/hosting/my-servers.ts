@@ -619,8 +619,12 @@ function parseSavePage(value: unknown): MyServerSavePage {
     return { serverId: value.serverId, updatedAt: value.updatedAt, activeSaveId: value.activeSaveId, items: value.items.map(parseSave), nextCursor: value.nextCursor };
 }
 
+const SAVE_KEYS = ["byteSize", "createdAt", "displayName", "importedBy", "lastUsedAt", "saveId"];
+
+/** Validates one listed save; its optional War Sails label must be a boolean or null when present. */
 function parseSave(value: unknown): MyServerSaveSummary {
-    if (!isRecord(value) || !hasExactKeys(value, ["byteSize", "createdAt", "displayName", "importedBy", "lastUsedAt", "saveId"]) || typeof value.saveId !== "string" || !RESOURCE_ID.test(value.saveId) || typeof value.displayName !== "string" || value.displayName.length < 1 || value.displayName.length > 48 || typeof value.byteSize !== "number" || !Number.isSafeInteger(value.byteSize) || value.byteSize < 0 || !isTimestamp(value.createdAt) || (value.lastUsedAt !== null && !isTimestamp(value.lastUsedAt)) || (value.importedBy !== "system" && value.importedBy !== "owner")) throw invalidResponse();
+    if (!isRecord(value) || !hasExactKeys(value, Object.hasOwn(value, "warSails") ? [...SAVE_KEYS, "warSails"] : SAVE_KEYS)
+        || (Object.hasOwn(value, "warSails") && value.warSails !== null && typeof value.warSails !== "boolean") || typeof value.saveId !== "string" || !RESOURCE_ID.test(value.saveId) || typeof value.displayName !== "string" || value.displayName.length < 1 || value.displayName.length > 48 || typeof value.byteSize !== "number" || !Number.isSafeInteger(value.byteSize) || value.byteSize < 0 || !isTimestamp(value.createdAt) || (value.lastUsedAt !== null && !isTimestamp(value.lastUsedAt)) || (value.importedBy !== "system" && value.importedBy !== "owner")) throw invalidResponse();
     return value as MyServerSaveSummary;
 }
 

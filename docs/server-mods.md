@@ -105,10 +105,21 @@ the website's side of it.
   official DLC (such as War Sails), which Coop's join check refuses. Disabled mods
   are left out. It reads the
   saved list, so it changes once an edit is saved.
-  - **Download mod list**, shown when players need at least one mod, saves
+  - **War Sails campaigns.** War Sails is a property of the campaign (see
+    [War Sails campaigns](server-file-transfers.md#war-sails-campaigns)). When the
+    active campaign uses it, the DLC line instead says players must enable War Sails
+    (NavalDLC) and disable any other official DLC, and the list starts with
+    "War Sails" (`NavalDLC`). The page decides this from the active campaign's
+    `warSails` label in the campaign list, or, when the control plane sends no
+    label, from the stored `modOptions.warSails`; a failed read keeps the Classic
+    copy. A Classic campaign keeps the copy, list and download exactly as before.
+  - **Download mod list**, shown when players need at least one mod (or the
+    campaign uses War Sails), saves
     `BannerlordCoop-mod-list.json`: every module a player enables to join, in load
     order. That is the enabled core modules, Coop and owner mods, without
-    `DedicatedServer.*`, which only the server loads. The shape is
+    `DedicatedServer.*`, which only the server loads. A War Sails campaign adds
+    `{ id: "NavalDLC", name: "War Sails", version: "", kind: "core" }` right after
+    Coop (unless the list already has NavalDLC). The shape is
     `{ format: "bannerlord-coop-mod-list", formatVersion: 1, serverId, exportedAt,
     mods: [{ order, id, name, version, kind: "core" | "coop" | "mod", playersOnly }] }`,
     where `order` starts at 1.
@@ -236,6 +247,11 @@ Which mods run headless is the control plane's and the dedicated server's concer
 - `crash_loop_cooldown` shows the control plane's message, which carries the
   remaining wait ("Start is paused for about N minutes. Changing its enabled mods
   ends the pause now."). Neither refusal starts status polling or a retry.
+- `war_sails_save_mismatch` and `war_sails_unsupported` (a Start refusal, a failed
+  Start status or the runtime insight) show the website's localized copy instead of
+  the control plane's text: the campaign's War Sails mode doesn't match, or the
+  server's build can't run War Sails (switch to the nightly channel or pick a
+  Classic campaign). See [War Sails campaigns](server-file-transfers.md#war-sails-campaigns).
 
 ## Rollout
 

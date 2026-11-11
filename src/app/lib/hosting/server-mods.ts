@@ -1,4 +1,5 @@
 import type { ModEntry, ModOrderEntry, ModRunsOn, ModsState, ModUploadManifest } from "../../../../supabase/functions/_shared/server-mods-contract";
+import { WAR_SAILS_MODULE } from "./war-sails";
 
 // The Mods tab's domain: installed mods as the control plane lists them, the catalog the panel depends
 // on (the API-backed catalog implements it; panel tests use an in-memory one), and pure load-order edits.
@@ -162,15 +163,24 @@ export function serverModsPlayerLoadOrder(mods: readonly ServerMod[]): ServerMod
     return mods.filter(mod => mod.enabled && !isDedicatedServerModule(mod));
 }
 
-/** Builds the downloadable mod list from the saved list, stamped with the given export time. */
-export function serverModListFile(serverId: string, mods: readonly ServerMod[], exportedAt: Date): ServerModListFile {
+/** Builds the downloadable mod list from the saved list, stamped with the given export time; a War Sails campaign adds NavalDLC. */
+export function serverModListFile(serverId: string, mods: readonly ServerMod[], exportedAt: Date, warSails = false): ServerModListFile {
+    const entries: Omit<ServerModListEntry, "order">[] = serverModsPlayerLoadOrder(mods).map(mod => ({
+        id: mod.id, name: mod.name, version: mod.version,
+        kind: mod.required ? "coop" : mod.pinned ? "core" : "mod", playersOnly: mod.runsOn === "players",
+    }));
     return {
         format: "bannerlord-coop-mod-list", formatVersion: 1, serverId, exportedAt: exportedAt.toISOString(),
-        mods: serverModsPlayerLoadOrder(mods).map((mod, index) => ({
-            order: index + 1, id: mod.id, name: mod.name, version: mod.version,
-            kind: mod.required ? "coop" : mod.pinned ? "core" : "mod", playersOnly: mod.runsOn === "players",
-        })),
+        mods: (warSails ? withWarSailsModule(entries) : entries).map((entry, index) => ({ order: index + 1, ...entry })),
     };
+}
+
+/** Inserts the War Sails DLC right after Coop (after the core modules when Coop is missing), unless the list already has it. */
+function withWarSailsModule(entries: readonly Omit<ServerModListEntry, "order">[]): Omit<ServerModListEntry, "order">[] {
+    if (entries.some(entry => entry.id.toLowerCase() === WAR_SAILS_MODULE.id.toLowerCase())) return [...entries];
+    const coop = entries.findIndex(entry => entry.kind === "coop");
+    const at = coop >= 0 ? coop + 1 : entries.findLastIndex(entry => entry.kind === "core") + 1;
+    return [...entries.slice(0, at), { ...WAR_SAILS_MODULE, version: "", kind: "core", playersOnly: false }, ...entries.slice(at)];
 }
 
 /** Counts enabled owner mods, which the control plane caps at 32. */

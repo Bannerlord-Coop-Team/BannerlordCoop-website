@@ -2022,7 +2022,11 @@ function Install-ServerIncremental {
 
     Assert-ServerStopped $ServerPath
     $parent = Split-Path -Parent $ServerPath
-    New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    # New-Item rejects an existing drive root (D:\), so only create a missing parent.
+    if (-not [string]::IsNullOrWhiteSpace($parent) -and
+        -not (Test-Path -LiteralPath $parent -PathType Container)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
     $work = Join-Path $parent ('.bannerlordcoop-installer-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $work -Force | Out-Null
     $incremental = $Release.incremental
@@ -2153,7 +2157,11 @@ function Install-Server {
         return
     }
     $parent = Split-Path -Parent $ServerPath
-    New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    # New-Item rejects an existing drive root (D:\), so only create a missing parent.
+    if (-not [string]::IsNullOrWhiteSpace($parent) -and
+        -not (Test-Path -LiteralPath $parent -PathType Container)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
     $work = Join-Path $parent ('.bannerlordcoop-installer-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $work -Force | Out-Null
     try {

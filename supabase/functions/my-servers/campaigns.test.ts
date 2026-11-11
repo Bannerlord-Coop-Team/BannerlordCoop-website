@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createMyServersHandler } from "../_shared/my-servers.ts";
-import { parseCampaignMutation, parseCampaignPage } from "../_shared/server-campaign-contract.ts";
+import { parseCampaignMutation, parseCampaignPage, parseCampaignResetStatus } from "../_shared/server-campaign-contract.ts";
+import { readFileSync } from "node:fs";
+
+const resetFixture = JSON.parse(readFileSync(new URL("../../../test/fixtures/campaign-reset/v1.json", import.meta.url), "utf8"));
 
 const requestId = "aaaaaaaa-1111-4111-8111-111111111111";
 const serverId = "bbbbbbbb-1111-4111-8111-111111111111";
@@ -13,6 +16,49 @@ const page = { serverId, updatedAt, activeSaveId: saveId, items: [campaign], nex
 function handler(fetchImplementation: typeof fetch) { return createMyServersHandler({ allowedOrigins: ["https://website.test"], controlPlaneUrl: "https://cp.test", fetchImplementation, waitUntil: () => undefined }); }
 function get(query: string) { return new Request(`https://edge.test/my-servers?${query}`, { headers: { authorization: `Bearer ${token}`, "x-request-id": requestId } }); }
 function post(body: unknown, id = true) { return new Request("https://edge.test/my-servers", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${token}`, ...(id ? { "x-request-id": requestId } : {}) }, body: JSON.stringify(body) }); }
+
+test("reset status forwards the exact authorized read and strictly consumes the shared versioned contract", async () => {
+    assert.equal(resetFixture.schemaVersion, 1);
+    const query = `resource=reset-campaign-status&serverId=${serverId}&jobId=${requestId}`;
+    const base = { serverId, jobId: requestId, state: "queued", errorCode: null, instruction: null };
+    const results = [
+        ...resetFixture.states.map((state: string) => ({ ...base, state })),
+        ...resetFixture.terminalFailures.map(({ state, errorCode, instruction }: Record<string, unknown>) => ({ ...base, state, errorCode, instruction })),
+    ];
+    for (const result of results) {
+        let calls = 0;
+        const response = await handler(async (url, init) => {
+            calls++;
+            assert.equal(String(url), "https://cp.test/v1/user/control-plane");
+            assert.equal(init?.method, "POST");
+            assert.equal(new Headers(init.headers).get("authorization"), `Bearer ${token}`);
+            assert.deepEqual(JSON.parse(String(init.body)), { version: 1, requestId, operation: "reset-campaign-status", input: { serverId, jobId: requestId } });
+            return Response.json({ version: 1, requestId, ok: true, result });
+        })(get(query));
+        assert.equal(response.status, 200); assert.equal(calls, 1);
+        assert.deepEqual((await response.json()).result, parseCampaignResetStatus(result, serverId, requestId));
+    }
+    for (const result of [
+        { ...base, serverId: saveId }, { ...base, jobId: saveId }, { ...base, state: ["queued"] }, { ...base, state: "claimed" },
+        { ...base, payload: "private/worker-details" }, { ...base, errorCode: "operation_failed" }, { ...base, instruction: "private" },
+        { ...base, state: "failed" }, { ...base, state: "failed", errorCode: ["operation_failed"] },
+        { ...base, state: "failed", errorCode: "private_error" },
+        { ...base, state: "failed", errorCode: "agent_capability_unavailable", instruction: "raw runner details" },
+        { ...base, state: "cancelled", errorCode: "agent_capability_unavailable", instruction: resetFixture.terminalFailures[0].instruction },
+    ]) {
+        assert.throws(() => parseCampaignResetStatus(result, serverId, requestId));
+        assert.equal((await handler(async () => Response.json({ version: 1, requestId, ok: true, result }))(get(query))).status, 502);
+    }
+    for (const invalid of [query + "&actor=administrator", query + `&jobId=${requestId}`, `resource=reset-campaign-status&serverId=${serverId}`, query.replace(requestId, "not-a-job")]) {
+        assert.equal((await handler(async () => { throw Error("Unexpected upstream read"); })(get(invalid))).status, 400);
+    }
+    for (const peer of resetFixture.unsupported) {
+        const response = await handler(async () => Response.json({ version: 1, requestId, ok: false,
+            error: { code: peer.code, message: "The requested operation is unavailable.", retryable: peer.retryable } }, { status: peer.status }))(get(query));
+        assert.equal(response.status, peer.status);
+        assert.equal((await response.json()).error.code, peer.code);
+    }
+});
 
 test("delete-save-status validates exact keys, identities, states and bounded codes without changing deletion admission", async () => {
     const query = `resource=delete-save-status&serverId=${serverId}&jobId=${requestId}`;
@@ -99,4 +145,42 @@ test("campaign selection and reset require a durable request ID, exact fields an
     assert.equal((await conflict.json()).error.code, "safe_stop_required");
     assert.deepEqual(parseCampaignMutation(select), select);
     assert.throws(() => parseCampaignMutation({ ...reset, saveId }));
+});
+
+test("campaign pages accept an optional War Sails label of true, false or null and reject anything else", async () => {
+    // Older control planes omit the key; the page must still parse unchanged.
+    assert.deepEqual(parseCampaignPage(page), page);
+    for (const warSails of [true, false, null]) {
+        const labelled = { ...page, items: [{ ...campaign, warSails }] };
+        assert.deepEqual(parseCampaignPage(labelled), labelled);
+        const response = await handler(async () => Response.json({ version: 1, requestId, ok: true, result: labelled }))(get(`resource=saves&serverId=${serverId}`));
+        assert.equal(response.status, 200);
+        assert.deepEqual((await response.json()).result, labelled);
+    }
+    for (const warSails of ["true", 1, {}, []]) {
+        const invalid = { ...page, items: [{ ...campaign, warSails }] };
+        assert.throws(() => parseCampaignPage(invalid));
+        assert.equal((await handler(async () => Response.json({ version: 1, requestId, ok: true, result: invalid }))(get(`resource=saves&serverId=${serverId}`))).status, 502);
+    }
+});
+
+test("reset-campaign forwards warSails only when true, so a Classic reset is byte-identical to today's request", async () => {
+    const reset = { action: "reset-campaign", serverId, expectedUpdatedAt: updatedAt };
+    const queued = { outcome: "enqueued", jobId: requestId, action: "reset-campaign" };
+    const classicBody = JSON.stringify({ version: 1, requestId, operation: "reset-campaign", input: { serverId, expectedUpdatedAt: updatedAt } });
+    const sent: string[] = [];
+    const recording = handler(async (_url, init) => { sent.push(String(init?.body)); return Response.json({ version: 1, requestId, ok: true, result: queued }); });
+    for (const body of [reset, { ...reset, warSails: false }, { ...reset, warSails: true }]) assert.equal((await recording(post(body))).status, 200);
+    assert.deepEqual(sent, [classicBody, classicBody,
+        JSON.stringify({ version: 1, requestId, operation: "reset-campaign", input: { serverId, expectedUpdatedAt: updatedAt, warSails: true } })]);
+    let calls = 0;
+    const rejecting = handler(async () => { calls++; throw Error("Unexpected fetch"); });
+    for (const warSails of ["true", 1, null]) assert.equal((await rejecting(post({ ...reset, warSails }))).status, 400);
+    assert.equal(calls, 0);
+    assert.deepEqual(parseCampaignMutation({ ...reset, warSails: true }), { ...reset, warSails: true });
+    assert.deepEqual(parseCampaignMutation({ ...reset, warSails: false }), reset);
+    assert.throws(() => parseCampaignMutation({ action: "select-save", serverId, saveId, expectedUpdatedAt: updatedAt, warSails: true }));
+    const refused = await handler(async () => Response.json({ version: 1, requestId, ok: false, error: { code: "war_sails_unsupported", message: "This build cannot run War Sails.", retryable: false } }, { status: 409 }))(post({ ...reset, warSails: true }));
+    assert.equal(refused.status, 409);
+    assert.equal((await refused.json()).error.code, "war_sails_unsupported");
 });

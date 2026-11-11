@@ -2,12 +2,14 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerCampaigns } from "./ManagedServerCampaigns";
+import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
+const CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION = "Contact support to update this server's runner, then request Reset Campaign again.";
 
-const mocks = vi.hoisted(() => ({ list: vi.fn(), change: vi.fn(), deleteSave: vi.fn(), deletionStatus: vi.fn(), refresh: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }) }));
-vi.mock("@/app/servers/managed-server-campaign-actions", () => ({ listManagedServerCampaigns: mocks.list, changeManagedServerCampaign: mocks.change }));
+const mocks = vi.hoisted(() => ({ list: vi.fn(), change: vi.fn(), resetStatus: vi.fn(), deleteSave: vi.fn(), deletionStatus: vi.fn(), refresh: vi.fn() }));
+vi.mock("next/navigation", () => { const router = { refresh: mocks.refresh }; return { useRouter: () => router }; });
+vi.mock("@/app/servers/managed-server-campaign-actions", () => ({ listManagedServerCampaigns: mocks.list, changeManagedServerCampaign: mocks.change, readManagedServerCampaignReset: mocks.resetStatus }));
 vi.mock("@/app/servers/managed-server-save-actions", () => ({ deleteManagedServerSave: mocks.deleteSave, readManagedServerSaveDeletion: mocks.deletionStatus }));
 
 const serverId = "11111111-1111-4111-8111-111111111111";
@@ -30,11 +32,12 @@ beforeEach(() => {
     Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value() { this.open = true; } });
     Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value() { this.open = false; } });
     mocks.list.mockResolvedValue({ ok: true, campaigns });
+    mocks.resetStatus.mockResolvedValue({ ok: true, status: { serverId, jobId: freshId, state: "queued", errorCode: null, instruction: null }, message: "Preparing your fresh campaign. This takes about a minute…" });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.useRealTimers(); });
 async function render(status: OwnerFileStatus | null = stopped, canDelete = false) {
-    await act(async () => root.render(<ManagedServerCampaigns userId="owner" serverId={serverId} status={status} canDelete={canDelete} />));
+    await act(async () => root.render(<TestLocalization><ManagedServerCampaigns userId="owner" serverId={serverId} status={status} canDelete={canDelete} /></TestLocalization>));
     await act(async () => vi.advanceTimersByTimeAsync(0));
 }
 function button(label: string) { const found = [...container.querySelectorAll("button")].find((el) => el.textContent === label); if (!found) throw Error(`Missing button ${label}`); return found; }
@@ -46,7 +49,7 @@ it("lists campaigns with the selection marked and only offers switching while th
     expect(container.textContent).toContain("Default New Game"); expect(container.textContent).toContain("Selected");
     expect(container.textContent).toContain("Imported Campaign"); expect(container.textContent).toContain("Stop the server to switch campaigns");
     expect(button("Use this campaign").disabled).toBe(true); expect(button("New campaign").disabled).toBe(true);
-    await act(async () => root.render(<ManagedServerCampaigns userId="owner" serverId={serverId} status={stopped} />));
+    await act(async () => root.render(<TestLocalization><ManagedServerCampaigns userId="owner" serverId={serverId} status={stopped} /></TestLocalization>));
     await act(async () => vi.advanceTimersByTimeAsync(0));
     expect(button("Use this campaign").disabled).toBe(false); expect(button("New campaign").disabled).toBe(false);
 });
@@ -79,7 +82,7 @@ it("selects an imported campaign with a durable request bound to the listed serv
     expect(mocks.refresh).toHaveBeenCalled();
 });
 
-it("starts a new campaign only after confirmation, replays the same request on retry, and reports completion when the selection changes", async () => {
+it("starts a new campaign only after confirmation, replays the same request on retry, and reads its terminal result", async () => {
     mocks.change.mockResolvedValueOnce({ ok: false, notSubmitted: false, refresh: false, message: "Connection interrupted." });
     await render();
     expect(dialog().open).toBe(false);
@@ -95,11 +98,149 @@ it("starts a new campaign only after confirmation, replays the same request on r
     expect((mocks.change.mock.calls[1]![0] as { requestId: string }).requestId).toBe(first.requestId);
     expect(dialog().open).toBe(false);
     expect(container.textContent).toContain("Preparing your fresh campaign");
-    // Polling notices the fresh default once the control plane re-seeds it.
+    mocks.resetStatus.mockResolvedValue({ ok: true, status: { serverId, jobId: freshId, state: "succeeded", errorCode: null, instruction: null }, message: "Your fresh campaign is ready. Start the server when you want to play it." });
     mocks.list.mockResolvedValue({ ok: true, campaigns: { ...campaigns, activeSaveId: freshId, items: [{ ...campaigns.items[0]!, saveId: freshId }] } });
     await act(async () => vi.advanceTimersByTimeAsync(5_000));
     expect(container.textContent).toContain("Your fresh campaign is ready");
     expect(button("New campaign").disabled).toBe(false);
+});
+
+async function beginReset() {
+    mocks.change.mockResolvedValue({ ok: true, reset: { outcome: "enqueued", jobId: freshId, action: "reset-campaign" } });
+    await render();
+    await act(async () => button("New campaign").click());
+    await act(async () => button("Delete saves and start fresh").click());
+}
+
+it("shows the retained native reset refusal without another Reset or a changed campaign", async () => {
+    await beginReset();
+    mocks.resetStatus.mockResolvedValue({ ok: true, status: { serverId, jobId: freshId, state: "failed", errorCode: "agent_capability_unavailable", instruction: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION }, message: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION });
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(container.textContent).toContain(CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION);
+    expect(container.textContent).toContain("Default New Game");
+    expect(mocks.change).toHaveBeenCalledTimes(1);
+    expect(mocks.resetStatus).toHaveBeenCalledWith(serverId, freshId, "owner");
+    const count = mocks.resetStatus.mock.calls.length;
+    await act(async () => vi.advanceTimersByTimeAsync(30_000));
+    expect(mocks.resetStatus).toHaveBeenCalledTimes(count);
+    expect(button("New campaign").disabled).toBe(false);
+});
+
+it("accepts succeeded status even when the new default keeps the same save ID", async () => {
+    await beginReset();
+    mocks.resetStatus.mockResolvedValue({ ok: true, status: { serverId, jobId: freshId, state: "succeeded", errorCode: null, instruction: null }, message: "Your fresh campaign is ready. Start the server when you want to play it." });
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(container.textContent).toContain("Your fresh campaign is ready");
+    expect(button("New campaign").disabled).toBe(false);
+    expect(mocks.change).toHaveBeenCalledTimes(1);
+});
+
+it("bounds legacy status polling and does not turn a pending supported job into success from a changed selection", async () => {
+    await beginReset();
+    mocks.list.mockResolvedValue({ ok: true, campaigns: { ...campaigns, activeSaveId: freshId } });
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    expect(container.textContent).not.toContain("Your fresh campaign is ready");
+    mocks.resetStatus.mockResolvedValue({ ok: true, status: null, message: "The reset status is not available from the hosting service yet. Your request has not been submitted again." });
+    mocks.list.mockResolvedValue({ ok: true, campaigns });
+    await act(async () => vi.advanceTimersByTimeAsync(10 * 60_000));
+    expect(container.textContent).toContain("outcome could not be confirmed");
+    expect(mocks.change).toHaveBeenCalledTimes(1);
+    expect(button("New campaign").disabled).toBe(false);
+});
+
+it("ignores a late reset status after the page account changes", async () => {
+    await beginReset();
+    let resolve!: (value: unknown) => void;
+    mocks.resetStatus.mockImplementationOnce(() => new Promise(value => { resolve = value; }));
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    await act(async () => root.render(<TestLocalization><ManagedServerCampaigns userId="other-owner" serverId={serverId} status={stopped} /></TestLocalization>));
+    await act(async () => resolve({ ok: true, status: { state: "failed" }, message: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION }));
+    expect(container.textContent).not.toContain(CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION);
+    expect(mocks.change).toHaveBeenCalledTimes(1);
+});
+
+it("releases the pending view after its deadline even if a status read never returns", async () => {
+    await beginReset();
+    mocks.resetStatus.mockImplementationOnce(() => new Promise(() => undefined));
+    await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    const count = mocks.resetStatus.mock.calls.length;
+    await act(async () => vi.advanceTimersByTimeAsync(10 * 60_000));
+    expect(mocks.resetStatus).toHaveBeenCalledTimes(count);
+    expect(container.textContent).toContain("outcome could not be confirmed");
+    expect(button("New campaign").disabled).toBe(false);
+    expect(mocks.change).toHaveBeenCalledTimes(1);
+});
+
+/** Renders the campaigns tab for an owner with the given War Sails capability and campaign labels. */
+async function renderModes(labels: { active?: boolean | null; imported?: boolean | null }, warSailsCapable?: boolean) {
+    const label = (value: boolean | null | undefined) => value === undefined ? {} : { warSails: value };
+    mocks.list.mockResolvedValue({ ok: true, campaigns: { ...campaigns, items: [{ ...campaigns.items[0]!, ...label(labels.active) }, { ...campaigns.items[1]!, ...label(labels.imported) }] } });
+    // A fresh root reloads the list, as opening the tab again would.
+    await act(async () => root.unmount());
+    root = createRoot(container);
+    await act(async () => root.render(<TestLocalization><ManagedServerCampaigns userId="owner" serverId={serverId} status={stopped} warSailsCapable={warSailsCapable} /></TestLocalization>));
+    await act(async () => vi.advanceTimersByTimeAsync(0));
+}
+/** The reset request the component sent, without its request ID, as the exact JSON text it would forward. */
+function sentReset(call = 0) {
+    const { requestId, ...body } = mocks.change.mock.calls[call]![0] as Record<string, unknown>;
+    expect(requestId).toMatch(/^[0-9a-f-]{36}$/);
+    return JSON.stringify(body);
+}
+const classicReset = JSON.stringify({ action: "reset-campaign", serverId, expectedUpdatedAt: stopped.updatedAt });
+
+it("keeps today's campaign list and exact Classic reset request when the control plane sends no War Sails fields", async () => {
+    mocks.change.mockResolvedValue({ ok: true, reset: { outcome: "enqueued", jobId: freshId, action: "reset-campaign" } });
+    await render();
+    expect(container.textContent).not.toContain("Classic");
+    expect(container.textContent).not.toContain("War Sails");
+    await act(async () => button("New campaign").click());
+    expect(dialog().querySelector('input[type="radio"]')).toBeNull();
+    await act(async () => button("Delete saves and start fresh").click());
+    expect(sentReset()).toBe(classicReset);
+});
+
+it("labels each campaign Classic or War Sails and shows nothing for an unknown label", async () => {
+    await renderModes({ active: false, imported: true });
+    const rows = [...container.querySelectorAll("li")];
+    expect(rows[0]!.querySelector("p")!.textContent).toBe("Default New GameSelectedClassic");
+    expect(rows[1]!.querySelector("p")!.textContent).toBe("Imported CampaignWar Sails");
+    await renderModes({ active: null });
+    expect([...container.querySelectorAll("li")].map(row => row.querySelector("p")!.textContent)).toEqual(["Default New GameSelected", "Imported Campaign"]);
+});
+
+it("notes that selecting a campaign in the other mode changes War Sails, only when both modes are known", async () => {
+    await renderModes({ active: false, imported: true });
+    expect(container.textContent).toContain("Using this campaign turns War Sails on. Players must enable War Sails (NavalDLC) to join.");
+    await renderModes({ active: true, imported: false });
+    expect(container.textContent).toContain("Using this campaign turns War Sails off. Players must disable War Sails to join.");
+    for (const labels of [{ active: true, imported: true }, { active: null, imported: true }, { imported: true }]) {
+        await renderModes(labels);
+        expect(container.textContent).not.toContain("Using this campaign turns");
+    }
+});
+
+it("offers the War Sails mode for a new campaign only when the build can run it and sends warSails only when chosen", async () => {
+    mocks.change.mockResolvedValue({ ok: false, notSubmitted: true, refresh: false, message: "Not sent." });
+    await renderModes({}, false);
+    await act(async () => button("New campaign").click());
+    expect(dialog().querySelector('input[type="radio"]')).toBeNull();
+    await act(async () => button("Cancel").click());
+
+    await renderModes({}, true);
+    await act(async () => button("New campaign").click());
+    const radios = [...dialog().querySelectorAll<HTMLInputElement>('input[name="new-campaign-mode"]')];
+    expect(radios.map(radio => [radio.value, radio.checked])).toEqual([["classic", true], ["warSails", false]]);
+    expect(dialog().textContent).toContain("Campaign mode");
+    await act(async () => button("Delete saves and start fresh").click());
+    expect(sentReset(0)).toBe(classicReset);
+    await act(async () => radios[1]!.click());
+    await act(async () => button("Delete saves and start fresh").click());
+    expect(sentReset(1)).toBe(JSON.stringify({ action: "reset-campaign", warSails: true, serverId, expectedUpdatedAt: stopped.updatedAt }));
+    // Reopening the dialog starts from Classic again.
+    await act(async () => button("Cancel").click());
+    await act(async () => button("New campaign").click());
+    expect(radios[0]!.checked).toBe(true);
 });
 
 it("shows load failures without hiding the controls and refuses changes before status is known", async () => {
@@ -176,7 +317,7 @@ it("keeps an unavailable status pending and discards late responses after switch
     let finish!: (result: unknown) => void;
     mocks.deletionStatus.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
     await render(stopped, true);
-    await act(async () => root.render(<ManagedServerCampaigns userId="other" serverId={serverId} status={stopped} canDelete />));
+    await act(async () => root.render(<TestLocalization><ManagedServerCampaigns userId="other" serverId={serverId} status={stopped} canDelete /></TestLocalization>));
     await act(async () => finish(statusResult("succeeded", "Private old outcome")));
     expect(container.textContent).not.toContain("Private old outcome");
     await render(stopped, true);

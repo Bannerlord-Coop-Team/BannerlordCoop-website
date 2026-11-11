@@ -19,6 +19,7 @@ const definition: LocaleDefinition = {
         "server-common": () => import("../dictionaries/ru/server-common.json"),
         "server-wireframe": () => import("../dictionaries/ru/server-wireframe.json"),
         "support": () => import("../dictionaries/ru/support.json"),
+        "hosting": () => import("../dictionaries/ru/hosting.json"),
         "not-found": () => import("../dictionaries/ru/not-found.json"),
     },
 };
