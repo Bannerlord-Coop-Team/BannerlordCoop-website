@@ -339,6 +339,7 @@ function SetupDialog({ summary, catalog, canOffer, disabled, pending, result, re
                                     <span className="flex items-center gap-1.5 text-sm font-medium">{t(`release.${channel}`)} <CircleHelp aria-hidden="true" className="size-3.5 text-gold/70" /></span>
                                     <span id={`release-${channel}-description`} role="tooltip" className="pointer-events-none absolute inset-x-0 bottom-full z-20 mb-2 hidden border border-white/15 bg-background px-3 py-2 text-xs font-normal leading-5 text-foreground shadow-xl group-hover:block group-focus-within:block">{releaseChannelInfo[channel]}{channel === "nightly" && <>{" "}{t("onboarding.nightlyTooltipUpdate")} {t("onboarding.nightlyTooltipPrefix")}<Link className="pointer-events-auto text-gold underline" href="https://discord.com/channels/709516043332354119/1058155634702434355/1539466223916421201" target="_blank" rel="noreferrer">{t("onboarding.nightlyTooltipHere")}</Link>{t("onboarding.nightlyTooltipSuffix")}</>}</span>
                                 </label>)}</div>
+                                <p className="mt-3 text-xs leading-5 text-foreground-muted">{t("onboarding.releaseAvailabilityHint")}</p>
                             </div></div>
                         </li>
                         <li className="rounded-sm border border-white/10 bg-background/30 p-4">
