@@ -6,7 +6,7 @@ import { hostingRegionLabel, type HostingRegionPayload } from "../../../../supab
 export const RELOCATION_JOB_ACTION = "migrate-region";
 const ACTIVE_JOB_STATES = new Set(["queued", "running", "retry-wait"]);
 
-type RelocationHost = Pick<HostingAdminVpsHost, "name" | "countryCode" | "locationId" | "region" | "availableServers" | "occupiedSlots">;
+type RelocationHost = Pick<HostingAdminVpsHost, "name" | "countryCode" | "locationId" | "region" | "availableServers" | "provenServers" | "occupiedSlots">;
 
 export type RelocationRow = {
     server: ManagedServer;
@@ -69,7 +69,8 @@ export function activeJobsByServer(jobs: readonly RelocationJob[]) {
 
 /**
  * Lists the regions a server could move to, each with the VPS hosts that serve it, excluding the host it is on.
- * Free-slot counts are the inventory's prepared slots; the control plane revalidates admission when the job is queued.
+ * Counts use launch-proven admissible candidates; older CP responses fall back to their legacy count.
+ * Source bytes, target headroom and job fences are revalidated by the control plane when the job is queued.
  */
 export function relocationTargets(
     hosts: readonly RelocationHost[],
@@ -79,7 +80,8 @@ export function relocationTargets(
     const byRegion = new Map<string, RelocationHostOption[]>();
     for (const host of hosts) {
         if (host.name === currentHostName) continue;
-        const freeSlots = Number.isSafeInteger(host.availableServers) && host.availableServers > 0 ? host.availableServers : 0;
+        const candidates = host.provenServers ?? host.availableServers;
+        const freeSlots = Number.isSafeInteger(candidates) && candidates > 0 ? candidates : 0;
         for (const region of hostServedRegionKeys(host, catalog)) {
             const regionHosts = byRegion.get(region) ?? [];
             regionHosts.push({ name: host.name, freeSlots });

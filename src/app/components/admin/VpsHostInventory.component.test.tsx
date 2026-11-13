@@ -1,4 +1,7 @@
 import { act } from "react";
+import { readFileSync } from "node:fs";
+import { decodeControlPlaneAdminResponse } from "@/app/lib/control-plane/client";
+import { parseSlotAvailability } from "@/app/lib/control-plane/slot-availability";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HostingAdminHostResources, HostingAdminVpsHost } from "@/app/lib/control-plane/types";
@@ -36,6 +39,23 @@ afterEach(async () => {
 });
 
 describe("compact VPS host inventory", () => {
+    it("decodes the shared incident fixture and explains five ready but zero admissible slots", async () => {
+        const fixture = JSON.parse(readFileSync("test/fixtures/vps-slot-availability/v1.json", "utf8"));
+        const requestId = "11111111-1111-4111-8111-111111111111";
+        const result = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify({
+            version: 1, requestId, ok: true, result: { hosts: [{ ...host("fixture-host", resources(60, 40), 0), ...fixture.expectedHost }] },
+        }), requestId, true);
+        const details = result.hosts[0].slotAvailability!;
+        expect(parseSlotAvailability(details)).toEqual(details);
+        await act(async () => root.render(<VpsHostInventory hosts={result.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 admissible"]')?.textContent)
+            .toBe("Slots8Running0Ready5Admissible0");
+        expect(container.textContent).toContain("Storage evidence is stale");
+        expect(container.textContent).toContain("2 launch-proven; 0 relocation candidates");
+        for (const invalid of [{ reasons: ["unknown"] }, { ready: 33 }, { launchProven: 6 }, { extra: true }]) {
+            expect(parseSlotAvailability({ ...details, ...invalid })).toBeUndefined();
+        }
+    });
     it("renders healthy hosts beside a timed-out host and retains its inventory", async () => {
         const timedOut: HostingAdminVpsHost = { ...host("host-frozen", resources(60, 40), 1),
             resources: null, liveData: { status: "unavailable", reason: "timeout" } };
@@ -76,9 +96,9 @@ describe("compact VPS host inventory", () => {
 
         expect(container.textContent).toContain("host-a");
         expect(container.textContent).toContain("owner@example.com (testserver)");
-        const capacity = container.querySelector('dl[aria-label="3 total slots, 1 running, 2 free"]');
+        const capacity = container.querySelector('dl[aria-label="3 total slots, 1 running, 2 admissible"]');
         expect(capacity?.querySelectorAll("dt")).toHaveLength(3);
-        expect(capacity?.textContent).toBe("Slots3Running1Free2");
+        expect(capacity?.textContent).toBe("Slots3Running1Admissible2");
         expect(container.textContent).not.toContain("UDP 4200");
         expect([...container.querySelectorAll("button")].filter((button) => button.textContent === "Runner current")).toHaveLength(2);
 
