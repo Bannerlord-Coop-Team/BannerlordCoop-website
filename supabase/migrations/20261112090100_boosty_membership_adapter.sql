@@ -2,7 +2,7 @@ begin;
 
 -- Boosty membership adapter: email-matched links, the creator credential in Supabase Vault, the
 -- subscriber poll's durable state, and Boosty's arm of the provider identity lookup that the
--- generic fence (20261109140000_membership_funding_providers.sql) reads. Identifiers are
+-- generic fence (20261112090000_membership_funding_providers.sql) reads. Identifiers are
 -- checked by that migration's membership_provider_identifier_valid, never a local pattern.
 -- Boosty's API is unofficial; every write here treats a failed or partial read as "no
 -- evidence", never as loss. Service role only; browser roles have no access.

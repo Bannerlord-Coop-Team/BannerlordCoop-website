@@ -167,7 +167,7 @@ test("rejects malformed chunk requests without relaying them", async () => {
         [chunkRequest(new Uint8Array(0)), 400],
         [chunkRequest(bytes(), { digest: null }), 400],
         [chunkRequest(bytes(), { digest: "z".repeat(64) }), 400],
-        [chunkRequest(bytes(), { query: `resource=mod-chunk&uploadId=${UPLOAD_ID}&index=13` }), 400],
+        [chunkRequest(bytes(), { query: `resource=mod-chunk&uploadId=${UPLOAD_ID}&index=358` }), 400],
         [chunkRequest(bytes(), { query: `resource=mod-chunk&uploadId=${UPLOAD_ID}&index=01` }), 400],
         [chunkRequest(bytes(), { query: `resource=mod-chunk&uploadId=../x&index=0` }), 400],
         [chunkRequest(bytes(), { query: `resource=mod-chunk&uploadId=${UPLOAD_ID}&index=0&path=/v1/admin` }), 400],

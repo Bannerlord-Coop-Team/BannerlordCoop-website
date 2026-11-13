@@ -34,6 +34,7 @@ describe("support page localization", () => {
         expect(await generateMetadata()).toEqual({
             title: "Support The Project",
             description: "Support the volunteer team behind Bannerlord Co-op through Patreon, Buy Me a Coffee, PayPal, Afdian, or Boosty.",
+            alternates: { canonical: "/support" },
         });
         expect(container.querySelectorAll(".sr-only")).toHaveLength(5);
         for (const section of container.querySelectorAll("section")) {
@@ -77,7 +78,7 @@ describe("support page localization", () => {
                 if (!key.startsWith("metadata.")) expect(container.textContent).toContain(message);
             }
             expect(await generateMetadata()).toEqual({
-                title: translated["metadata.title"], description: translated["metadata.description"],
+                title: translated["metadata.title"], description: translated["metadata.description"], alternates: { canonical: "/support" },
             });
             expect(renderToStaticMarkup(
                 <LocalizationProvider locale="ru" messages={{ common }}>

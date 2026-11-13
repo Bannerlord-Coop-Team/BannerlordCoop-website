@@ -26,9 +26,31 @@ campaign also stays disabled while the list is empty: a server that has never
 started has no game installed on its slot, its first Start creates the campaign,
 and the control plane refuses an earlier reset with `first_start_required`. Each
 mutation carries a durable `x-request-id` so a retry after a lost response is
-replayed rather than queued twice. While a reset is pending the card polls the
-campaign list every five seconds and reports when the selection moved to the
-freshly seeded campaign. ControlPlane PR #297 and `docs/managed-hosting/web-admin.md`
+replayed rather than queued twice. While a reset is pending the card reads that
+exact job through `GET ?resource=reset-campaign-status&serverId=<uuid>&jobId=<uuid>`
+every five seconds, alongside refreshing the campaign list. Each read checks the
+current authenticated account; the control plane checks current save-management
+authority and the job's server/action binding. The result contains only
+`serverId`, `jobId`, `state`, `errorCode` and `instruction`.
+
+A retained runner that cannot safely seed a new campaign refuses before removing
+any saves. The card displays: "Contact support to update this server's runner,
+then request Reset Campaign again." Polling never submits another Reset. Other
+terminal failures use fixed safe messages; private worker/runner diagnostics are
+rejected. A successful job is reported even if the selected save ID is unchanged.
+
+Website can deploy before the new control-plane method: only a structured,
+nonretryable `invalid_request` or `operation_unavailable` falls back to observing
+the campaign selection. Authorization, malformed responses and transport errors
+do not mean the operation is unsupported. Polling ends after ten minutes with an
+unconfirmed-outcome instruction, including when a read hangs. An account/server
+change invalidates late reads. ORCH chooses the paired PR merge/deploy order;
+neither PR authorizes a deployment. The shared fixture, source provenance and
+exact-request captures are in `test/fixtures/campaign-reset/`; validate with
+`npm run test:campaign-reset`. These isolated synthetic checks do not establish
+deployed authentication, browser rendering or game/runtime behavior.
+
+ControlPlane PR #297 and `docs/managed-hosting/web-admin.md`
 describe the operations; `server-campaign-contract.ts` mirrors their shapes.
 
 ## War Sails campaigns

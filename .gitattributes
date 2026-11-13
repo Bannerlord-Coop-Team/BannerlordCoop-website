@@ -3,11 +3,13 @@
 
 # Keep shell scripts LF so Windows deploys do not break Linux shebangs.
 *.sh text eol=lf
+test/fixtures/campaign-reset/*.json text eol=lf
 
 # This migration is mirrored and checksummed by ControlPlane's shared-ledger catalog.
 supabase/migrations/202611090002_patreon_lapse_report_links.sql text eol=lf
+supabase/migrations/202611100001_patreon_lapse_report_emails.sql text eol=lf
 
 # Mirrored into ControlPlane's shared Supabase ledger; keep its bytes stable across checkouts.
-supabase/migrations/20261109140000_membership_funding_providers.sql text eol=lf
-supabase/migrations/20261110120000_boosty_membership_adapter.sql text eol=lf
-supabase/migrations/20261111120000_patreon_lapse_report_patreon_funding.sql text eol=lf
+supabase/migrations/20261112090000_membership_funding_providers.sql text eol=lf
+supabase/migrations/20261112090100_boosty_membership_adapter.sql text eol=lf
+supabase/migrations/20261112090200_patreon_lapse_report_patreon_funding.sql text eol=lf

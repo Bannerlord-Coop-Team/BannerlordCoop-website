@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Sparkles, Trash2 } from "lucide-react";
-import { changeManagedServerCampaign, listManagedServerCampaigns } from "@/app/servers/managed-server-campaign-actions";
+import { changeManagedServerCampaign, listManagedServerCampaigns, readManagedServerCampaignReset } from "@/app/servers/managed-server-campaign-actions";
 import { useTranslations } from "@/app/lib/localization/client";
 import type { Translator } from "@/app/lib/localization/types";
 import { useSaveDeletion } from "./use-save-deletion";
@@ -15,6 +15,7 @@ import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/ser
 
 type Campaigns = Omit<CampaignPage, "nextCursor">;
 type CampaignMode = "classic" | "warSails";
+type ResetReceipt = { serverId: string; userId: string; jobId: string; previousSaveId: string | null; since: number };
 
 /** Lists, selects, deletes and resets campaigns; `warSailsCapable` offers a War Sails mode for a new campaign. */
 export function ManagedServerCampaigns({ userId, serverId, status, canDelete = false, warSailsCapable = false }: { userId: string; serverId: string; status: OwnerFileStatus | null; canDelete?: boolean; warSailsCapable?: boolean }) {
@@ -26,8 +27,9 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
     const [pending, startTransition] = useTransition();
     const [confirming, setConfirming] = useState(false);
     const [newMode, setNewMode] = useState<CampaignMode>("classic");
-    const [resetting, setResetting] = useState<{ previousSaveId: string | null; since: number } | null>(null);
-    const resettingRef = useRef<{ previousSaveId: string | null; since: number } | null>(null);
+    const [resetting, setResetting] = useState<ResetReceipt | null>(null);
+    const resettingRef = useRef<ResetReceipt | null>(null);
+    const legacyResetJob = useRef<string | null>(null);
     const [version, setVersion] = useState(0);
     const deletion = useSaveDeletion(userId, serverId, () => { setVersion(value => value + 1); router.refresh(); });
     const dialogRef = useRef<HTMLDialogElement>(null);
@@ -44,19 +46,52 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
             if (cancelled) return;
             if (!result?.ok) { setLoadError(result?.message ?? "The campaign list could not be loaded. Try again."); return; }
             setCampaigns(result.campaigns); setLoadError("");
-            // A reset is done when the selection moved to a different, freshly seeded campaign.
+            // Older control planes cannot read the job. Retain the existing selection-based fallback only for them.
             const reset = resettingRef.current;
-            if (!reset) return;
+            if (!reset || reset.serverId !== serverId || reset.userId !== userId || legacyResetJob.current !== reset.jobId) return;
             if (result.campaigns.activeSaveId !== null && result.campaigns.activeSaveId !== reset.previousSaveId) {
                 resettingRef.current = null; setResetting(null); requests.current = null;
                 setMessage("Your fresh campaign is ready. Start the server when you want to play it.");
-            } else if (Date.now() - reset.since > 10 * 60_000) {
-                resettingRef.current = null; setResetting(null);
-                setMessage("The new campaign is taking longer than expected. Check the Jobs list or refresh this page later.");
             }
         })();
         return () => { cancelled = true; };
     }, [serverId, userId, statusUpdatedAt, version]);
+
+    useEffect(() => {
+        if (!resetting || resetting.serverId !== serverId || resetting.userId !== userId) return;
+        const receipt = resetting;
+        let cancelled = false;
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        function finish(text: string) {
+            if (cancelled || resettingRef.current !== receipt) return;
+            resettingRef.current = null; legacyResetJob.current = null; setResetting(null);
+            requests.current = null; setMessage(text); setVersion(value => value + 1); router.refresh();
+        }
+        async function poll() {
+            if (cancelled || resettingRef.current !== receipt) return;
+            if (Date.now() - receipt.since >= 10 * 60_000) {
+                finish("The campaign reset outcome could not be confirmed. Check your campaigns or contact support before trying again.");
+                return;
+            }
+            let response: Awaited<ReturnType<typeof readManagedServerCampaignReset>> | null = null;
+            try { response = await readManagedServerCampaignReset(serverId, receipt.jobId, userId); } catch { response = null; }
+            if (cancelled || resettingRef.current !== receipt) return;
+            if (response?.ok) {
+                if (response.status && ["succeeded", "failed", "cancelled"].includes(response.status.state)) {
+                    finish(response.message); return;
+                }
+                legacyResetJob.current = response.status === null ? receipt.jobId : null;
+                setMessage(response.message);
+            } else if (response && !response.retryable) {
+                finish(response.message); return;
+            }
+            // One read at a time, with a fixed ten-minute bound and no mutation/retry of Reset.
+            timer = setTimeout(() => void poll(), 5_000);
+        }
+        const deadline = setTimeout(() => finish("The campaign reset outcome could not be confirmed. Check your campaigns or contact support before trying again."), Math.max(0, receipt.since + 10 * 60_000 - Date.now()));
+        void poll();
+        return () => { cancelled = true; clearTimeout(deadline); if (timer !== undefined) clearTimeout(timer); };
+    }, [resetting, serverId, userId, router]);
 
     useEffect(() => {
         const dialog = dialogRef.current;
@@ -65,10 +100,10 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
     }, [confirming]);
 
     useEffect(() => {
-        if (!resetting) return;
+        if (!resetting || resetting.serverId !== serverId || resetting.userId !== userId) return;
         const timer = window.setInterval(() => { setVersion((value) => value + 1); router.refresh(); }, 5_000);
         return () => window.clearInterval(timer);
-    }, [resetting, router]);
+    }, [resetting, router, serverId, userId]);
 
     function requestId(key: string) {
         if (requests.current?.key === key) return requests.current.requestId;
@@ -97,7 +132,8 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
                 setVersion((value) => value + 1); router.refresh();
             } else {
                 setConfirming(false);
-                const reset = { previousSaveId: campaigns.activeSaveId, since: Date.now() };
+                const reset = { serverId, userId, jobId: response.reset.jobId, previousSaveId: campaigns.activeSaveId, since: Date.now() };
+                legacyResetJob.current = null;
                 resettingRef.current = reset; setResetting(reset);
                 setMessage(response.reset.outcome === "existing" ? "That new-campaign request was already accepted. Preparing your fresh campaign…" : "Preparing your fresh campaign. This takes about a minute…");
             }
@@ -117,7 +153,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
         deletion.begin({ serverId, saveId: campaign.saveId, expectedUpdatedAt: page.updatedAt, confirmationText, requestId: crypto.randomUUID() });
     }
 
-    const busy = pending || resetting !== null || deletion.busy;
+    const busy = pending || (resetting !== null && resetting.serverId === serverId && resetting.userId === userId) || deletion.busy;
     const stopHint = status === null ? "Campaign changes are unavailable until the server status loads." : stopped ? null : "Stop the server to switch campaigns or start a new one.";
     // A server that never started has no campaign yet; the control plane refuses a reset until its first Start creates one.
     const noCampaignYet = campaigns !== null && campaigns.items.length === 0;

@@ -11,7 +11,7 @@ import { FUNDING_PROVIDERS } from "../supabase/functions/_shared/funding-provide
 import { sha256 } from "../supabase/functions/_shared/membership";
 
 // The generic provider machinery and the Boosty adapter that supplies its identity arm ship together.
-const migrations = ["20261109140000_membership_funding_providers.sql", "20261110120000_boosty_membership_adapter.sql"];
+const migrations = ["20261112090000_membership_funding_providers.sql", "20261112090100_boosty_membership_adapter.sql"];
 const history = ["20260907212654_create_patreon_links.sql", "20260907220000_patreon_website_roles.sql", "20260907230000_atomic_live_console_assignments.sql",
     "202609080002_membership_onboarding.sql", "202609080003_membership_role_locking.sql", "20260908030000_patreon_event_reconciliation.sql",
     "20260910200000_membership_receipt_claims.sql", "202609110001_edge_owned_link_commit.sql", "20260919010000_actionable_patreon_retries.sql",

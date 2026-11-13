@@ -243,7 +243,7 @@ the versions above, which stay byte-for-byte unchanged. The closed provider set 
   exactly the v2 claim (same RPC, lease, replay and row set) with each hint's provider
   added; v2 claims keep omitting it. ACK v2 acknowledges hints claimed by either version.
 
-`20261109140000_membership_funding_providers.sql` keeps `membership_heads` as the
+`20261112090000_membership_funding_providers.sql` keeps `membership_heads` as the
 Patreon head and account anchor, so every Patreon and Discord RPC keeps its behavior.
 Other providers get `membership_provider_heads`, keyed by `(account_id, provider)`, with
 the same RLS and no client grants. Outbox hints gain `provider` (existing rows become
@@ -262,9 +262,9 @@ separately authorized:
 
 1. ControlPlane applies its migration 129 (`20261109130000_control_plane_funding_providers.sql`)
    and deploys; with its legacy policy it still speaks wire version 1.
-2. This website applies `20261109140000_membership_funding_providers.sql`,
-   `20261110120000_boosty_membership_adapter.sql` and
-   `20261111120000_patreon_lapse_report_patreon_funding.sql` (which reads the provider
+2. This website applies `20261112090000_membership_funding_providers.sql`,
+   `20261112090100_boosty_membership_adapter.sql` and
+   `20261112090200_patreon_lapse_report_patreon_funding.sql` (which reads the provider
    columns of migration 129, so it must follow it) and deploys the
    `control-plane-membership-v1` Edge function. Boosty stays inert:
    `BOOSTY_MEMBERSHIP_POLICY_JSON` and `BOOSTY_STATUS_ENABLED` unset, dispatch disabled.

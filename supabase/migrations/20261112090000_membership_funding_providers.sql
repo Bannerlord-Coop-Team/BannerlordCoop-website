@@ -12,7 +12,7 @@ begin;
 -- membership_provider_empty_evidence (empty evidence) and
 -- public.membership_provider_identity(account, provider), the current-link lookup the
 -- generic fence calls. Here it refuses every provider; each adapter migration re-creates
--- it with every adapter's branch (Boosty's is 20261110120000_boosty_membership_adapter.sql).
+-- it with every adapter's branch (Boosty's is 20261112090100_boosty_membership_adapter.sql).
 -- Adding a provider is a new append-only migration that widens the CHECKs and re-creates
 -- the four registry functions with every existing provider's branch.
 

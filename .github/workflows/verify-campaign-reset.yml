@@ -1,0 +1,37 @@
+name: Verify campaign reset status
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/app/components/servers/ManagedServerCampaigns*'
+      - 'src/app/lib/hosting/server-campaigns*'
+      - 'src/app/servers/managed-server-campaign-actions*'
+      - 'supabase/functions/_shared/my-servers.ts'
+      - 'supabase/functions/_shared/server-campaign-contract.ts'
+      - 'supabase/functions/my-servers/campaigns.test.ts'
+      - 'test/fixtures/campaign-reset/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/verify-campaign-reset.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Campaign reset status verification
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npx next typegen
+      - run: npx tsc --noEmit
+      - run: npx eslint src/app/lib/hosting/server-campaigns.ts src/app/lib/hosting/server-campaigns.test.ts supabase/functions/_shared/server-campaign-contract.ts supabase/functions/_shared/my-servers.ts supabase/functions/my-servers/campaigns.test.ts src/app/servers/managed-server-campaign-actions.ts src/app/servers/managed-server-campaign-actions.component.test.tsx src/app/components/servers/ManagedServerCampaigns.tsx src/app/components/servers/ManagedServerCampaigns.component.test.tsx
+      - run: npm run test:campaign-reset
