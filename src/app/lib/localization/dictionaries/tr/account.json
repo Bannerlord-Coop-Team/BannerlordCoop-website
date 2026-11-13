@@ -44,5 +44,9 @@
   "disconnect.confirm": "{provider} bağlantısını kesmeyi onayla",
   "disconnect.cancel": "İptal",
   "loading.label": "Hesap yükleniyor",
-  "loading.status": "Hesap yükleniyor…"
+  "loading.status": "Hesap yükleniyor…",
+  "boosty.linked": "Boosty aboneliğin hesabının e-posta adresiyle bağlandı.",
+  "boosty.notFound": "Bu hesabın e-posta adresini kullanan bir Boosty aboneliği yok. Bağlamak için Boosty'de aynı e-posta adresiyle abone ol.",
+  "boosty.nonqualifying": "Boosty aboneliğin uygun bir seviye içermiyor.",
+  "boosty.checking": "Boosty üyeliğin kısa süre içinde kontrol edilecek."
 }

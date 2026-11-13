@@ -44,5 +44,9 @@
   "disconnect.confirm": "{provider}の連携解除を確定",
   "disconnect.cancel": "キャンセル",
   "loading.label": "アカウントを読み込み中",
-  "loading.status": "アカウントを読み込み中…"
+  "loading.status": "アカウントを読み込み中…",
+  "boosty.linked": "Boosty のサブスクリプションはアカウントのメールアドレスでリンクされています。",
+  "boosty.notFound": "このアカウントのメールアドレスを使う Boosty のサブスクリプションはありません。リンクするには、同じメールアドレスで Boosty に登録してください。",
+  "boosty.nonqualifying": "Boosty のサブスクリプションに対象のレベルが含まれていません。",
+  "boosty.checking": "Boosty のメンバーシップはまもなく確認されます。"
 }

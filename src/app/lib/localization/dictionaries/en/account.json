@@ -44,5 +44,9 @@
   "disconnect.confirm": "Confirm disconnect {provider}",
   "disconnect.cancel": "Cancel",
   "loading.label": "Loading account",
-  "loading.status": "Loading account…"
+  "loading.status": "Loading account…",
+  "boosty.linked": "Your Boosty subscription is linked through your account email.",
+  "boosty.notFound": "No Boosty subscription uses this account's email. To link one, subscribe on Boosty with the same email.",
+  "boosty.nonqualifying": "Your Boosty subscription does not include a qualifying level.",
+  "boosty.checking": "Your Boosty membership will be checked shortly."
 }

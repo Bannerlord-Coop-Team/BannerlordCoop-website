@@ -44,5 +44,9 @@
   "disconnect.confirm": "Confirmar a desassociação de {provider}",
   "disconnect.cancel": "Cancelar",
   "loading.label": "Carregamento da conta",
-  "loading.status": "A carregar a conta…"
+  "loading.status": "A carregar a conta…",
+  "boosty.linked": "A sua subscrição do Boosty está associada através do e-mail da sua conta.",
+  "boosty.notFound": "Nenhuma subscrição do Boosty utiliza o e-mail desta conta. Para associar uma, subscreva no Boosty com o mesmo e-mail.",
+  "boosty.nonqualifying": "A sua subscrição do Boosty não inclui um nível elegível.",
+  "boosty.checking": "A sua subscrição do Boosty será verificada em breve."
 }

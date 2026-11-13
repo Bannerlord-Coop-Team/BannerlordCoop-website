@@ -44,5 +44,9 @@
   "disconnect.confirm": "Confirmer la déconnexion de {provider}",
   "disconnect.cancel": "Annuler",
   "loading.label": "Chargement du compte",
-  "loading.status": "Chargement du compte…"
+  "loading.status": "Chargement du compte…",
+  "boosty.linked": "Votre abonnement Boosty est associé via l’adresse e-mail de votre compte.",
+  "boosty.notFound": "Aucun abonnement Boosty n’utilise l’adresse e-mail de ce compte. Pour en associer un, abonnez-vous sur Boosty avec la même adresse e-mail.",
+  "boosty.nonqualifying": "Votre abonnement Boosty n’inclut pas de niveau éligible.",
+  "boosty.checking": "Votre adhésion Boosty sera vérifiée sous peu."
 }

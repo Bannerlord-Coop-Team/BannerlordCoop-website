@@ -44,5 +44,9 @@
   "disconnect.confirm": "确认解除与 {provider} 的关联",
   "disconnect.cancel": "取消",
   "loading.label": "正在加载账户",
-  "loading.status": "正在加载账户…"
+  "loading.status": "正在加载账户…",
+  "boosty.linked": "你的 Boosty 订阅已通过账户邮箱关联。",
+  "boosty.notFound": "没有使用此账户邮箱的 Boosty 订阅。如需关联，请在 Boosty 上使用相同邮箱订阅。",
+  "boosty.nonqualifying": "你的 Boosty 订阅不包含符合条件的等级。",
+  "boosty.checking": "你的 Boosty 会员资格将很快得到验证。"
 }

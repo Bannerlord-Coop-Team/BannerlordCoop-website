@@ -3,6 +3,18 @@ import { createHash } from "node:crypto";
 import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 
+// Website files that sort inside the captured inventory range but were never shared membership history.
+const PRE_CAPTURE_NON_MEMBERSHIP_FILES = [
+    "202609100001_control_plane_web_admin_principals.sql",
+    "202609100010_control_plane_monitor_indexes.sql",
+    "202609100011_network_stats_updated_at_index.sql",
+    "20260910162653_create_homepage_videos.sql",
+    "20260910164925_homepage_video_publication_dates.sql",
+    "20260914130215_create_roadmap.sql",
+    "20260914132950_rename_roadmap_unstable_to_experimental.sql",
+    "202609200001_drop_unused_server_statistics_indexes.sql",
+];
+
 test("membership shared upgrade inventory pins own history and exact new CP Git mirrors without historical rewrites", async () => {
     const inventory = JSON.parse(await readFile("docs/membership-migration-inventory.json", "utf8"));
     const expected = inventory.migrations as { version: string; websitePath: string; websiteSha256: string; websiteBytes: number; cpSha256?: string; cpBytes?: number; representationException: boolean }[];
@@ -22,7 +34,13 @@ test("membership shared upgrade inventory pins own history and exact new CP Git 
         migrationName:"drop_unused_community_servers",source:"supabase_migrations.schema_migrations.statements",
     });
     assert.equal(retiredCommunityServers.releaseClassification,"required already-applied external history; NEVER replay");
-    assert.deepEqual((await readdir("supabase/migrations")).filter(f=>f.endsWith(".sql") && !["202611100001_patreon_lapse_report_emails.sql", "202611090002_patreon_lapse_report_links.sql", "202611080001_patreon_lapse_report_inventory.sql", "20261105200000_remove_client_archive_size_limit.sql", "20261009170000_patreon_creator_token_refresh.sql", "20261002160000_homepage_video_translation_keys.sql","20261002150000_roadmap_translation_keys.sql", "202610020003_release_first_observations.sql", "202610020002_control_plane_campaign_reset.sql", "202610020001_membership_allocation_usd20.sql", "20260930142800_control_plane_admin_job_index.sql", "202609300001_website_impersonation.sql", "202609100010_control_plane_monitor_indexes.sql", "202609100011_network_stats_updated_at_index.sql", "202609100001_control_plane_web_admin_principals.sql", "20260910162653_create_homepage_videos.sql", "20260910164925_homepage_video_publication_dates.sql", "20260914130215_create_roadmap.sql", "20260914132950_rename_roadmap_unstable_to_experimental.sql", "202609200001_drop_unused_server_statistics_indexes.sql"].includes(f)).sort(),expected.map(e=>e.websitePath.split("/").at(-1)).sort());
+    // The inventory captured history through its last row. Every local file up to that row is captured or one of
+    // these fixed non-membership files, so none may be dropped or slotted in; later files need no edit here.
+    const captured = expected.map(e=>e.websitePath.split("/").at(-1)!).sort();
+    const captureEnd = captured.at(-1)!;
+    const local = (await readdir("supabase/migrations")).filter(f=>f.endsWith(".sql")).sort();
+    assert.ok(PRE_CAPTURE_NON_MEMBERSHIP_FILES.every(f=>f < captureEnd && local.includes(f)));
+    assert.deepEqual(local.filter(f=>f <= captureEnd && !PRE_CAPTURE_NON_MEMBERSHIP_FILES.includes(f)), captured);
     assert.deepEqual(expected.filter(e=>e.representationException).map(e=>e.version),["20260821074242","20260821083000","20260821100640","20260821112235","202608240001","202608260001","202608260002","202608260003","202608260004","202608260005"]);
     for (const entry of expected) {
         // Canonical Git text bytes; CRLF checkouts are not new SQL provenance.

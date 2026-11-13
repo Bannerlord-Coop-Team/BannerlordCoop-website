@@ -50,6 +50,10 @@ verify_jwt = false
 [functions.patreon-roles]
 verify_jwt = false
 
+# Scheduled Boosty worker; authenticates with its own scheduler secret (x-boosty-sync-key).
+[functions.boosty-membership]
+verify_jwt = false
+
 # Daily pg_cron check; authenticates with the Patreon scheduler secret.
 [functions.vps-renewal-alert]
 verify_jwt = false

@@ -9,6 +9,9 @@ import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { LoadingButton } from "@/app/components/ui/LoadingButton";
 import type { AccountStatus } from "@/app/lib/hosting/membership-onboarding";
 import { getWebsiteAccountStatus } from "@/app/lib/hosting/website-account-status";
+import { boostyStatusEnabled, readBoostyStatus } from "@/app/lib/hosting/boosty-status";
+import { BoostyConnection } from "@/app/account/BoostyConnection";
+import type { BoostyStatus } from "../../../supabase/functions/_shared/boosty-account";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -32,10 +35,13 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     const messages = await getMessages(["account"], locale);
     const params = await searchParams;
     let status: AccountStatus | null = null;
+    let boosty: BoostyStatus | null = null;
     try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session && session.user.id === user.id) {
-            status = await getWebsiteAccountStatus(user.id, session.access_token);
+            // An unread or unreadable Boosty status hides its section rather than guessing it.
+            [status, boosty] = await Promise.all([getWebsiteAccountStatus(user.id, session.access_token),
+                boostyStatusEnabled() ? readBoostyStatus(supabase, session.access_token).catch(() => null) : null]);
         }
     } catch { /* Query parameters never establish current link state. */ }
 
@@ -116,6 +122,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                     )}
                     {status?.membership.linked && <DisconnectAccount provider="Patreon" action={disconnectPatreonAccount.bind(null, user.id)} />}
                 </section>
+                {boosty?.configured && <BoostyConnection status={boosty} t={t} />}
             </div>
         </section>
         <section className="mt-8 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="servers-heading">

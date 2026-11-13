@@ -44,5 +44,9 @@
   "disconnect.confirm": "Trennen von {provider} bestätigen",
   "disconnect.cancel": "Abbrechen",
   "loading.label": "Konto wird geladen",
-  "loading.status": "Konto wird geladen…"
+  "loading.status": "Konto wird geladen…",
+  "boosty.linked": "Dein Boosty-Abonnement ist über die E-Mail-Adresse deines Kontos verknüpft.",
+  "boosty.notFound": "Kein Boosty-Abonnement nutzt die E-Mail-Adresse dieses Kontos. Abonniere auf Boosty mit derselben E-Mail-Adresse, um es zu verknüpfen.",
+  "boosty.nonqualifying": "Dein Boosty-Abonnement enthält keine qualifizierende Stufe.",
+  "boosty.checking": "Deine Boosty-Mitgliedschaft wird in Kürze geprüft."
 }

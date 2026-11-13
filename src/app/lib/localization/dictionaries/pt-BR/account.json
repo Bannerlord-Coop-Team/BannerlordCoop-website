@@ -44,5 +44,9 @@
   "disconnect.confirm": "Confirmar desconexão de {provider}",
   "disconnect.cancel": "Cancelar",
   "loading.label": "Carregando conta",
-  "loading.status": "Carregando conta…"
+  "loading.status": "Carregando conta…",
+  "boosty.linked": "Sua assinatura do Boosty está vinculada pelo e-mail da sua conta.",
+  "boosty.notFound": "Nenhuma assinatura do Boosty usa o e-mail desta conta. Para vincular uma, assine no Boosty com o mesmo e-mail.",
+  "boosty.nonqualifying": "Sua assinatura do Boosty não inclui um nível qualificado.",
+  "boosty.checking": "Sua assinatura do Boosty será verificada em breve."
 }

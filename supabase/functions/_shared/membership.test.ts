@@ -333,3 +333,54 @@ test("confirmed former membership with no remaining benefits emits loss, never c
     const incomplete = { data: body.included[0], included: body.included.slice(1), links: { next: "https://untrusted.invalid" } };
     assert.equal((await verifyPatreonAllocation(incomplete, fifty, now)).paidAccessEndedAt, undefined);
 });
+
+test("CP version 2 snapshots and version 3 claims are strict per provider and fail closed on mismatched responses", async () => {
+    const claimId = "bbbbbbbb-1111-4111-8111-111111111111";
+    const eventId = "cccccccc-1111-4111-8111-111111111111";
+    const boosty = { version: 2, provider: "boosty", accountId, discordUserId: null, providerUserId: null, linkGeneration: "0", revision: "0", linkState: "unlinked",
+        verification: "unverified", programId: null, memberId: null, tierIds: [], verifiedAt: null, paidThroughAt: null, policyVersion: "boosty-paid-v1", evidenceSha256: null };
+    const patreon = { ...boosty, provider: "patreon", discordUserId: "123456789012345678", providerUserId: "1", linkGeneration: "3", revision: "9", linkState: "linked",
+        verification: "qualifying", programId: "10", memberId, tierIds: ["20"], verifiedAt: now, policyVersion: POLICY_VERSION, evidenceSha256: "e".repeat(64) };
+    let reply: unknown = boosty; const bodies: unknown[] = [];
+    const handler = createControlPlaneMembershipHandler({ supabaseUrl: "https://wfvqnijwuyqjibhlcrhz.supabase.co", serviceRoleKey: "synthetic-service-key", syncToken: "a".repeat(64),
+        fetch: async (url, init) => {
+            const path = new URL(String(url)).pathname;
+            if (path.startsWith("/auth/")) return Response.json({ id: accountId, identities: [] });
+            assert.ok(["/rest/v1/rpc/membership_funding_fence", "/rest/v1/rpc/membership_funding_claim"].includes(path), path);
+            bodies.push(JSON.parse(String(init?.body)));
+            return Response.json(reply);
+        } });
+    // Sends one authenticated CP request and returns its status and JSON body.
+    const request = async (body: unknown) => {
+        const response = await handler(new Request("https://edge-runtime.supabase.com/control-plane-membership-v1",
+            { method: "POST", headers: { Authorization: `Bearer ${"a".repeat(64)}`, "Content-Type": "application/json" }, body: JSON.stringify(body) }));
+        return { status: response.status, body: await response.json() };
+    };
+    // Requests one provider's version 2 snapshot for the fixture account.
+    const snapshot = (provider: string) => request({ version: 2, operation: "snapshot", accountId, provider });
+    assert.deepEqual(await snapshot("boosty"), { status: 200, body: boosty });
+    assert.deepEqual(bodies, [{ p_account_id: accountId, p_provider: "boosty", p_discord_user_id: null, p_deleted: false }]);
+    reply = patreon; assert.deepEqual(await snapshot("patreon"), { status: 200, body: patreon });
+    for (const paidAccessEndedAt of [null, now]) { reply = { ...patreon, paidAccessEndedAt }; assert.equal((await snapshot("patreon")).status, 200); }
+    // Each response must name the requested account and provider and satisfy that provider's grammar; per-field
+    // identifier grammar is pinned by the shared provider contract test.
+    for (const [provider, bad] of [
+        ["boosty", patreon], ["patreon", boosty], ["boosty", { ...boosty, accountId: "dddddddd-1111-4111-8111-111111111111" }], ["boosty", { ...boosty, version: 1 }],
+        ["boosty", { ...boosty, memberId }], ["boosty", { ...boosty, policyVersion: POLICY_VERSION }], ["patreon", { ...patreon, policyVersion: "boosty-paid-v1" }],
+        ["patreon", { ...patreon, memberId: null, tierIds: ["20", "20"] }], ["boosty", { ...boosty, extra: true }], ["patreon", { ...patreon, patreonUserId: "1" }],
+        ["boosty", { ...boosty, linkGeneration: 0 }], ["boosty", { ...boosty, paidAccessEndedAt: "yesterday" }], ["patreon", { ...patreon, campaignId: "10", programId: undefined }],
+    ] as const) { reply = bad; assert.equal((await snapshot(provider)).status, 503, JSON.stringify(bad)); }
+    reply = { ...boosty, programId: "coop-team_1", providerUserId: "12345678901234567890", tierIds: ["7"], linkState: "linked", verification: "qualifying" };
+    assert.equal((await snapshot("boosty")).status, 200);
+
+    const page = { version: 3, claimId, leaseExpiresAt: "2026-09-07T12:01:00.000Z", events: [{ eventId, accountId, provider: "boosty" }, { eventId: claimId, accountId, provider: "patreon" }] };
+    reply = page; bodies.length = 0;
+    assert.deepEqual(await request({ version: 3, operation: "claim", claimId, limit: 2 }), { status: 200, body: page });
+    assert.deepEqual(bodies, [{ p_claim_id: claimId, p_limit: 2 }]);
+    for (const bad of [{ ...page, version: 2 }, { ...page, claimId: eventId }, { ...page, events: [{ eventId, accountId }] }, { ...page, events: [{ eventId, accountId, provider: "kofi" }] },
+        { ...page, events: [...page.events, { eventId, accountId, provider: "patreon" }] }, { ...page, leaseExpiresAt: "2026-09-07T12:01:00Z" }]) {
+        reply = bad; assert.equal((await request({ version: 3, operation: "claim", claimId, limit: 2 })).status, 503, JSON.stringify(bad));
+    }
+    // Typed contention passes through so the store retries exactly as for version 2.
+    reply = { version: 2, retry: true }; assert.equal((await request({ version: 3, operation: "claim", claimId, limit: 2 })).status, 503);
+});

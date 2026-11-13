@@ -91,9 +91,12 @@ Positive evidence lasts at most 24 hours and funds only **new allocation**.
 `max(administrativeBase, qualifyingPatreonOne) + administrativeBonus` is the backend
 reducer; never add an extra membership slot to an existing administrative base.
 Administrative suspension remains authoritative. Adequate independent grants bypass
-membership outages/configuration. Expiry/unlink/unknown evidence never Stop, delete,
-revoke administrative grants, transfer servers, or start a grace countdown. Existing
-owner Start/Stop/saves remain accessible. Beginning a new Patreon check invalidates
+membership outages/configuration. Expiry and unknown or stale evidence never Stop, delete,
+revoke administrative grants, transfer servers, or start a grace countdown. Confirmed loss
+of paid access, or unlinking or replacing the funding identity of a membership-funded
+server, does: the control plane starts its 72-hour removal grace for that server unless
+another qualifying membership takes over the funding or independent administrative quota
+covers it. Existing owner Start/Stop/saves remain accessible. Beginning a new Patreon check invalidates
 old positive evidence immediately, including cancellation or provider outage.
 
 ## Same-account flow and Edge commit
@@ -219,6 +222,64 @@ fields/operations fail.
 Every snapshot authoritatively looks up the exact account via Auth admin API;
 404 becomes a tombstone, outage fails closed, identities never fall back to metadata.
 Patreon is a website-owned binding, not a Supabase provider identity.
+
+### Funding providers (snapshot v2, claim v3)
+
+The control plane's provider-list policy speaks a provider-naming contract alongside
+the versions above, which stay byte-for-byte unchanged. The closed provider set is
+`patreon` and `boosty` (`_shared/funding-provider.ts`, mirroring CP
+`membership/funding-provider.ts`).
+
+- `{"version":2,"operation":"snapshot","accountId":UUID,"provider":"patreon"|"boosty"}`
+  returns the version 1 fields with `version:2`, `provider`, and
+  `providerUserId`/`programId` in place of `patreonUserId`/`campaignId`, validated with
+  the provider's identifier grammar and policy versions (Boosty: decimal user/level IDs,
+  a blog slug, `memberId:null`, `boosty-paid-v1`). `paidAccessEndedAt` is present only
+  when the evidence has it. A response for another account or provider fails closed.
+- A Patreon v2 snapshot is `membership_fence`'s v1 snapshot renamed field for field, with
+  the same generation and revision, so the CP's v1 re-serialization hashes identically.
+- `{"version":3,"operation":"claim","claimId":UUID,"limit":1..50}` returns
+  `{"version":3,claimId,leaseExpiresAt,events:[{eventId,accountId,provider}]}`. It is
+  exactly the v2 claim (same RPC, lease, replay and row set) with each hint's provider
+  added; v2 claims keep omitting it. ACK v2 acknowledges hints claimed by either version.
+
+`20261112090000_membership_funding_providers.sql` keeps `membership_heads` as the
+Patreon head and account anchor, so every Patreon and Discord RPC keeps its behavior.
+Other providers get `membership_provider_heads`, keyed by `(account_id, provider)`, with
+the same RLS and no client grants. Outbox hints gain `provider` (existing rows become
+`patreon`); the 8 + 1 revocation hint bound applies per provider, so one provider's
+backlog cannot starve another's revocation. A never-linked Boosty account answers a
+constant `unlinked` head at generation `"0"` without writing; an Auth deletion tombstones
+every provider head and refuses resurrection. Linking and evidence are described in
+[Boosty membership adapter](boosty-membership.md).
+
+Adding a provider means a new entry in `FUNDING_PROVIDER_GRAMMAR` and a new append-only
+migration that widens the provider CHECKs and re-creates the SQL registry functions with
+every provider's branch. Keep ControlPlane's provider registry in step.
+
+Rollout, one sequence shared with ControlPlane's `membership-onboarding.md`; each step is
+separately authorized:
+
+1. ControlPlane applies its migration 129 (`20261109130000_control_plane_funding_providers.sql`)
+   and deploys; with its legacy policy it still speaks wire version 1.
+2. This website applies `20261112090000_membership_funding_providers.sql`,
+   `20261112090100_boosty_membership_adapter.sql` and
+   `20261112090200_patreon_lapse_report_patreon_funding.sql` (which reads the provider
+   columns of migration 129, so it must follow it) and deploys the
+   `control-plane-membership-v1` Edge function. Boosty stays inert:
+   `BOOSTY_MEMBERSHIP_POLICY_JSON` and `BOOSTY_STATUS_ENABLED` unset, dispatch disabled.
+3. ControlPlane mirrors those three website migrations in
+   `ALREADY_APPLIED_EXTERNAL_MIGRATIONS` before its next migration release.
+4. ControlPlane switches to its provider-list policy with Patreon only.
+5. ControlPlane adds the Boosty entry to its policy.
+6. Only then this website commissions Boosty ([Boosty membership adapter](boosty-membership.md#commissioning)):
+   `BOOSTY_MEMBERSHIP_POLICY_JSON`, the creator credential, dispatch, then
+   `BOOSTY_STATUS_ENABLED`.
+
+The CP policy must list Boosty before the website emits any Boosty hint: a control plane
+without the entry never acknowledges Boosty hints, so the account's pending hints hit the
+per-provider bound. To withdraw Boosty, disable the status display and dispatch here first;
+ControlPlane removes its entry only after no Boosty head or unacknowledged Boosty hint remains.
 
 Website account operations overlap fresh Auth-user and session-context checks.
 Both must succeed, with any impersonation target matching the verified user,
