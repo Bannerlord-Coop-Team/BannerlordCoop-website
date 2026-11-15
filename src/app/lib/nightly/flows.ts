@@ -1,6 +1,10 @@
+import {
+    DISCORD_SNOWFLAKE_PATTERN,
+    MAXIMUM_SPONSOR_CODE_LENGTH,
+    normalizeSponsorCode,
+} from "../../../../supabase/functions/_shared/nightly/formats";
 import type { NightlyClient, SponsorPortalData } from "./client";
 import { CLAIM_COOKIE, SPONSOR_COOKIE, type ClaimContext } from "./cookies";
-import { DISCORD_SNOWFLAKE_PATTERN } from "./formats";
 import {
     GENERIC_ERROR_MESSAGE,
     INSTALLER_AUTHORIZATION_EXPIRED_MESSAGE,
@@ -14,14 +18,6 @@ export type PortalView =
     | { kind: "seats"; data: SponsorPortalData }
     | { kind: "clear-session" }
     | { kind: "ineligible"; message: string }
-    | { kind: "error"; message: string };
-
-export type ClaimOutcome = { kind: "approved" } | { kind: "error"; message: string };
-
-export type SponsorActionOutcome =
-    | { kind: "code"; code: string }
-    | { kind: "removed" }
-    | { kind: "session-expired" }
     | { kind: "error"; message: string };
 
 /** Form state of the sponsor-code claim form. */
@@ -39,7 +35,6 @@ export type ClaimActionRequest = { sameOrigin: boolean; claim: ClaimContext | nu
 /** What a sponsor action read from Next before deciding: the origin verdict and the sponsor session cookie. */
 export type SponsorActionRequest = { sameOrigin: boolean; session: string | null };
 
-const MAXIMUM_SPONSOR_CODE_LENGTH = 128;
 const SESSION_EXPIRED_RESULT = { clearCookie: SPONSOR_COOKIE, redirectTo: "/nightly/sponsor?session=expired" } as const;
 
 /** Loads the sponsor portal: no session shows login, 401 clears the session once, 403 explains lost eligibility. */
@@ -57,86 +52,55 @@ export async function loadPortalView(
     return { kind: "error", message: nightlyErrorMessage("sponsor-login", result.code) };
 }
 
-/** Claims a sponsored seat for the pending device using a friend's sponsor code. */
-export async function submitClaim(
-    client: NightlyClient,
-    claim: ClaimContext | null,
-    sponsorCode: unknown,
-): Promise<ClaimOutcome> {
-    if (claim === null) return { kind: "error", message: INSTALLER_AUTHORIZATION_EXPIRED_MESSAGE };
-    const code = typeof sponsorCode === "string" ? sponsorCode.trim().toUpperCase() : "";
-    if (code.length === 0 || code.length > MAXIMUM_SPONSOR_CODE_LENGTH) {
-        return { kind: "error", message: nightlyErrorMessage("claim", "invalid_sponsor_code") };
-    }
-    const result = await client.claimSponsorship(claim.deviceId, code);
-    if (!result.ok) return { kind: "error", message: nightlyErrorMessage("claim", result.code) };
-    return { kind: "approved" };
-}
-
-/** Rotates the sponsor code; the new code is returned once for display. */
-export async function submitCreateCode(client: NightlyClient, session: string | null): Promise<SponsorActionOutcome> {
-    if (session === null) return { kind: "session-expired" };
-    const result = await client.createSponsorCode(session);
-    if (result.ok) return { kind: "code", code: result.value };
-    if (result.status === 401) return { kind: "session-expired" };
-    return { kind: "error", message: nightlyErrorMessage("sponsor-code", result.code) };
-}
-
-/** Removes one sponsored Discord account from the sponsor's seats. */
-export async function submitRemoveSeat(
-    client: NightlyClient,
-    session: string | null,
-    discordUserId: unknown,
-): Promise<SponsorActionOutcome> {
-    if (session === null) return { kind: "session-expired" };
-    if (typeof discordUserId !== "string" || !DISCORD_SNOWFLAKE_PATTERN.test(discordUserId)) {
-        return { kind: "error", message: nightlyErrorMessage("sponsor-remove", "invalid_request") };
-    }
-    const result = await client.removeSponsoredAccount(session, discordUserId);
-    if (result.ok) return { kind: "removed" };
-    if (result.status === 401) return { kind: "session-expired" };
-    return { kind: "error", message: nightlyErrorMessage("sponsor-remove", result.code) };
-}
-
-/** `POST /nightly/claim`: refuses cross-origin posts, otherwise claims the seat and clears the claim cookie on success. */
+/** `POST /nightly/claim`: claims a seat for the cookie's device with a friend's code, clearing the claim cookie on success. */
 export async function claimActionResult(
     client: NightlyClient,
     request: ClaimActionRequest,
     sponsorCode: unknown,
 ): Promise<ActionResult<ClaimFormState>> {
     if (!request.sameOrigin) return { state: { error: GENERIC_ERROR_MESSAGE } };
-    const outcome = await submitClaim(client, request.claim, sponsorCode);
-    if (outcome.kind === "error") return { state: { error: outcome.message } };
+    if (request.claim === null) return { state: { error: INSTALLER_AUTHORIZATION_EXPIRED_MESSAGE } };
+    const code = usableSponsorCode(sponsorCode);
+    if (code === null) return { state: { error: nightlyErrorMessage("claim", "invalid_sponsor_code") } };
+    const result = await client.claimSponsorship(request.claim.deviceId, code);
+    if (!result.ok) return { state: { error: nightlyErrorMessage("claim", result.code) } };
     return { clearCookie: CLAIM_COOKIE, redirectTo: "/nightly/approved?via=sponsor" };
 }
 
-/** `POST /nightly/sponsor` (create code): refuses cross-origin posts, returns the new code once or leaves an expired session. */
+/** `POST /nightly/sponsor` (create code): rotates the sponsor code and returns it once, or leaves an expired session. */
 export async function createCodeActionResult(
     client: NightlyClient,
     request: SponsorActionRequest,
 ): Promise<ActionResult<CreateCodeState>> {
     if (!request.sameOrigin) return { state: { code: null, error: GENERIC_ERROR_MESSAGE } };
-    const outcome = await submitCreateCode(client, request.session);
-    if (outcome.kind === "session-expired") return SESSION_EXPIRED_RESULT;
-    if (outcome.kind === "code") return { state: { code: outcome.code, error: null } };
-    return { state: { code: null, error: outcomeError(outcome) } };
+    if (request.session === null) return SESSION_EXPIRED_RESULT;
+    const result = await client.createSponsorCode(request.session);
+    if (result.ok) return { state: { code: result.value, error: null } };
+    if (result.status === 401) return SESSION_EXPIRED_RESULT;
+    return { state: { code: null, error: nightlyErrorMessage("sponsor-code", result.code) } };
 }
 
-/** `POST /nightly/sponsor` (remove seat): refuses cross-origin posts, reloads the seats on success or leaves an expired session. */
+/** `POST /nightly/sponsor` (remove seat): removes one sponsored account and reloads the seats, or leaves an expired session. */
 export async function removeSeatActionResult(
     client: NightlyClient,
     request: SponsorActionRequest,
     discordUserId: unknown,
 ): Promise<ActionResult<RemoveSeatState>> {
     if (!request.sameOrigin) return { state: { error: GENERIC_ERROR_MESSAGE } };
-    const outcome = await submitRemoveSeat(client, request.session, discordUserId);
-    if (outcome.kind === "session-expired") return SESSION_EXPIRED_RESULT;
-    if (outcome.kind === "removed") return { clearCookie: null, redirectTo: "/nightly/sponsor" };
-    return { state: { error: outcomeError(outcome) } };
+    if (request.session === null) return SESSION_EXPIRED_RESULT;
+    if (typeof discordUserId !== "string" || !DISCORD_SNOWFLAKE_PATTERN.test(discordUserId)) {
+        return { state: { error: nightlyErrorMessage("sponsor-remove", "invalid_request") } };
+    }
+    const result = await client.removeSponsoredAccount(request.session, discordUserId);
+    if (result.ok) return { clearCookie: null, redirectTo: "/nightly/sponsor" };
+    if (result.status === 401) return SESSION_EXPIRED_RESULT;
+    return { state: { error: nightlyErrorMessage("sponsor-remove", result.code) } };
 }
 
-/** The message to show for an outcome that neither succeeded nor expired the session. */
-function outcomeError(outcome: SponsorActionOutcome): string {
-    if (outcome.kind === "error") return outcome.message;
-    return GENERIC_ERROR_MESSAGE;
+/** Normalizes a submitted sponsor code with the Edge Function's bounds; null when it is missing, blank or too long. */
+function usableSponsorCode(value: unknown): string | null {
+    if (typeof value !== "string" || value.length > MAXIMUM_SPONSOR_CODE_LENGTH) return null;
+    const code = normalizeSponsorCode(value);
+    if (code.length === 0) return null;
+    return code;
 }

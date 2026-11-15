@@ -1,3 +1,5 @@
+import { SPONSORED_ACCOUNT_LIMIT } from "../../../../supabase/functions/_shared/nightly/formats";
+
 /** Where an Edge Function error surfaced; the same code can need different wording per step. */
 export type NightlyErrorContext = "activate" | "callback" | "claim" | "sponsor-login" | "sponsor-code" | "sponsor-remove";
 
@@ -12,8 +14,6 @@ export const NIGHTLY_ERROR_CONTEXTS: readonly NightlyErrorContext[] = [
 
 /** The Discord roles that qualify for nightly access, as every nightly page spells them. */
 export const QUALIFYING_ROLES_TEXT = "Staff, Tester, Patreon, Boosty, or Afdian";
-/** Sponsored-account seats per eligible member; pages with portal data render its `limit` instead. */
-export const SPONSOR_SEAT_LIMIT = 10;
 export const GENERIC_ERROR_MESSAGE = "Access could not be verified. Run the installer again or ask in the Bannerlord Co-op Discord.";
 export const ROLE_REQUIRED_MESSAGE = `A ${QUALIFYING_ROLES_TEXT} role is required.`;
 export const INSTALLER_AUTHORIZATION_EXPIRED_MESSAGE = "That installer authorization has expired.";
@@ -34,7 +34,7 @@ const CONTEXT_MESSAGES: Record<NightlyErrorContext, Readonly<Record<string, stri
         invalid_sponsor_code: "That sponsor code is not valid.",
         supporter_role_required: `That sponsor no longer has a qualifying ${QUALIFYING_ROLES_TEXT} role.`,
         already_sponsored: "This Discord account already has sponsored access.",
-        seats_full: `That eligible member has already used all ${SPONSOR_SEAT_LIMIT} sponsored-account seats.`,
+        seats_full: `That eligible member has already used all ${SPONSORED_ACCOUNT_LIMIT} sponsored-account seats.`,
     },
     "sponsor-login": {},
     "sponsor-code": {
@@ -47,13 +47,9 @@ const CONTEXT_MESSAGES: Record<NightlyErrorContext, Readonly<Record<string, stri
     },
 };
 
-const SHARED_MESSAGES: Readonly<Record<string, string>> = {
-    migration_in_progress: "Nightly access is briefly paused while account data is moved. Try again in a few minutes.",
-};
-
 /** Maps an Edge Function error code to user-facing copy; unknown codes get the gateway's generic message. */
 export function nightlyErrorMessage(context: NightlyErrorContext, code: string): string {
-    return own(CONTEXT_MESSAGES[context], code) ?? own(SHARED_MESSAGES, code) ?? GENERIC_ERROR_MESSAGE;
+    return own(CONTEXT_MESSAGES[context], code) ?? GENERIC_ERROR_MESSAGE;
 }
 
 /** Resolves the full error view, adding the sponsor-code help where the gateway showed it. */

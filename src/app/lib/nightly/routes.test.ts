@@ -7,6 +7,8 @@ import { planActivate, planCallback, planOutcome, planSponsorLogin, planSponsorL
 const SESSION = "s".repeat(43);
 const STATE = "t".repeat(43);
 const AUTHORIZE = "https://discord.com/oauth2/authorize?state=x";
+const DEVICE_ID = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
+const COOKIE_ATTRIBUTES = "Path=/nightly; Max-Age=0; Secure; HttpOnly; SameSite=lax";
 
 /** Builds a client stub whose methods fail loudly unless a test overrides them. */
 function stubClient(overrides: Partial<NightlyClient>): NightlyClient {
@@ -66,41 +68,50 @@ test("each OAuth outcome maps to its page and cookies, and the sponsor cookie li
     assert.deepEqual(planOutcome({ outcome: "sponsored-approved" }), { location: "/nightly/approved?via=sponsor", cookies: [] });
     assert.deepEqual(planOutcome({ outcome: "portal", session: SESSION, expires_in: 3600 }), {
         location: "/nightly/sponsor",
-        cookies: [`nightly_sponsor=${SESSION}; Path=/nightly; HttpOnly; Secure; SameSite=Lax; Max-Age=3600`],
+        cookies: [{ name: "nightly_sponsor", value: SESSION, maxAge: 3600 }],
     });
-    const needsSponsor: OAuthOutcome = { outcome: "needs-sponsor", device_id: "device-1", username: "Fréd <b>", previous_sponsor_revoked: true };
+    const claim = { deviceId: DEVICE_ID, username: "Fréd <b>", previousSponsorRevoked: true };
+    const needsSponsor: OAuthOutcome = { outcome: "needs-sponsor", claim };
     const plan = planOutcome(needsSponsor);
     assert.equal(plan.location, "/nightly/claim");
     assert.equal(plan.cookies.length, 1);
-    const match = /^nightly_claim=([A-Za-z0-9_-]+); Path=\/nightly; HttpOnly; Secure; SameSite=Lax; Max-Age=600$/u.exec(plan.cookies[0]!);
-    assert.ok(match, plan.cookies[0]);
-    assert.deepEqual(decodeClaimContext(match[1]), { deviceId: "device-1", username: "Fréd <b>", previousSponsorRevoked: true });
+    const [cookie] = plan.cookies;
+    assert.equal(cookie!.name, "nightly_claim");
+    assert.equal(cookie!.maxAge, 600);
+    assert.match(cookie!.value, /^[A-Za-z0-9_-]+$/u);
+    assert.deepEqual(decodeClaimContext(cookie!.value), claim);
 });
 
 test("logout expires the sponsor cookie and marks the login prompt as expired", () => {
     assert.deepEqual(planSponsorLogout(), {
         location: "/nightly/sponsor?session=expired",
-        cookies: ["nightly_sponsor=; Path=/nightly; HttpOnly; Secure; SameSite=Lax; Max-Age=0"],
+        cookies: [{ name: "nightly_sponsor", value: "", maxAge: 0 }],
     });
 });
 
-test("redirect responses are no-store 302s on the request origin with every cookie", () => {
-    const response = redirectResponse({ location: "/nightly/sponsor", cookies: ["a=1", "b=2"] }, "https://bannerlordcoop.com/nightly/callback?code=x");
+test("redirect responses are no-store 302s on the request origin that set every cookie with the nightly attributes", () => {
+    const cookies = [{ name: "nightly_sponsor", value: SESSION, maxAge: 0 }, { name: "nightly_claim", value: "", maxAge: 0 }];
+    const response = redirectResponse({ location: "/nightly/sponsor", cookies }, "https://bannerlordcoop.com/nightly/callback?code=x");
     assert.equal(response.status, 302);
     assert.equal(response.headers.get("location"), "https://bannerlordcoop.com/nightly/sponsor");
     assert.equal(response.headers.get("cache-control"), "no-store");
     assert.equal(response.headers.get("referrer-policy"), "no-referrer");
-    assert.deepEqual(response.headers.getSetCookie(), ["a=1", "b=2"]);
+    assert.deepEqual(response.headers.getSetCookie(), [`nightly_sponsor=${SESSION}; ${COOKIE_ATTRIBUTES}`, `nightly_claim=; ${COOKIE_ATTRIBUTES}`]);
     assert.equal(redirectResponse({ location: AUTHORIZE, cookies: [] }, "https://bannerlordcoop.com/nightly/activate").headers.get("location"), AUTHORIZE);
 });
 
 test("cookie readers reject tampered values", () => {
     assert.equal(readSponsorSession(SESSION), SESSION);
     for (const bad of [undefined, "", "short", `${SESSION}x`, "s".repeat(42) + "!"]) assert.equal(readSponsorSession(bad), null);
-    const encoded = encodeClaimContext({ deviceId: "d", username: "u", previousSponsorRevoked: false });
-    assert.deepEqual(decodeClaimContext(encoded), { deviceId: "d", username: "u", previousSponsorRevoked: false });
+    const claim = { deviceId: DEVICE_ID, username: "u", previousSponsorRevoked: false };
+    assert.deepEqual(decodeClaimContext(encodeClaimContext(claim)), claim);
     const forge = (value: unknown) => Buffer.from(JSON.stringify(value)).toString("base64url");
-    for (const bad of [undefined, "", "!!!", "x".repeat(2000), forge({ d: "bad id", u: "u" }), forge({ d: "d", u: "" }), forge({ d: "d", u: "x".repeat(101) }), forge([1])]) {
+    assert.deepEqual(decodeClaimContext(forge({ deviceId: DEVICE_ID, username: "u", previousSponsorRevoked: "yes" })), claim);
+    const forged = [
+        forge({ deviceId: "device-1", username: "u" }), forge({ deviceId: DEVICE_ID, username: "" }),
+        forge({ deviceId: DEVICE_ID, username: "x".repeat(101) }), forge({ d: DEVICE_ID, u: "u" }), forge([1]),
+    ];
+    for (const bad of [undefined, "", "!!!", "x".repeat(2000), ...forged]) {
         assert.equal(decodeClaimContext(bad), null, String(bad).slice(0, 40));
     }
 });

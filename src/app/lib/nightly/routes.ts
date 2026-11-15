@@ -1,16 +1,20 @@
+import { NextResponse } from "next/server";
+import { USER_CODE_PATTERN } from "../../../../supabase/functions/_shared/nightly/formats";
 import type { NightlyClient, NightlyResult, OAuthOutcome } from "./client";
 import {
     CLAIM_COOKIE,
     CLAIM_COOKIE_SECONDS,
     encodeClaimContext,
-    serializeNightlyCookie,
+    nightlyCookieOptions,
     SPONSOR_COOKIE,
 } from "./cookies";
-import { OAUTH_STATE_PATTERN, USER_CODE_PATTERN } from "./formats";
+import { OAUTH_STATE_PATTERN } from "./formats";
 import type { NightlyErrorContext } from "./messages";
 
+/** One nightly cookie a redirect sets; a zero lifetime clears it. */
+export type NightlyCookie = { name: string; value: string; maxAge: number };
 /** Where a nightly GET route sends the browser, plus any cookies it sets on the way. */
-export type RedirectPlan = { location: string; cookies: string[] };
+export type RedirectPlan = { location: string; cookies: NightlyCookie[] };
 
 const MAXIMUM_OAUTH_CODE_LENGTH = 512;
 
@@ -48,30 +52,26 @@ export function planOutcome(outcome: OAuthOutcome): RedirectPlan {
     if (outcome.outcome === "approved") return plan("/nightly/approved");
     if (outcome.outcome === "sponsored-approved") return plan("/nightly/approved?via=sponsor");
     if (outcome.outcome === "portal") {
-        return plan("/nightly/sponsor", [serializeNightlyCookie(SPONSOR_COOKIE, outcome.session, outcome.expires_in)]);
+        return plan("/nightly/sponsor", [{ name: SPONSOR_COOKIE, value: outcome.session, maxAge: outcome.expires_in }]);
     }
-    const claim = encodeClaimContext({
-        deviceId: outcome.device_id,
-        username: outcome.username,
-        previousSponsorRevoked: outcome.previous_sponsor_revoked,
-    });
-    return plan("/nightly/claim", [serializeNightlyCookie(CLAIM_COOKIE, claim, CLAIM_COOKIE_SECONDS)]);
+    const claim = encodeClaimContext(outcome.claim);
+    return plan("/nightly/claim", [{ name: CLAIM_COOKIE, value: claim, maxAge: CLAIM_COOKIE_SECONDS }]);
 }
 
 /** Handles `GET /nightly/sponsor/logout`: drops an expired sponsor session and returns to the login prompt. */
 export function planSponsorLogout(): RedirectPlan {
-    return plan("/nightly/sponsor?session=expired", [serializeNightlyCookie(SPONSOR_COOKIE, "", 0)]);
+    return plan("/nightly/sponsor?session=expired", [{ name: SPONSOR_COOKIE, value: "", maxAge: 0 }]);
 }
 
-/** Converts a plan into a no-store 302 response on the request's origin. */
-export function redirectResponse(redirect: RedirectPlan, requestUrl: string): Response {
-    const headers = new Headers({
-        location: new URL(redirect.location, requestUrl).href,
-        "cache-control": "no-store",
-        "referrer-policy": "no-referrer",
-    });
-    for (const cookie of redirect.cookies) headers.append("set-cookie", cookie);
-    return new Response(null, { status: 302, headers });
+/** Converts a plan into a no-store 302 on the request's origin, setting each cookie with the shared nightly attributes. */
+export function redirectResponse(redirect: RedirectPlan, requestUrl: string): NextResponse {
+    const response = NextResponse.redirect(new URL(redirect.location, requestUrl), 302);
+    response.headers.set("cache-control", "no-store");
+    response.headers.set("referrer-policy", "no-referrer");
+    for (const cookie of redirect.cookies) {
+        response.cookies.set(cookie.name, cookie.value, nightlyCookieOptions(cookie.maxAge));
+    }
+    return response;
 }
 
 /** Redirects to Discord on success, otherwise to the matching error page. */
@@ -81,6 +81,6 @@ function planAuthorize(result: NightlyResult<string>, context: NightlyErrorConte
 }
 
 /** Creates a redirect plan. */
-function plan(location: string, cookies: string[] = []): RedirectPlan {
+function plan(location: string, cookies: NightlyCookie[] = []): RedirectPlan {
     return { location, cookies };
 }

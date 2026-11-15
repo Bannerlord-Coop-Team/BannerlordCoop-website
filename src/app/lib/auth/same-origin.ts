@@ -26,7 +26,8 @@ export function servedHost(headers: Headers): string | null {
 function fromThisSite(headers: Headers, isServedOrigin: (origin: string) => boolean, strictness: OriginStrictness): boolean {
     const site = headers.get("sec-fetch-site");
     const lenient = strictness === "request";
-    if (site !== null && site !== "same-origin" && !(lenient && site === "none")) return false;
+    const siteAllowed = site === null || site === "same-origin" || (lenient && site === "none");
+    if (!siteAllowed) return false;
     const origin = headers.get("origin");
     if (origin === null) return lenient || site === "same-origin";
     return isServedOrigin(origin);
