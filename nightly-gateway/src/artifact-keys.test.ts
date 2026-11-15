@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { artifactKeyFromUrl, isAllowedArtifactKey } from "./core";
+import { artifactKeyFromUrl, isAllowedArtifactKey } from "./artifact-keys";
 
 const legacy = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 

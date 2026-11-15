@@ -1,4 +1,4 @@
-import { isDiscordSnowflake, isSha256Hex } from "./core";
+import { isDiscordSnowflake, isSha256Hex } from "./artifact-keys";
 import { PUBLIC_MANUAL_SERVER_ORIGIN, resolveGatewayOrigin } from "./origins";
 import {
     CREATE_BUILD_PIN_KIND,

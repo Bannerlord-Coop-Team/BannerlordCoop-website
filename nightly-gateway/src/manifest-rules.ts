@@ -1,4 +1,4 @@
-import { artifactKeyFromUrl, isAllowedArtifactKey } from "./core";
+import { artifactKeyFromUrl, isAllowedArtifactKey } from "./artifact-keys";
 import { GATEWAY_ORIGINS } from "./origins";
 
 // Validates the v2 nightly publication and its pointer, the legacy v1 client and release manifests,
