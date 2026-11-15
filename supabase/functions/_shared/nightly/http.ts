@@ -1,4 +1,4 @@
-import { readBoundedBytes, RequestTooLargeError } from "../edge-http.ts";
+import { readBoundedText, RequestTooLargeError } from "../edge-http.ts";
 
 const JSON_HEADERS = Object.freeze({
     "content-type": "application/json; charset=utf-8",
@@ -44,11 +44,12 @@ export async function readJsonObject(request: Request): Promise<Record<string, u
 }
 
 /** Reads a request body as UTF-8 up to the shared 4 KiB limit. */
-async function readRequestText(request: Request): Promise<string> {
-    try {
-        return new TextDecoder().decode(await readBoundedBytes(request, MAXIMUM_REQUEST_BYTES));
-    } catch (error) {
-        if (error instanceof RequestTooLargeError) throw new GatewayError(413, "request_too_large");
-        throw error;
-    }
+function readRequestText(request: Request): Promise<string> {
+    return readBoundedText(request, MAXIMUM_REQUEST_BYTES).catch(rethrowTooLargeAsRequestTooLarge);
+}
+
+/** Maps a body over the shared 4 KiB limit to `413 request_too_large` and rethrows anything else unchanged. */
+function rethrowTooLargeAsRequestTooLarge(error: unknown): never {
+    if (error instanceof RequestTooLargeError) throw new GatewayError(413, "request_too_large");
+    throw error;
 }

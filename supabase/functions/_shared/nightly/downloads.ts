@@ -1,6 +1,8 @@
 import type { GatewayQueries } from "./database.ts";
 
-// The single owner of nightly_gateway.download_sessions: issuing a download session and revoking them.
+// The single writer of nightly_gateway.download_sessions: issuing a download session and revoking them.
+// External reader: the Worker's authorizeDownload looks sessions up by token_hash (SHA-256 hex of the access
+// token) and checks expires_at (epoch seconds), so those two columns are a contract with the Worker.
 
 /** One download session to record: its token hash, device, member, sponsor and lifetime. */
 export type NewDownloadSession = {

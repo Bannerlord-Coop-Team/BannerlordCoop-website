@@ -7,11 +7,12 @@ import {
     parkAwaitingSponsor,
 } from "./device.ts";
 import type { DiscordUser } from "./discord.ts";
-import { revokeSponsorIfIneligible, storeSupporterGrant } from "./eligibility.ts";
+import { revokeSponsorIfIneligible } from "./eligibility.ts";
 import { MAXIMUM_OAUTH_CODE_LENGTH, SECRET_TOKEN_PATTERN, USER_CODE_PATTERN } from "./formats.ts";
+import { storeSupporterGrant } from "./grants.ts";
 import { GatewayError, json } from "./http.ts";
 import { hasNightlyAccessRole, OAUTH_STATE_SECONDS, SPONSOR_SESSION_SECONDS } from "./policy.ts";
-import { findSeatHolder } from "./sponsor.ts";
+import { findSeatHolder, openSponsorSession } from "./sponsor.ts";
 import { randomToken, sha256 } from "./tokens.ts";
 
 /** A well-formed `/oauth/complete` body: Discord's authorization code and a gateway-issued state. */
@@ -79,12 +80,7 @@ async function completePortalLogin(context: GatewayContext, code: string): Promi
     const member = await context.discord.currentMember(accessToken);
     if (!hasNightlyAccessRole(member.roles)) throw new GatewayError(403, "supporter_role_required");
     await storeSupporterGrant(context, user.id);
-    const session = randomToken(context.random);
-    const now = context.now();
-    await context.db.query(
-        "INSERT INTO nightly_gateway.sponsor_sessions (token_hash, supporter_discord_user_id, created_at, expires_at) VALUES ($1, $2, $3, $4)",
-        [await sha256(session), user.id, now, now + SPONSOR_SESSION_SECONDS],
-    );
+    const session = await openSponsorSession(context, user.id);
     return json({ outcome: "portal", session, expires_in: SPONSOR_SESSION_SECONDS });
 }
 

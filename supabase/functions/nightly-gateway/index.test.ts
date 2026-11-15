@@ -212,6 +212,22 @@ test("a poll that loses the issue race to an existing download session is 409 al
     assert.deepEqual(releases, [false], "a lost race keeps the connection");
 });
 
+test("a poll that loses the consuming update to a concurrent poll is 409 already_used and issues nothing", async () => {
+    await seedGrant(database, SPONSOR);
+    const approved = await seedDevice(database, { status: "approved", discordUserId: FRIEND, sponsorId: SPONSOR });
+    const script = discordScript({ bot: { [SPONSOR]: { roles: [PATREON_ROLE] } } });
+    script.beforeBotLookup = async () => {
+        // The concurrent poll consumes the session while this one re-checks the sponsor.
+        await database.query("update nightly_gateway.device_sessions set status = 'consumed' where id = $1", [approved.id]);
+    };
+    const { handler, releases } = gatewayHandler(database, script);
+    const response = await handler(installerRequest("/v1/device/token", `device_code=${approved.secret}`));
+    assert.deepEqual([response.status, await body(response)], [409, { error: "already_used" }]);
+    assert.equal((await device(approved.id))!.status, "consumed");
+    assert.equal(await count("download_sessions", "device_session_id = $1", [approved.id]), 0);
+    assert.deepEqual(releases, [false], "a lost race keeps the connection");
+});
+
 test("a sponsor who lost the role at token issue loses grants and download sessions", async () => {
     await seedGrant(database, SPONSOR);
     await seedSeat(database, SPONSOR, FRIEND);
@@ -571,7 +587,7 @@ test("sponsor routes require a live sponsor session", async () => {
     }
 });
 
-test("the portal lists seats in claim order with the 10-seat limit", async () => {
+test("the portal lists seats in claim order and leaves the seat limit to the shared policy", async () => {
     await seedGrant(database, SPONSOR);
     await seedSeat(database, SPONSOR, FRIEND, NOW - 20);
     await seedSeat(database, SPONSOR, "222222222222222222", NOW - 30);
@@ -583,7 +599,6 @@ test("the portal lists seats in claim order with the 10-seat limit", async () =>
             { discord_user_id: "222222222222222222", created_at: NOW - 30 },
             { discord_user_id: FRIEND, created_at: NOW - 20 },
         ],
-        limit: 10,
     }]);
 });
 
@@ -692,4 +707,31 @@ test("unexpected non-database failures log only the error class", async () => {
         cause: "TypeError",
     });
     assert.ok(!JSON.stringify(logs).includes(WEBSITE_KEY));
+});
+
+test("unexpected failures log a snake_case error code from the message, and never any other message text", async () => {
+    const logs: Record<string, unknown>[] = [];
+    let failure: Error = new Error("postgres_integer_out_of_range");
+    const throwing = createNightlyGatewayHandler({
+        websiteKey: WEBSITE_KEY,
+        discord: { clientId: CLIENT_ID, clientSecret: "s".repeat(32), botToken: BOT_TOKEN },
+        fetch,
+        openDatabase: async () => { throw failure; },
+        clock: () => NOW * 1000,
+        log: (event) => logs.push(event),
+    });
+    const response = await throwing(installerRequest("/v1/device/sessions"));
+    assert.deepEqual([response.status, await body(response)], [500, { error: "internal_error" }]);
+    assert.deepEqual(logs.at(-1), {
+        event: "nightly_gateway_request_failed",
+        path: "/functions/v1/nightly-gateway/v1/device/sessions",
+        error: "internal_error",
+        cause: "Error",
+        message: "postgres_integer_out_of_range",
+    });
+    for (const unsafe of ["Postgres_Out_Of_Range", "out of range", "x".repeat(65), `leaked_${"k".repeat(60)}`, ""]) {
+        failure = new Error(unsafe);
+        await throwing(installerRequest("/v1/device/sessions"));
+        assert.equal(logs.at(-1)!.message, undefined, `message ${JSON.stringify(unsafe)} is not logged`);
+    }
 });

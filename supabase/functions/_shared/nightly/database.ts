@@ -1,5 +1,6 @@
 // PostgreSQL access for the nightly gateway: typed parameterized queries and transactions on one
 // request-scoped connection. Handler SQL is native PostgreSQL and names tables as nightly_gateway.<table>.
+// INT8 columns arrive as JS numbers because createPostgresDatabaseProvider (postgres-pool.ts) registers the parser.
 
 /** The rows a statement returned and how many rows it inserted, updated or deleted. */
 export type QueryResult<T> = { rows: T[]; rowCount: number };
@@ -35,13 +36,6 @@ export function firstRow<T>(result: QueryResult<T>): T | null {
     return result.rows[0] ?? null;
 }
 
-/** Parses an INT8 column as a JS number, refusing values beyond the safe-integer range. */
-export function parseSafeInt8(value: string): number {
-    const parsed = Number(value);
-    if (!Number.isSafeInteger(parsed)) throw new Error("postgres_integer_out_of_range");
-    return parsed;
-}
-
 /** Whether an error is PostgreSQL's unique_violation (SQLSTATE 23505). */
 export function isUniqueViolation(error: unknown): boolean {
     return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "23505";
@@ -52,6 +46,7 @@ class PostgresGatewayDatabase implements GatewayDatabase {
     private readonly statements: GatewayQueries;
 
     constructor(private readonly client: PostgresClient) {
+        // Query-only view handed to transactional work, so `tx` cannot open a nested BEGIN.
         this.statements = { query: (sql, values) => this.query(sql, values) };
     }
 
@@ -68,19 +63,11 @@ class PostgresGatewayDatabase implements GatewayDatabase {
         try {
             result = await work(this.statements);
         } catch (error) {
-            return this.rollback(error);
+            // A failing ROLLBACK propagates instead; being unexpected, it makes the lease discard the connection.
+            await this.client.query("ROLLBACK");
+            throw error;
         }
         await this.client.query("COMMIT");
         return result;
-    }
-
-    /** Rolls back and rethrows `cause`; a failed rollback is an unexpected error, so the lease discards the connection. */
-    private async rollback(cause: unknown): Promise<never> {
-        try {
-            await this.client.query("ROLLBACK");
-        } catch {
-            throw new Error("gateway_transaction_rollback_failed", { cause });
-        }
-        throw cause;
     }
 }

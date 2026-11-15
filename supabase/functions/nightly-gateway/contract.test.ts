@@ -77,14 +77,13 @@ test("the website client drives device sign-in, a sponsor claim and the sponsor 
 
     assert.deepEqual(value(await client.sponsorPortal(portal.session)), {
         seats: [{ discordUserId: FRIEND, createdAt: new Date(NOW * 1000) }],
-        limit: 10,
     });
     const rotated = value(await client.createSponsorCode(portal.session));
     assert.match(rotated, /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/);
     assert.notEqual(rotated, SPONSOR_CODE);
 
     assert.deepEqual(await client.removeSponsoredAccount(portal.session, FRIEND), { ok: true, value: null });
-    assert.deepEqual(value(await client.sponsorPortal(portal.session)), { seats: [], limit: 10 });
+    assert.deepEqual(value(await client.sponsorPortal(portal.session)), { seats: [] });
     assert.deepEqual(await client.sponsorPortal("x".repeat(43)), { ok: false, status: 401, code: "authorization_expired" });
     assert.ok(releases.every((failed) => failed === false));
 });

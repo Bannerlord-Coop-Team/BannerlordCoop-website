@@ -14,6 +14,8 @@ const MINIMUM_WEBSITE_KEY_LENGTH = 32;
 const MINIMUM_CLIENT_SECRET_LENGTH = 32;
 const MINIMUM_BOT_TOKEN_LENGTH = 50;
 const SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/;
+/** A snake_case error code this code base throws as a plain Error's message; any other message is never logged. */
+const SAFE_ERROR_CODE_PATTERN = /^[a-z0-9_]{1,64}$/;
 
 type InstallerRoute = (context: GatewayContext, request: Request) => Promise<Response>;
 type WebsiteRoute = (context: GatewayContext, body: Record<string, unknown>) => Promise<Response>;
@@ -51,7 +53,8 @@ export function createNightlyGatewayHandler(options: NightlyGatewayOptions): (re
     const clock = options.clock ?? Date.now;
     const random = options.random ?? cryptoRandomBytes;
     const log = options.log ?? ((event) => console.error(JSON.stringify(event)));
-    const router = new GatewayRouter(options, discord, () => Math.floor(clock() / 1000), random);
+    const now = () => Math.floor(clock() / 1000);
+    const router = new GatewayRouter(options.websiteKey, options.openDatabase, discord, now, random);
     return async (request) => {
         try {
             return await router.route(request);
@@ -64,7 +67,8 @@ export function createNightlyGatewayHandler(options: NightlyGatewayOptions): (re
 // Authenticates each request for its route family and runs the route on a request-scoped database.
 class GatewayRouter {
     constructor(
-        private readonly options: NightlyGatewayOptions,
+        private readonly websiteKey: string,
+        private readonly openDatabase: DatabaseProvider,
         private readonly discord: DiscordApi,
         private readonly now: () => number,
         private readonly random: RandomBytes,
@@ -89,7 +93,7 @@ class GatewayRouter {
     /** Requires the website key, parses the JSON body, then runs a website route. */
     private async routeWebsite(request: Request, route: WebsiteRoute): Promise<Response> {
         const provided = request.headers.get(WEBSITE_KEY_HEADER);
-        if (provided === null || !secretsEqual(this.options.websiteKey, provided)) {
+        if (provided === null || !secretsEqual(this.websiteKey, provided)) {
             throw new GatewayError(401, "unauthorized");
         }
         const body = await readJsonObject(request);
@@ -98,7 +102,7 @@ class GatewayRouter {
 
     /** Leases a database for one route invocation and always releases it, discarding it after an unexpected failure. */
     private async withContext(run: (context: GatewayContext) => Promise<Response>): Promise<Response> {
-        const lease = await this.options.openDatabase();
+        const lease = await this.openDatabase();
         let failed = false;
         try {
             return await run({ db: lease.database, discord: this.discord, now: this.now, random: this.random });
@@ -130,12 +134,23 @@ function failureResponse(request: Request, error: unknown, log: (event: Record<s
     return json({ error: "internal_error" }, 500);
 }
 
-/** Describes an unexpected failure by its error class and PostgreSQL SQLSTATE only, never its message or data. */
-function unexpectedCause(error: unknown): { cause: string; sqlstate?: string } {
+/** Describes an unexpected failure by error class, safe snake_case code and SQLSTATE only, never other message text. */
+function unexpectedCause(error: unknown): { cause: string; message?: string; sqlstate?: string } {
     const cause = error instanceof Error ? error.name : typeof error;
+    return { cause, ...safeMessage(error), ...sqlstate(error) };
+}
+
+/** The error's message only when it is one of the gateway's own snake_case codes, like `postgres_integer_out_of_range`. */
+function safeMessage(error: unknown): { message?: string } {
+    if (!(error instanceof Error) || !SAFE_ERROR_CODE_PATTERN.test(error.message)) return {};
+    return { message: error.message };
+}
+
+/** The error's PostgreSQL SQLSTATE, when it carries a well-formed one. */
+function sqlstate(error: unknown): { sqlstate?: string } {
     const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
-    if (typeof code !== "string" || !SQLSTATE_PATTERN.test(code)) return { cause };
-    return { cause, sqlstate: code };
+    if (typeof code !== "string" || !SQLSTATE_PATTERN.test(code)) return {};
+    return { sqlstate: code };
 }
 
 /** Refuses to start with a missing or implausible secret instead of failing per request. */

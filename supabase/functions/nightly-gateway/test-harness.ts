@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
-import { postgresGatewayDatabase } from "../_shared/nightly/database.ts";
+import { type PostgresClient, postgresGatewayDatabase } from "../_shared/nightly/database.ts";
 import { createNightlyGatewayHandler } from "../_shared/nightly/gateway.ts";
 import { DISCORD_GUILD_ID } from "../_shared/nightly/policy.ts";
 import { sha256 } from "../_shared/nightly/tokens.ts";
@@ -53,6 +53,8 @@ export type DiscordScript = {
     bot: Record<string, { roles: string[] }>;
     tokenFailure?: () => Response;
     botFailure?: () => Response;
+    /** Runs before each bot lookup is answered, e.g. to change the database mid-request. */
+    beforeBotLookup?: (userId: string) => Promise<void>;
     calls: Array<{ url: string; headers: Headers; body: string }>;
 };
 
@@ -79,6 +81,7 @@ export function discordFetch(script: DiscordScript): typeof fetch {
         }
         const botLookup = url.match(new RegExp(`^https://discord\\.com/api/v10/guilds/${DISCORD_GUILD_ID}/members/(\\d+)$`));
         if (botLookup !== null) {
+            await script.beforeBotLookup?.(botLookup[1]!);
             if (script.botFailure) return script.botFailure();
             const member = script.bot[botLookup[1]!];
             return member === undefined ? unknownMember() : Response.json(member);
@@ -99,8 +102,8 @@ export function unknownMember(): Response {
     return Response.json({ message: "Unknown Member", code: 10007 }, { status: 404 });
 }
 
-/** A handler over the shared database and a Discord script, plus its logs and lease releases. */
-export function gatewayHandler(database: PGlite, script: DiscordScript, clock = () => NOW * 1000) {
+/** A handler over the shared database (or a wrapper of it) and a Discord script, plus its logs and lease releases. */
+export function gatewayHandler(database: PostgresClient, script: DiscordScript, clock = () => NOW * 1000) {
     const releases: boolean[] = [];
     const logs: Record<string, unknown>[] = [];
     const handler = createNightlyGatewayHandler({

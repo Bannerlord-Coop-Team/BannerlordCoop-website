@@ -1,13 +1,22 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { firstRow, isUniqueViolation, postgresGatewayDatabase, type PostgresClient } from "../_shared/nightly/database.ts";
+import { createPostgresDatabaseProvider, parseSafeInt8, type PostgresModule } from "../_shared/nightly/postgres-pool.ts";
 import {
-    firstRow,
-    isUniqueViolation,
-    parseSafeInt8,
-    postgresGatewayDatabase,
-    type PostgresClient,
-} from "../_shared/nightly/database.ts";
-import { applyMigration, createGatewayDatabase, NOW, SPONSOR } from "./test-harness.ts";
+    applyMigration,
+    body,
+    createGatewayDatabase,
+    discordScript,
+    FRIEND,
+    gatewayHandler,
+    installerRequest,
+    NOW,
+    PATREON_ROLE,
+    seedDevice,
+    seedDownloadSession,
+    seedGrant,
+    SPONSOR,
+} from "./test-harness.ts";
 
 const WORKER_GRANT_UPSERT = `
     INSERT INTO nightly_gateway.supporter_grants (supporter_discord_user_id, encrypted_refresh_token, token_nonce, updated_at)
@@ -69,16 +78,69 @@ test("transactions commit together and roll back together", async () => {
     }
 });
 
-test("a failed rollback surfaces as an unexpected error carrying the original cause", async () => {
-    const failure = new Error("stop");
+test("a failed rollback propagates its own error instead of the work's", async () => {
+    const rollbackFailure = new Error("connection lost");
     const client: PostgresClient = {
         query: async (sql) => {
-            if (sql === "ROLLBACK") throw new Error("connection lost");
+            if (sql === "ROLLBACK") throw rollbackFailure;
             return { rows: [], rowCount: 0 };
         },
     };
-    await assert.rejects(postgresGatewayDatabase(client).transaction(async () => { throw failure; }), (error: Error) =>
-        error.message === "gateway_transaction_rollback_failed" && error.cause === failure);
+    await assert.rejects(
+        postgresGatewayDatabase(client).transaction(async () => { throw new Error("stop"); }),
+        (error) => error === rollbackFailure,
+    );
+});
+
+test("a failed rollback behind a gateway error is a 500 that discards the connection", async () => {
+    const pg = await createGatewayDatabase();
+    try {
+        await seedGrant(pg, SPONSOR);
+        const approved = await seedDevice(pg, { status: "approved", discordUserId: FRIEND, sponsorId: SPONSOR });
+        await seedDownloadSession(pg, FRIEND, SPONSOR, "r".repeat(43), approved.id);
+        const failingRollback: PostgresClient = {
+            query: async (sql, values) => {
+                const result = await pg.query(sql, values);
+                if (sql === "ROLLBACK") throw new Error("connection lost");
+                return result;
+            },
+        };
+        const { handler, releases } = gatewayHandler(failingRollback, discordScript({ bot: { [SPONSOR]: { roles: [PATREON_ROLE] } } }));
+        const response = await handler(installerRequest("/v1/device/token", `device_code=${approved.secret}`));
+        assert.deepEqual([response.status, await body(response)], [500, { error: "internal_error" }]);
+        assert.deepEqual(releases, [true]);
+    } finally {
+        await pg.close();
+    }
+});
+
+test("the Postgres provider registers the INT8 parser, then leases and releases pooled connections", async () => {
+    const parsers = new Map<number, (value: string) => number>();
+    const released: Array<boolean | undefined> = [];
+    let poolConfig: Record<string, unknown> = {};
+    const pgModule: PostgresModule = {
+        types: { builtins: { INT8: 20 }, setTypeParser: (oid, parse) => { parsers.set(oid, parse); } },
+        Pool: class {
+            constructor(config: Record<string, unknown>) { poolConfig = config; }
+            async connect() {
+                return { query: async () => ({ rows: [{ ok: 1 }], rowCount: 1 }), release: (destroy?: boolean) => { released.push(destroy); } };
+            }
+            on() { return this; }
+        },
+    };
+    const openDatabase = createPostgresDatabaseProvider(pgModule, "postgres://example", {
+        applicationName: "test", maxConnections: 4, idleTimeoutMs: 10_000, queryTimeoutMs: 5_000,
+    });
+    assert.equal(parsers.get(20), parseSafeInt8);
+    assert.deepEqual(poolConfig, {
+        connectionString: "postgres://example", application_name: "test", max: 4,
+        idleTimeoutMillis: 10_000, connectionTimeoutMillis: 5_000, query_timeout: 5_000,
+    });
+    const lease = await openDatabase();
+    assert.deepEqual((await lease.database.query("SELECT 1 AS ok")).rows, [{ ok: 1 }]);
+    await lease.release(false);
+    await (await openDatabase()).release(true);
+    assert.deepEqual(released, [false, true]);
 });
 
 test("the refresh-token migration clears stored tokens and keeps the running Worker's upsert valid", async () => {
