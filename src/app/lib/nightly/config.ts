@@ -7,14 +7,20 @@ export type NightlyEnvironment = {
     NODE_ENV?: string;
 };
 
+/** The name of a nightly setting; diagnostics may log it, never its value. */
+export type NightlySetting = "NIGHTLY_FUNCTION_URL" | "NIGHTLY_WEBSITE_KEY";
+
+export type NightlyConfigResult = { ok: true; config: NightlyConfig } | { ok: false; setting: NightlySetting };
+
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
-/** Reads and validates the Edge Function settings; null means the nightly pages fail closed. */
-export function readNightlyConfig(environment: NightlyEnvironment): NightlyConfig | null {
-    const websiteKey = environment.NIGHTLY_WEBSITE_KEY?.trim();
+/** Reads and validates the Edge Function settings; a failure names the first invalid setting so the pages fail closed. */
+export function readNightlyConfig(environment: NightlyEnvironment): NightlyConfigResult {
     const functionUrl = normalizeFunctionUrl(environment.NIGHTLY_FUNCTION_URL, environment.NODE_ENV);
-    if (!websiteKey || functionUrl === null) return null;
-    return { functionUrl, websiteKey };
+    if (functionUrl === null) return { ok: false, setting: "NIGHTLY_FUNCTION_URL" };
+    const websiteKey = environment.NIGHTLY_WEBSITE_KEY?.trim();
+    if (!websiteKey) return { ok: false, setting: "NIGHTLY_WEBSITE_KEY" };
+    return { ok: true, config: { functionUrl, websiteKey } };
 }
 
 /** Accepts an https URL without credentials, query or fragment (loopback http only under next dev). */

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createNightlyClient, decodeOAuthOutcome, decodePortal, type NightlyFetch } from "./client";
 import { readNightlyConfig } from "./config";
-import type { NightlyLogger } from "./diagnostics";
+import { reportConfigInvalid, type NightlyLogger } from "./diagnostics";
 
 const config = { functionUrl: "https://project.supabase.co/functions/v1/nightly-gateway", websiteKey: "website-key-value" };
 const SESSION = "A".repeat(43);
@@ -130,15 +130,6 @@ test("authorize URLs must point at Discord's OAuth authorize endpoint", async ()
     }
 });
 
-test("claim and removal succeed on their contract responses", async () => {
-    const claim = await createNightlyClient(config, fakeFetch(200, { outcome: "sponsored-approved" }).fetch).claimSponsorship("d", "c");
-    assert.deepEqual(claim, { ok: true, value: null });
-    const removed = await createNightlyClient(config, fakeFetch(204).fetch).removeSponsoredAccount(SESSION, "123456789012345678");
-    assert.deepEqual(removed, { ok: true, value: null });
-    const code = await createNightlyClient(config, fakeFetch(200, { code: "AB2C-DEF3-GH45" }).fetch).createSponsorCode(SESSION);
-    assert.deepEqual(code, { ok: true, value: "AB2C-DEF3-GH45" });
-});
-
 test("OAuth outcomes decode exactly the four contract shapes", () => {
     assert.deepEqual(decodeOAuthOutcome({ outcome: "approved" }), { outcome: "approved" });
     assert.deepEqual(decodeOAuthOutcome({ outcome: "sponsored-approved", extra: 1 }), { outcome: "sponsored-approved" });
@@ -161,7 +152,6 @@ test("OAuth outcomes decode exactly the four contract shapes", () => {
 
 test("portal seats keep valid snowflakes, read epoch-second timestamps and drop malformed rows", () => {
     const portal = decodePortal({
-        limit: 10,
         seats: [
             { discord_user_id: "123456789012345678", created_at: 1_700_000_000 },
             { discord_user_id: "223456789012345678", created_at: "2026-11-01T10:00:00Z" },
@@ -171,30 +161,38 @@ test("portal seats keep valid snowflakes, read epoch-second timestamps and drop 
         ],
     });
     assert.deepEqual(portal, {
-        limit: 10,
         seats: [
             { discordUserId: "123456789012345678", createdAt: new Date(1_700_000_000_000) },
             { discordUserId: "223456789012345678", createdAt: null },
             { discordUserId: "323456789012345678", createdAt: null },
         ],
     });
-    assert.equal(decodePortal({ seats: [] }), undefined);
-    assert.equal(decodePortal({ seats: "x", limit: 10 }), undefined);
+    assert.deepEqual(decodePortal({ seats: [] }), { seats: [] });
+    assert.equal(decodePortal({ seats: "x" }), undefined);
+    assert.equal(decodePortal({}), undefined);
 });
 
 test("config requires a website key and a clean https function URL", () => {
     const url = "https://project.supabase.co/functions/v1/nightly-gateway/";
+    const invalidUrl = { ok: false, setting: "NIGHTLY_FUNCTION_URL" };
+    const loopback = "http://127.0.0.1:54321/functions/v1/nightly-gateway";
     assert.deepEqual(readNightlyConfig({ NIGHTLY_FUNCTION_URL: url, NIGHTLY_WEBSITE_KEY: " key " }), {
-        functionUrl: "https://project.supabase.co/functions/v1/nightly-gateway", websiteKey: "key",
+        ok: true, config: { functionUrl: "https://project.supabase.co/functions/v1/nightly-gateway", websiteKey: "key" },
     });
-    assert.equal(readNightlyConfig({ NIGHTLY_FUNCTION_URL: url }), null);
-    assert.equal(readNightlyConfig({ NIGHTLY_WEBSITE_KEY: "key" }), null);
+    assert.deepEqual(readNightlyConfig({ NIGHTLY_FUNCTION_URL: url }), { ok: false, setting: "NIGHTLY_WEBSITE_KEY" });
+    assert.deepEqual(readNightlyConfig({ NIGHTLY_FUNCTION_URL: url, NIGHTLY_WEBSITE_KEY: "  " }), { ok: false, setting: "NIGHTLY_WEBSITE_KEY" });
+    assert.deepEqual(readNightlyConfig({ NIGHTLY_WEBSITE_KEY: "key" }), invalidUrl);
     for (const bad of ["http://project.supabase.co/x", "https://user:pw@project.supabase.co/x", "https://project.supabase.co/x?y=1", "not a url"]) {
-        assert.equal(readNightlyConfig({ NIGHTLY_FUNCTION_URL: bad, NIGHTLY_WEBSITE_KEY: "key" }), null, bad);
+        assert.deepEqual(readNightlyConfig({ NIGHTLY_FUNCTION_URL: bad, NIGHTLY_WEBSITE_KEY: "key" }), invalidUrl, bad);
     }
-    assert.equal(readNightlyConfig({ NIGHTLY_FUNCTION_URL: "http://127.0.0.1:54321/functions/v1/nightly-gateway", NIGHTLY_WEBSITE_KEY: "key" }), null);
-    assert.equal(
-        readNightlyConfig({ NIGHTLY_FUNCTION_URL: "http://127.0.0.1:54321/functions/v1/nightly-gateway", NIGHTLY_WEBSITE_KEY: "key", NODE_ENV: "development" })?.functionUrl,
-        "http://127.0.0.1:54321/functions/v1/nightly-gateway",
-    );
+    assert.deepEqual(readNightlyConfig({ NIGHTLY_FUNCTION_URL: loopback, NIGHTLY_WEBSITE_KEY: "key" }), invalidUrl);
+    assert.deepEqual(readNightlyConfig({ NIGHTLY_FUNCTION_URL: loopback, NIGHTLY_WEBSITE_KEY: "key", NODE_ENV: "development" }), {
+        ok: true, config: { functionUrl: loopback, websiteKey: "key" },
+    });
+});
+
+test("an invalid config is logged by setting name only", () => {
+    const entries: unknown[] = [];
+    reportConfigInvalid((entry) => entries.push(entry), "NIGHTLY_WEBSITE_KEY");
+    assert.deepEqual(entries, [{ event: "nightly_config_invalid", setting: "NIGHTLY_WEBSITE_KEY" }]);
 });

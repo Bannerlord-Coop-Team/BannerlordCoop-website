@@ -1,9 +1,11 @@
+import type { NightlySetting } from "./config";
+
 /** A structured log sink; entries name routes, statuses and codes, never bodies or secret values. */
 export type NightlyLogger = (entry: Readonly<Record<string, string | number>>) => void;
 
-/** Logs that the Edge Function settings are missing or invalid, naming no values. */
-export function reportConfigInvalid(log: NightlyLogger): void {
-    log({ event: "nightly_config_invalid" });
+/** Logs which Edge Function setting is missing or invalid, by name only. */
+export function reportConfigInvalid(log: NightlyLogger, setting: NightlySetting): void {
+    log({ event: "nightly_config_invalid", setting });
 }
 
 /** Logs a call that got no response (network error or timeout) with the error's class name only. */

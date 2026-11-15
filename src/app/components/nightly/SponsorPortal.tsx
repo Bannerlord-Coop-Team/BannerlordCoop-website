@@ -13,7 +13,7 @@ export function SponsorPortal({ data, createCode, removeSeat }: {
     removeSeat: RemoveSeatAction;
 }) {
     const used = data.seats.length;
-    const open = Math.max(data.limit - used, 0);
+    const open = Math.max(SPONSORED_ACCOUNT_LIMIT - used, 0);
     return (
         <>
             <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
@@ -24,12 +24,12 @@ export function SponsorPortal({ data, createCode, removeSeat }: {
                         {` ${QUALIFYING_ROLES_TEXT} `}Discord role.
                     </p>
                 </div>
-                <div className="inline-flex shrink-0 items-center gap-3 self-start border border-gold/25 bg-gold/[0.04] px-4 py-3 lg:self-auto" aria-label={`${used} of ${data.limit} seats used`}>
+                <div className="inline-flex shrink-0 items-center gap-3 self-start border border-gold/25 bg-gold/[0.04] px-4 py-3 lg:self-auto" aria-label={`${used} of ${SPONSORED_ACCOUNT_LIMIT} seats used`}>
                     <strong className="font-display text-4xl leading-none text-gold">{used}</strong>
-                    <span className="font-label text-[0.65rem] uppercase leading-4 tracking-[0.14em] text-foreground-dim">of {data.limit}<br />seats used</span>
+                    <span className="font-label text-[0.65rem] uppercase leading-4 tracking-[0.14em] text-foreground-dim">of {SPONSORED_ACCOUNT_LIMIT}<br />seats used</span>
                 </div>
             </div>
-            <CreateSponsorCodeForm action={createCode} hasSeats={used > 0} limit={data.limit} />
+            <CreateSponsorCodeForm action={createCode} hasSeats={used > 0} />
             <section className="mt-10" aria-labelledby="seat-heading">
                 <div className="flex items-center justify-between border-b border-gold/25 pb-3">
                     <h2 id="seat-heading" className="font-label text-sm font-semibold uppercase tracking-[0.17em] text-foreground">Sponsored accounts</h2>

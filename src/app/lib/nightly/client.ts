@@ -20,7 +20,7 @@ export type OAuthOutcome =
     | { outcome: "portal"; session: string; expires_in: number };
 
 export type SponsorSeat = { discordUserId: string; createdAt: Date | null };
-export type SponsorPortalData = { seats: SponsorSeat[]; limit: number };
+export type SponsorPortalData = { seats: SponsorSeat[] };
 
 export type NightlyFetch = (input: string, init: RequestInit) => Promise<Response>;
 
@@ -199,13 +199,12 @@ function decodeSponsoredApproval(body: unknown): null | undefined {
 /** Validates the portal body, dropping malformed seats rather than rendering them. */
 export function decodePortal(body: unknown): SponsorPortalData | undefined {
     if (!isRecord(body) || !Array.isArray(body.seats)) return undefined;
-    if (typeof body.limit !== "number" || !Number.isInteger(body.limit) || body.limit < 0) return undefined;
     const seats = body.seats.flatMap((seat): SponsorSeat[] => {
         if (!isRecord(seat) || typeof seat.discord_user_id !== "string") return [];
         if (!DISCORD_SNOWFLAKE_PATTERN.test(seat.discord_user_id)) return [];
         return [{ discordUserId: seat.discord_user_id, createdAt: seatDate(seat.created_at) }];
     });
-    return { seats, limit: body.limit };
+    return { seats };
 }
 
 /** Reads a seat timestamp sent as Unix seconds; anything else, or an out-of-range value, reads as unknown. */

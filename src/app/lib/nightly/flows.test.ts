@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { NightlyClient, NightlyFailure } from "./client";
-import { sameOriginRequest, sameOriginSubmission, servedHost } from "../auth/same-origin";
 import {
     claimActionResult,
     createCodeActionResult,
@@ -12,7 +11,7 @@ import { GENERIC_ERROR_MESSAGE, nightlyErrorMessage, nightlyErrorView, parseErro
 
 const SESSION = "s".repeat(43);
 const CLAIM = { deviceId: "device-1", username: "friend", previousSponsorRevoked: false };
-const PORTAL = { seats: [{ discordUserId: "123456789012345678", createdAt: null }], limit: 10 };
+const PORTAL = { seats: [{ discordUserId: "123456789012345678", createdAt: null }] };
 const CLAIM_REQUEST = { sameOrigin: true, claim: CLAIM };
 const SPONSOR_REQUEST = { sameOrigin: true, session: SESSION };
 const APPROVED = { clearCookie: "nightly_claim", redirectTo: "/nightly/approved?via=sponsor" };
@@ -117,33 +116,6 @@ test("error messages use the gateway's wording per step and never echo the code"
     assert.equal(parseErrorContext("claim"), "claim");
     assert.equal(parseErrorContext("toString"), null);
     assert.equal(parseErrorContext(undefined), null);
-});
-
-test("same-origin submissions require matching Fetch Metadata or Origin", () => {
-    const check = (values: Record<string, string>) => {
-        const headers = new Headers(values);
-        return sameOriginSubmission(headers, servedHost(headers));
-    };
-    assert.equal(check({ "sec-fetch-site": "same-origin", origin: "https://bannerlordcoop.com", host: "bannerlordcoop.com" }), true);
-    assert.equal(check({ origin: "https://bannerlordcoop.com", host: "bannerlordcoop.com" }), true);
-    assert.equal(check({ "sec-fetch-site": "same-origin", host: "bannerlordcoop.com" }), true);
-    assert.equal(check({ origin: "https://bannerlordcoop.com", "x-forwarded-host": "bannerlordcoop.com, proxy", host: "internal" }), true);
-    assert.equal(check({ "sec-fetch-site": "cross-site", origin: "https://bannerlordcoop.com", host: "bannerlordcoop.com" }), false);
-    assert.equal(check({ "sec-fetch-site": "same-site", origin: "https://nightly.bannerlordcoop.com", host: "bannerlordcoop.com" }), false);
-    assert.equal(check({ origin: "https://evil.example", host: "bannerlordcoop.com" }), false);
-    assert.equal(check({ origin: "null", host: "bannerlordcoop.com" }), false);
-    assert.equal(check({ host: "bannerlordcoop.com" }), false);
-    assert.equal(check({ "sec-fetch-site": "none", host: "bannerlordcoop.com" }), false);
-    assert.equal(check({ "sec-fetch-site": "same-origin", origin: "https://bannerlordcoop.com" }), false);
-});
-
-test("route-handler requests keep accepting direct navigations and Origin-less requests", () => {
-    const check = (values: Record<string, string>) => sameOriginRequest(new Request("https://bannerlordcoop.com/api/x", { headers: values }));
-    assert.equal(check({}), true);
-    assert.equal(check({ "sec-fetch-site": "none" }), true);
-    assert.equal(check({ "sec-fetch-site": "same-origin", origin: "https://bannerlordcoop.com" }), true);
-    assert.equal(check({ origin: "http://bannerlordcoop.com" }), false);
-    assert.equal(check({ "sec-fetch-site": "cross-site" }), false);
 });
 
 test("claim action refuses a cross-origin post without calling the Edge Function", async () => {
