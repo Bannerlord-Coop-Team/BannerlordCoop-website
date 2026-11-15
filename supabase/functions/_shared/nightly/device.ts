@@ -55,7 +55,7 @@ function isClaimableDevice(
 
 type ApprovedDevice = { discord_user_id: string; sponsor_discord_user_id: string };
 
-/** `POST /v1/device/sessions`: starts a 10-minute pending device session; the Worker adds `verification_uri`. */
+/** `POST /v1/device/sessions`: starts a pending device session lasting `DEVICE_SESSION_SECONDS`; the Worker adds `verification_uri`. */
 export async function createDeviceSession(context: GatewayContext): Promise<Response> {
     const id = randomUuid(context.random);
     const deviceSecret = randomToken(context.random);
@@ -74,7 +74,7 @@ export async function createDeviceSession(context: GatewayContext): Promise<Resp
     }, 201);
 }
 
-/** `POST /v1/device/token`: trades an approved device session for a one-hour download token, exactly once. */
+/** `POST /v1/device/token`: trades an approved device session for a download token lasting `DOWNLOAD_SESSION_SECONDS`, exactly once. */
 export async function pollDeviceSession(context: GatewayContext, request: Request): Promise<Response> {
     const deviceSecret = (await readForm(request)).get("device_code");
     if (typeof deviceSecret !== "string" || !SECRET_TOKEN_PATTERN.test(deviceSecret)) {

@@ -7,7 +7,7 @@ import { WEBSITE_KEY_HEADER } from "./formats.ts";
 import { errorJson, GatewayError, json, readJsonObject } from "./http.ts";
 import { type GatewayLog, logToStderr } from "./log.ts";
 import { completeOAuth, startOAuth } from "./oauth.ts";
-import { claimSponsorship, removeSponsoredAccount, rotateSponsorCode, sponsorPortal } from "./sponsor.ts";
+import { claimSponsorship, createSponsorCode, removeSponsoredAccount, sponsorPortal } from "./sponsor.ts";
 import { cryptoRandomBytes, type RandomBytes, secretsEqual } from "./tokens.ts";
 
 const FUNCTION_PREFIXES = Object.freeze(["/functions/v1/nightly-gateway", "/nightly-gateway"]);
@@ -28,7 +28,7 @@ const WEBSITE_ROUTES: Readonly<Record<string, WebsiteRoute>> = Object.freeze({
     "/oauth/complete": completeOAuth,
     "/sponsorship/claim": claimSponsorship,
     "/sponsor/portal": sponsorPortal,
-    "/sponsor/code": rotateSponsorCode,
+    "/sponsor/code": createSponsorCode,
     "/sponsor/remove": removeSponsoredAccount,
 });
 

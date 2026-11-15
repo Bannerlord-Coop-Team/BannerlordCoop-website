@@ -57,7 +57,7 @@ async function startDeviceOAuth(context: GatewayContext, rawUserCode: unknown): 
     return json({ authorize_url: context.discord.authorizeUrl(state) });
 }
 
-/** Stores a 10-minute sponsor-portal OAuth state. */
+/** Stores a sponsor-portal OAuth state lasting `OAUTH_STATE_SECONDS`. */
 async function startPortalOAuth(context: GatewayContext): Promise<Response> {
     const state = randomToken(context.random);
     const now = context.now();
@@ -77,7 +77,7 @@ async function consumePortalState(queries: GatewayQueries, stateHash: string, no
     return deleted.rowCount === 1;
 }
 
-/** Signs an eligible guild member into the sponsor portal: their grant and a 24-hour session, stored together. */
+/** Signs an eligible guild member into the sponsor portal: their grant and a session lasting `SPONSOR_SESSION_SECONDS`, stored together. */
 async function completePortalLogin(context: GatewayContext, code: string): Promise<Response> {
     const accessToken = await context.discord.exchangeCode(code);
     const user = await context.discord.currentUser(accessToken);

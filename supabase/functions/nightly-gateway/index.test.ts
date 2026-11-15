@@ -758,6 +758,7 @@ test("an installer, a friend, and a sponsor complete the whole sponsored flow, h
 });
 
 test("unexpected database failures are a logged 500 with the SQLSTATE, and later requests still work", async () => {
+    // A NaN clock writes NaN into an INT8 column, so PostgreSQL rejects the INSERT with a real SQLSTATE.
     let clock = () => Number.NaN;
     const { handler, logs } = gatewayHandler(database, discordScript(), () => clock());
     const response = await handler(installerRequest("/v1/device/sessions"));

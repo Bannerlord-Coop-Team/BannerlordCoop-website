@@ -65,8 +65,8 @@ export async function sponsorPortal(context: GatewayContext, body: Record<string
     });
 }
 
-/** `POST /sponsor/code`: replaces the sponsor's code with a new one, returned once and stored as a hash. */
-export async function rotateSponsorCode(context: GatewayContext, body: Record<string, unknown>): Promise<Response> {
+/** `POST /sponsor/code`: creates a new sponsor code that replaces the previous one, returned once and stored as a hash. */
+export async function createSponsorCode(context: GatewayContext, body: Record<string, unknown>): Promise<Response> {
     const sponsorId = await requireSponsorSession(context.db, body.session, context.now());
     const code = randomSponsorCode(context.random);
     await replaceSponsorCodeHash(context.db, sponsorId, await sha256(code), context.now());
@@ -94,7 +94,7 @@ export async function findSeatHolder(queries: GatewayQueries, friendId: string):
     return seat?.supporter_discord_user_id ?? null;
 }
 
-/** Opens a 24-hour sponsor-portal session for a supporter and returns its token, stored only as a hash. */
+/** Opens a sponsor-portal session lasting `SPONSOR_SESSION_SECONDS` for a supporter and returns its token, stored only as a hash. */
 export async function openSponsorSession(
     queries: GatewayQueries,
     supporterId: string,
