@@ -1,5 +1,5 @@
 import type { SponsorPortalData, SponsorSeat } from "@/app/lib/nightly/client";
-import { QUALIFYING_ROLES_TEXT } from "@/app/lib/nightly/messages";
+import { QUALIFYING_ROLES_TEXT } from "../../../../supabase/functions/_shared/nightly/policy";
 import { SPONSORED_ACCOUNT_LIMIT } from "../../../../supabase/functions/_shared/nightly/policy";
 import { CreateSponsorCodeForm, RemoveSeatForm, type CreateCodeAction, type RemoveSeatAction } from "./SponsorPortalForms";
 import { finePrintClass, headingClass, ledeClass, primaryButtonClass } from "./styles";

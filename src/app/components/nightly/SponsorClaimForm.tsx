@@ -2,7 +2,7 @@
 
 import { LoadingButton } from "@/app/components/ui/LoadingButton";
 import type { ClaimFormState } from "@/app/lib/nightly/flows";
-import { QUALIFYING_ROLES_TEXT } from "@/app/lib/nightly/messages";
+import { QUALIFYING_ROLES_TEXT } from "../../../../supabase/functions/_shared/nightly/policy";
 import { useActionState } from "react";
 import { MAXIMUM_SPONSOR_CODE_LENGTH } from "../../../../supabase/functions/_shared/nightly/formats";
 import { alertClass, primaryButtonClass } from "./styles";

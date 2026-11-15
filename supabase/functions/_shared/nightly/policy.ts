@@ -26,6 +26,9 @@ export const NIGHTLY_ACCESS_ROLE_IDS = Object.freeze([
     "1551834978570997792", // Competition Winner; eligible but not advertised on the website.
 ]);
 
+/** The qualifying roles as every nightly page spells them; Competition Winner is deliberately not advertised. */
+export const QUALIFYING_ROLES_TEXT = "Staff, Tester, Patreon, Boosty, or Afdian";
+
 export const DEVICE_SESSION_SECONDS = 10 * 60;
 export const DEVICE_POLL_INTERVAL_SECONDS = 3;
 export const DOWNLOAD_SESSION_SECONDS = 60 * 60;

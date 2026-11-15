@@ -40,10 +40,10 @@ These calls run server-side, from Next.js route handlers and server actions. Eve
 
 | Edge Function route | Body | Response |
 |---|---|---|
-| `POST /oauth/start` | `{purpose: "device", user_code}` or `{purpose: "sponsor-portal"}` | `200 {authorize_url}`. It stores the state hash (`device_sessions.oauth_state_hash` for `device`, `oauth_states` for `sponsor-portal`). Errors: `400 invalid_code`, `400 expired` |
+| `POST /oauth/start` | `{purpose: "device", user_code}` or `{purpose: "sponsor-portal"}` | `200 {authorize_url}`. It stores the state hash (`device_sessions.oauth_state_hash` for `device`, `oauth_states` for `sponsor-portal`). Errors: `400 invalid_request` (unknown purpose or malformed body), `400 invalid_code`, `400 expired` |
 | `POST /oauth/complete` | `{code, state}` | `200` with one of the outcomes below. The state is checked before any Discord call, so an unknown, expired or replayed state returns `400 expired`. Other errors: `400 invalid_request`, `403 supporter_role_required` (portal login without a qualifying role), `502 discord_*` |
-| `POST /sponsorship/claim` | `{device_id, sponsor_code}` | `200 {outcome: "sponsored-approved"}`. Errors: `400 expired`, `403 invalid_sponsor_code`, `403 supporter_role_required`, `409 already_sponsored`, `409 seats_full` |
-| `POST /sponsor/portal` | `{session}` | `200 {seats: [{discord_user_id, created_at}]}`. The 10-seat limit is the shared `SPONSORED_ACCOUNT_LIMIT`, not part of the response. Errors: `401 authorization_required`/`authorization_expired`, `403 supporter_role_required` |
+| `POST /sponsorship/claim` | `{device_id, sponsor_code}` | `200 {outcome: "sponsored-approved"}`. Errors: `400 invalid_request`, `400 expired`, `403 invalid_sponsor_code`, `403 supporter_role_required`, `409 already_sponsored`, `409 seats_full`, `502 discord_*`, `500 internal_error` |
+| `POST /sponsor/portal` | `{session}` | `200 {seats: [{discord_user_id, created_at}]}`. The 10-seat limit is the shared `SPONSORED_ACCOUNT_LIMIT`, not part of the response. Errors: `401 authorization_required`/`authorization_expired`, `403 supporter_role_required`, `502 discord_*`, `500 internal_error` |
 | `POST /sponsor/code` | `{session}` | `200 {code: "XXXX-XXXX-XXXX"}`, displayed once. Error: `401` |
 | `POST /sponsor/remove` | `{session, discord_user_id}` | `204`. Errors: `401`, `400 invalid_request` |
 

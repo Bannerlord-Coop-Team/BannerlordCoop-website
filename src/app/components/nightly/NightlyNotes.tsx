@@ -1,5 +1,5 @@
 import { DISCORD_INVITE_URL, WINDOWS_INSTALLER_FILENAME, WINDOWS_INSTALLER_URL } from "@/app/lib/nightly/links";
-import { QUALIFYING_ROLES_TEXT } from "@/app/lib/nightly/messages";
+import { QUALIFYING_ROLES_TEXT } from "../../../../supabase/functions/_shared/nightly/policy";
 import type { ReactNode } from "react";
 import { primaryButtonClass, secondaryButtonClass } from "./styles";
 

@@ -1,4 +1,4 @@
-import { SPONSORED_ACCOUNT_LIMIT } from "../../../../supabase/functions/_shared/nightly/policy";
+import { QUALIFYING_ROLES_TEXT, SPONSORED_ACCOUNT_LIMIT } from "../../../../supabase/functions/_shared/nightly/policy";
 
 /** Every step an Edge Function error can surface in; the same code can need different wording per step. */
 export const NIGHTLY_ERROR_CONTEXTS = [
@@ -14,8 +14,6 @@ export type NightlyErrorHelp = "sponsor-code" | null;
 /** The canned message and optional help panel the error page renders. */
 export type NightlyErrorView = { message: string; help: NightlyErrorHelp };
 
-/** The Discord roles that qualify for nightly access, as every nightly page spells them. */
-export const QUALIFYING_ROLES_TEXT = "Staff, Tester, Patreon, Boosty, or Afdian";
 export const GENERIC_ERROR_MESSAGE = "Access could not be verified. Run the installer again or ask in the Bannerlord Co-op Discord.";
 export const ROLE_REQUIRED_MESSAGE = `A ${QUALIFYING_ROLES_TEXT} role is required.`;
 export const INSTALLER_AUTHORIZATION_EXPIRED_MESSAGE = "That installer authorization has expired.";
