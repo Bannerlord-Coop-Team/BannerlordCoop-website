@@ -1,13 +1,21 @@
 import "server-only";
-import { createNightlyClient, type NightlyClient } from "./client";
+import { createNightlyClient, type NightlyClient, type NightlyFetch } from "./client";
 import { readNightlyConfig } from "./config";
+import { loggingFetch, reportConfigInvalid, type NightlyLogger } from "./diagnostics";
 
-/** Composition root: wires the nightly client to the Worker's server-only env and the global fetch. */
+const globalFetch: NightlyFetch = (input, init) => fetch(input, init);
+const logError: NightlyLogger = (entry) => console.error(entry);
+
+/** Composition root: wires the nightly client to the Worker's server-only env, the global fetch and console logging. */
 export function getNightlyClient(): NightlyClient {
     const config = readNightlyConfig({
         NIGHTLY_FUNCTION_URL: process.env.NIGHTLY_FUNCTION_URL,
         NIGHTLY_WEBSITE_KEY: process.env.NIGHTLY_WEBSITE_KEY,
         NODE_ENV: process.env.NODE_ENV,
     });
-    return createNightlyClient(config, (input, init) => fetch(input, init));
+    if (config === null) {
+        reportConfigInvalid(logError);
+        return createNightlyClient(null, globalFetch);
+    }
+    return createNightlyClient(config, loggingFetch(globalFetch, config.functionUrl, logError));
 }

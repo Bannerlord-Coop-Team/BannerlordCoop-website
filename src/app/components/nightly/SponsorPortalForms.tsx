@@ -1,15 +1,13 @@
 "use client";
 
 import { LoadingButton } from "@/app/components/ui/LoadingButton";
+import type { CreateCodeState, RemoveSeatState } from "@/app/lib/nightly/flows";
 import { useActionState } from "react";
 import { alertClass, primaryButtonClass, textButtonClass } from "./styles";
 
-/** Result of the create-code action: the new code is shown once, or an error message. */
-export type CreateCodeState = { code: string | null; error: string | null };
+export type { CreateCodeState, RemoveSeatState };
 export type CreateCodeAction = (state: CreateCodeState, form: FormData) => Promise<CreateCodeState>;
 
-/** Result of the remove-seat action; success redirects back to the portal, so only errors come back. */
-export type RemoveSeatState = { error: string | null };
 export type RemoveSeatAction = (state: RemoveSeatState, form: FormData) => Promise<RemoveSeatState>;
 
 /** Rotates the sponsor code through the injected action and shows the new code exactly once. */

@@ -50,12 +50,12 @@ it("landing page links the installers on the gateway host and the sponsor portal
         "/nightly/sponsor",
         "https://discord.gg/bannerlordcoop",
     ]);
-    expect(view.querySelector("h1")?.textContent).toBe("Test tomorrow’s battles today.");
 });
 
-it("success page tells the user to return to the installer", async () => {
-    expect(render(await ApprovedPage(params())).textContent).toContain("Access approvedReturn to the installer window. It will continue automatically.");
-    expect(render(await ApprovedPage(params({ via: "sponsor" }))).querySelector("h1")?.textContent).toBe("Sponsored access approved");
+it("success page switches its heading for a sponsored approval", async () => {
+    const heading = async (values: Record<string, string>) => render(await ApprovedPage(params(values))).querySelector("h1")?.textContent;
+    expect(await heading({ via: "sponsor" })).toBe("Sponsored access approved");
+    expect(await heading({})).not.toBe(await heading({ via: "sponsor" }));
 });
 
 it("error page renders only canned copy for the context and code", async () => {

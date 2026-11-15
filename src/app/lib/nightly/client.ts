@@ -1,4 +1,14 @@
 import type { NightlyConfig } from "./config";
+import {
+    DEVICE_ID_PATTERN,
+    DISCORD_SNOWFLAKE_PATTERN,
+    ERROR_CODE_PATTERN,
+    isValidUsername,
+    SESSION_TOKEN_PATTERN,
+    SPONSOR_CODE_PATTERN,
+} from "./formats";
+
+export { DISCORD_SNOWFLAKE_PATTERN, SESSION_TOKEN_PATTERN } from "./formats";
 
 /** A failed Edge Function call: HTTP status (0 when no response arrived) and a sanitized error code. */
 export type NightlyFailure = { ok: false; status: number; code: string };
@@ -26,11 +36,6 @@ export type NightlyClient = {
 };
 
 export const NIGHTLY_WEBSITE_KEY_HEADER = "x-nightly-website-key";
-export const SESSION_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
-export const DISCORD_SNOWFLAKE_PATTERN = /^\d{17,20}$/u;
-const SPONSOR_CODE_PATTERN = /^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/u;
-const ERROR_CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/u;
-const DEVICE_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/u;
 const MAXIMUM_RESPONSE_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MILLISECONDS = 15_000;
 const DISCORD_AUTHORIZE_ORIGIN = "https://discord.com";
@@ -144,17 +149,19 @@ export function decodeOAuthOutcome(body: unknown): OAuthOutcome | undefined {
     return undefined;
 }
 
-/** Validates a sponsor-portal login outcome. */
+/** Validates a sponsor-portal login outcome; the session lifetime must be a positive whole number of seconds. */
 function decodePortalOutcome(body: Record<string, unknown>): OAuthOutcome | undefined {
     if (typeof body.session !== "string" || !SESSION_TOKEN_PATTERN.test(body.session)) return undefined;
-    const expiresIn = typeof body.expires_in === "number" && body.expires_in > 0 ? body.expires_in : 86_400;
-    return { outcome: "portal", session: body.session, expires_in: Math.floor(expiresIn) };
+    if (typeof body.expires_in !== "number") return undefined;
+    const expiresIn = Math.floor(body.expires_in);
+    if (!Number.isSafeInteger(expiresIn) || expiresIn <= 0) return undefined;
+    return { outcome: "portal", session: body.session, expires_in: expiresIn };
 }
 
 /** Validates a needs-sponsor outcome, bounding the identifiers carried to the claim form. */
 function decodeNeedsSponsor(body: Record<string, unknown>): OAuthOutcome | undefined {
     if (typeof body.device_id !== "string" || !DEVICE_ID_PATTERN.test(body.device_id)) return undefined;
-    if (typeof body.username !== "string" || body.username.length === 0 || body.username.length > 100) return undefined;
+    if (!isValidUsername(body.username)) return undefined;
     return {
         outcome: "needs-sponsor",
         device_id: body.device_id,
@@ -182,8 +189,14 @@ export function decodePortal(body: unknown): SponsorPortalData | undefined {
 
 /** Reads a seat timestamp given as Unix seconds or an ISO string. */
 function seatDate(value: unknown): Date | null {
-    const date = typeof value === "number" ? new Date(value * 1000) : typeof value === "string" ? new Date(value) : null;
-    if (date === null || Number.isNaN(date.getTime())) return null;
+    if (typeof value === "number") return validDate(new Date(value * 1000));
+    if (typeof value === "string") return validDate(new Date(value));
+    return null;
+}
+
+/** Returns the date, or null when it does not hold a real point in time. */
+function validDate(date: Date): Date | null {
+    if (Number.isNaN(date.getTime())) return null;
     return date;
 }
 

@@ -1,9 +1,8 @@
-import { SESSION_TOKEN_PATTERN } from "./client";
+import { DEVICE_ID_PATTERN, isValidUsername, SESSION_TOKEN_PATTERN } from "./formats";
 
 export const SPONSOR_COOKIE = "nightly_sponsor";
 export const CLAIM_COOKIE = "nightly_claim";
 export const CLAIM_COOKIE_SECONDS = 10 * 60;
-export const SPONSOR_SESSION_SECONDS = 24 * 60 * 60;
 
 /** Pending sponsor claim carried from the Discord callback to the claim form. */
 export type ClaimContext = { deviceId: string; username: string; previousSponsorRevoked: boolean };
@@ -16,7 +15,6 @@ export type CookieOptions = {
     maxAge: number;
 };
 
-const DEVICE_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/u;
 const MAXIMUM_CLAIM_COOKIE_LENGTH = 1024;
 
 /** Cookie attributes shared by both nightly cookies (contract §2: Path=/nightly; HttpOnly; Secure; SameSite=Lax). */
@@ -55,6 +53,6 @@ export function decodeClaimContext(value: string | undefined): ClaimContext | nu
     if (typeof parsed !== "object" || parsed === null) return null;
     const { d, u, r } = parsed as Record<string, unknown>;
     if (typeof d !== "string" || !DEVICE_ID_PATTERN.test(d)) return null;
-    if (typeof u !== "string" || u.length === 0 || u.length > 100) return null;
+    if (!isValidUsername(u)) return null;
     return { deviceId: d, username: u, previousSponsorRevoked: r === true };
 }

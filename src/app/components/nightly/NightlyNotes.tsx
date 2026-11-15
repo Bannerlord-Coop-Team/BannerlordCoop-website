@@ -1,4 +1,5 @@
 import { DISCORD_INVITE_URL, WINDOWS_INSTALLER_URL } from "@/app/lib/nightly/links";
+import { QUALIFYING_ROLES_TEXT } from "@/app/lib/nightly/messages";
 import type { ReactNode } from "react";
 import { secondaryButtonClass } from "./styles";
 
@@ -58,8 +59,8 @@ export function SponsorCodeHelp() {
 export function PreviousSponsorRevokedHelp() {
     return (
         <HelpPanel title="Previous sponsor access ended">
-            The friend who sponsored this Discord account no longer has a qualifying Staff, Tester, Patreon, Boosty, or Afdian
-            role. Enter a new sponsor code below.
+            The friend who sponsored this Discord account no longer has a qualifying {QUALIFYING_ROLES_TEXT} role. Enter a new
+            sponsor code below.
         </HelpPanel>
     );
 }

@@ -1,8 +1,8 @@
 import type { SponsorPortalData, SponsorSeat } from "@/app/lib/nightly/client";
+import { QUALIFYING_ROLES_TEXT, SPONSOR_SEAT_LIMIT } from "@/app/lib/nightly/messages";
 import { CreateSponsorCodeForm, RemoveSeatForm, type CreateCodeAction, type RemoveSeatAction } from "./SponsorPortalForms";
 import { headingClass, ledeClass, primaryButtonClass } from "./styles";
 
-const ROLES = "Staff, Tester, Patreon, Boosty, or Afdian";
 const seatDateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: "UTC" });
 
 /** Renders the signed-in sponsor's seats with the create-code and remove-seat actions. */
@@ -20,7 +20,7 @@ export function SponsorPortal({ data, createCode, removeSeat }: {
                     <h1 className={headingClass}>Your <span className="text-crimson">warband.</span></h1>
                     <p className={ledeClass}>
                         Create a code for friends to use during installation. Their access remains tied to your current qualifying
-                        {` ${ROLES} `}Discord role.
+                        {` ${QUALIFYING_ROLES_TEXT} `}Discord role.
                     </p>
                 </div>
                 <div className="inline-flex shrink-0 items-center gap-3 self-start border border-gold/25 bg-gold/[0.04] px-4 py-3 lg:self-auto" aria-label={`${used} of ${data.limit} seats used`}>
@@ -84,7 +84,8 @@ export function SponsorLogin({ expired }: { expired: boolean }) {
                 </p>
             )}
             <p className={ledeClass}>
-                Staff, Testers, and Patreon, Boosty, or Afdian supporters can each share nightly access with up to 10 Discord accounts.
+                Members with a qualifying {QUALIFYING_ROLES_TEXT} role can each share nightly access with up to {SPONSOR_SEAT_LIMIT} Discord
+                accounts.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-4">
                 <a className={primaryButtonClass} href="/nightly/sponsor/login">
@@ -92,7 +93,7 @@ export function SponsorLogin({ expired }: { expired: boolean }) {
                 </a>
             </div>
             <p className="mt-8 max-w-xl border-t border-white/10 pt-5 text-xs leading-6 text-foreground-dim">
-                We verify your qualifying {ROLES} Discord role when you sign in and whenever a sponsored friend installs or updates.
+                We verify your qualifying {QUALIFYING_ROLES_TEXT} Discord role when you sign in and whenever a sponsored friend installs or updates.
             </p>
         </>
     );

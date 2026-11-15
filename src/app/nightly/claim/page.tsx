@@ -4,7 +4,7 @@ import { NightlyError } from "@/app/components/nightly/NightlyStatus";
 import { SponsorClaimForm } from "@/app/components/nightly/SponsorClaimForm";
 import { headingClass, ledeClass } from "@/app/components/nightly/styles";
 import { CLAIM_COOKIE, decodeClaimContext } from "@/app/lib/nightly/cookies";
-import { INSTALLER_AUTHORIZATION_EXPIRED_MESSAGE } from "@/app/lib/nightly/messages";
+import { INSTALLER_AUTHORIZATION_EXPIRED_MESSAGE, QUALIFYING_ROLES_TEXT } from "@/app/lib/nightly/messages";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import { claimSponsorSeat } from "./actions";
@@ -29,7 +29,7 @@ export default async function SponsorClaimPage() {
             </p>
             <h1 className={headingClass}>One more step to <span className="text-crimson">ride.</span></h1>
             <p className={ledeClass}>
-                This Discord account does not currently have a qualifying Staff, Tester, Patreon, Boosty, or Afdian role.
+                This Discord account does not currently have a qualifying {QUALIFYING_ROLES_TEXT} role.
             </p>
             {claim.previousSponsorRevoked && <PreviousSponsorRevokedHelp />}
             <div className="mb-5 mt-8 flex items-center gap-4 font-label text-xs font-semibold uppercase tracking-[0.2em] text-gold after:h-px after:flex-1 after:bg-gold/25">
@@ -37,8 +37,8 @@ export default async function SponsorClaimPage() {
             </div>
             <SponsorClaimForm action={claimSponsorSeat} />
             <SupportNote title="Already eligible?">
-                Make sure the correct Discord account has a qualifying Staff or Tester role or is connected to your Patreon, Boosty,
-                or Afdian membership, then restart the installer.
+                Make sure the correct Discord account has a qualifying {QUALIFYING_ROLES_TEXT} role (supporter roles come from
+                the membership connected to that account), then restart the installer.
             </SupportNote>
         </NightlyCard>
     );

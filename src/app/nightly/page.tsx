@@ -1,6 +1,7 @@
 import { NightlyCard } from "@/app/components/nightly/NightlyCard";
 import { headingClass, ledeClass, primaryButtonClass, secondaryButtonClass } from "@/app/components/nightly/styles";
 import { DISCORD_INVITE_URL, LINUX_INSTALLER_URL, WINDOWS_INSTALLER_URL } from "@/app/lib/nightly/links";
+import { QUALIFYING_ROLES_TEXT } from "@/app/lib/nightly/messages";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -32,7 +33,7 @@ export default function NightlyAccessPage() {
             </h1>
             <p className={ledeClass}>
                 Install or update the Bannerlord Co-op client, Windows dedicated server, or both. Nightly builds are available to
-                Staff, Testers, and Patreon, Boosty, and Afdian supporters, plus their sponsored friends.
+                members with a qualifying {QUALIFYING_ROLES_TEXT} role, plus their sponsored friends.
             </p>
             <ol className="mt-8 grid gap-px bg-white/10 sm:grid-cols-2">
                 {steps.map((step) => (
