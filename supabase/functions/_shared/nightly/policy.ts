@@ -5,12 +5,12 @@
 export const SPONSORED_ACCOUNT_LIMIT = 10;
 
 export const DISCORD_GUILD_ID = "709516043332354119";
-export const SUPPORTER_ROLE_IDS = Object.freeze([
+const SUPPORTER_ROLE_IDS = Object.freeze([
     "1532151760012050452", // Patreon supporter
     "1532744756151455834", // Boosty supporter
     "1533090199104524338", // Afdian supporter
 ]);
-export const STAFF_ROLE_IDS = Object.freeze([
+const STAFF_ROLE_IDS = Object.freeze([
     "730945590011232296", // Helper
     "711610715152056331", // Mod Developer
     "750401609045115114", // Trial Dev
@@ -18,8 +18,8 @@ export const STAFF_ROLE_IDS = Object.freeze([
     "730631536122003548", // Community Manager
     "730631233524072588", // Project Lead
 ]);
-export const TESTER_ROLE_ID = "710222948375593010";
-export const NIGHTLY_ACCESS_ROLE_IDS = Object.freeze([
+const TESTER_ROLE_ID = "710222948375593010";
+const NIGHTLY_ACCESS_ROLE_IDS = Object.freeze([
     ...SUPPORTER_ROLE_IDS,
     ...STAFF_ROLE_IDS,
     TESTER_ROLE_ID,

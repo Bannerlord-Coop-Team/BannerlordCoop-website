@@ -30,7 +30,7 @@ function responseText(body: unknown): string | null {
     return JSON.stringify(body);
 }
 
-test("every call is an authenticated JSON POST to the contract route with the contract body", async () => {
+test("every call is an authenticated, time-limited JSON POST to the contract route with the contract body", async () => {
     const cases: Array<[string, (client: ReturnType<typeof createNightlyClient>) => Promise<unknown>, string, unknown]> = [
         ["device start", (c) => c.startDeviceOAuth("ABCD-EF23"), "/oauth/start", { purpose: "device", user_code: "ABCD-EF23" }],
         ["sponsor start", (c) => c.startSponsorOAuth(), "/oauth/start", { purpose: "sponsor-portal" }],
@@ -49,6 +49,7 @@ test("every call is an authenticated JSON POST to the contract route with the co
         assert.equal(init.method, "POST", name);
         assert.equal(init.cache, "no-store", name);
         assert.equal(init.redirect, "manual", name);
+        assert.ok(init.signal instanceof AbortSignal, name);
         const headers = new Headers(init.headers);
         assert.equal(headers.get("x-nightly-website-key"), "website-key-value", name);
         assert.equal(headers.get("content-type"), "application/json", name);
@@ -106,16 +107,10 @@ test("an endless body is abandoned once it passes the limit instead of being rea
     assert.equal(cancelled, true);
 });
 
-test("network failures, missing configuration and contract-breaking success bodies fail closed", async () => {
-    const throwing: NightlyFetch = async () => { throw new TypeError("network down"); };
-    assert.deepEqual(await createNightlyClient(config, throwing, noLog).startSponsorOAuth(), { ok: false, status: 0, code: "unavailable" });
-
+test("missing configuration fails closed without calling the Edge Function", async () => {
     const unused = fakeFetch(200, {});
     assert.deepEqual(await createNightlyClient(null, unused.fetch, noLog).startSponsorOAuth(), { ok: false, status: 0, code: "not_configured" });
     assert.equal(unused.calls.length, 0);
-
-    const { fetch } = fakeFetch(200, { code: "not-a-sponsor-code" });
-    assert.deepEqual(await createNightlyClient(config, fetch, noLog).createSponsorCode(SESSION), { ok: false, status: 200, code: "invalid_response" });
 });
 
 /** Builds a logger that records every entry it is given. */

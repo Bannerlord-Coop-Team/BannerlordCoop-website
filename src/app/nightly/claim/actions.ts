@@ -2,6 +2,7 @@
 
 import { CLAIM_COOKIE, decodeClaimContext } from "@/app/lib/nightly/cookies";
 import { claimActionResult, type ClaimFormState } from "@/app/lib/nightly/flows";
+import { SPONSOR_CODE_FIELD } from "@/app/lib/nightly/form-fields";
 import { getNightlyClient } from "@/app/lib/nightly/server";
 import { cookies } from "next/headers";
 import { carryOut, submittedFromThisSite } from "../action-effects";
@@ -12,5 +13,5 @@ export async function claimSponsorSeat(_state: ClaimFormState, form: FormData): 
         sameOrigin: await submittedFromThisSite(),
         claim: decodeClaimContext((await cookies()).get(CLAIM_COOKIE)?.value),
     };
-    return carryOut(await claimActionResult(getNightlyClient(), request, form.get("sponsor_code")));
+    return carryOut(await claimActionResult(getNightlyClient(), request, form.get(SPONSOR_CODE_FIELD)));
 }

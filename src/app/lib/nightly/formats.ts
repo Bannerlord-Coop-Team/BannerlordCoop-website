@@ -3,12 +3,10 @@ import { SECRET_TOKEN_PATTERN } from "../../../../supabase/functions/_shared/nig
 
 /** The sponsor-portal session token carried in the `nightly_sponsor` cookie. */
 export const SESSION_TOKEN_PATTERN = SECRET_TOKEN_PATTERN;
-/** The OAuth `state` Discord echoes back to `/nightly/callback`. */
-export const OAUTH_STATE_PATTERN = SECRET_TOKEN_PATTERN;
 /** The `{error}` code of a failed Edge Function call. */
 export const ERROR_CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/u;
 /** Longest Discord username the website carries or renders. */
-export const MAXIMUM_USERNAME_LENGTH = 100;
+const MAXIMUM_USERNAME_LENGTH = 100;
 
 /** Whether a value is a non-empty username within the carried bound. */
 export function isValidUsername(value: unknown): value is string {

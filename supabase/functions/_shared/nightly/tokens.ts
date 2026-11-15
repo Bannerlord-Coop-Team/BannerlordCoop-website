@@ -18,7 +18,7 @@ export function randomToken(random: RandomBytes): string {
 }
 
 /** Creates `length` characters from the unambiguous code alphabet. */
-export function randomCode(random: RandomBytes, length: number): string {
+function randomCode(random: RandomBytes, length: number): string {
     return Array.from(random(length), (byte) => CODE_ALPHABET[byte % CODE_ALPHABET.length]).join("");
 }
 
@@ -35,8 +35,8 @@ export function randomSponsorCode(random: RandomBytes): string {
 /** Creates an RFC 4122 version-4 UUID from the injected random source. */
 export function randomUuid(random: RandomBytes): string {
     const bytes = random(16);
-    bytes[6] = (bytes[6]! & 0x0f) | 0x40;
-    bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+    bytes[6] = (bytes[6]! & 0x0f) | 0x40; // version 4
+    bytes[8] = (bytes[8]! & 0x3f) | 0x80; // RFC 4122 variant (10xx)
     const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
     return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }

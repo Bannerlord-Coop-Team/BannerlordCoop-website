@@ -9,7 +9,7 @@ import {
 } from "./device.ts";
 import type { DiscordUser } from "./discord.ts";
 import { revokeSponsorIfIneligible } from "./eligibility.ts";
-import { MAXIMUM_OAUTH_CODE_LENGTH, normalizeUserCode, SECRET_TOKEN_PATTERN, USER_CODE_PATTERN } from "./formats.ts";
+import { isWellFormedOAuthCallback, normalizeUserCode, USER_CODE_PATTERN } from "./formats.ts";
 import { storeSupporterGrant } from "./grants.ts";
 import { GatewayError, json } from "./http.ts";
 import { hasNightlyAccessRole, OAUTH_STATE_SECONDS, SPONSOR_SESSION_SECONDS } from "./policy.ts";
@@ -18,16 +18,6 @@ import { randomToken, sha256 } from "./tokens.ts";
 
 /** What the sponsor-code form tells the friend: whether a previous sponsor's seat was just revoked. */
 type SponsorCodeNotice = { previousSponsorRevoked: boolean };
-
-/** A well-formed `/oauth/complete` body: Discord's authorization code and a gateway-issued state. */
-type CompleteRequest = { code: string; state: string };
-
-/** Whether a website body carries a plausible authorization code and a well-formed OAuth state. */
-function isValidCompleteRequest(body: Record<string, unknown>): body is Record<string, unknown> & CompleteRequest {
-    const { code, state } = body;
-    return typeof code === "string" && code.length > 0 && code.length <= MAXIMUM_OAUTH_CODE_LENGTH
-        && typeof state === "string" && SECRET_TOKEN_PATTERN.test(state);
-}
 
 /** `POST /oauth/start`: stores a state hash for the device or sponsor-portal flow and returns Discord's URL. */
 export async function startOAuth(context: GatewayContext, body: Record<string, unknown>): Promise<Response> {
@@ -38,7 +28,7 @@ export async function startOAuth(context: GatewayContext, body: Record<string, u
 
 /** `POST /oauth/complete`: resolves the state to a portal login or a device session and finishes that flow. */
 export async function completeOAuth(context: GatewayContext, body: Record<string, unknown>): Promise<Response> {
-    if (!isValidCompleteRequest(body)) throw new GatewayError(400, "invalid_request");
+    if (!isWellFormedOAuthCallback(body)) throw new GatewayError(400, "invalid_request");
     const stateHash = await sha256(body.state);
     if (await consumePortalState(context.db, stateHash, context.now())) return completePortalLogin(context, body.code);
     const deviceId = await findAuthorizableDeviceByState(context.db, stateHash, context.now());

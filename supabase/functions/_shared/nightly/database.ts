@@ -4,13 +4,18 @@
 // (postgres-pool.ts registers it).
 
 /** A PostgreSQL SQLSTATE error code: five digits or capitals, like 23505. */
-export const SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/;
+const SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/;
 /** A Node-style errno code naming a failed dependency, like ECONNREFUSED or ETIMEDOUT; checked before SQLSTATE. */
 const ERRNO_CODE_PATTERN = /^E[A-Z]{2,20}$/;
 
+/** The `code` property of a thrown value, when it is an object that has one. */
+function codeOf(error: unknown): unknown {
+    return typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
+}
+
 /** The error's errno code (naming a failed connection or timeout) or else its PostgreSQL SQLSTATE, when well-formed. */
 export function driverCode(error: unknown): { code?: string; sqlstate?: string } {
-    const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
+    const code = codeOf(error);
     if (typeof code !== "string") return {};
     if (ERRNO_CODE_PATTERN.test(code)) return { code };
     if (SQLSTATE_PATTERN.test(code)) return { sqlstate: code };
@@ -52,7 +57,7 @@ export class DatabaseUnavailableError extends Error {
 
     constructor(cause: unknown) {
         super("nightly_database_unavailable", { cause });
-        this.code = typeof cause === "object" && cause !== null ? (cause as { code?: unknown }).code : undefined;
+        this.code = codeOf(cause);
     }
 }
 
@@ -68,7 +73,7 @@ export function firstRow<T>(result: QueryResult<T>): T | null {
 
 /** Whether an error is PostgreSQL's unique_violation (SQLSTATE 23505). */
 export function isUniqueViolation(error: unknown): boolean {
-    return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "23505";
+    return codeOf(error) === "23505";
 }
 
 // Runs each statement, and each transaction, on a connection leased for it alone, so outages surface one way.

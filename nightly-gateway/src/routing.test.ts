@@ -52,7 +52,7 @@ function formRequest(origin: string, path: string, body: string): Request {
     });
 }
 
-test("device session creation is forwarded and the gateway adds its own activation link", async () => {
+test("device session creation is forwarded with a timeout and the gateway adds its own activation link", async () => {
     const upstream = recordingFetch(() => Response.json(SESSION, { status: 201 }));
     const gateway = createGateway({ fetch: upstream.fetch, log: noLog });
 
@@ -67,6 +67,7 @@ test("device session creation is forwarded and the gateway adds its own activati
     assert.equal(call.url, `${FUNCTION_URL}/v1/device/sessions`);
     assert.equal(call.init.method, "POST");
     assert.equal(call.init.redirect, "manual");
+    assert.ok(call.init.signal instanceof AbortSignal);
     assert.equal(call.body, "client=installer");
     const headers = new Headers(call.init.headers);
     assert.equal(headers.get("content-type"), "application/x-www-form-urlencoded");

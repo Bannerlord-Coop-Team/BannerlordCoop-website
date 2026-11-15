@@ -229,7 +229,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 /** Accepts only a Discord authorize URL, so a compromised upstream cannot turn activation into an open redirect. */
-export function decodeAuthorizeUrl(body: unknown): string | undefined {
+function decodeAuthorizeUrl(body: unknown): string | undefined {
     if (!isRecord(body) || typeof body.authorize_url !== "string") return undefined;
     let url: URL;
     try {

@@ -2,6 +2,7 @@
 
 import { LoadingButton } from "@/app/components/ui/LoadingButton";
 import type { CreateCodeState, RemoveSeatState } from "@/app/lib/nightly/flows";
+import { SEAT_USER_FIELD } from "@/app/lib/nightly/form-fields";
 import { useActionState } from "react";
 import { SPONSORED_ACCOUNT_LIMIT } from "../../../../supabase/functions/_shared/nightly/policy";
 import { alertClass, primaryButtonClass, textButtonClass } from "./styles";
@@ -44,7 +45,7 @@ export function RemoveSeatForm({ action, discordUserId }: { action: RemoveSeatAc
     const [state, formAction] = useActionState(action, { error: null });
     return (
         <form action={formAction} className="flex flex-col items-start gap-1 sm:items-end">
-            <input type="hidden" name="discord_user_id" value={discordUserId} />
+            <input type="hidden" name={SEAT_USER_FIELD} value={discordUserId} />
             <LoadingButton className={textButtonClass} pendingText="Removing…" aria-label={`Remove access for Discord account ${discordUserId}`}>
                 Remove access
             </LoadingButton>

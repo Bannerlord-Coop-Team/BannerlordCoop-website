@@ -2,6 +2,7 @@
 
 import { LoadingButton } from "@/app/components/ui/LoadingButton";
 import type { ClaimFormState } from "@/app/lib/nightly/flows";
+import { SPONSOR_CODE_FIELD } from "@/app/lib/nightly/form-fields";
 import { QUALIFYING_ROLES_TEXT } from "../../../../supabase/functions/_shared/nightly/policy";
 import { useActionState } from "react";
 import { MAXIMUM_SPONSOR_CODE_LENGTH } from "../../../../supabase/functions/_shared/nightly/formats";
@@ -20,7 +21,7 @@ export function SponsorClaimForm({ action }: { action: ClaimFormAction }) {
             <div className="flex flex-col gap-3 sm:flex-row">
                 <input
                     id="sponsor-code"
-                    name="sponsor_code"
+                    name={SPONSOR_CODE_FIELD}
                     required
                     maxLength={MAXIMUM_SPONSOR_CODE_LENGTH}
                     autoComplete="off"

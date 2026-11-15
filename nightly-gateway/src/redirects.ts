@@ -1,4 +1,4 @@
-export const WEBSITE_NIGHTLY_URL = "https://bannerlordcoop.com/nightly";
+const WEBSITE_NIGHTLY_URL = "https://bannerlordcoop.com/nightly";
 
 /** A browser redirect from a retired gateway page to its bannerlordcoop.com/nightly replacement. */
 export type WebsiteRedirect = { location: string; status: 301 | 302 };

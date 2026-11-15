@@ -907,8 +907,7 @@ function Test-NightlyTransientPollFailure {
     if ($StatusCode -eq 408 -or $StatusCode -eq 429) { return $true }
     if ($StatusCode -lt 500) { return $false }
     if (-not $ErrorCode) { return $true }
-    return $ErrorCode -ceq 'internal_error' -or
-        $ErrorCode -ceq 'function_unreachable' -or $ErrorCode -ceq 'function_response_invalid'
+    return $ErrorCode -cin @('internal_error', 'function_unreachable', 'function_response_invalid')
 }
 
 # Classifies one Discord verification check into Continue, Accept, Retry or Fail.

@@ -14,13 +14,20 @@ export const MAXIMUM_SPONSOR_CODE_LENGTH = 128;
 /** Device session ids are lowercase RFC 4122 UUIDs. */
 export const DEVICE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 /** A Discord user id (snowflake). */
-export const DISCORD_SNOWFLAKE_PATTERN = /^\d{17,20}$/u;
+const DISCORD_SNOWFLAKE_PATTERN = /^\d{17,20}$/u;
 /** Header carrying the shared secret on every website-to-Edge-Function request. */
 export const WEBSITE_KEY_HEADER = "x-nightly-website-key";
 
 /** Whether a value is a Discord snowflake ID string. */
 export function isDiscordSnowflake(value: unknown): value is string {
     return typeof value === "string" && DISCORD_SNOWFLAKE_PATTERN.test(value);
+}
+
+/** Whether an OAuth callback carries a non-empty, bounded Discord authorization code and a well-formed gateway state. */
+export function isWellFormedOAuthCallback(fields: { code?: unknown; state?: unknown }): fields is { code: string; state: string } {
+    const { code, state } = fields;
+    return typeof code === "string" && code.length > 0 && code.length <= MAXIMUM_OAUTH_CODE_LENGTH
+        && typeof state === "string" && SECRET_TOKEN_PATTERN.test(state);
 }
 
 /** Normalizes a typed installer user code before validation, so case and padding do not matter. */

@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import {
-    MAXIMUM_OAUTH_CODE_LENGTH,
+    isWellFormedOAuthCallback,
     normalizeUserCode,
     USER_CODE_PATTERN,
 } from "../../../../supabase/functions/_shared/nightly/formats";
 import type { NightlyClient, NightlyResult, OAuthOutcome } from "./client";
-import { OAUTH_STATE_PATTERN } from "./formats";
 import type { NightlyErrorContext } from "./messages";
 import { errorPath, SPONSORED_APPROVED_PATH } from "./query-flags";
 import { applyPlanCookies, claimCookie, redirectPlan, sponsorSessionCookie, type RedirectPlan } from "./redirect-plan";
@@ -26,7 +25,7 @@ export async function planSponsorLogin(client: NightlyClient): Promise<RedirectP
 export async function planCallback(params: URLSearchParams, client: NightlyClient): Promise<RedirectPlan> {
     const code = params.get("code") ?? "";
     const state = params.get("state") ?? "";
-    if (!isWellFormedCallback(code, state)) return redirectPlan(errorPath("callback", "invalid_request"));
+    if (!isWellFormedOAuthCallback({ code, state })) return redirectPlan(errorPath("callback", "invalid_request"));
     const result = await client.completeOAuth(code, state);
     if (!result.ok) return redirectPlan(errorPath("callback", result.code));
     return planOutcome(result.value);
@@ -53,12 +52,6 @@ export function redirectResponse(redirect: RedirectPlan, requestUrl: string): Ne
     response.headers.set("referrer-policy", "no-referrer");
     applyPlanCookies(response.cookies, redirect.cookies);
     return response;
-}
-
-/** Whether Discord's callback carries a non-empty, bounded OAuth code and a well-formed state. */
-function isWellFormedCallback(code: string, state: string): boolean {
-    if (code.length === 0 || code.length > MAXIMUM_OAUTH_CODE_LENGTH) return false;
-    return OAUTH_STATE_PATTERN.test(state);
 }
 
 /** Redirects to Discord on success, otherwise to the matching error page. */
