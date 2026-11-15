@@ -1,91 +1,75 @@
 # Nightly gateway D1-to-Supabase cutover
 
-This runbook moves the nightly gateway's durable state into the private
-`nightly_gateway` schema without allowing D1 and PostgreSQL to accept writes at
-the same time. R2 release objects do not move.
+This runbook moved the nightly gateway's durable state from D1 into the private
+`nightly_gateway` schema without letting D1 and PostgreSQL accept writes at the
+same time. R2 release objects did not move.
 
-## Prepare
+## Status: the gateway database is PostgreSQL only
 
-1. Apply `supabase/migrations/202608260004_create_nightly_gateway_schema.sql`.
-2. Generate a unique database password and create the login through an
-   owner-authenticated PostgreSQL session:
+The cutover is complete. Since the Edge Function split, every device, sponsor,
+and OAuth write happens in the Supabase `nightly-gateway` Edge Function against
+PostgreSQL. The Worker reads and writes the same `nightly_gateway` schema
+through its `HYPERDRIVE` binding. It has no D1 binding and no
+`DATABASE_BACKEND` selector; a leftover `DATABASE_BACKEND` Worker secret is
+ignored.
 
-   ```sql
-   create role nightly_gateway_worker login password '<generated password>';
-   grant nightly_gateway_runtime to nightly_gateway_worker;
-   alter role nightly_gateway_worker set statement_timeout = '5s';
-   ```
+There is no D1 rollback route. A Worker pointed at D1 would look up
+`download_sessions` in a store nothing writes, and every newly issued token
+would fail with `401 authorization_expired`.
 
-3. In Cloudflare, create a cache-disabled Hyperdrive configuration for the
-   Supabase database with `nightly_gateway_worker`. Put its real ID in
-   `wrangler.jsonc`.
-4. Deploy this bridge release with both `LEGACY_DB` and `HYPERDRIVE` bound.
-   Before deploying it to an unmigrated environment, explicitly set
-   `DATABASE_BACKEND=legacy-d1`. Absence deliberately selects PostgreSQL and
-   fails closed if Hyperdrive is unavailable.
-5. Confirm a normal eligible-user gateway flow still works on D1.
+The `bannerlordcoop-nightly-access` D1 database stays in place, unbound and
+frozen. Do not delete it until retention is explicitly approved. The SQL under
+`nightly-gateway/migrations/` and `migrate-d1-to-postgres.mjs` are historical
+records of the import, not the live schema; `supabase/migrations/` owns that.
 
-## Lock, copy, and switch
+## Rolling back a gateway release
 
-Run from the repository root. The database connection supplied to the importer
-must use `nightly_gateway_worker`, not `postgres` or `service_role`.
+Roll back the Worker and the Edge Function together, because they share one
+schema and one device-API contract:
 
-1. Put the gateway into maintenance mode:
+1. Redeploy the previous Worker version (`npx --yes wrangler@4.40.2 versions
+   list --config nightly-gateway/wrangler.jsonc`, then `npx --yes
+   wrangler@4.40.2 rollback <version-id> --config nightly-gateway/wrangler.jsonc`).
+2. Redeploy the previous `nightly-gateway` Edge Function from the matching
+   commit with `supabase functions deploy nightly-gateway`.
+3. If the release also changed the `nightly_gateway` schema, roll forward with
+   a new Supabase migration instead of reverting it, so both components keep
+   reading the same tables.
 
-   ```sh
-   printf '%s' locked | npx --yes wrangler@4.40.2 secret put MIGRATION_MODE --config nightly-gateway/wrangler.jsonc
-   ```
+## Maintenance lock
 
-   `GET /health` must now return HTTP 503 with `maintenance: true`. All other
-   gateway requests also fail closed with HTTP 503, so the D1 snapshot cannot
-   race a new write.
+The Worker still honours a maintenance lock for any future data operation that
+must not race installer writes:
 
-2. Export D1 and import the snapshot in one verified PostgreSQL transaction:
+```sh
+printf '%s' locked | npx --yes wrangler@4.40.2 secret put MIGRATION_MODE --config nightly-gateway/wrangler.jsonc
+```
 
-   ```sh
-   read -rsp 'nightly_gateway_worker PostgreSQL URL: ' NIGHTLY_GATEWAY_DATABASE_URL
-   printf '\n'
-   printf '%s' "$NIGHTLY_GATEWAY_DATABASE_URL" | npm run gateway:migrate-d1 -- --connection-string-stdin
-   unset NIGHTLY_GATEWAY_DATABASE_URL
-   ```
+While locked, `GET /health` returns HTTP 503 with `maintenance: true` and every
+other Worker request fails closed with HTTP 503. The lock covers only the
+Worker; the Edge Function keeps accepting device, sponsor, and OAuth writes.
+Unlock with:
 
-   The importer creates an owner-only temporary D1 export, loads only the eight
-   fixed tables, rejects a non-empty target, verifies every table's row count,
-   commits atomically, and removes the export. It never prints row contents or
-   the connection string.
+```sh
+npx --yes wrangler@4.40.2 secret delete MIGRATION_MODE --config nightly-gateway/wrangler.jsonc
+```
 
-3. Switch the already-deployed Worker to PostgreSQL while maintenance remains
-   active:
+## What the cutover did (historical)
 
-   ```sh
-   printf '%s' postgres | npx --yes wrangler@4.40.2 secret put DATABASE_BACKEND --config nightly-gateway/wrangler.jsonc
-   ```
-
-4. Request `/health` again. HTTP 503 with `maintenance: true` now also proves
-   the Worker connected through Hyperdrive; a database connection failure
-   returns HTTP 500 instead.
-5. If that check fails, restore the D1 backend before unlocking:
-
-   ```sh
-   printf '%s' legacy-d1 | npx --yes wrangler@4.40.2 secret put DATABASE_BACKEND --config nightly-gateway/wrangler.jsonc
-   ```
-
-6. When the PostgreSQL health check succeeds, unlock traffic:
-
-   ```sh
-   npx --yes wrangler@4.40.2 secret delete MIGRATION_MODE --config nightly-gateway/wrangler.jsonc
-   ```
-
-## Verify and close the rollback window
-
-Verify one direct eligible-member install, one sponsored install, sponsor-seat
-listing/removal, and (when configured) one create-build pin. Confirm that new
-rows appear only in `nightly_gateway` and that D1 counts remain frozen.
-
-Keep the stopped D1 database and `LEGACY_DB` binding only for the short rollback
-window. Once PostgreSQL has accepted new writes, switching back to the frozen
-D1 snapshot would discard those writes; use a new maintenance window and an
-explicit reverse reconciliation instead. After acceptance, remove the D1
-binding, the `legacy-d1` selector path, and the old D1 migrations in a separate
-cleanup change. Do not delete the D1 database until retention is explicitly
-approved.
+1. Applied `supabase/migrations/202608260004_create_nightly_gateway_schema.sql`
+   and created the `nightly_gateway_worker` login (granted
+   `nightly_gateway_runtime`, `statement_timeout = '5s'`) through an
+   owner-authenticated session.
+2. Created a cache-disabled Hyperdrive configuration for that login and bound it
+   as `HYPERDRIVE`.
+3. Locked the gateway with `MIGRATION_MODE=locked`.
+4. Ran `npm run gateway:migrate-d1 -- --connection-string-stdin` with the
+   `nightly_gateway_worker` connection string. The importer exported D1 to an
+   owner-only temporary file, loaded only the fixed tables into an empty target,
+   verified every table's row count, committed atomically, and removed the
+   export without printing row contents or the connection string.
+5. Switched the Worker to PostgreSQL, verified a direct eligible-member install,
+   a sponsored install, sponsor-seat listing and removal, and a create-build
+   pin, then unlocked.
+6. Removed the D1 binding and the backend selector once the Edge Function took
+   over every device, sponsor, and OAuth write.

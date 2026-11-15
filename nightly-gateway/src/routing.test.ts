@@ -123,15 +123,18 @@ test("device token polling passes every status through without an activation lin
     }
 });
 
-test("an unreachable or broken Edge Function becomes a logged 502 with a named code and cause class", async () => {
-    const failures: Array<{ respond: () => Response | Promise<Response>; code: string; cause?: string }> = [
+test("an unreachable or broken Edge Function becomes a logged 502 with a named code, cause class and upstream status", async () => {
+    const failures: Array<{ respond: () => Response | Promise<Response>; code: string; cause?: string; upstreamStatus?: number }> = [
         { respond: () => Promise.reject(new TypeError("fetch failed")), code: "function_unreachable", cause: "TypeError" },
         { respond: () => Promise.reject(new DOMException("timed out", "TimeoutError")), code: "function_unreachable", cause: "TimeoutError" },
-        { respond: () => new Response("<html>Bad gateway</html>", { status: 502, headers: { "content-type": "text/html" } }), code: "function_response_invalid", cause: "SyntaxError" },
-        { respond: () => new Response(null, { status: 200 }), code: "function_response_invalid" },
-        { respond: () => new Response("x".repeat(64 * 1024), { status: 200 }), code: "function_response_invalid" },
-        { respond: () => new Response(null, { status: 302, headers: { location: "https://example.invalid/" } }), code: "function_response_invalid" },
-        { respond: () => new Response(erroringStream(), { status: 200 }), code: "function_response_invalid", cause: "Error" },
+        { respond: () => new Response("<html>Bad gateway</html>", { status: 502, headers: { "content-type": "text/html" } }), code: "function_response_invalid", cause: "SyntaxError", upstreamStatus: 502 },
+        { respond: () => new Response("<html>Gateway timeout</html>", { status: 504, headers: { "content-type": "text/html" } }), code: "function_response_invalid", cause: "SyntaxError", upstreamStatus: 504 },
+        { respond: () => new Response(null, { status: 503 }), code: "function_response_invalid", upstreamStatus: 503 },
+        { respond: () => new Response(null, { status: 200 }), code: "function_response_invalid", upstreamStatus: 200 },
+        { respond: () => new Response(new Uint8Array([0x7b, 0xff, 0x7d]), { status: 500 }), code: "function_response_invalid", cause: "TypeError", upstreamStatus: 500 },
+        { respond: () => new Response("x".repeat(64 * 1024), { status: 200 }), code: "function_response_invalid", upstreamStatus: 200 },
+        { respond: () => new Response(null, { status: 302, headers: { location: "https://example.invalid/" } }), code: "function_response_invalid", upstreamStatus: 302 },
+        { respond: () => new Response(erroringStream(), { status: 200 }), code: "function_response_invalid", cause: "Error", upstreamStatus: 200 },
     ];
     for (const failure of failures) {
         const logger = recordingLog();
@@ -147,8 +150,9 @@ test("an unreachable or broken Edge Function becomes a logged 502 with a named c
             event: "nightly_gateway_request_failed",
             path: "/v1/device/sessions",
             error: failure.code,
+            ...(failure.upstreamStatus === undefined ? {} : { upstream_status: failure.upstreamStatus }),
             ...(failure.cause === undefined ? {} : { cause: failure.cause }),
-        }], failure.code);
+        }], `${failure.code} ${failure.upstreamStatus ?? "unreachable"}`);
     }
 });
 

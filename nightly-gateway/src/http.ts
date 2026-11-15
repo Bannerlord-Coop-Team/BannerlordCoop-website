@@ -11,10 +11,18 @@ export type GatewayLog = (event: Record<string, unknown>) => void;
 /** The outbound HTTP call the gateway depends on; production passes the Workers global fetch. */
 export type UpstreamFetch = (url: string, init: RequestInit) => Promise<Response>;
 
+/** Log-only context on a GatewayError: the underlying failure and, for relayed calls, the upstream HTTP status. */
+export type GatewayErrorOptions = { cause?: unknown; upstreamStatus?: number };
+
 // Carries the HTTP status and stable error code returned to clients.
-// The optional cause keeps the underlying failure so the top-level log can name its class.
+// Its cause and upstream status are for the top-level log only and never reach the response body.
 export class GatewayError extends Error {
-    constructor(readonly status: number, readonly code: string, options?: { cause?: unknown }) { super(code, options); }
+    readonly upstreamStatus?: number;
+
+    constructor(readonly status: number, readonly code: string, options: GatewayErrorOptions = {}) {
+        super(code, options);
+        this.upstreamStatus = options.upstreamStatus;
+    }
 }
 
 // Returns an error's message only when it is a bare snake_case code, which is safe to log.

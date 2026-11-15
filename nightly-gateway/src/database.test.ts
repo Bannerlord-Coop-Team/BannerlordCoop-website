@@ -19,24 +19,17 @@ test("gateway SQL rejects parameter-count drift", () => {
     );
 });
 
-test("the bridge uses legacy D1 only when it is explicitly selected", async () => {
-    const legacy = {
+test("an injected test database is used as-is", async () => {
+    const injected = {
         prepare() { throw new Error("not used"); },
         async batch() { return []; },
     };
-    assert.equal(await databaseForRequest({ LEGACY_DB: legacy, DATABASE_BACKEND: "legacy-d1" }), legacy);
+    assert.equal(await databaseForRequest({ DB: injected }), injected);
 });
 
-test("the post-cutover default fails closed without Hyperdrive", async () => {
+test("the gateway fails closed without Hyperdrive", async () => {
     await assert.rejects(
         databaseForRequest({}),
         /gateway_database_configuration_invalid/,
-    );
-});
-
-test("unknown database backends fail closed", async () => {
-    await assert.rejects(
-        databaseForRequest({ DATABASE_BACKEND: "sqlite" }),
-        /gateway_database_backend_invalid/,
     );
 });

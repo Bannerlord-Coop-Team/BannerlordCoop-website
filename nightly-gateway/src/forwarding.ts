@@ -64,23 +64,24 @@ function forwardedHeaders(request: Request): Headers {
     return headers;
 }
 
-// Parses the upstream body as bounded, non-empty UTF-8 JSON; anything else is a 502.
+// Parses the upstream body as bounded, non-empty UTF-8 JSON; anything else is a 502 that logs the upstream status.
 async function readUpstreamJson(response: Response): Promise<unknown> {
+    const upstreamStatus = response.status;
     const bytes = await readUpstreamBytes(response);
-    if (bytes === null || bytes.byteLength === 0) throw new GatewayError(502, "function_response_invalid");
+    if (bytes === null || bytes.byteLength === 0) throw new GatewayError(502, "function_response_invalid", { upstreamStatus });
     try {
         return JSON.parse(decodeUtf8(bytes));
     } catch (cause) {
-        throw new GatewayError(502, "function_response_invalid", { cause });
+        throw new GatewayError(502, "function_response_invalid", { cause, upstreamStatus });
     }
 }
 
-// Reads the bounded upstream body; null means it was too large, and a broken stream is a 502 that keeps its cause.
+// Reads the bounded upstream body; null means it was too large, and a broken stream is a 502 that keeps its cause and status.
 async function readUpstreamBytes(response: Response): Promise<Uint8Array | null> {
     try {
         return await readBoundedBytes(response, MAXIMUM_DEVICE_RESPONSE_BYTES);
     } catch (cause) {
-        throw new GatewayError(502, "function_response_invalid", { cause });
+        throw new GatewayError(502, "function_response_invalid", { cause, upstreamStatus: response.status });
     }
 }
 

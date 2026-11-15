@@ -47,15 +47,22 @@ export function createGateway(dependencies: GatewayDependencies): GatewayHandler
 
 export default createGateway({ fetch: (url, init) => fetch(url, init), log: consoleLog }) satisfies ExportedHandler<Env>;
 
-// Logs a failed request with its stable code and, when known, the class of the underlying cause.
+// Logs a failed request with its stable code, the upstream status when relayed, and the class of the underlying cause.
 // The cause's message is logged only when it is a bare snake_case code; any other text is never logged.
 function logRequestFailure(log: GatewayLog, request: Request, error: unknown): void {
     log({
         event: "nightly_gateway_request_failed",
         path: new URL(request.url).pathname,
         error: error instanceof GatewayError ? error.code : "internal_error",
+        ...describeUpstreamStatus(error),
         ...describeFailureCause(error),
     });
+}
+
+// Names the relayed upstream's HTTP status for the log when the failure carries one.
+function describeUpstreamStatus(error: unknown): { upstream_status?: number } {
+    if (!(error instanceof GatewayError) || error.upstreamStatus === undefined) return {};
+    return { upstream_status: error.upstreamStatus };
 }
 
 // Describes the failure behind a request: a GatewayError's cause, or the unexpected error itself.
