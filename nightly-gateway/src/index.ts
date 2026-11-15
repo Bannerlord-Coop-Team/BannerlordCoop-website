@@ -138,7 +138,7 @@ async function route(request: Request, env: Env): Promise<Response> {
         return servePinManifest(request, env);
     }
     if (request.method === "GET" && url.pathname === "/v1/manifests/client") {
-        return serveManifest(request, env, true, true);
+        return serveManifest(request, env, true);
     }
     if (request.method === "GET" && url.pathname === "/v1/manifests/release") {
         return serveManifest(request, env, false);
@@ -813,15 +813,26 @@ async function sha256Bytes(bytes: Uint8Array): Promise<string> {
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function serveManifest(
-    request: Request,
-    env: Env,
-    clientOnly: boolean,
-    requireCompletePublication = false,
-): Promise<Response> {
+async function serveManifest(request: Request, env: Env, clientOnly: boolean): Promise<Response> {
     await requireNightlyDownloadSession(request, env);
     const wantsV2 = request.headers.get(NIGHTLY_PUBLICATION_VERSION_HEADER)?.trim() === "2";
-    if (!wantsV2 && !requireCompletePublication) {
+    if (clientOnly && !wantsV2) {
+        try {
+            return json(rewriteManifestArtifactUrls(
+                await readHeaderlessNightlyClientManifest(env),
+                env.PUBLIC_ORIGIN,
+                env.LEGACY_R2_ORIGIN,
+            ));
+        } catch (error) {
+            console.error(JSON.stringify({
+                event: "nightly_headerless_client_read_failed",
+                error_code: error instanceof Error && /^[a-z0-9_]{1,64}$/.test(error.message)
+                    ? error.message : "manifest_unavailable",
+            }));
+            throw new GatewayError(503, "manifest_unavailable");
+        }
+    }
+    if (!wantsV2) {
         try {
             return json(rewriteManifestArtifactUrls(
                 await readLegacyNightlyManifest(env, clientOnly),
@@ -846,7 +857,6 @@ async function serveManifest(
             env.PUBLIC_RELEASES === undefined ? undefined : () => env.PUBLIC_RELEASES.get("nightly/release.json"),
         );
     } catch (error) {
-        if (requireCompletePublication) throw new GatewayError(503, "manifest_unavailable");
         const errorCode = error instanceof Error && /^[a-z0-9_]{1,64}$/.test(error.message)
             ? error.message : "publication_read_failed";
         const publicationError = error instanceof NightlyPublicationReadError ? error : null;
@@ -888,13 +898,94 @@ async function serveManifest(
     return json(rewritten);
 }
 
+async function readHeaderlessNightlyClientManifest(env: Env): Promise<JsonObject> {
+    let publication: JsonObject | null = null;
+    try {
+        publication = await readNightlyPublication(
+            (key) => env.RELEASES.get(key),
+            fetch,
+            env.PUBLIC_RELEASES === undefined ? undefined : () => env.PUBLIC_RELEASES.get("nightly/release.json"),
+        );
+    } catch {
+        // Fall through to the previous complete legacy pair below.
+    }
+
+    if (publication !== null) {
+        const legacy = await tryReadLegacyNightlyClientManifest(env);
+        if (legacy !== null && legacyClientMatchesPublication(legacy, publication)) return legacy;
+        return projectPublicationClientAsLegacy(publication, env.LEGACY_R2_ORIGIN, env.PUBLIC_ORIGIN);
+    }
+
+    const legacyClient = await readLegacyNightlyClientManifest(env);
+    const legacyRelease = validateLegacyNightlyReleaseManifest(
+        await readLegacyJson(env, "nightly/release.json", 128 * 1024),
+        env.LEGACY_R2_ORIGIN,
+        env.PUBLIC_ORIGIN,
+    );
+    return projectLegacyReleaseClient(legacyRelease, legacyClient, env.LEGACY_R2_ORIGIN, env.PUBLIC_ORIGIN);
+}
+
+async function tryReadLegacyNightlyClientManifest(env: Env): Promise<JsonObject | null> {
+    try {
+        return await readLegacyNightlyClientManifest(env);
+    } catch {
+        return null;
+    }
+}
+
+function legacyClientMatchesPublication(legacy: JsonObject, publication: JsonObject): boolean {
+    const legacyClient = legacy.client as Record<string, unknown>;
+    const publicationClient = publication.client as Record<string, unknown>;
+    return legacy.releaseDate === publication.releaseDate
+        && legacy.headSha === publication.headSha
+        && legacyClient.key === publicationClient.key
+        && legacyClient.sha256 === publicationClient.sha256;
+}
+
+function projectPublicationClientAsLegacy(
+    publication: JsonObject,
+    legacyOrigin: string,
+    gatewayOrigin: string,
+): JsonObject {
+    return validateLegacyNightlyClientManifest({
+        version: 1,
+        releaseDate: publication.releaseDate,
+        headSha: publication.headSha,
+        baseSha: null,
+        workflowRunId: Number(publication.clientRunId),
+        builtAt: publication.builtAt,
+        client: publication.client,
+    }, legacyOrigin, gatewayOrigin);
+}
+
+function projectLegacyReleaseClient(
+    release: JsonObject,
+    metadata: JsonObject,
+    legacyOrigin: string,
+    gatewayOrigin: string,
+): JsonObject {
+    return validateLegacyNightlyClientManifest({
+        version: 1,
+        releaseDate: release.releaseDate,
+        headSha: release.headSha,
+        baseSha: null,
+        workflowRunId: metadata.workflowRunId,
+        builtAt: metadata.builtAt,
+        client: release.client,
+    }, legacyOrigin, gatewayOrigin);
+}
+
+async function readLegacyNightlyClientManifest(env: Env): Promise<JsonObject> {
+    return validateLegacyNightlyClientManifest(
+        await readLegacyJson(env, "nightly/client.json", 32 * 1024),
+        env.LEGACY_R2_ORIGIN,
+        env.PUBLIC_ORIGIN,
+    );
+}
+
 async function readLegacyNightlyManifest(env: Env, clientOnly: boolean): Promise<JsonObject> {
     if (clientOnly) {
-        return validateLegacyNightlyClientManifest(
-            await readLegacyJson(env, "nightly/client.json", 32 * 1024),
-            env.LEGACY_R2_ORIGIN,
-            env.PUBLIC_ORIGIN,
-        );
+        return readLegacyNightlyClientManifest(env);
     }
     const legacyRelease = validateLegacyNightlyReleaseManifest(
         await readLegacyJson(env, "nightly/release.json", 128 * 1024),

@@ -85,14 +85,18 @@ permits caller-chosen object keys.
 ### Manifest-version compatibility during rollout
 
 `/v1/manifests/release` returns the validated legacy v1 object by default,
-preserving compatibility with the 14b9e61c gateway and older installers. The
-client route always requires the complete v2 publication; a request that sends
-`X-Bannerlord-Coop-Nightly-Version: 2` opts into the complete v2 publication;
-the header is the only representation switch and does not select an object key.
+preserving compatibility with the 14b9e61c gateway and older installers. A
+headerless client request returns a v1 projection of the complete paired
+publication: the legacy client object is used only when its identity agrees
+with that publication; a newer or mismatched legacy object is ignored. A
+request that sends `X-Bannerlord-Coop-Nightly-Version: 2` opts into the complete
+v2 publication; the header is the only representation switch and does not
+select an object key.
 The current Windows and Linux installers send that header and accept either v2
 or the validated v1 response, so a session can cross a gradual Worker rollout
-without a manifest-version failure. Client-only requests fail closed until the
-paired release pointer and private publication manifest exist.
+without a manifest-version failure. Client-only requests return the previous
+complete pair while a newer client waits for its server; they return 503 only
+when no complete pair exists.
 
 ### Publication read failures and compatibility fallback
 
@@ -101,11 +105,9 @@ back only when both legacy `nightly/release.json` and `nightly/client.json`
 objects validate and agree on release date, client commit, client key, and
 client checksum. This keeps Server and Both on one validated legacy pair during
 a transient publication read failure; missing, malformed, or mismatched legacy
-objects remain a 503. `GET /v1/manifests/client` falls back to the bounded,
-validated `nightly/client.json` compatibility object in the same `RELEASES`
-bucket. A Client installer can continue with that validated legacy client. The
-fallback accepts only fixed artifact origins and content-addressed client keys,
-then rewrites responses through the normal artifact route.
+objects remain a 503. Headerless client delivery uses the same bounded,
+validated legacy v1 projection and fixed artifact-origin checks, so a client
+cannot move ahead of the complete server publication.
 
 The failure event records the route, exact stage (`pointer`, `private_read`,
 `checksum`, `manifest`, or `container`), the pointer HTTP/R2 status when one
