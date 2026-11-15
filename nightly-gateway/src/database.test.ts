@@ -12,16 +12,6 @@ test("gateway SQL is schema-qualified and uses PostgreSQL parameters", () => {
     );
 });
 
-test("INSERT OR IGNORE becomes a conflict-safe PostgreSQL insert", () => {
-    assert.equal(
-        postgresSql(
-            "INSERT OR IGNORE INTO pin_download_sessions (token_hash, pin_token_hash) SELECT ?, token_hash FROM installer_pins WHERE token_hash = ?",
-            2,
-        ),
-        "INSERT INTO \"nightly_gateway\".\"pin_download_sessions\" (token_hash, pin_token_hash) SELECT $1, token_hash FROM \"nightly_gateway\".\"installer_pins\" WHERE token_hash = $2\nON CONFLICT DO NOTHING",
-    );
-});
-
 test("gateway SQL rejects parameter-count drift", () => {
     assert.throws(
         () => postgresSql("SELECT build_id FROM installer_pins WHERE token_hash = ?", 0),

@@ -41,7 +41,7 @@ These calls run server-side, from Next.js route handlers and server actions on `
 | `POST /oauth/start` | `{purpose: "device", user_code}` or `{purpose: "sponsor-portal"}` | `200 {authorize_url}`. It stores the state hash: `device_sessions.oauth_state_hash` for `device`, `oauth_states` for `sponsor-portal`. Errors: `400 invalid_code`, `400 expired` |
 | `POST /oauth/complete` | `{code, state}` | `200` with one of the outcomes listed below this table. Errors: `400 invalid_request`/`expired`, `502 discord_*` |
 | `POST /sponsorship/claim` | `{device_id, sponsor_code}` | `200 {outcome: "sponsored-approved"}`. Errors: `400 expired`, `403 invalid_sponsor_code`, `403 supporter_role_required`, `409 already_sponsored`, `409 seats_full` |
-| `POST /sponsor/portal` | `{session}` | `200 {seats: [{discord_user_id, created_at}], limit: 10}`. Errors: `401 authorization_expired`, `403 supporter_role_required` (the website should send the user to log in again) |
+| `POST /sponsor/portal` | `{session}` | `200 {seats: [{discord_user_id, created_at}]}` (the 10-seat limit is a shared constant in `_shared/nightly/policy.ts`, not part of the response). Errors: `401 authorization_expired`, `403 supporter_role_required` (the website should send the user to log in again) |
 | `POST /sponsor/code` | `{session}` | `200 {code: "XXXX-XXXX-XXXX"}` (it is displayed once). Error: `401` |
 | `POST /sponsor/remove` | `{session, discord_user_id}` | `204`. Errors: `401`, `400` |
 

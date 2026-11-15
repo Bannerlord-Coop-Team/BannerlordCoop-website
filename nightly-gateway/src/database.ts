@@ -150,7 +150,7 @@ class PostgresPreparedStatement implements GatewayPreparedStatement {
     }
 }
 
-// Translates D1-style SQL to Postgres: schema-qualified gateway tables, $n parameters, and ON CONFLICT DO NOTHING.
+// Translates D1-style SQL to Postgres: schema-qualified gateway tables and $n parameters.
 // Throws when the SQL is empty or oversized or its placeholders do not match the value count.
 export function postgresSql(sourceSql: string, valueCount: number): string {
     if (typeof sourceSql !== "string" || sourceSql.length === 0 || sourceSql.length > 16_384
@@ -164,11 +164,8 @@ export function postgresSql(sourceSql: string, valueCount: number): string {
             `"${GATEWAY_SCHEMA}"."${tableName}"`,
         );
     }
-    const ignoreConflict = /\bINSERT\s+OR\s+IGNORE\s+INTO\b/i.test(sql);
-    if (ignoreConflict) sql = sql.replace(/\bINSERT\s+OR\s+IGNORE\s+INTO\b/i, "INSERT INTO");
     let parameter = 0;
     sql = sql.replace(/\?/g, () => `$${++parameter}`);
     if (parameter !== valueCount) throw new Error("gateway_database_parameter_mismatch");
-    if (ignoreConflict) sql = `${sql.trimEnd()}\nON CONFLICT DO NOTHING`;
     return sql;
 }
