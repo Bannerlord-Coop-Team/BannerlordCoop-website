@@ -3,7 +3,7 @@ import {
     MAXIMUM_SPONSOR_CODE_LENGTH,
     normalizeSponsorCode,
 } from "../../../../supabase/functions/_shared/nightly/formats";
-import { isSessionRejection, type NightlyClient, type PendingClaim, type SponsorPortalData } from "./client";
+import { isEligibilityRejection, isSessionRejection, type NightlyClient, type PendingClaim, type SponsorPortalData } from "./client";
 import { CLAIM_COOKIE, SPONSOR_COOKIE } from "./cookies";
 import {
     GENERIC_ERROR_MESSAGE,
@@ -43,7 +43,7 @@ const SESSION_EXPIRED_RESULT: ActionRedirect = { redirect: redirectPlan(SESSION_
 
 /**
  * Loads the sponsor portal: no session shows login (with the notice an action that dropped the session asked for),
- * a rejected session shows login with the expired notice, 403 explains lost eligibility; a rejected website key is an error.
+ * a rejected session shows login with the expired notice, a lost qualifying role explains itself; a rejected website key is an error.
  */
 export async function loadPortalView(client: NightlyClient, session: string | null, expiredNotice: boolean): Promise<PortalView> {
     if (session === null) return { kind: "login", expired: expiredNotice };
@@ -51,7 +51,7 @@ export async function loadPortalView(client: NightlyClient, session: string | nu
     if (result.ok) return { kind: "seats", data: result.value };
     // Pages cannot write cookies; the stale HttpOnly session is overwritten at the next portal login.
     if (isSessionRejection(result)) return { kind: "login", expired: true };
-    if (result.status === 403) return { kind: "ineligible", message: ROLE_REQUIRED_MESSAGE };
+    if (isEligibilityRejection(result)) return { kind: "ineligible", message: ROLE_REQUIRED_MESSAGE };
     return { kind: "error", message: nightlyErrorMessage("sponsor-login", result.code) };
 }
 

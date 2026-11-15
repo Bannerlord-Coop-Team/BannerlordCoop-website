@@ -20,6 +20,7 @@ import {
     FRIEND,
     gatewayHandler,
     installerRequest,
+    noLog,
     NOW,
     OTHER_SPONSOR,
     PATREON_ROLE,
@@ -69,6 +70,7 @@ async function redirectUrisSent(redirectUri?: string): Promise<[string | null, s
         fetch: discordFetch(script),
         database: singleConnectionDatabase(database),
         clock: () => NOW * 1000,
+        log: noLog,
     });
     const pending = await seedDevice(database);
     const start = await handler(websiteRequest("/oauth/start", { purpose: "device", user_code: pending.userCode }));
@@ -101,6 +103,7 @@ test("the handler refuses implausible secrets at construction", () => {
         discord: { clientId: CLIENT_ID, clientSecret: "s".repeat(32), botToken: BOT_TOKEN },
         fetch,
         database: failingDatabase(() => new Error("unused")),
+        log: noLog,
     };
     assert.doesNotThrow(() => createNightlyGatewayHandler(base));
     assert.throws(() => createNightlyGatewayHandler({ ...base, websiteKey: "short" }), /nightly_gateway_configuration_invalid/);
@@ -742,10 +745,12 @@ test("a created sponsor code is shown once, stored hashed, and redeemable", asyn
     assert.deepEqual(await body(claimed), { outcome: "sponsored-approved" });
 });
 
-test("removing a seat frees it and ends that friend's download sessions under this sponsor", async () => {
+test("removing a seat frees it and ends that friend's download sessions under this sponsor, never another sponsor's seat", async () => {
+    const otherFriend = "222222222222222222";
     await seedGrant(database, SPONSOR);
     await seedGrant(database, OTHER_SPONSOR);
     await seedSeat(database, SPONSOR, FRIEND);
+    await seedSeat(database, OTHER_SPONSOR, otherFriend);
     await seedDownloadSession(database, FRIEND, SPONSOR, "1".repeat(43));
     await seedDownloadSession(database, FRIEND, OTHER_SPONSOR, "2".repeat(43));
     const session = await seedSponsorSession(database, SPONSOR);
@@ -755,7 +760,11 @@ test("removing a seat frees it and ends that friend's download sessions under th
     const response = await handler(websiteRequest("/sponsor/remove", { session, discord_user_id: FRIEND }));
     assert.equal(response.status, 204);
     assert.equal(await response.text(), "");
-    assert.equal(await count("sponsorships"), 0);
+    const foreign = await handler(websiteRequest("/sponsor/remove", { session, discord_user_id: otherFriend }));
+    assert.equal(foreign.status, 204);
+    assert.deepEqual(await rows(database, "select supporter_discord_user_id, sponsored_discord_user_id from nightly_gateway.sponsorships"), [
+        { supporter_discord_user_id: OTHER_SPONSOR, sponsored_discord_user_id: otherFriend },
+    ]);
     assert.deepEqual(await rows(database, "select supporter_discord_user_id from nightly_gateway.download_sessions"), [
         { supporter_discord_user_id: OTHER_SPONSOR },
     ]);

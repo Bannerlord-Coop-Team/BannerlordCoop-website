@@ -7,6 +7,7 @@ import { CANONICAL_GATEWAY_ORIGIN } from "./origins";
 import { NIGHTLY_POINTER_URL, NightlyPublicationReadError, readNightlyPublication } from "./publication";
 import type { GatewayDatabase } from "./database";
 import { createGateway } from "./index";
+import { noLog } from "./test-log";
 
 const origin = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const repository = "ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server";
@@ -104,7 +105,7 @@ test("both authenticated manifest routes select the same pointer and keep privat
         RELEASES: { get: value.getObject },
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase() });
+    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase(), log: noLog });
     const headers = {
         authorization: `Bearer ${"n".repeat(43)}`,
         "x-bannerlord-coop-nightly-version": "2",
@@ -287,7 +288,7 @@ test("the client route requires the complete publication while release keeps the
         } },
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    const worker = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase() });
+    const worker = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase(), log: noLog });
     const authorization = `Bearer ${"n".repeat(43)}`;
     legacyClientBytes = Buffer.from(JSON.stringify({
         version: 1,
@@ -344,7 +345,7 @@ test("the headerless client route returns 503 when no complete pair exists", asy
         RELEASES: { async get() { return null; } },
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase() });
+    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase(), log: noLog });
     const response = await manifestGateway.fetch(new Request(`${gateway}/v1/manifests/client`, {
         headers: { authorization: `Bearer ${"n".repeat(43)}` },
     }), env);
@@ -358,7 +359,7 @@ test("the client route fails closed when the paired publication is unavailable",
         RELEASES: { async get() { return null; } },
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase() });
+    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase(), log: noLog });
     const response = await manifestGateway.fetch(new Request(`${gateway}/v1/manifests/client`, {
         headers: { authorization: `Bearer ${"n".repeat(43)}` },
     }), env);
@@ -383,7 +384,7 @@ test("v2 client fallback never serves a legacy client ahead of the release pair"
         RELEASES: { async get(key: string) { if (key === value.pointer.manifest.key) return null; if (key === "nightly/release.json") return bytes(legacyRelease); if (key === "nightly/client.json") return bytes(aheadClient); return null; } },
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase() });
+    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase(), log: noLog });
     const response = await manifestGateway.fetch(new Request(`${gateway}/v1/manifests/client`, {
         headers: { authorization: `Bearer ${"n".repeat(43)}`, "x-bannerlord-coop-nightly-version": "2" },
     }), env);
@@ -402,7 +403,7 @@ test("a complete release pair remains available when the legacy client object is
         RELEASES: { async get(key: string) { return key === "nightly/release.json" ? bytes(releaseBytes) : null; } },
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase() });
+    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase(), log: noLog });
     const response = await manifestGateway.fetch(new Request(`${gateway}/v1/manifests/client`, {
         headers: { authorization: `Bearer ${"n".repeat(43)}` },
     }), env);
@@ -536,7 +537,7 @@ test("manifest artifact URLs follow the gateway host the installer used", async 
         } },
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase() });
+    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase(), log: noLog });
     const authorization = `Bearer ${"n".repeat(43)}`;
     const cases = [
         { host: canonical, expected: canonical },

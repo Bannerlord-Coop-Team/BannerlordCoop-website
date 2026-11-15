@@ -53,10 +53,13 @@ const MAXIMUM_RESPONSE_BYTES = 64 * 1024;
 const CALL_TIMEOUT_MS = 40_000;
 const CLIENT_ERROR_STATUS = 400;
 const UNAUTHORIZED_STATUS = 401;
+const FORBIDDEN_STATUS = 403;
 const NOT_FOUND_STATUS = 404;
 const SERVER_ERROR_STATUS = 500;
 /** The contract table's 401 codes that reject the user's session; signing in again clears them. */
 const SESSION_REJECTION_CODES: ReadonlySet<string> = new Set(["authorization_required", "authorization_expired"]);
+/** The contract's 403 code for a Discord user who no longer holds a qualifying role. */
+const ROLE_REQUIRED_CODE = "supporter_role_required";
 const DISCORD_AUTHORIZE_ORIGIN = "https://discord.com";
 const DISCORD_AUTHORIZE_PATHS = new Set(["/oauth2/authorize", "/api/oauth2/authorize", "/api/v10/oauth2/authorize"]);
 
@@ -191,6 +194,11 @@ function parseJson(bytes: Uint8Array | null): unknown {
  */
 export function isSessionRejection(rejected: NightlyFailure): boolean {
     return rejected.status === UNAUTHORIZED_STATUS && SESSION_REJECTION_CODES.has(rejected.code);
+}
+
+/** Whether the Edge Function refused the user because they no longer hold a qualifying role (the contract's 403 code). */
+export function isEligibilityRejection(rejected: NightlyFailure): boolean {
+    return rejected.status === FORBIDDEN_STATUS && rejected.code === ROLE_REQUIRED_CODE;
 }
 
 /**

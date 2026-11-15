@@ -17,6 +17,7 @@ import {
     FRIEND,
     gatewayHandler,
     installerRequest,
+    noLog,
     NOW,
     PATREON_ROLE,
     pgliteClient,
@@ -226,7 +227,7 @@ test("the Postgres database registers the safe INT8 parser for INT8 columns", ()
         },
     };
     createPostgresGatewayDatabase(pgModule, "postgres://example", {
-        applicationName: "test", maxConnections: 4, idleTimeoutMs: 10_000, queryTimeoutMs: 5_000,
+        applicationName: "test", maxConnections: 4, idleTimeoutMs: 10_000, queryTimeoutMs: 5_000, log: noLog,
     });
     assert.equal(parsers.get(20), parseSafeInt8);
 });

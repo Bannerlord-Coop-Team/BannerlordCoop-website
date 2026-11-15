@@ -52,7 +52,7 @@ function stateOf(authorizeUrl: string): string {
 type WorkerEntry = {
     createGateway(dependencies: {
         fetch: (url: string, init: RequestInit) => Promise<Response>;
-        log?: (event: Record<string, unknown>) => void;
+        log: (event: Record<string, unknown>) => void;
     }): { fetch(request: Request, env: unknown): Promise<Response> };
 };
 

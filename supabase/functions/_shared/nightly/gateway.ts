@@ -5,7 +5,7 @@ import { configurationInvalid, hasMinimumLength } from "./configuration.ts";
 import { assertDiscordCredentials, createDiscordApi, type DiscordCredentials } from "./discord.ts";
 import { WEBSITE_KEY_HEADER } from "./formats.ts";
 import { errorJson, GatewayError, json, readJsonObject } from "./http.ts";
-import { type GatewayLog, logToStderr } from "./log.ts";
+import type { GatewayLog } from "./log.ts";
 import { completeOAuth, startOAuth } from "./oauth.ts";
 import { claimSponsorship, createSponsorCode, removeSponsoredAccount, sponsorPortal } from "./sponsor.ts";
 import { cryptoRandomBytes, type RandomBytes, secretsEqual } from "./tokens.ts";
@@ -42,15 +42,14 @@ export type NightlyGatewayOptions = {
     /** Wall-clock milliseconds, like Date.now. */
     clock?: () => number;
     random?: RandomBytes;
-    /** Receives one structured event per failed request; defaults to JSON on stderr. */
-    log?: GatewayLog;
+    /** Receives one structured event per failed request; the composition root picks the sink. */
+    log: GatewayLog;
 };
 
 /** Builds the Edge Function's request handler: installer device routes plus the website's JSON routes. */
 export function createNightlyGatewayHandler(options: NightlyGatewayOptions): (request: Request) => Promise<Response> {
     assertConfiguration(options);
     const clock = options.clock ?? Date.now;
-    const log = options.log ?? logToStderr;
     const router = new GatewayRouter(options.websiteKey, {
         db: options.database,
         discord: createDiscordApi(options.discord, options.fetch),
@@ -61,7 +60,7 @@ export function createNightlyGatewayHandler(options: NightlyGatewayOptions): (re
         try {
             return await router.route(request);
         } catch (error) {
-            return failureResponse(request, error, log);
+            return failureResponse(request, error, options.log);
         }
     };
 }

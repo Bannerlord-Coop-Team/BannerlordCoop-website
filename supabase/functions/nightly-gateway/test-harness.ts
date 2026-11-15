@@ -201,6 +201,9 @@ export function failingDatabase(failure: () => unknown): GatewayDatabase {
     };
 }
 
+/** Discards gateway log events, for tests that assert responses and rows instead. */
+export function noLog(): void {}
+
 /** A handler over the shared database (or a wrapper of it) and a Discord script, plus its logs and pool. */
 export function gatewayHandler(database: PgliteQueries, script: DiscordScript, clock = () => NOW * 1000) {
     const logs: Record<string, unknown>[] = [];

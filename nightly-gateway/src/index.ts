@@ -17,7 +17,8 @@ import { websiteRedirectFor } from "./redirects";
 /** Outside services the gateway uses; injected so tests can stand in for the Edge Function, logs and Postgres. */
 export type GatewayDependencies = {
     fetch: UpstreamFetch;
-    log?: GatewayLog;
+    /** Receives one structured event per failed request; the entry point picks the sink. */
+    log: GatewayLog;
     /** Opens the request's database; production defaults to the Hyperdrive binding and never reads one from env. */
     openDatabase?: (env: Env) => Promise<GatewayDatabase>;
 };
@@ -40,7 +41,7 @@ function consoleLog(event: Record<string, unknown>): void {
 export function createGateway(dependencies: GatewayDependencies): GatewayHandler {
     const resolved: ResolvedDependencies = {
         fetch: dependencies.fetch,
-        log: dependencies.log ?? consoleLog,
+        log: dependencies.log,
         openDatabase: dependencies.openDatabase ?? openHyperdriveDatabase,
     };
     const log = resolved.log;

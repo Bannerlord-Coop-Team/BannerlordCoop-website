@@ -17,6 +17,7 @@ import type { RequestEnv } from "./database";
 import { createGateway } from "./index";
 import { serveCreateBuildPinLauncher, serveCreateBuildPinPage } from "./pins";
 import { createWorkerSchemaDatabase, workerDatabase } from "./postgres-test-database";
+import { noLog } from "./test-log";
 
 const gateway = "https://nightly.bannerlordcoop.com";
 const legacyGateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
@@ -45,6 +46,7 @@ after(async () => {
 // The Worker under test: pin routes never call upstream, and each request opens the PGlite-backed database.
 const worker = createGateway({
     fetch: () => Promise.reject(new Error("pin routes must not call upstream")),
+    log: noLog,
     openDatabase: async () => workerDatabase(database),
 });
 

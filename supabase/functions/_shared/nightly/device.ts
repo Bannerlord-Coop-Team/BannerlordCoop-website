@@ -14,6 +14,7 @@ import { randomToken, randomUserCode, randomUuid, sha256 } from "./tokens.ts";
 // The single owner of nightly_gateway.device_sessions: the installer's device routes plus the device-session
 // queries the OAuth and sponsorship flows need, so no other module names the table or its statuses.
 
+/** The device_sessions columns these routes read; the narrower row types below are projections of it. */
 type DeviceSessionRow = {
     id: string;
     status: string;
@@ -35,14 +36,14 @@ function isAwaitingAuthorization(status: string): boolean {
     return status === "pending" || status === "awaiting-sponsor";
 }
 
-type AuthorizableDevice = { id: string; status: string; expires_at: number };
+type AuthorizableDevice = Pick<DeviceSessionRow, "id" | "status" | "expires_at">;
 
 /** Whether an OAuth-bound device session exists, is unexpired, and still waits to be authorized. */
 function isAuthorizableDevice(device: AuthorizableDevice | null, now: number): device is AuthorizableDevice {
     return device !== null && device.expires_at >= now && isAwaitingAuthorization(device.status);
 }
 
-type ClaimableDevice = { discord_user_id: string | null; status: string; expires_at: number };
+type ClaimableDevice = Pick<DeviceSessionRow, "discord_user_id" | "status" | "expires_at">;
 
 /** Whether a device session exists, is unexpired, awaits a sponsor, and is bound to a signed-in Discord user. */
 function isClaimableDevice(
@@ -52,8 +53,6 @@ function isClaimableDevice(
     return device !== null && device.status === "awaiting-sponsor" && device.expires_at >= now
         && isDiscordSnowflake(device.discord_user_id);
 }
-
-type ApprovedDevice = { discord_user_id: string; sponsor_discord_user_id: string };
 
 /** `POST /v1/device/sessions`: starts a pending device session lasting `DEVICE_SESSION_SECONDS`; the Worker adds `verification_uri`. */
 export async function createDeviceSession(context: GatewayContext): Promise<Response> {
@@ -166,6 +165,9 @@ export async function approveDevice(
         [userId, sponsorId, now, deviceId],
     );
 }
+
+/** The member and sponsor an approved session's consuming UPDATE returns. */
+type ApprovedDevice = Pick<DownloadableDevice, "discord_user_id" | "sponsor_discord_user_id">;
 
 /**
  * Consumes the approved device session and inserts its download session in one transaction. The consuming

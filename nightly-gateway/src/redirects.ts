@@ -10,7 +10,9 @@ const PERMANENT_PAGES: Readonly<Record<string, string>> = Object.freeze({
 });
 
 // Maps a gateway browser path that moved to the website onto its new URL, or null when the gateway still serves it.
-// "/" and "/activate" are 302 (they may change again); the retired sponsor and OAuth pages are 301.
+// "/" and "/activate" are 302 (they may change again); the retired sponsor and OAuth pages are 301. Only "/" and
+// "/activate" are limited to GET/HEAD; "/activate" and "/oauth/callback" keep their query string, so the callback is
+// handled outside the PERMANENT_PAGES table.
 export function websiteRedirectFor(method: string, url: URL): WebsiteRedirect | null {
     const readOnly = method === "GET" || method === "HEAD";
     if (readOnly && url.pathname === "/") return { location: WEBSITE_NIGHTLY_URL, status: 302 };

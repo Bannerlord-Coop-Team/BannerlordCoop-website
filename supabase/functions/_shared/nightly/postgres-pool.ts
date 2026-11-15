@@ -1,5 +1,5 @@
 import { type ConnectionPool, driverCode, type GatewayDatabase, pooledGatewayDatabase } from "./database.ts";
-import { type GatewayLog, logToStderr } from "./log.ts";
+import type { GatewayLog } from "./log.ts";
 
 // Edge-only composition of the gateway's PostgreSQL pool. The `pg` module is a parameter, so this file never
 // imports a driver and the INT8 parser the gateway database relies on cannot be left unregistered.
@@ -22,8 +22,8 @@ export type PostgresPoolOptions = {
     idleTimeoutMs: number;
     /** Bounds both acquiring a connection and each query. */
     queryTimeoutMs: number;
-    /** Receives one structured event per idle-connection error; defaults to JSON on stderr. */
-    log?: GatewayLog;
+    /** Receives one structured event per idle-connection error; the composition root picks the sink. */
+    log: GatewayLog;
 };
 
 /** Parses an INT8 column as a JS number, refusing values beyond the safe-integer range. */
@@ -48,8 +48,7 @@ export function createPostgresGatewayDatabase(
         connectionTimeoutMillis: options.queryTimeoutMs,
         query_timeout: options.queryTimeoutMs,
     });
-    const log = options.log ?? logToStderr;
-    pool.on("error", (error) => log(poolErrorEvent(error)));
+    pool.on("error", (error) => options.log(poolErrorEvent(error)));
     return pooledGatewayDatabase(pool);
 }
 

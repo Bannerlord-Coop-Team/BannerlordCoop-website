@@ -82,7 +82,8 @@ class PooledGatewayDatabase implements GatewayDatabase {
         try {
             result = await runStatement<T>(connection, sql, values);
         } catch (error) {
-            connection.release(!leavesConnectionReady(error));
+            const destroy = !leavesConnectionReady(error);
+            connection.release(destroy);
             throw error;
         }
         connection.release();

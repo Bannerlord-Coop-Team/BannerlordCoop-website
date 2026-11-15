@@ -6,6 +6,7 @@ import { type UpstreamFetch } from "./http";
 import { createGateway } from "./index";
 import { CANONICAL_GATEWAY_ORIGIN, LEGACY_GATEWAY_ORIGIN } from "./origins";
 import { websiteRedirectFor } from "./redirects";
+import { noLog } from "./test-log";
 
 const FUNCTION_URL = "https://wfvqnijwuyqjibhlcrhz.supabase.co/functions/v1/nightly-gateway";
 const LEGACY_R2 = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
@@ -53,7 +54,7 @@ function formRequest(origin: string, path: string, body: string): Request {
 
 test("device session creation is forwarded and the gateway adds its own activation link", async () => {
     const upstream = recordingFetch(() => Response.json(SESSION, { status: 201 }));
-    const gateway = createGateway({ fetch: upstream.fetch });
+    const gateway = createGateway({ fetch: upstream.fetch, log: noLog });
 
     const response = await gateway.fetch(formRequest(CANONICAL_GATEWAY_ORIGIN, "/v1/device/sessions", "client=installer"), statelessEnv());
 
@@ -80,7 +81,7 @@ test("the activation link follows the allowlisted request host and replaces any 
     ];
     for (const entry of cases) {
         const stale = { ...SESSION, verification_uri: "https://attacker.invalid/activate?code=AB2D-EF3H" };
-        const gateway = createGateway({ fetch: recordingFetch(() => Response.json(stale, { status: 201 })).fetch });
+        const gateway = createGateway({ fetch: recordingFetch(() => Response.json(stale, { status: 201 })).fetch, log: noLog });
         const response = await gateway.fetch(formRequest(entry.origin, "/v1/device/sessions", "client=installer"), statelessEnv());
         const body = await response.json() as { verification_uri: string };
         assert.equal(body.verification_uri, `${entry.expected}/activate?code=AB2D-EF3H`, entry.origin);
@@ -95,7 +96,7 @@ test("session responses without a created, valid user code are passed through un
         { status: 400, body: { error: "invalid_request" } },
     ];
     for (const outcome of outcomes) {
-        const gateway = createGateway({ fetch: recordingFetch(() => Response.json(outcome.body, { status: outcome.status })).fetch });
+        const gateway = createGateway({ fetch: recordingFetch(() => Response.json(outcome.body, { status: outcome.status })).fetch, log: noLog });
         const response = await gateway.fetch(formRequest(CANONICAL_GATEWAY_ORIGIN, "/v1/device/sessions", "client=installer"), statelessEnv());
         assert.equal(response.status, outcome.status);
         assert.deepEqual(await response.json(), outcome.body);
@@ -112,7 +113,7 @@ test("device token polling passes every status through without an activation lin
     ];
     for (const outcome of outcomes) {
         const upstream = recordingFetch(() => Response.json(outcome.body, { status: outcome.status }));
-        const gateway = createGateway({ fetch: upstream.fetch });
+        const gateway = createGateway({ fetch: upstream.fetch, log: noLog });
         const response = await gateway.fetch(
             formRequest(LEGACY_GATEWAY_ORIGIN, "/v1/device/token", `device_code=${"d".repeat(43)}`),
             statelessEnv(`${FUNCTION_URL}/`),
@@ -179,7 +180,7 @@ test("a failing installer request stream is an internal error, not an oversized 
 
 test("oversized device request bodies are refused before anything is forwarded", async () => {
     const upstream = recordingFetch(() => Response.json({}));
-    const gateway = createGateway({ fetch: upstream.fetch });
+    const gateway = createGateway({ fetch: upstream.fetch, log: noLog });
     const response = await gateway.fetch(
         formRequest(CANONICAL_GATEWAY_ORIGIN, "/v1/device/token", `device_code=${"d".repeat(8 * 1024)}`),
         statelessEnv(),
@@ -215,7 +216,7 @@ test("a misconfigured Edge Function URL fails closed without calling anything", 
 });
 
 test("retired gateway pages redirect to the website on both gateway hosts", async () => {
-    const gateway = createGateway({ fetch: () => Promise.reject(new Error("redirects must not call upstream")) });
+    const gateway = createGateway({ fetch: () => Promise.reject(new Error("redirects must not call upstream")), log: noLog });
     const cases = [
         { method: "GET", path: "/", status: 302, location: "https://bannerlordcoop.com/nightly" },
         { method: "GET", path: "/activate?code=AB2D-EF3H", status: 302, location: "https://bannerlordcoop.com/nightly/activate?code=AB2D-EF3H" },

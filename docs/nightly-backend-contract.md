@@ -105,4 +105,5 @@ Outcomes returned by `/oauth/complete`:
 4. **Worker:** deploy the slimmed gateway. Device login runs on Supabase from this point.
 5. **Smoke test:** a real install end to end, plus the sponsor portal.
 6. **Clean up:** delete the Worker's retired secrets (`DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_SECRET`, `TOKEN_ENCRYPTION_KEY`, `DATABASE_BACKEND`) and, once nothing needs it, the old D1 database.
+   Once the pre-split Worker can no longer be rolled back to, add a migration that drops `supporter_grants.encrypted_refresh_token` and `token_nonce` with their three checks, and reduce `storeSupporterGrant` (`grants.ts`) to an upsert of `updated_at`.
 7. **Later:** retire the `workers.dev` host, and switch the Discord bot and app back to the project's long-term application.

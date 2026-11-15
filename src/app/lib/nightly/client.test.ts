@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createNightlyClient, decodeOAuthOutcome, decodePortal, isSessionRejection, toPendingClaim, type NightlyFetch } from "./client";
+import { createNightlyClient, decodeOAuthOutcome, decodePortal, isEligibilityRejection, isSessionRejection, toPendingClaim, type NightlyFetch } from "./client";
 import { readNightlyConfig } from "./config";
 import type { NightlyLogger } from "./diagnostics";
 
@@ -177,10 +177,16 @@ test("only a 401 with a contract session-rejection code is a session rejection; 
     assert.equal(isSessionRejection({ ok: false, status: 403, code: "authorization_expired" }), false);
 });
 
+test("only a 403 with the contract's role-required code is an eligibility rejection", () => {
+    assert.equal(isEligibilityRejection({ ok: false, status: 403, code: "supporter_role_required" }), true);
+    assert.equal(isEligibilityRejection({ ok: false, status: 403, code: "invalid_sponsor_code" }), false);
+    assert.equal(isEligibilityRejection({ ok: false, status: 401, code: "supporter_role_required" }), false);
+});
+
 test("pending claims validate the device id and username, and only a literal true marks a revoked sponsor", () => {
     assert.deepEqual(toPendingClaim(DEVICE_ID, "friend", true), { deviceId: DEVICE_ID, username: "friend", previousSponsorRevoked: true });
     assert.deepEqual(toPendingClaim(DEVICE_ID, "friend", "yes"), { deviceId: DEVICE_ID, username: "friend", previousSponsorRevoked: false });
-    for (const [deviceId, username] of [[42, "friend"], ["device-1", "friend"], [DEVICE_ID.toUpperCase(), "friend"], [DEVICE_ID, ""], [DEVICE_ID, 7]]) {
+    for (const [deviceId, username] of [[42, "friend"], ["device-1", "friend"], [DEVICE_ID.toUpperCase(), "friend"], [DEVICE_ID, ""], [DEVICE_ID, "x".repeat(101)], [DEVICE_ID, 7]]) {
         assert.equal(toPendingClaim(deviceId, username, false), null, JSON.stringify([deviceId, username]));
     }
 });
@@ -225,7 +231,7 @@ test("OAuth outcomes decode exactly the four contract shapes", () => {
     assert.deepEqual(decodeOAuthOutcome({ outcome: "portal", session: SESSION, expires_in: 3600.9 }), { outcome: "portal", session: SESSION, expiresIn: 3600 });
     const portalExpiring = (expiresIn: unknown) => ({ outcome: "portal", session: SESSION, ...(expiresIn === undefined ? {} : { expires_in: expiresIn }) });
     const badPortals = [undefined, null, "86400", 0, -5, 0.5, Number.NaN, Number.POSITIVE_INFINITY, 1e300].map(portalExpiring);
-    for (const bad of [null, [], { outcome: "unknown" }, { outcome: "portal", session: "short", expires_in: 86400 }, ...badPortals, { outcome: "needs-sponsor", device_id: "bad id!", username: "x" }, { outcome: "needs-sponsor", device_id: "device-1", username: "x" }, { outcome: "needs-sponsor", device_id: DEVICE_ID.toUpperCase(), username: "x" }, { outcome: "needs-sponsor", device_id: DEVICE_ID, username: "" }, { outcome: "needs-sponsor", device_id: DEVICE_ID, username: "x".repeat(101) }]) {
+    for (const bad of [null, [], { outcome: "unknown" }, { outcome: "portal", session: "short", expires_in: 86400 }, ...badPortals, { outcome: "needs-sponsor", device_id: "device-1", username: "x" }, { outcome: "needs-sponsor", username: "x" }]) {
         assert.equal(decodeOAuthOutcome(bad), undefined, JSON.stringify(bad));
     }
 });
