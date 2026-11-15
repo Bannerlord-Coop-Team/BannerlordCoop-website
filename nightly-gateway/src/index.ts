@@ -71,7 +71,7 @@ export default {
             }));
             if (error instanceof GatewayError) {
                 if (prefersHtmlError(request)) {
-                    return html(errorPage(gatewayErrorMessage(error.code)), error.status);
+                    return html(errorPage(gatewayErrorMessage(error.code, error.status)), error.status);
                 }
                 return json({ error: error.code }, error.status);
             }
@@ -1335,7 +1335,7 @@ function prefersHtmlError(request: Request): boolean {
     return (request.headers.get("accept") ?? "").includes("text/html");
 }
 
-function gatewayErrorMessage(code: string): string {
+export function gatewayErrorMessage(code: string, status?: number): string {
     if (code === "migration_in_progress") {
         return "Nightly access is briefly paused while account data is moved. Try again in a few minutes.";
     }
@@ -1356,6 +1356,12 @@ function gatewayErrorMessage(code: string): string {
     }
     if (code === "pin_mint_unavailable") {
         return "Create-build installer links are not configured on this gateway.";
+    }
+    if (code === "discord_membership_required" && status === 403) {
+        return "Join the Bannerlord Co-op Discord and make sure your account has the required role, then run the installer again.";
+    }
+    if (code === "discord_membership_required" && status === 502) {
+        return "Discord roles could not be checked right now. Try again later.";
     }
     return "Access could not be verified. Run the installer again or ask in the Bannerlord Co-op Discord.";
 }
