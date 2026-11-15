@@ -2,7 +2,7 @@ import type { SponsorPortalData, SponsorSeat } from "@/app/lib/nightly/client";
 import { QUALIFYING_ROLES_TEXT } from "@/app/lib/nightly/messages";
 import { SPONSORED_ACCOUNT_LIMIT } from "../../../../supabase/functions/_shared/nightly/policy";
 import { CreateSponsorCodeForm, RemoveSeatForm, type CreateCodeAction, type RemoveSeatAction } from "./SponsorPortalForms";
-import { headingClass, ledeClass, primaryButtonClass } from "./styles";
+import { finePrintClass, headingClass, ledeClass, primaryButtonClass } from "./styles";
 
 const seatDateFormat = new Intl.DateTimeFormat("en", { dateStyle: "medium", timeZone: "UTC" });
 
@@ -93,7 +93,7 @@ export function SponsorLogin({ expired }: { expired: boolean }) {
                     Continue with Discord <span aria-hidden="true">&rarr;</span>
                 </a>
             </div>
-            <p className="mt-8 max-w-xl border-t border-white/10 pt-5 text-xs leading-6 text-foreground-dim">
+            <p className={finePrintClass}>
                 We verify your qualifying {QUALIFYING_ROLES_TEXT} Discord role when you sign in and whenever a sponsored friend installs or updates.
             </p>
         </>

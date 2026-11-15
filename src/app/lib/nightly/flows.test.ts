@@ -7,15 +7,22 @@ import {
     loadPortalView,
     removeSeatActionResult,
 } from "./flows";
-import { GENERIC_ERROR_MESSAGE, nightlyErrorMessage, nightlyErrorView, parseErrorContext, ROLE_REQUIRED_MESSAGE } from "./messages";
+import {
+    GENERIC_ERROR_MESSAGE,
+    nightlyErrorMessage,
+    nightlyErrorView,
+    nightlyErrorViewFor,
+    parseErrorContext,
+    ROLE_REQUIRED_MESSAGE,
+} from "./messages";
 
 const SESSION = "s".repeat(43);
 const CLAIM = { deviceId: "device-1", username: "friend", previousSponsorRevoked: false };
 const PORTAL = { seats: [{ discordUserId: "123456789012345678", createdAt: null }] };
 const CLAIM_REQUEST = { sameOrigin: true, claim: CLAIM };
 const SPONSOR_REQUEST = { sameOrigin: true, session: SESSION };
-const APPROVED = { clearCookie: "nightly_claim", redirectTo: "/nightly/approved?via=sponsor" };
-const EXPIRED = { clearCookie: "nightly_sponsor", redirectTo: "/nightly/sponsor?session=expired" };
+const APPROVED = { redirect: { location: "/nightly/approved?via=sponsor", cookies: [{ name: "nightly_claim", value: "", maxAge: 0 }] } };
+const EXPIRED = { redirect: { location: "/nightly/sponsor?session=expired", cookies: [{ name: "nightly_sponsor", value: "", maxAge: 0 }] } };
 
 /** Builds a client stub whose methods fail loudly unless a test overrides them. */
 function stubClient(overrides: Partial<NightlyClient>): NightlyClient {
@@ -32,20 +39,18 @@ function fail(status: number, code: string): NightlyFailure {
     return { ok: false, status, code };
 }
 
-test("portal view: no session shows login, success shows seats, 401 clears once, 403 explains lost eligibility", async () => {
-    assert.deepEqual(await loadPortalView(stubClient({}), null, false), { kind: "login", expired: false });
-    assert.deepEqual(await loadPortalView(stubClient({}), null, true), { kind: "login", expired: true });
+test("portal view: no session shows login, success shows seats, 401 shows expired login, 403 explains lost eligibility", async () => {
+    assert.deepEqual(await loadPortalView(stubClient({}), null), { kind: "login", expired: false });
     const sessions: string[] = [];
     const seats = stubClient({ sponsorPortal: async (session) => { sessions.push(session); return { ok: true, value: PORTAL }; } });
-    assert.deepEqual(await loadPortalView(seats, SESSION, false), { kind: "seats", data: PORTAL });
+    assert.deepEqual(await loadPortalView(seats, SESSION), { kind: "seats", data: PORTAL });
     assert.deepEqual(sessions, [SESSION]);
     const expired = stubClient({ sponsorPortal: async () => fail(401, "authorization_expired") });
-    assert.deepEqual(await loadPortalView(expired, SESSION, false), { kind: "clear-session" });
-    assert.deepEqual(await loadPortalView(expired, SESSION, true), { kind: "login", expired: true });
+    assert.deepEqual(await loadPortalView(expired, SESSION), { kind: "login", expired: true });
     const ineligible = stubClient({ sponsorPortal: async () => fail(403, "supporter_role_required") });
-    assert.deepEqual(await loadPortalView(ineligible, SESSION, false), { kind: "ineligible", message: ROLE_REQUIRED_MESSAGE });
+    assert.deepEqual(await loadPortalView(ineligible, SESSION), { kind: "ineligible", message: ROLE_REQUIRED_MESSAGE });
     const down = stubClient({ sponsorPortal: async () => fail(502, "discord_unavailable") });
-    assert.deepEqual(await loadPortalView(down, SESSION, false), { kind: "error", message: GENERIC_ERROR_MESSAGE });
+    assert.deepEqual(await loadPortalView(down, SESSION), { kind: "error", message: GENERIC_ERROR_MESSAGE });
 });
 
 test("claim sends the cookie's device and the normalized code, and maps every contract error", async () => {
@@ -87,10 +92,10 @@ test("create code returns the code once, expires on 401 or a missing session and
     assert.deepEqual(await createCodeActionResult(down, SPONSOR_REQUEST), { state: { code: null, error: GENERIC_ERROR_MESSAGE } });
 });
 
-test("remove seat validates the Discord id, reloads on success, expires on 401 or a missing session and maps 400", async () => {
+test("remove seat validates the Discord id, reloads on success, expires on 401 or a missing session and maps invalid_request", async () => {
     const calls: string[][] = [];
     const removed = stubClient({ removeSponsoredAccount: async (session, id) => { calls.push([session, id]); return { ok: true, value: null }; } });
-    assert.deepEqual(await removeSeatActionResult(removed, SPONSOR_REQUEST, "123456789012345678"), { clearCookie: null, redirectTo: "/nightly/sponsor" });
+    assert.deepEqual(await removeSeatActionResult(removed, SPONSOR_REQUEST, "123456789012345678"), { redirect: { location: "/nightly/sponsor", cookies: [] } });
     assert.deepEqual(calls, [[SESSION, "123456789012345678"]]);
     assert.deepEqual(await removeSeatActionResult(stubClient({}), { sameOrigin: true, session: null }, "123456789012345678"), EXPIRED);
     const invalid = { state: { error: nightlyErrorMessage("sponsor-remove", "invalid_request") } };
@@ -99,7 +104,7 @@ test("remove seat validates the Discord id, reloads on success, expires on 401 o
     }
     const expired = stubClient({ removeSponsoredAccount: async () => fail(401, "authorization_expired") });
     assert.deepEqual(await removeSeatActionResult(expired, SPONSOR_REQUEST, "123456789012345678"), EXPIRED);
-    const rejected = stubClient({ removeSponsoredAccount: async () => fail(400, "http_400") });
+    const rejected = stubClient({ removeSponsoredAccount: async () => fail(400, "invalid_request") });
     assert.deepEqual(await removeSeatActionResult(rejected, SPONSOR_REQUEST, "123456789012345678"), invalid);
 });
 
@@ -116,6 +121,15 @@ test("error messages use the gateway's wording per step and never echo the code"
     assert.equal(parseErrorContext("claim"), "claim");
     assert.equal(parseErrorContext("toString"), null);
     assert.equal(parseErrorContext(undefined), null);
+    assert.equal(parseErrorContext(["claim", "claim"]), null);
+    assert.equal(nightlyErrorMessage("sponsor-remove", "http_400"), GENERIC_ERROR_MESSAGE);
+});
+
+test("the error page view falls back to the generic message for an unknown context or a repeated code", () => {
+    assert.deepEqual(nightlyErrorViewFor(null, "expired"), { message: GENERIC_ERROR_MESSAGE, help: null });
+    assert.deepEqual(nightlyErrorViewFor("activate", "expired"), { message: "That installer code has expired.", help: null });
+    assert.deepEqual(nightlyErrorViewFor("activate", ["expired", "expired"]), { message: GENERIC_ERROR_MESSAGE, help: null });
+    assert.deepEqual(nightlyErrorViewFor("callback", "supporter_role_required").help, "sponsor-code");
 });
 
 test("claim action refuses a cross-origin post without calling the Edge Function", async () => {

@@ -1,19 +1,17 @@
 import { NextResponse } from "next/server";
-import { MAXIMUM_OAUTH_CODE_LENGTH, USER_CODE_PATTERN } from "../../../../supabase/functions/_shared/nightly/formats";
-import type { NightlyClient, NightlyResult, OAuthOutcome } from "./client";
 import {
-    CLAIM_COOKIE,
-    CLAIM_COOKIE_SECONDS,
-    encodeClaimContext,
-    nightlyCookieOptions,
-    SPONSOR_COOKIE,
-} from "./cookies";
+    MAXIMUM_OAUTH_CODE_LENGTH,
+    normalizeUserCode,
+    USER_CODE_PATTERN,
+} from "../../../../supabase/functions/_shared/nightly/formats";
+import type { NightlyClient, NightlyResult, OAuthOutcome } from "./client";
+import { CLAIM_COOKIE, CLAIM_COOKIE_SECONDS, encodeClaimContext, nightlyCookieOptions, SPONSOR_COOKIE } from "./cookies";
 import { OAUTH_STATE_PATTERN } from "./formats";
 import type { NightlyErrorContext } from "./messages";
 
 /** One nightly cookie a redirect sets; a zero lifetime clears it. */
 export type NightlyCookie = { name: string; value: string; maxAge: number };
-/** Where a nightly GET route sends the browser, plus any cookies it sets on the way. */
+/** Where a nightly route handler or server action sends the browser, plus any cookies it sets on the way. */
 export type RedirectPlan = { location: string; cookies: NightlyCookie[] };
 
 /** Builds the error-page path for one context and sanitized code. */
@@ -23,8 +21,8 @@ export function errorPath(context: NightlyErrorContext, code: string): string {
 
 /** Handles `GET /nightly/activate?code=`: starts device OAuth or explains why the code cannot be used. */
 export async function planActivate(params: URLSearchParams, client: NightlyClient): Promise<RedirectPlan> {
-    const userCode = params.get("code")?.trim().toUpperCase();
-    if (!userCode || !USER_CODE_PATTERN.test(userCode)) return plan(errorPath("activate", "invalid_code"));
+    const userCode = normalizeUserCode(params.get("code") ?? "");
+    if (!USER_CODE_PATTERN.test(userCode)) return plan(errorPath("activate", "invalid_code"));
     return planAuthorize(await client.startDeviceOAuth(userCode), "activate");
 }
 
@@ -35,11 +33,9 @@ export async function planSponsorLogin(client: NightlyClient): Promise<RedirectP
 
 /** Handles `GET /nightly/callback`: completes OAuth once, then redirects so a refresh never replays the code. */
 export async function planCallback(params: URLSearchParams, client: NightlyClient): Promise<RedirectPlan> {
-    const code = params.get("code");
-    const state = params.get("state");
-    if (!code || code.length > MAXIMUM_OAUTH_CODE_LENGTH || !state || !OAUTH_STATE_PATTERN.test(state)) {
-        return plan(errorPath("callback", "invalid_request"));
-    }
+    const code = params.get("code") ?? "";
+    const state = params.get("state") ?? "";
+    if (!isWellFormedCallback(code, state)) return plan(errorPath("callback", "invalid_request"));
     const result = await client.completeOAuth(code, state);
     if (!result.ok) return plan(errorPath("callback", result.code));
     return planOutcome(result.value);
@@ -56,11 +52,6 @@ export function planOutcome(outcome: OAuthOutcome): RedirectPlan {
     return plan("/nightly/claim", [{ name: CLAIM_COOKIE, value: claim, maxAge: CLAIM_COOKIE_SECONDS }]);
 }
 
-/** Handles `GET /nightly/sponsor/logout`: drops an expired sponsor session and returns to the login prompt. */
-export function planSponsorLogout(): RedirectPlan {
-    return plan("/nightly/sponsor?session=expired", [{ name: SPONSOR_COOKIE, value: "", maxAge: 0 }]);
-}
-
 /** Converts a plan into a no-store 302 on the request's origin, setting each cookie with the shared nightly attributes. */
 export function redirectResponse(redirect: RedirectPlan, requestUrl: string): NextResponse {
     const response = NextResponse.redirect(new URL(redirect.location, requestUrl), 302);
@@ -70,6 +61,12 @@ export function redirectResponse(redirect: RedirectPlan, requestUrl: string): Ne
         response.cookies.set(cookie.name, cookie.value, nightlyCookieOptions(cookie.maxAge));
     }
     return response;
+}
+
+/** Whether Discord's callback carries a non-empty, bounded OAuth code and a well-formed state. */
+function isWellFormedCallback(code: string, state: string): boolean {
+    if (code.length === 0 || code.length > MAXIMUM_OAUTH_CODE_LENGTH) return false;
+    return OAUTH_STATE_PATTERN.test(state);
 }
 
 /** Redirects to Discord on success, otherwise to the matching error page. */

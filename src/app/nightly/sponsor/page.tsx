@@ -7,22 +7,20 @@ import { loadPortalView } from "@/app/lib/nightly/flows";
 import { getNightlyClient } from "@/app/lib/nightly/server";
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { createSponsorCode, removeSponsoredSeat } from "./actions";
 
 export const metadata: Metadata = { title: "Share nightlies with friends", robots: { index: false, follow: false } };
 
 type SponsorPageProps = { searchParams: Promise<Record<string, string | string[] | undefined>> };
 
-/** Sponsor portal: login prompt without a session, otherwise the seat list from `/sponsor/portal`. */
+/** Sponsor portal: login prompt without a live session, otherwise the seat list from `/sponsor/portal`. */
 export default async function SponsorPage({ searchParams }: SponsorPageProps) {
     const session = readSponsorSession((await cookies()).get(SPONSOR_COOKIE)?.value);
-    const alreadyCleared = (await searchParams).session === "expired";
-    const view = await loadPortalView(getNightlyClient(), session, alreadyCleared);
-    // Pages cannot write cookies, so an expired session is cleared by the logout route handler.
-    if (view.kind === "clear-session") redirect("/nightly/sponsor/logout");
+    const view = await loadPortalView(getNightlyClient(), session);
     if (view.kind === "login") {
-        return <NightlyCard eyebrow="Nightly access portal"><SponsorLogin expired={view.expired} /></NightlyCard>;
+        // A sponsor action that dropped an expired session lands here with `?session=expired`.
+        const expired = view.expired || (await searchParams).session === "expired";
+        return <NightlyCard eyebrow="Nightly access portal"><SponsorLogin expired={expired} /></NightlyCard>;
     }
     if (view.kind === "ineligible") {
         return (

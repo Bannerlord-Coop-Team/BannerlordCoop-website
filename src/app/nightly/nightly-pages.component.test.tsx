@@ -85,7 +85,7 @@ it("claim page without a pending claim explains the authorization expired", asyn
     expect(view.querySelector('[role="alert"]')?.textContent).toBe("That installer authorization has expired.");
 });
 
-it("sponsor page renders the seat list, hands a rejected session to the logout route and offers re-login when ineligible", async () => {
+it("sponsor page renders the seat list, shows the expired login for a rejected session and offers re-login when ineligible", async () => {
     mocks.cookies.set("nightly_sponsor", SESSION);
     mocks.client = { sponsorPortal: async () => ({ ok: true, value: { seats: [{ discordUserId: "123456789012345678", createdAt: null }] } }) };
     const portal = render(await SponsorPage(params()));
@@ -93,17 +93,33 @@ it("sponsor page renders the seat list, hands a rejected session to the logout r
     expect(portal.querySelector("code")?.textContent).toBe("123456789012345678");
 
     mocks.client = { sponsorPortal: async () => ({ ok: false, status: 401, code: "authorization_expired" }) };
-    await expect(SponsorPage(params())).rejects.toThrow("redirect:/nightly/sponsor/logout");
+    const expired = render(await SponsorPage(params()));
+    expect(expired.querySelector('[role="status"]')?.textContent).toContain("Your sponsor session has ended.");
+    expect(mocks.redirect).not.toHaveBeenCalled();
 
     mocks.client = { sponsorPortal: async () => ({ ok: false, status: 403, code: "supporter_role_required" }) };
     const ineligible = render(await SponsorPage(params()));
     expect(ineligible.querySelector('a[href="/nightly/sponsor/login"]')?.textContent).toContain("Sign in again");
 });
 
-it("a finished server action clears its cookie with the route handlers' attributes, then redirects", async () => {
-    await expect(carryOut({ clearCookie: "nightly_claim", redirectTo: "/nightly/approved?via=sponsor" })).rejects.toThrow("redirect:");
+it("sponsor page shows the expired notice after an action dropped the session", async () => {
+    const view = render(await SponsorPage(params({ session: "expired" })));
+    expect(view.querySelector('[role="status"]')?.textContent).toContain("Your sponsor session has ended.");
+    const fresh = render(await SponsorPage(params()));
+    expect(fresh.querySelector('[role="status"]')).toBeNull();
+});
+
+it("a finished server action sets its plan's cookies with the route handlers' attributes, then redirects", async () => {
+    const plan = { location: "/nightly/approved?via=sponsor", cookies: [{ name: "nightly_claim", value: "", maxAge: 0 }] };
+    await expect(carryOut({ redirect: plan })).rejects.toThrow("redirect:");
     expect(mocks.setCookie).toHaveBeenCalledExactlyOnceWith("nightly_claim", "", {
         path: "/nightly", maxAge: 0, httpOnly: true, secure: true, sameSite: "lax",
     });
     expect(mocks.redirect).toHaveBeenCalledExactlyOnceWith("/nightly/approved?via=sponsor");
+});
+
+it("a server action redirect without cookies only redirects, and a form state is returned as is", async () => {
+    await expect(carryOut({ redirect: { location: "/nightly/sponsor", cookies: [] } })).rejects.toThrow("redirect:/nightly/sponsor");
+    expect(mocks.setCookie).not.toHaveBeenCalled();
+    expect(await carryOut({ state: { error: "x" } })).toEqual({ error: "x" });
 });
