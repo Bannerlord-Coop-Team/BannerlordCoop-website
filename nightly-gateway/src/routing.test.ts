@@ -22,16 +22,10 @@ function erroringStream(): ReadableStream<Uint8Array> {
     return new ReadableStream({ pull(controller) { controller.error(new Error("connection reset")); } });
 }
 
-// Runs one call while capturing console.error lines, so tests can check what the Worker logged.
-async function captureErrors<T>(run: () => Promise<T>): Promise<{ result: T; logs: string[] }> {
-    const logs: string[] = [];
-    const original = console.error;
-    console.error = (line: unknown) => { logs.push(String(line)); };
-    try {
-        return { result: await run(), logs };
-    } finally {
-        console.error = original;
-    }
+// Collects the Worker's structured log events in memory, so tests can check what it logged without touching console.
+function recordingLog(): { log: (event: Record<string, unknown>) => void; events: Array<Record<string, unknown>> } {
+    const events: Array<Record<string, unknown>> = [];
+    return { events, log: (event) => { events.push(event); } };
 }
 
 // Records each upstream call and answers with the given response factory.
@@ -131,44 +125,60 @@ test("device token polling passes every status through without an activation lin
     }
 });
 
-test("an unreachable or broken Edge Function becomes a logged 502 with a named code", async () => {
-    const failures: Array<{ respond: () => Response | Promise<Response>; code: string }> = [
-        { respond: () => Promise.reject(new TypeError("fetch failed")), code: "function_unreachable" },
-        { respond: () => Promise.reject(new DOMException("timed out", "TimeoutError")), code: "function_unreachable" },
-        { respond: () => new Response("<html>Bad gateway</html>", { status: 502, headers: { "content-type": "text/html" } }), code: "function_response_invalid" },
+test("an unreachable or broken Edge Function becomes a logged 502 with a named code and cause class", async () => {
+    const failures: Array<{ respond: () => Response | Promise<Response>; code: string; cause?: string }> = [
+        { respond: () => Promise.reject(new TypeError("fetch failed")), code: "function_unreachable", cause: "TypeError" },
+        { respond: () => Promise.reject(new DOMException("timed out", "TimeoutError")), code: "function_unreachable", cause: "TimeoutError" },
+        { respond: () => new Response("<html>Bad gateway</html>", { status: 502, headers: { "content-type": "text/html" } }), code: "function_response_invalid", cause: "SyntaxError" },
         { respond: () => new Response(null, { status: 200 }), code: "function_response_invalid" },
         { respond: () => new Response("x".repeat(64 * 1024), { status: 200 }), code: "function_response_invalid" },
         { respond: () => new Response(null, { status: 302, headers: { location: "https://example.invalid/" } }), code: "function_response_invalid" },
-        { respond: () => new Response(erroringStream(), { status: 200 }), code: "function_response_invalid" },
+        { respond: () => new Response(erroringStream(), { status: 200 }), code: "function_response_invalid", cause: "Error" },
     ];
     for (const failure of failures) {
-        const gateway = createGateway({ fetch: recordingFetch(failure.respond).fetch });
-        const { result: response, logs } = await captureErrors(() => gateway.fetch(
+        const logger = recordingLog();
+        const gateway = createGateway({ fetch: recordingFetch(failure.respond).fetch, log: logger.log });
+        const response = await gateway.fetch(
             formRequest(CANONICAL_GATEWAY_ORIGIN, "/v1/device/sessions", "client=installer"),
             statelessEnv(),
-        ));
+        );
         assert.equal(response.status, 502);
         assert.deepEqual(await response.json(), { error: failure.code });
         assert.equal(response.headers.get("cache-control"), "no-store");
-        assert.deepEqual(logs.map((line) => JSON.parse(line)), [
-            { event: "nightly_gateway_request_failed", path: "/v1/device/sessions", error: failure.code },
-        ]);
+        assert.deepEqual(logger.events, [{
+            event: "nightly_gateway_request_failed",
+            path: "/v1/device/sessions",
+            error: failure.code,
+            ...(failure.cause === undefined ? {} : { cause: failure.cause }),
+        }], failure.code);
     }
+});
+
+test("the logged cause names only the failure class, never its message", async () => {
+    const logger = recordingLog();
+    const secret = "Bearer sk_live_do_not_log";
+    const gateway = createGateway({ fetch: () => Promise.reject(new TypeError(secret)), log: logger.log });
+    await gateway.fetch(formRequest(CANONICAL_GATEWAY_ORIGIN, "/v1/device/token", "device_code=x"), statelessEnv());
+    assert.equal(logger.events.length, 1);
+    assert.equal(logger.events[0].cause, "TypeError");
+    assert.doesNotMatch(JSON.stringify(logger.events), /sk_live_do_not_log/);
 });
 
 test("a failing installer request stream is an internal error, not an oversized body", async () => {
     const upstream = recordingFetch(() => Response.json({}));
-    const gateway = createGateway({ fetch: upstream.fetch });
+    const logger = recordingLog();
+    const gateway = createGateway({ fetch: upstream.fetch, log: logger.log });
     const request = new Request(`${CANONICAL_GATEWAY_ORIGIN}/v1/device/token`, {
         method: "POST",
         headers: { "content-type": "application/x-www-form-urlencoded" },
         body: erroringStream(),
         duplex: "half",
     } as RequestInit);
-    const { result: response } = await captureErrors(() => gateway.fetch(request, statelessEnv()));
+    const response = await gateway.fetch(request, statelessEnv());
     assert.equal(response.status, 500);
     assert.deepEqual(await response.json(), { error: "internal_error" });
     assert.equal(upstream.calls.length, 0);
+    assert.deepEqual(logger.events, [{ event: "nightly_gateway_request_failed", path: "/v1/device/token", error: "internal_error" }]);
 });
 
 test("oversized device request bodies are refused before anything is forwarded", async () => {
@@ -194,11 +204,13 @@ test("the Edge Function URL must be a plain https base URL", () => {
 
 test("a misconfigured Edge Function URL fails closed without calling anything", async () => {
     const upstream = recordingFetch(() => Response.json({}));
-    const gateway = createGateway({ fetch: upstream.fetch });
+    const logger = recordingLog();
+    const gateway = createGateway({ fetch: upstream.fetch, log: logger.log });
     const response = await gateway.fetch(formRequest(CANONICAL_GATEWAY_ORIGIN, "/v1/device/sessions", "client=installer"), statelessEnv("http://insecure.invalid"));
     assert.equal(response.status, 500);
     assert.deepEqual(await response.json(), { error: "internal_error" });
     assert.equal(upstream.calls.length, 0);
+    assert.equal(logger.events.length, 1);
 });
 
 test("retired gateway pages redirect to the website on both gateway hosts", async () => {

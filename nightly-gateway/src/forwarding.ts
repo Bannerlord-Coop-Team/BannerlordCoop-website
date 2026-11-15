@@ -57,8 +57,8 @@ async function callFunction(request: Request, url: string, body: Uint8Array, ups
             redirect: "manual",
             signal: AbortSignal.timeout(DEVICE_FORWARD_TIMEOUT_MS),
         });
-    } catch {
-        throw new GatewayError(502, "function_unreachable");
+    } catch (cause) {
+        throw new GatewayError(502, "function_unreachable", { cause });
     }
 }
 
@@ -72,12 +72,21 @@ function forwardedHeaders(request: Request): Headers {
 
 // Parses the upstream body as bounded, non-empty UTF-8 JSON; anything else is a 502.
 async function readUpstreamJson(response: Response): Promise<unknown> {
-    const bytes = await readBoundedBytes(response, MAXIMUM_DEVICE_RESPONSE_BYTES).catch(() => null);
+    const bytes = await readUpstreamBytes(response);
     if (bytes === null || bytes.byteLength === 0) throw new GatewayError(502, "function_response_invalid");
     try {
         return JSON.parse(decodeUtf8(bytes));
-    } catch {
-        throw new GatewayError(502, "function_response_invalid");
+    } catch (cause) {
+        throw new GatewayError(502, "function_response_invalid", { cause });
+    }
+}
+
+// Reads the bounded upstream body; null means it was too large, and a broken stream is a 502 that keeps its cause.
+async function readUpstreamBytes(response: Response): Promise<Uint8Array | null> {
+    try {
+        return await readBoundedBytes(response, MAXIMUM_DEVICE_RESPONSE_BYTES);
+    } catch (cause) {
+        throw new GatewayError(502, "function_response_invalid", { cause });
     }
 }
 

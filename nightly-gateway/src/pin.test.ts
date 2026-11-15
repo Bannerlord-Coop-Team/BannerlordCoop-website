@@ -5,10 +5,8 @@ import {
     CREATE_BUILD_PIN_KIND,
     createBuildPinToken,
 } from "./core";
-import worker, {
-    serveCreateBuildPinLauncher,
-    serveCreateBuildPinPage,
-} from "./index";
+import worker from "./index";
+import { serveCreateBuildPinLauncher, serveCreateBuildPinPage } from "./pins";
 
 const gateway = "https://nightly.bannerlordcoop.com";
 const legacyGateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";

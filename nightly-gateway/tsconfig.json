@@ -17,6 +17,13 @@
     "src/database.ts",
     "src/forwarding.ts",
     "src/redirects.ts",
-    "src/publication.ts"
+    "src/publication.ts",
+    "src/http.ts",
+    "src/pins.ts",
+    "src/pages.ts",
+    "src/manifests.ts",
+    "src/artifacts.ts",
+    "src/downloads.ts",
+    "src/primitives.ts"
   ]
 }
