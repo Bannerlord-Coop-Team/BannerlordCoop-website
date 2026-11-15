@@ -6,7 +6,6 @@ import { useActionState } from "react";
 import { SPONSORED_ACCOUNT_LIMIT } from "../../../../supabase/functions/_shared/nightly/policy";
 import { alertClass, primaryButtonClass, textButtonClass } from "./styles";
 
-export type { CreateCodeState, RemoveSeatState };
 export type CreateCodeAction = (state: CreateCodeState, form: FormData) => Promise<CreateCodeState>;
 
 export type RemoveSeatAction = (state: RemoveSeatState, form: FormData) => Promise<RemoveSeatState>;

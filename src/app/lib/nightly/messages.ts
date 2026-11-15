@@ -37,12 +37,9 @@ const CONTEXT_MESSAGES: Record<NightlyErrorContext, Readonly<Record<string, stri
         seats_full: `That eligible member has already used all ${SPONSORED_ACCOUNT_LIMIT} sponsored-account seats.`,
     },
     "sponsor-login": {},
-    "sponsor-code": {
-        supporter_role_required: ROLE_REQUIRED_MESSAGE,
-    },
+    "sponsor-code": {},
     "sponsor-remove": {
         invalid_request: "That sponsored account could not be removed. Reload the page and try again.",
-        supporter_role_required: ROLE_REQUIRED_MESSAGE,
     },
 };
 

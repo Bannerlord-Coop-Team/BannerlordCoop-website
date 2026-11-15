@@ -7,9 +7,6 @@ import { useActionState } from "react";
 import { MAXIMUM_SPONSOR_CODE_LENGTH } from "../../../../supabase/functions/_shared/nightly/formats";
 import { alertClass, primaryButtonClass } from "./styles";
 
-// A successful claim redirects, so only errors come back to the form.
-export type { ClaimFormState };
-
 export type ClaimFormAction = (state: ClaimFormState, form: FormData) => Promise<ClaimFormState>;
 
 /** Collects a friend's sponsor code and submits it through the injected server action. */

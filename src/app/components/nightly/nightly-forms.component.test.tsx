@@ -1,9 +1,9 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
-import { SponsorClaimForm, type ClaimFormState } from "./SponsorClaimForm";
+import type { ClaimFormState, CreateCodeState, RemoveSeatState } from "@/app/lib/nightly/flows";
+import { SponsorClaimForm } from "./SponsorClaimForm";
 import { SponsorPortal } from "./SponsorPortal";
-import type { CreateCodeState, RemoveSeatState } from "./SponsorPortalForms";
 
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
