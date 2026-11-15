@@ -16,8 +16,11 @@ Every URL it hands back (manifest artifact URLs, pin install links, the pin
 launcher, and the `verification_uri` it adds to a created device session) uses
 the host the request arrived on. Any other host is treated as the canonical one.
 When the Edge Function cannot be reached or answers with something other than
-bounded JSON, the Worker logs the path and returns `502 function_unreachable` or
-`502 function_response_invalid`.
+bounded JSON, the Worker returns `502 function_unreachable` or
+`502 function_response_invalid` with only `{"error": ...}` in the body. The
+`nightly_gateway_request_failed` log line carries the path, the cause class, and
+for `function_response_invalid` the Edge reply's `upstream_status` (for example
+`504` from a platform timeout page).
 
 The installer script is intentionally public. It carries no Discord, R2, or
 shared download secret. Every install or update starts a new device session,
@@ -30,12 +33,12 @@ token only after the Edge Function verifies one of these conditions:
   sponsored-account seats.
 
 Sponsored access is attached to the friend's Discord account, not to a machine
-or a download count. Before each installer session is approved, the gateway
-asks Discord whether that sponsor still has a qualifying Staff, Tester, Competition Winner, or
-supporter role. If they left the guild or lost the role, their grant, seats,
-and active download sessions are removed. Sponsored friends do not need the
-sponsor to sign in again. Removing a sponsored account also revokes its active
-gateway sessions. Every eligible member has one shared ten-seat pool
+or a download count. Before each installer session is approved, the Edge
+Function asks Discord whether that sponsor still has a qualifying Staff, Tester,
+Competition Winner, or supporter role. If they left the guild or lost the role,
+the Edge Function removes their grant, seats, and active download sessions.
+Sponsored friends do not need the sponsor to sign in again. Removing a sponsored
+account (also an Edge Function action) revokes its active download sessions. Every eligible member has one shared ten-seat pool
 regardless of how many qualifying roles they hold.
 
 Competition Winner is an installer eligibility role only, not a website membership
@@ -55,8 +58,8 @@ server; Linux testers run those files through Wine or Proton. Run
 `installer/`; `gateway:dry-run` performs the sync automatically before
 packaging.
 
-`installer/install.ps1` is the authority for nightly release metadata, Discord
-authorization decisions, and incremental server update behavior. Both installers
+`installer/install.ps1` is the client-side authority for nightly release
+metadata, the device-authorization flow, and incremental server update behavior. Both installers
 read `/v1/manifests/release`. The gateway first reads the public
 `bannerlordcoop-nightly-releases/nightly/release.json` pointer, which contains only
 the GHCR digest and the hash-bound key of the private
@@ -156,16 +159,19 @@ Linux and checks that the packaged Linux scripts match their canonical sources.
    login named `nightly_gateway_worker`, grant it that runtime role, and use it
    only for this gateway.
 2. Create a cache-disabled Cloudflare Hyperdrive configuration using that
-   login and the Supabase PostgreSQL connection. Replace the all-zero
-   Hyperdrive ID in `wrangler.jsonc` before a real deployment. The Worker never
-   receives a Supabase service-role key or a general database owner credential.
-3. Keep the existing D1 binding during the migration window only. With no
-   `DATABASE_BACKEND` secret, the post-cutover release uses PostgreSQL. Select
-   `legacy-d1` explicitly before deploying a bridge release to an unmigrated
-   environment. Follow
-   `SUPABASE_CUTOVER.md` to lock writes, import one consistent snapshot, switch
-   to PostgreSQL, verify, and unlock. Remove the D1 binding after the rollback
-   window closes.
+   login and the Supabase PostgreSQL connection, and bind it as `HYPERDRIVE` in
+   `wrangler.jsonc`. The Worker never receives a Supabase service-role key or a
+   general database owner credential.
+3. The gateway database is PostgreSQL only. Since the Edge Function split,
+   every device, sponsor, and OAuth write happens in the Edge Function against
+   the same `nightly_gateway` schema, so there is no D1 binding, no
+   `DATABASE_BACKEND` selector, and no D1 rollback route: a Worker reading D1
+   would find no `download_sessions` and reject every new token with
+   `401 authorization_expired`. Rolling back means redeploying the previous
+   Worker version *and* the previous Edge Function version together (see
+   `SUPABASE_CUTOVER.md`). The SQL under `nightly-gateway/migrations/` and
+   `migrate-d1-to-postgres.mjs` are historical records of the completed D1
+   import; the live schema is owned by `supabase/migrations/`.
 4. Keep the `NIGHTLY_FUNCTION_URL` var in `wrangler.jsonc` pointed at the
    deployed `nightly-gateway` Edge Function. Discord OAuth, the Discord bot
    token, and the website key are Edge Function secrets; the Worker holds no
@@ -178,11 +184,11 @@ Linux and checks that the packaged Linux scripts match their canonical sources.
    retired.
 6. Optionally set `PIN_MINT_SECRET` with `wrangler secret put` to the same
    value as Bot_UP's `NIGHTLY_GATEWAY_PIN_SECRET` (at least 32 characters).
-   Nightly Discord OAuth and `/v1/manifests/client` keep working when this
-    secret is absent. When it is set, `/create-build` can mint a one-time
-   installer pin. Apply D1 migration `0002_installer_pins.sql`, and add a
-   one-day `pins/` lifecycle rule on `bannerlordcoop-patron-nightlies`. Do not
-   require this secret at Worker start.
+   `/v1/manifests/client` keeps working when this secret is absent. When it is
+   set, `/create-build` can mint a one-time installer pin; its tables come from
+   the step 1 schema migration. Add a one-day `pins/` lifecycle rule on
+   `bannerlordcoop-patron-nightlies`. Do not require this secret at Worker
+   start.
 7. Create and bind a private R2 bucket named
    `bannerlordcoop-patron-nightlies` as `RELEASES`. Do not enable its `r2.dev`
    URL or attach a public custom domain. Artifacts reach installers only
@@ -209,7 +215,7 @@ npm test
 `wrangler.jsonc` before typechecking. Run `gateway:types` directly only when
 you want to refresh the generated types for editor use.
 
-The dry run is intentionally non-deploying. Deployment also requires the real
-Hyperdrive ID, the deployed Edge Function, private Patron bucket, and the
-Garrett Cloudflare account configured in `wrangler.jsonc`. D1 remains bound
-only for the controlled cutover and short rollback window.
+The dry run is intentionally non-deploying. Deployment also requires the
+Hyperdrive configuration, the deployed Edge Function, private Patron bucket, and
+the Garrett Cloudflare account configured in `wrangler.jsonc`. The Worker binds
+no D1 database.

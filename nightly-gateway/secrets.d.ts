@@ -4,6 +4,5 @@
 interface Env {
     DB: import("./src/database").GatewayDatabase;
     PIN_MINT_SECRET?: string;
-    DATABASE_BACKEND?: "legacy-d1" | "postgres";
     MIGRATION_MODE?: "locked";
 }

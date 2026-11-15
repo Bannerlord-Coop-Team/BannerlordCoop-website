@@ -30,7 +30,7 @@ export interface GatewayPreparedStatement {
     run(): Promise<GatewayRunResult>;
 }
 
-/** The D1-shaped database surface the gateway modules depend on, so Postgres and D1 are interchangeable. */
+/** The D1-shaped statement surface the gateway modules depend on, served by Postgres in production and fakes in tests. */
 export interface GatewayDatabase {
     prepare(sql: string): GatewayPreparedStatement;
     batch(statements: GatewayPreparedStatement[]): Promise<GatewayRunResult[]>;
@@ -40,21 +40,12 @@ type HyperdriveBinding = { connectionString: string };
 type DatabaseEnvironment = {
     DB?: GatewayDatabase;
     HYPERDRIVE?: HyperdriveBinding;
-    LEGACY_DB?: GatewayDatabase;
-    DATABASE_BACKEND?: string;
 };
 
-// Picks the request's database: an injected one, the explicitly selected legacy D1, or a new Hyperdrive Postgres client.
-// Any other configuration fails closed.
+// Picks the request's database: an injected test database, otherwise a new Hyperdrive Postgres client.
+// Postgres is the only production store since the Edge Function split; a missing Hyperdrive binding fails closed.
 export async function databaseForRequest(env: DatabaseEnvironment): Promise<GatewayDatabase> {
     if (isGatewayDatabase(env.DB)) return env.DB;
-    if (env.DATABASE_BACKEND === "legacy-d1") {
-        if (!isGatewayDatabase(env.LEGACY_DB)) throw new Error("gateway_legacy_database_configuration_invalid");
-        return env.LEGACY_DB;
-    }
-    if (env.DATABASE_BACKEND !== undefined && env.DATABASE_BACKEND !== "postgres") {
-        throw new Error("gateway_database_backend_invalid");
-    }
     const connectionString = env.HYPERDRIVE?.connectionString;
     if (typeof connectionString !== "string" || connectionString.length < 16 || connectionString.length > 8_192) {
         throw new Error("gateway_database_configuration_invalid");
