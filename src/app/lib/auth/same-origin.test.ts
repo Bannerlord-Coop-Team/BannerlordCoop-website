@@ -1,12 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sameOriginRequest, sameOriginSubmission, servedHost } from "./same-origin";
+import { sameOriginRequest, sameOriginSubmission } from "./same-origin";
 
 test("same-origin submissions require matching Fetch Metadata or Origin", () => {
-    const check = (values: Record<string, string>) => {
-        const headers = new Headers(values);
-        return sameOriginSubmission(headers, servedHost(headers));
-    };
+    const check = (values: Record<string, string>) => sameOriginSubmission(new Headers(values));
     assert.equal(check({ "sec-fetch-site": "same-origin", origin: "https://bannerlordcoop.com", host: "bannerlordcoop.com" }), true);
     assert.equal(check({ origin: "https://bannerlordcoop.com", host: "bannerlordcoop.com" }), true);
     assert.equal(check({ "sec-fetch-site": "same-origin", host: "bannerlordcoop.com" }), true);
