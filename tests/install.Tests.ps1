@@ -530,6 +530,12 @@ $discordUpstream = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebErro
 if ($discordUpstream.Action -cne 'Fail' -or $discordUpstream.Message -notmatch 'HTTP 502; error=discord_membership_required') {
     throw 'A named Discord upstream failure retried instead of failing fast with its details.'
 }
+foreach ($forwardingCode in 'function_unreachable', 'function_response_invalid') {
+    $forwarding = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 502 $forwardingCode)
+    if ($forwarding.Action -cne 'Retry' -or $forwarding.Message -notmatch "HTTP 502; error=$forwardingCode") {
+        throw "A Worker forwarding failure ($forwardingCode) did not retry with its details."
+    }
+}
 $networkRecord = $null
 try { throw [Net.WebException]::new('The underlying connection was closed: An unexpected error occurred on a send.') } catch { $networkRecord = $_ }
 $network = Get-NightlyTokenPollDecision -ErrorRecord $networkRecord

@@ -20,16 +20,16 @@ Rule of thumb: **only the Edge Function calls Discord, and only the Worker reads
 
 ## 1. Installer-facing API (Worker host, unchanged wire format)
 
-Installers keep calling the gateway host. The Worker forwards these two routes to the Edge Function, passing the method and body through and adding the `x-nightly-forwarded-origin` header:
+Installers keep calling the gateway host. The Worker forwards these two routes to the Edge Function, passing the method and body through. The Edge Function never sees or validates the installer's host.
 
 | Route | Request | Success | Errors (unchanged codes) |
 |---|---|---|---|
-| `POST /v1/device/sessions` | form `client=installer` | `201 {device_code, user_code, verification_uri, expires_in: 600, interval: 3}` | `5xx` |
+| `POST /v1/device/sessions` | form `client=installer` | `201 {device_code, user_code, verification_uri, expires_in: 600, interval: 3}` (the Edge Function returns everything except `verification_uri`, which the Worker adds) | `5xx` |
 | `POST /v1/device/token` | form `device_code=<43 chars>` | `200 {access_token: <43 chars>, token_type: "Bearer", expires_in: 3600}` | `400 invalid_request`/`expired_token`, `428 authorization_pending`, `403 access_denied`/`supporter_role_required`, `409 already_used`, `502 discord_*` (+`upstream_status`, `upstream_code`) |
 
-- **`verification_uri`** is built from the forwarded origin, as `<origin>/activate?code=XXXX-XXXX`. Old installers (workers.dev) and new installers (`nightly.bannerlordcoop.com`) both receive a URI on their own host, so the existing installer host check keeps passing.
+- **`verification_uri`** is added by the Worker from the host the installer used, as `<origin>/activate?code=XXXX-XXXX`. Old installers (workers.dev) and new installers (`nightly.bannerlordcoop.com`) both receive a URI on their own host, so the existing installer host check keeps passing.
 - **`GET /activate?code=` on the Worker** answers `302` to `https://bannerlordcoop.com/nightly/activate?code=…`.
-- **Allowed forwarded origins:** the Edge Function accepts only the two gateway origins above. Anything else is `400 invalid_request`.
+- **Forwarding failures:** the Worker answers `502 function_unreachable` when the Edge Function can't be reached and `502 function_response_invalid` when its reply is unusable. Both are logged, and the installer treats both as transient while polling.
 - **Token formats:** all tokens and codes keep their current formats. Secrets are 32 random bytes, base64url-encoded (43 chars). The user code is `XXXX-XXXX` from `A-Z2-9`. Storage is SHA-256 hashes only.
 
 ## 2. Website ↔ Edge Function API
@@ -52,7 +52,7 @@ Outcomes returned by `/oauth/complete`:
 - `{outcome: "portal", session, expires_in: 86400}`: sponsor-portal login.
 
 - **OAuth.** The redirect URI is exactly `https://bannerlordcoop.com/nightly/callback`, already registered on the app. Scopes are unchanged: `identify guilds.members.read`.
-- **Sponsor session.** The website keeps the session token in cookie `nightly_sponsor`: `Path=/nightly; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`.
+- **Sponsor session.** The website keeps the session token in cookie `nightly_sponsor`: `Path=/nightly; HttpOnly; Secure; SameSite=Lax; Max-Age` taken from the portal outcome's `expires_in`.
 - **CSRF.** The website protects its own forms with Next.js server actions plus a same-origin check. The Edge Function trusts the website key plus the session, and no longer issues HMAC form tokens.
 - **Messages.** The website maps error codes to user-facing text. The current `gatewayErrorMessage` and help strings in `nightly-gateway/src/index.ts` are the copy source.
 
@@ -71,24 +71,24 @@ The Worker's legacy `/sponsor*` and `/oauth/callback` paths answer `301` to the 
 
 ## 4. Edge Function internals
 
-- **Database access.** It connects with `npm:pg` to `SUPABASE_DB_URL` (provided automatically) and reuses the gateway's SQL and the `GatewayDatabase` adapter from `nightly-gateway/src/database.ts`, so the port moves handlers without rewriting queries. All queries stay in the `nightly_gateway` schema.
+- **Database access.** It connects with `npm:pg` to `SUPABASE_DB_URL` (provided automatically) through a small `query`/`transaction` helper. Queries are native Postgres with schema-qualified `nightly_gateway.*` names; multi-statement changes run in transactions.
 - **Discord.**
   - Bot lookup: `GET /guilds/709516043332354119/members/{id}` with `Bot DISCORD_BOT_TOKEN` and `User-Agent: DiscordBot (https://bannerlordcoop.com, 1)`.
   - Errors carry `upstream_status` and `upstream_code`.
-  - The role lists in `nightly-gateway/src/core.ts` are shared and unchanged.
+  - The role lists and access rules live only in `supabase/functions/_shared/nightly/policy.ts`, with unchanged values.
 - **Secrets.**
   - Already set: `DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`.
   - New: `NIGHTLY_WEBSITE_KEY`.
   - Nothing else.
 - **Refresh tokens.** The gateway stores encrypted Discord refresh tokens it never reads. The Edge Function stops storing them. A migration makes `supporter_grants.encrypted_refresh_token` and `token_nonce` nullable, and clears the existing values. `TOKEN_ENCRYPTION_KEY` is retired.
-- **Code sharing.** Shared pure logic (role checks, code formats, constants) moves to `supabase/functions/_shared/nightly/`. The Worker imports it too, so there is one copy.
+- **No shared code with the Worker.** The Edge Function owns the access policy; the Worker owns R2 and holds no Discord or role logic.
 
 ## 5. Worker changes
 
 - **Removed:** the device-session, OAuth, sponsorship and portal handlers, plus the `DISCORD_*` and `TOKEN_ENCRYPTION_KEY` bindings.
 - **Kept:** manifests, artifacts, pins, assets and `/health`. `/` redirects to `https://bannerlordcoop.com/nightly`.
 - **Origin handling:** `PUBLIC_ORIGIN` becomes the request origin, checked against the two allowed hosts. Manifest URL rewriting, pin URLs and `verification_uri` therefore match the host the installer used. The single-origin `assertConfiguration` check is replaced by that allowlist.
-- **New secret:** `NIGHTLY_FUNCTION_URL` for forwarding.
+- **New var:** `NIGHTLY_FUNCTION_URL` (in `wrangler.jsonc`) for forwarding.
 
 ## 6. Installer and pipeline changes
 
@@ -126,11 +126,11 @@ The Worker's legacy `/sponsor*` and `/oauth/callback` paths answer `301` to the 
 - **Claim state.** The device id, username and revoked flag live in the `nightly_claim` cookie (`Path=/nightly`, 10 minutes), never in the HTML.
 - **Sponsor-portal actions.** Create-code and remove-seat are server actions posted to `/nightly/sponsor`, guarded by Next's origin check plus an explicit same-origin check. `/nightly/sponsor/logout` clears an expired session.
 - **Worker forwarding.**
-  - It sends the allowlisted request origin, or the canonical host for anything else.
-  - A non-JSON, empty, oversized (>16 KiB) or redirecting upstream reply returns `502 internal_error`.
-  - A request body over 4 KiB returns `413 request_too_large` and is not forwarded.
+  - For a successful session it adds `verification_uri` on the allowlisted request host, or the canonical host for anything else.
+  - An unreachable function returns `502 function_unreachable`; a non-JSON, empty, oversized (>16 KiB) or redirecting upstream reply returns `502 function_response_invalid`. Both are logged.
+  - A request body over 4 KiB returns `413 request_too_large` and is not forwarded; a failing request stream is a `500`, not a 413.
   - The upstream timeout is 10 s.
 - **Worker redirects.** `/` and `/activate` redirect only for GET/HEAD. The other legacy paths answer `301` for any method. Only `/activate` and `/oauth/callback` keep their query strings.
 - **Legacy (v1) manifests.** Their checks accept either gateway host, and URLs are rewritten to the host the installer used.
-- **Code sharing.** The Worker keeps its own role lists in `nightly-gateway/src/core.ts`, and the Edge Function has its own in `_shared/nightly/policy.ts`. Unifying them is left for later.
+- **Code sharing.** None: the Worker's Discord policy was removed, so `_shared/nightly/policy.ts` is the only access policy.
 - **Custom domain.** `nightly.bannerlordcoop.com` is attached to the Worker as a custom domain and declared in `nightly-gateway/wrangler.jsonc` `routes`.
