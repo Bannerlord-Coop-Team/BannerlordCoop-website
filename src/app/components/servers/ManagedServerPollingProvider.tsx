@@ -79,12 +79,16 @@ const ManagedServerSavesContext = createContext<ManagedServerSaves | null>(null)
 /** Undefined outside the console toolbar; null until the toolbar's status row has mounted. */
 export const ManagedServerStatusSlotContext = createContext<HTMLElement | null | undefined>(undefined);
 
-/** Spaces status refreshes further apart as an operation runs longer: every 4 s, then 8 s, then 15 s. */
+/** Polling is deliberately quiet: one visible tab checks at most every fifteen seconds. */
 export function managedServerPollDelay(elapsedMilliseconds: number) {
-    if (elapsedMilliseconds < 60_000) return 4_000;
-    if (elapsedMilliseconds < 3 * 60_000) return 8_000;
-    return 15_000;
+    return Math.max(15_000, Math.min(5 * 60_000, 15_000 * 2 ** Math.min(4, Math.floor(elapsedMilliseconds / 60_000))));
 }
+
+const TERMINAL_OPERATION_STATES = new Set(["stopped", "awaiting-save", "succeeded", "failed", "cancelled", "deleted"]);
+export function isTerminalManagedServerOperationState(state: unknown) {
+    return typeof state === "string" && TERMINAL_OPERATION_STATES.has(state);
+}
+const MAXIMUM_POLL_FAILURES = 4;
 
 /** Creates the in-memory channel that carries live console phases to lifecycle progress. */
 export function createManagedConsoleSignals(): ManagedConsoleSignals {
@@ -205,6 +209,7 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
         let refreshWhenVisible = false;
         let cancelled = false;
         let checking: Promise<void> | null = null;
+        let failures = 0;
 
         // Full page renders are expensive on the edge runtime, so unchanged status skips them.
         // The fingerprint is read before refreshing, so a change after it is caught next time.
@@ -219,8 +224,26 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
                     new Promise<null>((resolve) => { timeout = window.setTimeout(() => resolve(null), waitMilliseconds); }),
                 ]).finally(() => window.clearTimeout(timeout));
                 if (cancelled) return;
-                if (result?.ok && result.fingerprint === polled.fingerprint) return;
-                polled.fingerprint = result?.ok ? result.fingerprint : null;
+                if (result?.ok) {
+                    failures = 0;
+                    // The fingerprint is JSON owned by the status action; operationState is its second item.
+                    try {
+                        const operationState = JSON.parse(result.fingerprint)[1];
+                        if (isTerminalManagedServerOperationState(operationState)) {
+                            setSession((current) => current?.sequence === sequence ? null : current);
+                            return;
+                        }
+                    } catch { /* malformed evidence is handled as a failed read below */ }
+                    if (result.fingerprint === polled.fingerprint) return;
+                    polled.fingerprint = result.fingerprint;
+                } else {
+                    failures += 1;
+                    if (failures >= MAXIMUM_POLL_FAILURES) {
+                        setTimedOutSession(session);
+                        setSession((current) => current?.sequence === sequence ? null : current);
+                        return;
+                    }
+                }
             }
             router.refresh();
         }
@@ -232,7 +255,12 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
         }
 
         function schedule() {
-            if (!cancelled) timer = window.setTimeout(tick, managedServerPollDelay(Date.now() - startedAt));
+            if (!cancelled) {
+                const base = managedServerPollDelay(Date.now() - startedAt);
+                const backoff = failures === 0 ? base : Math.min(5 * 60_000, base * 2 ** failures);
+                const jitter = backoff * (0.9 + Math.random() * 0.2);
+                timer = window.setTimeout(tick, jitter);
+            }
         }
 
         // Checks on a widening schedule; a hidden tab defers its check until it is shown again.
