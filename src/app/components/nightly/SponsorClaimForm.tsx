@@ -4,6 +4,7 @@ import { LoadingButton } from "@/app/components/ui/LoadingButton";
 import type { ClaimFormState } from "@/app/lib/nightly/flows";
 import { QUALIFYING_ROLES_TEXT } from "@/app/lib/nightly/messages";
 import { useActionState } from "react";
+import { MAXIMUM_SPONSOR_CODE_LENGTH } from "../../../../supabase/functions/_shared/nightly/formats";
 import { alertClass, primaryButtonClass } from "./styles";
 
 // A successful claim redirects, so only errors come back to the form.
@@ -24,7 +25,7 @@ export function SponsorClaimForm({ action }: { action: ClaimFormAction }) {
                     id="sponsor-code"
                     name="sponsor_code"
                     required
-                    maxLength={128}
+                    maxLength={MAXIMUM_SPONSOR_CODE_LENGTH}
                     autoComplete="off"
                     spellCheck={false}
                     placeholder="XXXX-XXXX-XXXX"

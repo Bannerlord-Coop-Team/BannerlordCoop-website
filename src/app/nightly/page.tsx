@@ -1,6 +1,12 @@
 import { NightlyCard } from "@/app/components/nightly/NightlyCard";
 import { headingClass, ledeClass, primaryButtonClass, secondaryButtonClass } from "@/app/components/nightly/styles";
-import { DISCORD_INVITE_URL, LINUX_INSTALLER_URL, WINDOWS_INSTALLER_URL } from "@/app/lib/nightly/links";
+import {
+    DISCORD_INVITE_URL,
+    LINUX_INSTALLER_FILENAME,
+    LINUX_INSTALLER_URL,
+    WINDOWS_INSTALLER_FILENAME,
+    WINDOWS_INSTALLER_URL,
+} from "@/app/lib/nightly/links";
 import { QUALIFYING_ROLES_TEXT } from "@/app/lib/nightly/messages";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -45,10 +51,10 @@ export default function NightlyAccessPage() {
                 ))}
             </ol>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                <a className={primaryButtonClass} href={WINDOWS_INSTALLER_URL} download="BannerlordCoop-Nightly-Installer.cmd">
+                <a className={primaryButtonClass} href={WINDOWS_INSTALLER_URL} download={WINDOWS_INSTALLER_FILENAME}>
                     Download Windows installer <span aria-hidden="true">&darr;</span>
                 </a>
-                <a className={primaryButtonClass} href={LINUX_INSTALLER_URL} download="BannerlordCoop-Nightly-Installer.sh">
+                <a className={primaryButtonClass} href={LINUX_INSTALLER_URL} download={LINUX_INSTALLER_FILENAME}>
                     Download Linux installer <span aria-hidden="true">&darr;</span>
                 </a>
                 <Link className={secondaryButtonClass} href="/nightly/sponsor" prefetch={false}>

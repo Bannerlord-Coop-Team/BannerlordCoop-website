@@ -3,6 +3,7 @@
 import { LoadingButton } from "@/app/components/ui/LoadingButton";
 import type { CreateCodeState, RemoveSeatState } from "@/app/lib/nightly/flows";
 import { useActionState } from "react";
+import { SPONSORED_ACCOUNT_LIMIT } from "../../../../supabase/functions/_shared/nightly/policy";
 import { alertClass, primaryButtonClass, textButtonClass } from "./styles";
 
 export type { CreateCodeState, RemoveSeatState };
@@ -11,7 +12,7 @@ export type CreateCodeAction = (state: CreateCodeState, form: FormData) => Promi
 export type RemoveSeatAction = (state: RemoveSeatState, form: FormData) => Promise<RemoveSeatState>;
 
 /** Rotates the sponsor code through the injected action and shows the new code exactly once. */
-export function CreateSponsorCodeForm({ action, hasSeats, limit }: { action: CreateCodeAction; hasSeats: boolean; limit: number }) {
+export function CreateSponsorCodeForm({ action, hasSeats }: { action: CreateCodeAction; hasSeats: boolean }) {
     const [state, formAction] = useActionState(action, { code: null, error: null });
     return (
         <div className="mt-8">
@@ -28,7 +29,7 @@ export function CreateSponsorCodeForm({ action, hasSeats, limit }: { action: Cre
                 <div role="status" className="mt-6 border border-gold/25 bg-background/70 px-5 py-5">
                     <p className="font-display text-2xl font-semibold text-foreground">Sponsor code created</p>
                     <p className="mt-2 max-w-xl text-sm leading-6 text-foreground-muted">
-                        Send this code only to friends you want to sponsor. It can add accounts until your {limit} seats are full.
+                        Send this code only to friends you want to sponsor. It can add accounts until your {SPONSORED_ACCOUNT_LIMIT} seats are full.
                     </p>
                     <span className="mt-4 block font-label text-xs font-semibold uppercase tracking-[0.18em] text-gold">Your sponsor code</span>
                     <p className="mt-2 break-all font-mono text-2xl font-semibold tracking-[0.1em] text-foreground sm:text-3xl">{state.code}</p>

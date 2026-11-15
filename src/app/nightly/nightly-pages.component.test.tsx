@@ -87,7 +87,7 @@ it("claim page without a pending claim explains the authorization expired", asyn
 
 it("sponsor page renders the seat list, hands a rejected session to the logout route and offers re-login when ineligible", async () => {
     mocks.cookies.set("nightly_sponsor", SESSION);
-    mocks.client = { sponsorPortal: async () => ({ ok: true, value: { limit: 10, seats: [{ discordUserId: "123456789012345678", createdAt: null }] } }) };
+    mocks.client = { sponsorPortal: async () => ({ ok: true, value: { seats: [{ discordUserId: "123456789012345678", createdAt: null }] } }) };
     const portal = render(await SponsorPage(params()));
     expect(portal.querySelector('[aria-label="1 of 10 seats used"]')).not.toBeNull();
     expect(portal.querySelector("code")?.textContent).toBe("123456789012345678");

@@ -59,7 +59,7 @@ it("portal lists seats with a count, and removes a seat by its Discord id", asyn
     });
     const view = await mount(
         <SponsorPortal
-            data={{ limit: 10, seats: [
+            data={{ seats: [
                 { discordUserId: "123456789012345678", createdAt: new Date("2026-11-01T10:00:00Z") },
                 { discordUserId: "223456789012345678", createdAt: null },
             ] }}
@@ -86,7 +86,7 @@ it("portal creates a sponsor code and shows it once, or the error", async () => 
     const createCode = vi.fn()
         .mockResolvedValueOnce({ code: "AB2C-DEF3-GH45", error: null })
         .mockResolvedValueOnce({ code: null, error: "A Staff, Tester, Patreon, Boosty, or Afdian role is required." });
-    const view = await mount(<SponsorPortal data={{ limit: 10, seats: [] }} createCode={createCode} removeSeat={vi.fn()} />);
+    const view = await mount(<SponsorPortal data={{ seats: [] }} createCode={createCode} removeSeat={vi.fn()} />);
     expect(view.textContent).toContain("No seats claimed yet.");
     expect(view.textContent).toContain("10 open");
     const form = view.querySelector("form")!;

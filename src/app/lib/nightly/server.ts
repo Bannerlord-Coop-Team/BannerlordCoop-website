@@ -9,11 +9,12 @@ const logError: NightlyLogger = (entry) => console.error(entry);
 
 /** Composition root: wires the nightly client to the Worker's server-only env, the global fetch and console logging. */
 export function getNightlyClient(): NightlyClient {
-    const config = readNightlyConfig({
+    const result = readNightlyConfig({
         NIGHTLY_FUNCTION_URL: process.env.NIGHTLY_FUNCTION_URL,
         NIGHTLY_WEBSITE_KEY: process.env.NIGHTLY_WEBSITE_KEY,
         NODE_ENV: process.env.NODE_ENV,
     });
-    if (config === null) reportConfigInvalid(logError);
-    return createNightlyClient(config, globalFetch, logError);
+    if (result.ok) return createNightlyClient(result.config, globalFetch, logError);
+    reportConfigInvalid(logError, result.setting);
+    return createNightlyClient(null, globalFetch, logError);
 }

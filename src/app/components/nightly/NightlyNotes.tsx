@@ -1,4 +1,4 @@
-import { DISCORD_INVITE_URL, WINDOWS_INSTALLER_URL } from "@/app/lib/nightly/links";
+import { DISCORD_INVITE_URL, WINDOWS_INSTALLER_FILENAME, WINDOWS_INSTALLER_URL } from "@/app/lib/nightly/links";
 import { QUALIFYING_ROLES_TEXT } from "@/app/lib/nightly/messages";
 import type { ReactNode } from "react";
 import { secondaryButtonClass } from "./styles";
@@ -44,7 +44,7 @@ export function SponsorCodeHelp() {
         <HelpPanel
             title="Have a sponsor code?"
             action={(
-                <a className={`${secondaryButtonClass} shrink-0`} href={WINDOWS_INSTALLER_URL} download="BannerlordCoop-Nightly-Installer.cmd">
+                <a className={`${secondaryButtonClass} shrink-0`} href={WINDOWS_INSTALLER_URL} download={WINDOWS_INSTALLER_FILENAME}>
                     Download installer <span aria-hidden="true">&darr;</span>
                 </a>
             )}
