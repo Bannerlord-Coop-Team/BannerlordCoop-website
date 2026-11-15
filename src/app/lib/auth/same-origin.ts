@@ -11,14 +11,15 @@ export function sameOriginRequest(request: Request): boolean {
     return fromThisSite(request.headers, (origin) => origin === servedOrigin, "request");
 }
 
-/** Whether a form post came from this site: Fetch Metadata `same-origin`, or an Origin on the served host. */
-export function sameOriginSubmission(headers: Headers, servedHost: string | null): boolean {
-    if (!servedHost) return false;
-    return fromThisSite(headers, (origin) => hostOf(origin) === servedHost, "submission");
+/** Whether a form post came from this site: Fetch Metadata `same-origin`, or an Origin on the host the post was served on. */
+export function sameOriginSubmission(headers: Headers): boolean {
+    const host = servedHost(headers);
+    if (!host) return false;
+    return fromThisSite(headers, (origin) => hostOf(origin) === host, "submission");
 }
 
 /** The host a request was served on, as the proxy forwarded it (first `X-Forwarded-Host`, else `Host`). */
-export function servedHost(headers: Headers): string | null {
+function servedHost(headers: Headers): string | null {
     const host = (headers.get("x-forwarded-host") ?? headers.get("host"))?.split(",")[0]?.trim();
     return host || null;
 }

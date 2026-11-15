@@ -10,6 +10,9 @@ const DEVICE_ID = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
 
 type Captured = { url: string; init: RequestInit };
 
+/** A logger for tests that do not inspect diagnostics: drops every entry. */
+const noLog: NightlyLogger = () => {};
+
 /** Builds a fake fetch that records calls and answers with a fixed response. */
 function fakeFetch(status: number, body?: unknown): { fetch: NightlyFetch; calls: Captured[] } {
     const calls: Captured[] = [];
@@ -39,7 +42,7 @@ test("every call is an authenticated JSON POST to the contract route with the co
     ];
     for (const [name, invoke, path, body] of cases) {
         const { fetch, calls } = fakeFetch(500, { error: "internal_error" });
-        await invoke(createNightlyClient(config, fetch));
+        await invoke(createNightlyClient(config, fetch, noLog));
         assert.equal(calls.length, 1, name);
         const [{ url, init }] = calls;
         assert.equal(url, `${config.functionUrl}${path}`, name);
@@ -60,7 +63,7 @@ test("contract error codes pass through with their HTTP status", async () => {
     ];
     for (const [status, code] of cases) {
         const { fetch } = fakeFetch(status, { error: code, upstream_status: 403, upstream_code: 50001 });
-        assert.deepEqual(await createNightlyClient(config, fetch).claimSponsorship("d", "c"), { ok: false, status, code });
+        assert.deepEqual(await createNightlyClient(config, fetch, noLog).claimSponsorship("d", "c"), { ok: false, status, code });
     }
 });
 
@@ -68,20 +71,51 @@ test("raw or malformed upstream bodies never become user-visible codes", async (
     const bodies: unknown[] = ["<html>Cloudflare error</html>", { error: "<script>alert(1)</script>" }, { error: 42 }, undefined, "x".repeat(70_000)];
     for (const body of bodies) {
         const { fetch } = fakeFetch(502, body);
-        assert.deepEqual(await createNightlyClient(config, fetch).sponsorPortal(SESSION), { ok: false, status: 502, code: "http_502" });
+        assert.deepEqual(await createNightlyClient(config, fetch, noLog).sponsorPortal(SESSION), { ok: false, status: 502, code: "http_502" });
     }
+});
+
+/** Builds a JSON error body of exactly the given UTF-8 byte length, padded mostly with two-byte characters. */
+function errorBodyOfBytes(byteLength: number): string {
+    const prefix = '{"error":"discord_unavailable","pad":"';
+    const suffix = '"}';
+    const padBytes = byteLength - prefix.length - suffix.length;
+    const text = `${prefix}${"é".repeat(Math.floor(padBytes / 2))}${"x".repeat(padBytes % 2)}${suffix}`;
+    assert.equal(new TextEncoder().encode(text).byteLength, byteLength);
+    return text;
+}
+
+test("the response limit counts UTF-8 bytes, not characters", async () => {
+    const limit = 64 * 1024;
+    const atLimit = fakeFetch(503, errorBodyOfBytes(limit));
+    assert.deepEqual(await createNightlyClient(config, atLimit.fetch, noLog).sponsorPortal(SESSION), { ok: false, status: 503, code: "discord_unavailable" });
+    const overLimit = errorBodyOfBytes(limit + 1);
+    assert.ok(overLimit.length < limit, "the oversized body is short in characters");
+    const { fetch } = fakeFetch(503, overLimit);
+    assert.deepEqual(await createNightlyClient(config, fetch, noLog).sponsorPortal(SESSION), { ok: false, status: 503, code: "http_503" });
+});
+
+test("an endless body is abandoned once it passes the limit instead of being read to the end", async () => {
+    let cancelled = false;
+    const endless = new ReadableStream<Uint8Array>({
+        pull: (controller) => controller.enqueue(new Uint8Array(16 * 1024).fill(0x20)),
+        cancel: () => { cancelled = true; },
+    });
+    const streaming: NightlyFetch = async () => new Response(endless, { status: 502 });
+    assert.deepEqual(await createNightlyClient(config, streaming, noLog).sponsorPortal(SESSION), { ok: false, status: 502, code: "http_502" });
+    assert.equal(cancelled, true);
 });
 
 test("network failures, missing configuration and contract-breaking success bodies fail closed", async () => {
     const throwing: NightlyFetch = async () => { throw new TypeError("network down"); };
-    assert.deepEqual(await createNightlyClient(config, throwing).startSponsorOAuth(), { ok: false, status: 0, code: "unavailable" });
+    assert.deepEqual(await createNightlyClient(config, throwing, noLog).startSponsorOAuth(), { ok: false, status: 0, code: "unavailable" });
 
     const unused = fakeFetch(200, {});
-    assert.deepEqual(await createNightlyClient(null, unused.fetch).startSponsorOAuth(), { ok: false, status: 0, code: "not_configured" });
+    assert.deepEqual(await createNightlyClient(null, unused.fetch, noLog).startSponsorOAuth(), { ok: false, status: 0, code: "not_configured" });
     assert.equal(unused.calls.length, 0);
 
     const { fetch } = fakeFetch(200, { code: "not-a-sponsor-code" });
-    assert.deepEqual(await createNightlyClient(config, fetch).createSponsorCode(SESSION), { ok: false, status: 200, code: "invalid_response" });
+    assert.deepEqual(await createNightlyClient(config, fetch, noLog).createSponsorCode(SESSION), { ok: false, status: 200, code: "invalid_response" });
 });
 
 /** Builds a logger that records every entry it is given. */
@@ -168,10 +202,10 @@ test("statuses the contract never sends a user are logged: a wrong function URL'
 
 test("authorize URLs must point at Discord's OAuth authorize endpoint", async () => {
     const good = "https://discord.com/oauth2/authorize?client_id=1&state=abc";
-    const ok = await createNightlyClient(config, fakeFetch(200, { authorize_url: good }).fetch).startDeviceOAuth("ABCD-EF23");
+    const ok = await createNightlyClient(config, fakeFetch(200, { authorize_url: good }).fetch, noLog).startDeviceOAuth("ABCD-EF23");
     assert.deepEqual(ok, { ok: true, value: good });
     for (const bad of ["https://evil.example/oauth2/authorize", "http://discord.com/oauth2/authorize", "https://discord.com.evil.example/oauth2/authorize", "https://user:pass@discord.com/oauth2/authorize", "https://discord.com/logout", "javascript:alert(1)"]) {
-        const result = await createNightlyClient(config, fakeFetch(200, { authorize_url: bad }).fetch).startSponsorOAuth();
+        const result = await createNightlyClient(config, fakeFetch(200, { authorize_url: bad }).fetch, noLog).startSponsorOAuth();
         assert.deepEqual(result, { ok: false, status: 200, code: "invalid_response" }, bad);
     }
 });

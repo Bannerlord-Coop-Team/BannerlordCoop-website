@@ -43,6 +43,7 @@ export type NightlyClient = {
     removeSponsoredAccount(session: string, discordUserId: string): Promise<NightlyResult<null>>;
 };
 
+/** Largest response body, in bytes, the client reads; a longer body is abandoned and decodes as no body. */
 const MAXIMUM_RESPONSE_BYTES = 64 * 1024;
 /**
  * Longest one Edge Function call may take, above its worst case so the website never gives up on a call that still
@@ -70,7 +71,7 @@ type BodyRead = { readable: true; body: unknown } | { readable: false; error: un
 export function createNightlyClient(
     config: NightlyConfig | null,
     fetcher: NightlyFetch,
-    log: NightlyLogger = ignoreLog,
+    log: NightlyLogger,
 ): NightlyClient {
     const call = <T>(path: string, body: unknown, decode: Decoder<T>): Promise<NightlyResult<T>> => {
         if (config === null) return Promise.resolve(failure(0, "not_configured"));
@@ -136,20 +137,49 @@ function post({ config, fetcher }: Transport, path: string, body: unknown): Prom
 
 /** Reads a response body; a stream that fails is reported as unreadable, with its error, rather than read as empty. */
 async function readJson(response: Response): Promise<BodyRead> {
-    let text: string;
+    let bytes: Uint8Array | null;
     try {
-        text = await response.text();
+        bytes = await readBoundedBytes(response);
     } catch (error) {
         return { readable: false, error };
     }
-    return { readable: true, body: parseBoundedJson(text) };
+    return { readable: true, body: parseJson(bytes) };
 }
 
-/** Parses JSON text; empty, oversized or malformed text reads as undefined. */
-function parseBoundedJson(text: string): unknown {
-    if (text.length === 0 || text.length > MAXIMUM_RESPONSE_BYTES) return undefined;
+/** Reads the body's bytes, stopping (and cancelling the stream) once it exceeds the limit; null marks an oversized body. */
+async function readBoundedBytes(response: Response): Promise<Uint8Array | null> {
+    if (response.body === null) return new Uint8Array(0);
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done) return concatenate(chunks, total);
+        total += value.byteLength;
+        if (total > MAXIMUM_RESPONSE_BYTES) {
+            await reader.cancel().catch(() => undefined);
+            return null;
+        }
+        chunks.push(value);
+    }
+}
+
+/** Joins body chunks into one byte array of the given total length. */
+function concatenate(chunks: readonly Uint8Array[], total: number): Uint8Array {
+    const bytes = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.byteLength;
+    }
+    return bytes;
+}
+
+/** Parses UTF-8 JSON bytes; an oversized (null), empty or malformed body reads as undefined. */
+function parseJson(bytes: Uint8Array | null): unknown {
+    if (bytes === null || bytes.byteLength === 0) return undefined;
     try {
-        return JSON.parse(text);
+        return JSON.parse(new TextDecoder().decode(bytes));
     } catch {
         return undefined;
     }
@@ -172,9 +202,6 @@ function isOperatorFailure(rejected: NightlyFailure): boolean {
     if (status < CLIENT_ERROR_STATUS || status === NOT_FOUND_STATUS || status >= SERVER_ERROR_STATUS) return true;
     return status === UNAUTHORIZED_STATUS && !isSessionRejection(rejected);
 }
-
-/** The default logger: drops every entry. */
-function ignoreLog(): void {}
 
 /** Extracts the contract's `{error}` code, falling back to a status-derived code for anything unexpected. */
 function errorCode(body: unknown, status: number): string {
