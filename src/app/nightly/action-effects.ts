@@ -1,7 +1,7 @@
 import "server-only";
 import { sameOriginSubmission, servedHost } from "@/app/lib/auth/same-origin";
-import { nightlyCookieOptions } from "@/app/lib/nightly/cookies";
 import type { ActionResult } from "@/app/lib/nightly/flows";
+import { applyPlanCookies } from "@/app/lib/nightly/redirect-plan";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -15,7 +15,6 @@ export async function submittedFromThisSite(): Promise<boolean> {
 export async function carryOut<State>(result: ActionResult<State>): Promise<State> {
     if ("state" in result) return result.state;
     const plan = result.redirect;
-    const jar = await cookies();
-    for (const cookie of plan.cookies) jar.set(cookie.name, cookie.value, nightlyCookieOptions(cookie.maxAge));
+    applyPlanCookies(await cookies(), plan.cookies);
     redirect(plan.location);
 }

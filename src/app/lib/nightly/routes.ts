@@ -5,11 +5,10 @@ import {
     USER_CODE_PATTERN,
 } from "../../../../supabase/functions/_shared/nightly/formats";
 import type { NightlyClient, NightlyResult, OAuthOutcome } from "./client";
-import { nightlyCookieOptions } from "./cookies";
 import { OAUTH_STATE_PATTERN } from "./formats";
 import type { NightlyErrorContext } from "./messages";
 import { errorPath, SPONSORED_APPROVED_PATH } from "./query-flags";
-import { claimCookie, redirectPlan, sponsorSessionCookie, type RedirectPlan } from "./redirect-plan";
+import { applyPlanCookies, claimCookie, redirectPlan, sponsorSessionCookie, type RedirectPlan } from "./redirect-plan";
 
 /** Handles `GET /nightly/activate?code=`: starts device OAuth or explains why the code cannot be used. */
 export async function planActivate(params: URLSearchParams, client: NightlyClient): Promise<RedirectPlan> {
@@ -41,7 +40,7 @@ export function planOutcome(outcome: OAuthOutcome): RedirectPlan {
         case "sponsored-approved":
             return redirectPlan(SPONSORED_APPROVED_PATH);
         case "portal":
-            return redirectPlan("/nightly/sponsor", sponsorSessionCookie(outcome.session, outcome.expires_in));
+            return redirectPlan("/nightly/sponsor", sponsorSessionCookie(outcome.session, outcome.expiresIn));
         case "needs-sponsor":
             return redirectPlan("/nightly/claim", claimCookie(outcome.claim));
     }
@@ -52,9 +51,7 @@ export function redirectResponse(redirect: RedirectPlan, requestUrl: string): Ne
     const response = NextResponse.redirect(new URL(redirect.location, requestUrl), 302);
     response.headers.set("cache-control", "no-store");
     response.headers.set("referrer-policy", "no-referrer");
-    for (const cookie of redirect.cookies) {
-        response.cookies.set(cookie.name, cookie.value, nightlyCookieOptions(cookie.maxAge));
-    }
+    applyPlanCookies(response.cookies, redirect.cookies);
     return response;
 }
 
