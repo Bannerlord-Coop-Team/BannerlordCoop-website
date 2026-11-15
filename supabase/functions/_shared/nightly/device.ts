@@ -99,13 +99,12 @@ export async function findLiveDeviceByUserCode(
     userCode: string,
     now: number,
 ): Promise<string | null> {
-    const session = firstRow(await queries.query<{ id: string; expires_at: number }>(
-        `SELECT id, expires_at FROM nightly_gateway.device_sessions
-         WHERE user_code = $1 AND status IN ('pending', 'awaiting-sponsor')`,
+    const device = firstRow(await queries.query<AuthorizableDevice>(
+        "SELECT id, status, expires_at FROM nightly_gateway.device_sessions WHERE user_code = $1",
         [userCode],
     ));
-    if (session === null || session.expires_at < now) return null;
-    return session.id;
+    if (!isAuthorizableDevice(device, now)) return null;
+    return device.id;
 }
 
 /** Binds an OAuth state hash to a device session, replacing any earlier one. */

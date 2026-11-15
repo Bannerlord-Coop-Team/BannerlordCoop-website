@@ -136,7 +136,8 @@ async function planSeat(context: GatewayContext, friendId: string, sponsorId: st
     const holderId = await findSeatHolder(context.db, friendId);
     if (holderId === null) return { kind: "free" };
     if (holderId === sponsorId) return { kind: "already-held" };
-    if (await revokeSponsorIfIneligible(context, holderId)) throw new GatewayError(409, "already_sponsored");
+    const holderStillEligible = await revokeSponsorIfIneligible(context, holderId);
+    if (holderStillEligible) throw new GatewayError(409, "already_sponsored");
     return { kind: "replace", revokedHolderId: holderId };
 }
 

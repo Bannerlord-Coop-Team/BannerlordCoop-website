@@ -20,5 +20,6 @@ export async function revokeSponsorIfIneligible(context: GatewayContext, support
 
 /** Throws `403 supporter_role_required` for a sponsor who no longer qualifies, after revoking them. */
 export async function assertSponsorEligible(context: GatewayContext, supporterId: string): Promise<void> {
-    if (!await revokeSponsorIfIneligible(context, supporterId)) throw new GatewayError(403, "supporter_role_required");
+    const stillEligible = await revokeSponsorIfIneligible(context, supporterId);
+    if (!stillEligible) throw new GatewayError(403, "supporter_role_required");
 }

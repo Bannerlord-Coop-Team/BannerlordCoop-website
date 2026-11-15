@@ -541,7 +541,7 @@ test("a Discord call that outlives its 8-second timeout is a logged 500 and leav
     assert.deepEqual(await device(pending.id), { status: "pending", discord_user_id: null, sponsor_discord_user_id: null, authorized_at: null });
 });
 
-test("Discord bodies: oversized is response_too_large, undecodable is discord_response_invalid, a dropped stream is a 500", async () => {
+test("Discord bodies: oversized is discord_response_too_large, undecodable is discord_response_invalid, a dropped stream is a 500", async () => {
     const pending = await seedDevice(database);
     const complete = async (tokenResponse: () => Response) => {
         const script = discordScript();
@@ -551,7 +551,7 @@ test("Discord bodies: oversized is response_too_large, undecodable is discord_re
         return { status: response.status, body: await body(response), logs };
     };
     const oversized = await complete(() => new Response("x".repeat(16 * 1024 + 1)));
-    assert.deepEqual([oversized.status, oversized.body], [502, { error: "response_too_large" }]);
+    assert.deepEqual([oversized.status, oversized.body], [502, { error: "discord_response_too_large" }]);
     const undecodable = await complete(() => new Response(new Uint8Array([0x7b, 0xff, 0x7d])));
     assert.deepEqual([undecodable.status, undecodable.body], [502, { error: "discord_response_invalid" }]);
     const dropped = await complete(() => new Response(new ReadableStream<Uint8Array>({

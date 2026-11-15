@@ -43,6 +43,9 @@ type BearerToken = { token_type: "Bearer"; access_token: string; scope: string }
 /** A Discord response together with its bounded, strictly decoded body. */
 type DiscordReply = { response: Response; text: string };
 
+/** A Discord request before the shared transport adds the user agent and the timeout. */
+type DiscordRequest = { method?: string; headers: Record<string, string>; body?: URLSearchParams };
+
 /** The Discord calls the gateway makes: OAuth for the signed-in user and the bot's member lookup. */
 export interface DiscordApi {
     authorizeUrl(state: string): string;
@@ -101,13 +104,11 @@ class DiscordHttpApi implements DiscordApi {
             client_id: this.credentials.clientId,
             client_secret: this.credentials.clientSecret,
         });
-        const response = await this.fetchImplementation(DISCORD_TOKEN, {
+        const { response, text } = await this.send(DISCORD_TOKEN, {
             method: "POST",
-            headers: { "content-type": "application/x-www-form-urlencoded", "user-agent": DISCORD_USER_AGENT },
+            headers: { "content-type": "application/x-www-form-urlencoded" },
             body: form,
-            signal: AbortSignal.timeout(DISCORD_TIMEOUT_MS),
-        });
-        const text = await readDiscordText(response, MAXIMUM_TOKEN_RESPONSE_BYTES);
+        }, MAXIMUM_TOKEN_RESPONSE_BYTES);
         if (!response.ok) throw new GatewayError(502, "discord_authorization_failed", discordFailure(response, text));
         const token = parseJson(text);
         if (!isBearerWithRequiredScopes(token)) throw new GatewayError(502, "discord_response_invalid");
@@ -128,21 +129,16 @@ class DiscordHttpApi implements DiscordApi {
 
     /** Reads the signed-in user's guild membership, or null when they are not in the guild. */
     async currentMemberIfPresent(accessToken: string): Promise<DiscordMember | null> {
-        const member = await this.userGetIfPresent<unknown>(this.memberPath(), accessToken);
+        const member = await this.getIfPresent(this.memberPath(), `Bearer ${accessToken}`);
         if (member === null) return null;
         return requireRoles(member);
     }
 
     /** Looks up any guild member with the bot token, or null when they are not in the guild. */
     async botGuildMember(userId: string): Promise<DiscordMember | null> {
-        const response = await this.fetchImplementation(`${DISCORD_API}/guilds/${DISCORD_GUILD_ID}/members/${userId}`, {
-            headers: { authorization: `Bot ${this.credentials.botToken}`, "user-agent": DISCORD_USER_AGENT },
-            signal: AbortSignal.timeout(DISCORD_TIMEOUT_MS),
-        });
-        const text = await readDiscordText(response, MAXIMUM_MEMBER_RESPONSE_BYTES);
-        if (response.status === 404) return null;
-        if (!response.ok) throw new GatewayError(502, "discord_membership_required", discordFailure(response, text));
-        return requireRoles(parseJson(text));
+        const member = await this.getIfPresent(`/guilds/${DISCORD_GUILD_ID}/members/${userId}`, `Bot ${this.credentials.botToken}`);
+        if (member === null) return null;
+        return requireRoles(member);
     }
 
     /** The current-user guild-member path for the Bannerlord Coop guild. */
@@ -152,23 +148,29 @@ class DiscordHttpApi implements DiscordApi {
 
     /** GETs a user-token endpoint; every failure, a 404 included, is a gateway error. */
     private async userGet<T>(path: string, accessToken: string): Promise<T> {
-        return parseUserReply(await this.userFetch(path, accessToken)) as T;
+        return parseMemberReply(await this.get(path, `Bearer ${accessToken}`)) as T;
     }
 
-    /** GETs a user-token endpoint, or null when Discord answers 404; other failures are gateway errors. */
-    private async userGetIfPresent<T>(path: string, accessToken: string): Promise<T | null> {
-        const reply = await this.userFetch(path, accessToken);
+    /** GETs a REST endpoint, or null when Discord answers 404; other failures are gateway errors. */
+    private async getIfPresent(path: string, authorization: string): Promise<unknown | null> {
+        const reply = await this.get(path, authorization);
         if (reply.response.status === 404) return null;
-        return parseUserReply(reply) as T;
+        return parseMemberReply(reply);
     }
 
-    /** Sends a user-token GET and reads its bounded body. */
-    private async userFetch(path: string, accessToken: string): Promise<DiscordReply> {
-        const response = await this.fetchImplementation(`${DISCORD_API}${path}`, {
-            headers: { authorization: `Bearer ${accessToken}`, "user-agent": DISCORD_USER_AGENT },
+    /** Sends an authorized REST GET bounded to a user or member body. */
+    private get(path: string, authorization: string): Promise<DiscordReply> {
+        return this.send(`${DISCORD_API}${path}`, { headers: { authorization } }, MAXIMUM_MEMBER_RESPONSE_BYTES);
+    }
+
+    /** Sends one Discord request with the user agent and the timeout, then reads its bounded, strict-UTF-8 body. */
+    private async send(url: string, request: DiscordRequest, maximumBytes: number): Promise<DiscordReply> {
+        const response = await this.fetchImplementation(url, {
+            ...request,
+            headers: { ...request.headers, "user-agent": DISCORD_USER_AGENT },
             signal: AbortSignal.timeout(DISCORD_TIMEOUT_MS),
         });
-        return { response, text: await readDiscordText(response, MAXIMUM_MEMBER_RESPONSE_BYTES) };
+        return { response, text: await readDiscordText(response, maximumBytes) };
     }
 }
 
@@ -193,8 +195,8 @@ function parseAbsoluteUrl(value: string): URL | null {
     }
 }
 
-/** Parses a successful user-token reply; a failed one is `discord_membership_required` with Discord's codes. */
-function parseUserReply({ response, text }: DiscordReply): unknown {
+/** Parses a successful user or member reply; a failed one is `discord_membership_required` with Discord's codes. */
+function parseMemberReply({ response, text }: DiscordReply): unknown {
     if (response.ok) return parseJson(text);
     throw new GatewayError(membershipFailureStatus(response), "discord_membership_required", discordFailure(response, text));
 }
@@ -206,17 +208,17 @@ function membershipFailureStatus(response: Response): number {
 }
 
 /**
- * Reads a bounded Discord body as strict UTF-8: oversized is `502 response_too_large`, undecodable
+ * Reads a bounded Discord body as strict UTF-8: oversized is `502 discord_response_too_large`, undecodable
  * `502 discord_response_invalid`, and a network fault or timeout mid-body propagates as an unexpected error.
  */
 async function readDiscordText(response: Response, maximumBytes: number): Promise<string> {
-    const bytes = await readBoundedBytes(response, maximumBytes).catch(rethrowTooLargeAsResponseTooLarge);
+    const bytes = await readBoundedBytes(response, maximumBytes).catch(rethrowTooLargeAsDiscordResponseTooLarge);
     return decodeStrictUtf8(bytes);
 }
 
-/** Maps an over-limit Discord body to `502 response_too_large` and rethrows anything else unchanged. */
-function rethrowTooLargeAsResponseTooLarge(error: unknown): never {
-    if (error instanceof RequestTooLargeError) throw new GatewayError(502, "response_too_large");
+/** Maps an over-limit Discord body to `502 discord_response_too_large` and rethrows anything else unchanged. */
+function rethrowTooLargeAsDiscordResponseTooLarge(error: unknown): never {
+    if (error instanceof RequestTooLargeError) throw new GatewayError(502, "discord_response_too_large");
     throw error;
 }
 
