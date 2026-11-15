@@ -1,4 +1,4 @@
-import { GatewayError, decodeUtf8, json, readBoundedBytes } from "./http";
+import { GatewayError, decodeUtf8, json, readBoundedBytes, type UpstreamFetch } from "./http";
 
 export const DEVICE_SESSIONS_PATH = "/v1/device/sessions";
 export const FORWARDED_DEVICE_PATHS: readonly string[] = Object.freeze([DEVICE_SESSIONS_PATH, "/v1/device/token"]);
@@ -8,18 +8,13 @@ const MAXIMUM_DEVICE_RESPONSE_BYTES = 16 * 1024;
 const DEVICE_FORWARD_TIMEOUT_MS = 10_000;
 const USER_CODE = /^[A-Z2-9]{4}-[A-Z2-9]{4}$/;
 
-/** The outbound HTTP call the forwarder depends on; production passes the Workers global fetch. */
-export type UpstreamFetch = (url: string, init: RequestInit) => Promise<Response>;
-
-/** Where one installer call is relayed: the Edge Function URL and the gateway origin the installer used. */
-export type DeviceForwardTarget = { url: string; origin: string };
+/** Where one installer call is relayed: the device-API path, its Edge Function URL, and the gateway origin the installer used. */
+export type DeviceForwardTarget = { path: string; url: string; origin: string };
 
 // Builds the Edge Function URL for one device-API path from the configured function base URL.
 // Throws when the configured base is not a plain https URL, so a bad deploy fails loudly.
 export function deviceFunctionUrl(functionUrl: unknown, path: string): string {
-    if (typeof functionUrl !== "string" || !FORWARDED_DEVICE_PATHS.includes(path)) {
-        throw new Error("gateway_function_url_invalid");
-    }
+    if (typeof functionUrl !== "string") throw new Error("gateway_function_url_invalid");
     let parsed: URL;
     try {
         parsed = new URL(functionUrl);
@@ -43,8 +38,7 @@ export async function forwardDeviceRequest(
     if (body === null) throw new GatewayError(413, "request_too_large");
     const upstream = await callFunction(request, target.url, body, upstreamFetch);
     const payload = await readUpstreamJson(upstream);
-    const path = new URL(request.url).pathname;
-    return json(withVerificationUri(payload, path, upstream.status, target.origin), upstream.status);
+    return json(withVerificationUri(payload, target.path, upstream.status, target.origin), upstream.status);
 }
 
 // Sends the bounded body to the Edge Function with only the headers it needs; any network failure or timeout is a 502.

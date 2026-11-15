@@ -1,36 +1,43 @@
+import { requireNightlyDownloadSession } from "./downloads";
+import { GatewayError, decodeUtf8, json, safeErrorCode, type GatewayLog, type UpstreamFetch } from "./http";
 import {
     rewriteManifestArtifactUrls,
-    resolveGatewayOrigin,
     type JsonObject,
     validateLegacyNightlyClientManifest,
     validateLegacyNightlyReleaseManifest,
-} from "./core";
-import { requireNightlyDownloadSession } from "./downloads";
-import { GatewayError, decodeUtf8, json, type GatewayLog } from "./http";
+} from "./manifest-rules";
+import { resolveGatewayOrigin } from "./origins";
 import { NightlyPublicationReadError, readNightlyPublication } from "./publication";
 
 // Serves the nightly client and release manifests, falling back from the v2 publication to the legacy v1 pair.
 
 const NIGHTLY_PUBLICATION_VERSION_HEADER = "x-bannerlord-coop-nightly-version";
 
+/** What manifest serving needs from outside: the outbound fetch for the public pointer and the event log. */
+export type ManifestDependencies = { fetch: UpstreamFetch; log: GatewayLog };
+
 // Serves the authorized nightly manifest with every artifact URL rewritten onto the gateway host the installer used.
 // Stored manifests may name either gateway host; both validate before the rewrite.
-export async function serveManifest(request: Request, env: Env, clientOnly: boolean, log: GatewayLog): Promise<Response> {
+export async function serveManifest(
+    request: Request,
+    env: Env,
+    clientOnly: boolean,
+    { fetch: upstreamFetch, log }: ManifestDependencies,
+): Promise<Response> {
     await requireNightlyDownloadSession(request, env);
     const origin = resolveGatewayOrigin(request.url);
     const wantsV2 = request.headers.get(NIGHTLY_PUBLICATION_VERSION_HEADER)?.trim() === "2";
     if (clientOnly && !wantsV2) {
         try {
             return json(rewriteManifestArtifactUrls(
-                await readHeaderlessNightlyClientManifest(env),
+                await readHeaderlessNightlyClientManifest(env, upstreamFetch),
                 origin,
                 env.LEGACY_R2_ORIGIN,
             ));
         } catch (error) {
             log({
                 event: "nightly_headerless_client_read_failed",
-                error_code: error instanceof Error && /^[a-z0-9_]{1,64}$/.test(error.message)
-                    ? error.message : "manifest_unavailable",
+                error_code: safeErrorCode(error) ?? "manifest_unavailable",
             });
             throw new GatewayError(503, "manifest_unavailable");
         }
@@ -46,22 +53,16 @@ export async function serveManifest(request: Request, env: Env, clientOnly: bool
             log({
                 event: "nightly_legacy_default_read_failed",
                 route: clientOnly ? "client" : "release",
-                error_code: error instanceof Error && /^[a-z0-9_]{1,64}$/.test(error.message)
-                    ? error.message : "legacy_manifest_unavailable",
+                error_code: safeErrorCode(error) ?? "legacy_manifest_unavailable",
             });
             throw new GatewayError(503, "manifest_unavailable");
         }
     }
     let validated;
     try {
-        validated = await readNightlyPublication(
-            (key) => env.RELEASES.get(key),
-            fetch,
-            env.PUBLIC_RELEASES === undefined ? undefined : () => env.PUBLIC_RELEASES.get("nightly/release.json"),
-        );
+        validated = await readPublication(env, upstreamFetch);
     } catch (error) {
-        const errorCode = error instanceof Error && /^[a-z0-9_]{1,64}$/.test(error.message)
-            ? error.message : "publication_read_failed";
+        const errorCode = safeErrorCode(error) ?? "publication_read_failed";
         const publicationError = error instanceof NightlyPublicationReadError ? error : null;
         log({
             event: "nightly_publication_read_failed",
@@ -103,8 +104,8 @@ export async function serveManifest(request: Request, env: Env, clientOnly: bool
         } catch (fallbackError) {
             log({
                 event: clientOnly ? "nightly_legacy_client_fallback_failed" : "nightly_legacy_release_fallback_failed",
-                error_code: fallbackError instanceof Error && /^[a-z0-9_]{1,64}$/.test(fallbackError.message)
-                    ? fallbackError.message : clientOnly ? "legacy_client_unavailable" : "legacy_release_unavailable",
+                error_code: safeErrorCode(fallbackError)
+                    ?? (clientOnly ? "legacy_client_unavailable" : "legacy_release_unavailable"),
             });
             throw new GatewayError(503, "manifest_unavailable");
         }
@@ -114,14 +115,10 @@ export async function serveManifest(request: Request, env: Env, clientOnly: bool
 }
 
 // Picks the client manifest served to installers that send no version header: the publication's client, else the legacy pair's.
-async function readHeaderlessNightlyClientManifest(env: Env): Promise<JsonObject> {
+async function readHeaderlessNightlyClientManifest(env: Env, upstreamFetch: UpstreamFetch): Promise<JsonObject> {
     let publication: JsonObject | null = null;
     try {
-        publication = await readNightlyPublication(
-            (key) => env.RELEASES.get(key),
-            fetch,
-            env.PUBLIC_RELEASES === undefined ? undefined : () => env.PUBLIC_RELEASES.get("nightly/release.json"),
-        );
+        publication = await readPublication(env, upstreamFetch);
     } catch {
         // Fall through to the previous complete legacy pair below.
     }
@@ -140,6 +137,15 @@ async function readHeaderlessNightlyClientManifest(env: Env): Promise<JsonObject
         legacyRelease,
         await tryReadLegacyNightlyClientManifest(env),
         env.LEGACY_R2_ORIGIN,
+    );
+}
+
+// Reads the verified v2 publication, taking the pointer from the public R2 binding when bound, else over HTTP.
+function readPublication(env: Env, upstreamFetch: UpstreamFetch): Promise<JsonObject> {
+    return readNightlyPublication(
+        (key) => env.RELEASES.get(key),
+        upstreamFetch,
+        env.PUBLIC_RELEASES === undefined ? undefined : () => env.PUBLIC_RELEASES.get("nightly/release.json"),
     );
 }
 

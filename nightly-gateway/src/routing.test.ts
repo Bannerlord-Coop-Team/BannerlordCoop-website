@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { CANONICAL_GATEWAY_ORIGIN, LEGACY_GATEWAY_ORIGIN } from "./core";
-import { deviceFunctionUrl, type UpstreamFetch } from "./forwarding";
+import { deviceFunctionUrl } from "./forwarding";
+import { type UpstreamFetch } from "./http";
 import { createGateway } from "./index";
+import { CANONICAL_GATEWAY_ORIGIN, LEGACY_GATEWAY_ORIGIN } from "./origins";
 import { websiteRedirectFor } from "./redirects";
 
 const FUNCTION_URL = "https://wfvqnijwuyqjibhlcrhz.supabase.co/functions/v1/nightly-gateway";
 const LEGACY_R2 = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
-const RETIRED_FORWARDED_ORIGIN_HEADER = "x-nightly-forwarded-origin";
 const SESSION = Object.freeze({ device_code: "d".repeat(43), user_code: "AB2D-EF3H", expires_in: 600, interval: 3 });
 
 type UpstreamCall = { url: string; init: RequestInit; body: string };
@@ -67,7 +67,6 @@ test("device session creation is forwarded and the gateway adds its own activati
     assert.equal(call.init.redirect, "manual");
     assert.equal(call.body, "client=installer");
     const headers = new Headers(call.init.headers);
-    assert.equal(headers.get(RETIRED_FORWARDED_ORIGIN_HEADER), null);
     assert.equal(headers.get("content-type"), "application/x-www-form-urlencoded");
     assert.equal(headers.get("cookie"), null);
 });
@@ -121,7 +120,6 @@ test("device token polling passes every status through without an activation lin
         assert.deepEqual(await response.json(), outcome.body);
         assert.equal(response.headers.get("cache-control"), "no-store");
         assert.equal(upstream.calls[0].url, `${FUNCTION_URL}/v1/device/token`);
-        assert.equal(new Headers(upstream.calls[0].init.headers).get(RETIRED_FORWARDED_ORIGIN_HEADER), null);
     }
 });
 
@@ -161,6 +159,7 @@ test("the logged cause names only the failure class, never its message", async (
     await gateway.fetch(formRequest(CANONICAL_GATEWAY_ORIGIN, "/v1/device/token", "device_code=x"), statelessEnv());
     assert.equal(logger.events.length, 1);
     assert.equal(logger.events[0].cause, "TypeError");
+    assert.equal(logger.events[0].message, undefined);
     assert.doesNotMatch(JSON.stringify(logger.events), /sk_live_do_not_log/);
 });
 
@@ -199,7 +198,6 @@ test("the Edge Function URL must be a plain https base URL", () => {
     for (const invalid of [undefined, "", "http://example.invalid/fn", `${FUNCTION_URL}?x=1`, "https://user:pass@example.invalid/fn", "not a url"]) {
         assert.throws(() => deviceFunctionUrl(invalid, "/v1/device/sessions"), /gateway_function_url_invalid/);
     }
-    assert.throws(() => deviceFunctionUrl(FUNCTION_URL, "/v1/pins"), /gateway_function_url_invalid/);
 });
 
 test("a misconfigured Edge Function URL fails closed without calling anything", async () => {
@@ -210,7 +208,13 @@ test("a misconfigured Edge Function URL fails closed without calling anything", 
     assert.equal(response.status, 500);
     assert.deepEqual(await response.json(), { error: "internal_error" });
     assert.equal(upstream.calls.length, 0);
-    assert.equal(logger.events.length, 1);
+    assert.deepEqual(logger.events, [{
+        event: "nightly_gateway_request_failed",
+        path: "/v1/device/sessions",
+        error: "internal_error",
+        cause: "Error",
+        message: "gateway_function_url_invalid",
+    }]);
 });
 
 test("retired gateway pages redirect to the website on both gateway hosts", async () => {

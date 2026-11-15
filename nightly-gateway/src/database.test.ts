@@ -5,26 +5,26 @@ import { databaseForRequest, postgresSql } from "./database";
 test("gateway SQL is schema-qualified and uses PostgreSQL parameters", () => {
     assert.equal(
         postgresSql(
-            "SELECT id FROM device_sessions WHERE device_secret_hash = ? AND expires_at >= ?",
+            "SELECT expires_at FROM download_sessions WHERE token_hash = ? AND expires_at >= ?",
             2,
         ),
-        "SELECT id FROM \"nightly_gateway\".\"device_sessions\" WHERE device_secret_hash = $1 AND expires_at >= $2",
+        "SELECT expires_at FROM \"nightly_gateway\".\"download_sessions\" WHERE token_hash = $1 AND expires_at >= $2",
     );
 });
 
 test("INSERT OR IGNORE becomes a conflict-safe PostgreSQL insert", () => {
     assert.equal(
         postgresSql(
-            "INSERT OR IGNORE INTO sponsorships (supporter_discord_user_id, sponsored_discord_user_id) VALUES (?, ?)",
+            "INSERT OR IGNORE INTO pin_download_sessions (token_hash, pin_token_hash) SELECT ?, token_hash FROM installer_pins WHERE token_hash = ?",
             2,
         ),
-        "INSERT INTO \"nightly_gateway\".\"sponsorships\" (supporter_discord_user_id, sponsored_discord_user_id) VALUES ($1, $2)\nON CONFLICT DO NOTHING",
+        "INSERT INTO \"nightly_gateway\".\"pin_download_sessions\" (token_hash, pin_token_hash) SELECT $1, token_hash FROM \"nightly_gateway\".\"installer_pins\" WHERE token_hash = $2\nON CONFLICT DO NOTHING",
     );
 });
 
 test("gateway SQL rejects parameter-count drift", () => {
     assert.throws(
-        () => postgresSql("SELECT id FROM device_sessions WHERE id = ?", 0),
+        () => postgresSql("SELECT build_id FROM installer_pins WHERE token_hash = ?", 0),
         /gateway_database_parameter_mismatch/,
     );
 });

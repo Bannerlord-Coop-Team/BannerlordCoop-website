@@ -1,23 +1,20 @@
+import { isDiscordSnowflake, isSha256Hex } from "./core";
+import { PUBLIC_MANUAL_SERVER_ORIGIN, resolveGatewayOrigin } from "./origins";
 import {
     CREATE_BUILD_PIN_KIND,
     CREATE_BUILD_PIN_LIFETIME_SECONDS,
     DOWNLOAD_SESSION_SECONDS,
-    PUBLIC_MANUAL_SERVER_ORIGIN,
     createBuildPinInstallUrl,
     createBuildPinToken,
     isAllowedManualServerKey,
     isCreateBuildPinCommitSha,
-    isCreateBuildPinToken,
-    isDiscordSnowflake,
-    isSha256Hex,
     mintSecretsEqual,
     pinClientObjectKey,
-    resolveGatewayOrigin,
-} from "./core";
+} from "./pin-rules";
 import { requirePinDownloadSession } from "./downloads";
 import { GatewayError, json, readForm } from "./http";
 import { errorPage, escapeHtml, html, page } from "./pages";
-import { nowSeconds, randomToken, sha256, sha256Bytes } from "./primitives";
+import { isBearerToken, nowSeconds, randomToken, sha256, sha256Bytes } from "./primitives";
 
 // Mints, redeems, and serves create-build pins: one-time install links for a staff-built client/server pair.
 
@@ -153,7 +150,7 @@ export async function mintCreateBuildPin(request: Request, env: Env): Promise<Re
 export async function redeemCreateBuildPin(request: Request, env: Env): Promise<Response> {
     const body = await readForm(request);
     const pin = body.get("pin");
-    if (!isCreateBuildPinToken(pin)) throw new GatewayError(400, "invalid_request");
+    if (!isBearerToken(pin)) throw new GatewayError(400, "invalid_request");
     const now = nowSeconds();
     const pinHash = await sha256(pin);
     const row = await env.DB.prepare(
@@ -258,7 +255,7 @@ type VisibleCreateBuildPin = {
 // Looks up an unused, unexpired pin from the query string, or returns the user-facing reason it cannot be shown.
 async function loadVisibleCreateBuildPin(url: URL, env: Env): Promise<string | VisibleCreateBuildPin> {
     const token = url.searchParams.get("pin");
-    if (!isCreateBuildPinToken(token)) return "That create-build installer link is invalid.";
+    if (!isBearerToken(token)) return "That create-build installer link is invalid.";
     const row = await env.DB.prepare(
         "SELECT client_sha, server_sha, expires_at, consumed_at FROM installer_pins WHERE token_hash = ?",
     ).bind(await sha256(token)).first<{
@@ -324,7 +321,7 @@ function pinMintSecret(env: Env): string {
 // Writes the one-time Windows launcher that fetches the latest install.ps1 from the gateway host the user opened.
 // The GitHub raw copy stays as the fallback when that host is unreachable.
 function createBuildPinLauncher(token: string, origin: string): string {
-    if (!isCreateBuildPinToken(token)) throw new GatewayError(400, "invalid_request");
+    if (!isBearerToken(token)) throw new GatewayError(400, "invalid_request");
     return [
         "@echo off",
         "setlocal",

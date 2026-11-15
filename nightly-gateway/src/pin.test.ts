@@ -4,7 +4,7 @@ import test from "node:test";
 import {
     CREATE_BUILD_PIN_KIND,
     createBuildPinToken,
-} from "./core";
+} from "./pin-rules";
 import worker from "./index";
 import { serveCreateBuildPinLauncher, serveCreateBuildPinPage } from "./pins";
 
@@ -373,13 +373,18 @@ test("migration mode fails closed before any gateway state can change", async ()
     assert.deepEqual(await create.json(), { error: "migration_in_progress" });
 });
 
-test("create-build pins keep install links, manifests, and launchers on the host that was used", async () => {
-    for (const origin of [gateway, legacyGateway]) {
+test("create-build pins keep install links, manifests, and launchers on the allowlisted host that was used", async () => {
+    const cases = [
+        { origin: gateway, expected: gateway },
+        { origin: legacyGateway, expected: legacyGateway },
+        { origin: "https://gateway.attacker.invalid", expected: gateway },
+    ];
+    for (const { origin, expected } of cases) {
         const { env } = pinEnvironment();
         const minted = await fetchGateway(mintRequest(PIN_SECRET, metadata(), CLIENT_ARCHIVE, origin), env);
         assert.equal(minted.status, 201);
         const { token, installUrl } = await minted.json() as { token: string; installUrl: string };
-        assert.equal(installUrl, `${origin}/install?pin=${token}`);
+        assert.equal(installUrl, `${expected}/install?pin=${token}`, origin);
 
         const page = await fetchGateway(new Request(installUrl), env);
         assert.equal(page.status, 200);
@@ -387,7 +392,7 @@ test("create-build pins keep install links, manifests, and launchers on the host
 
         const launcher = await fetchGateway(new Request(`${origin}/v1/pins/install.cmd?pin=${token}`), env);
         assert.equal(launcher.status, 200);
-        assert.ok((await launcher.text()).includes(`set "INSTALLER_PRIMARY=${origin}/install.ps1"\r\n`));
+        assert.ok((await launcher.text()).includes(`set "INSTALLER_PRIMARY=${expected}/install.ps1"\r\n`), origin);
 
         const redeemed = await fetchGateway(new Request(`${origin}/v1/pins/token`, {
             method: "POST",
@@ -399,20 +404,7 @@ test("create-build pins keep install links, manifests, and launchers on the host
             headers: { authorization: `Bearer ${accessToken}` },
         }), env);
         const body = await manifest.json() as { client: { publicUrl: string }; server: { publicUrl: string } };
-        assert.equal(body.client.publicUrl, `${origin}/v1/artifacts/pins/${BUILD_ID}/Coop.7z`);
+        assert.equal(body.client.publicUrl, `${expected}/v1/artifacts/pins/${BUILD_ID}/Coop.7z`, origin);
         assert.equal(body.server.publicUrl, `${legacy}/${SERVER_KEY}`);
     }
-});
-
-test("create-build pins requested on an unknown host use the canonical gateway host", async () => {
-    const { env } = pinEnvironment();
-    const minted = await fetchGateway(mintRequest(PIN_SECRET, metadata(), CLIENT_ARCHIVE, "https://gateway.attacker.invalid"), env);
-    assert.equal(minted.status, 201);
-    const { token, installUrl } = await minted.json() as { token: string; installUrl: string };
-    assert.equal(installUrl, `${gateway}/install?pin=${token}`);
-    const launcher = await serveCreateBuildPinLauncher(
-        new URL(`https://gateway.attacker.invalid/v1/pins/install.cmd?pin=${token}`),
-        env,
-    );
-    assert.ok((await launcher.text()).includes(`set "INSTALLER_PRIMARY=${gateway}/install.ps1"\r\n`));
 });
