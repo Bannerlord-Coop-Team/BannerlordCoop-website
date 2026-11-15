@@ -66,6 +66,11 @@ verify_jwt = false
 [functions.subscription-grace-alert]
 verify_jwt = false
 
+# Installer routes are forwarded by the nightly Worker (allowlisted x-nightly-forwarded-origin);
+# website routes require the x-nightly-website-key shared secret. No Supabase JWT is involved.
+[functions.nightly-gateway]
+verify_jwt = false
+
 # Called anonymously by the mod; abuse is limited by the network-id blacklist and upload size caps.
 [functions.create-github-issue-bug-report]
 verify_jwt = false
