@@ -1,6 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
-import { type PostgresClient, postgresGatewayDatabase } from "../_shared/nightly/database.ts";
+import {
+    type ConnectionPool,
+    type GatewayDatabase,
+    pooledGatewayDatabase,
+    type PooledConnection,
+    type PostgresClient,
+    type QueryResult,
+} from "../_shared/nightly/database.ts";
 import { createNightlyGatewayHandler } from "../_shared/nightly/gateway.ts";
 import { DISCORD_GUILD_ID } from "../_shared/nightly/policy.ts";
 import { sha256 } from "../_shared/nightly/tokens.ts";
@@ -55,7 +62,11 @@ export type DiscordScript = {
     botFailure?: () => Response;
     /** Runs before each bot lookup is answered, e.g. to change the database mid-request. */
     beforeBotLookup?: (userId: string) => Promise<void>;
-    calls: Array<{ url: string; headers: Headers; body: string }>;
+    /** Runs as every Discord call starts, e.g. to check what the gateway holds meanwhile. */
+    beforeEachCall?: (url: string) => void;
+    /** Never answers: each call settles only when its abort signal fires, like a Discord that hangs. */
+    stall?: boolean;
+    calls: Array<{ url: string; headers: Headers; body: string; signal: AbortSignal | null | undefined }>;
 };
 
 /** Builds a Discord script defaulting to an unaffiliated friend who is not in the guild. */
@@ -67,7 +78,9 @@ export function discordScript(overrides: Partial<DiscordScript> = {}): DiscordSc
 export function discordFetch(script: DiscordScript): typeof fetch {
     return (async (input: string | URL | Request, init?: RequestInit) => {
         const url = requestUrl(input);
-        script.calls.push({ url, headers: new Headers(init?.headers), body: String(init?.body ?? "") });
+        script.calls.push({ url, headers: new Headers(init?.headers), body: String(init?.body ?? ""), signal: init?.signal });
+        script.beforeEachCall?.(url);
+        if (script.stall) return untilAborted(init?.signal);
         if (url === TOKEN_URL) return script.tokenFailure?.() ?? Response.json({
             access_token: "user-access-token",
             refresh_token: "refresh-token-never-stored",
@@ -90,6 +103,11 @@ export function discordFetch(script: DiscordScript): typeof fetch {
     }) as typeof fetch;
 }
 
+/** A fetch result that never arrives: it rejects with the signal's reason once the signal aborts. */
+function untilAborted(signal: AbortSignal | null | undefined): Promise<Response> {
+    return new Promise((_, reject) => signal?.addEventListener("abort", () => reject(signal.reason), { once: true }));
+}
+
 /** Normalizes any fetch input to its URL string. */
 function requestUrl(input: string | URL | Request): string {
     if (typeof input === "string") return input;
@@ -102,22 +120,71 @@ export function unknownMember(): Response {
     return Response.json({ message: "Unknown Member", code: 10007 }, { status: 404 });
 }
 
-/** A handler over the shared database (or a wrapper of it) and a Discord script, plus its logs and lease releases. */
+// Lends one connection (PGlite has only one) as a pool of one: statements and transactions take turns, so a
+// transaction never interleaves with other work, and a connection that is never released stalls every later query.
+export class SingleConnectionPool implements ConnectionPool {
+    /** Whether a statement or transaction holds the connection right now. */
+    inUse = false;
+    private turn: Promise<void> = Promise.resolve();
+
+    constructor(private readonly client: PostgresClient) {}
+
+    /** Runs one statement once the connection is free. */
+    async query(sql: string, values?: unknown[]) {
+        const free = await this.take();
+        try {
+            return await this.client.query(sql, values);
+        } finally {
+            free();
+        }
+    }
+
+    /** Leases the connection until the transaction releases it; it cannot be destroyed, only handed on. */
+    async connect(): Promise<PooledConnection> {
+        const free = await this.take();
+        return { query: (sql, values) => this.client.query(sql, values), release: () => free() };
+    }
+
+    /** Waits for the previous holder, then returns the function that hands the connection to the next one. */
+    private async take(): Promise<() => void> {
+        const previous = this.turn;
+        let next!: () => void;
+        this.turn = new Promise((resolve) => { next = resolve; });
+        await previous;
+        this.inUse = true;
+        return () => {
+            this.inUse = false;
+            next();
+        };
+    }
+}
+
+/** The production gateway database over a single PGlite (or wrapped) connection. */
+export function singleConnectionDatabase(client: PostgresClient): GatewayDatabase {
+    return pooledGatewayDatabase(new SingleConnectionPool(client));
+}
+
+/** A database whose every statement and transaction fails with `failure()`, for unexpected-failure tests. */
+export function failingDatabase(failure: () => unknown): GatewayDatabase {
+    return {
+        query: async <T>(): Promise<QueryResult<T>> => { throw failure(); },
+        transaction: async () => { throw failure(); },
+    };
+}
+
+/** A handler over the shared database (or a wrapper of it) and a Discord script, plus its logs and pool. */
 export function gatewayHandler(database: PostgresClient, script: DiscordScript, clock = () => NOW * 1000) {
-    const releases: boolean[] = [];
     const logs: Record<string, unknown>[] = [];
+    const pool = new SingleConnectionPool(database);
     const handler = createNightlyGatewayHandler({
         websiteKey: WEBSITE_KEY,
         discord: { clientId: CLIENT_ID, clientSecret: "s".repeat(32), botToken: BOT_TOKEN },
         fetch: discordFetch(script),
-        openDatabase: async () => ({
-            database: postgresGatewayDatabase(database),
-            release: (failed: boolean) => { releases.push(failed); },
-        }),
+        database: pooledGatewayDatabase(pool),
         clock,
         log: (event) => logs.push(event),
     });
-    return { handler, releases, logs };
+    return { handler, logs, pool };
 }
 
 /** An installer request as the Worker forwards it: the installer's form body, with no extra headers. */

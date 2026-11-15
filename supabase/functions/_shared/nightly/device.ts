@@ -1,5 +1,5 @@
 import type { GatewayContext } from "./context.ts";
-import { firstRow, isUniqueViolation } from "./database.ts";
+import { firstRow, type GatewayQueries, isUniqueViolation } from "./database.ts";
 import { insertDownloadSession } from "./downloads.ts";
 import { assertSponsorEligible } from "./eligibility.ts";
 import { isDiscordSnowflake, SECRET_TOKEN_PATTERN } from "./formats.ts";
@@ -94,64 +94,77 @@ export async function pollDeviceSession(context: GatewayContext, request: Reques
 }
 
 /** Returns the ID of the live, not yet authorized device session a typed user code names, or null. */
-export async function findLiveDeviceByUserCode(context: GatewayContext, userCode: string): Promise<string | null> {
-    const session = firstRow(await context.db.query<{ id: string; expires_at: number }>(
+export async function findLiveDeviceByUserCode(
+    queries: GatewayQueries,
+    userCode: string,
+    now: number,
+): Promise<string | null> {
+    const session = firstRow(await queries.query<{ id: string; expires_at: number }>(
         `SELECT id, expires_at FROM nightly_gateway.device_sessions
          WHERE user_code = $1 AND status IN ('pending', 'awaiting-sponsor')`,
         [userCode],
     ));
-    if (session === null || session.expires_at < context.now()) return null;
+    if (session === null || session.expires_at < now) return null;
     return session.id;
 }
 
 /** Binds an OAuth state hash to a device session, replacing any earlier one. */
-export async function bindDeviceOAuthState(context: GatewayContext, deviceId: string, stateHash: string): Promise<void> {
-    await context.db.query("UPDATE nightly_gateway.device_sessions SET oauth_state_hash = $1 WHERE id = $2", [
+export async function bindDeviceOAuthState(queries: GatewayQueries, deviceId: string, stateHash: string): Promise<void> {
+    await queries.query("UPDATE nightly_gateway.device_sessions SET oauth_state_hash = $1 WHERE id = $2", [
         stateHash,
         deviceId,
     ]);
 }
 
 /** Returns the ID of the device session an OAuth state was bound to while it can still be authorized, or null. */
-export async function findAuthorizableDeviceByState(context: GatewayContext, stateHash: string): Promise<string | null> {
-    const device = firstRow(await context.db.query<AuthorizableDevice>(
+export async function findAuthorizableDeviceByState(
+    queries: GatewayQueries,
+    stateHash: string,
+    now: number,
+): Promise<string | null> {
+    const device = firstRow(await queries.query<AuthorizableDevice>(
         "SELECT id, status, expires_at FROM nightly_gateway.device_sessions WHERE oauth_state_hash = $1",
         [stateHash],
     ));
-    if (!isAuthorizableDevice(device, context.now())) return null;
+    if (!isAuthorizableDevice(device, now)) return null;
     return device.id;
 }
 
 /** Records the signed-in Discord user on a device session and parks it until a sponsor code is redeemed. */
-export async function parkAwaitingSponsor(context: GatewayContext, deviceId: string, userId: string): Promise<void> {
-    await context.db.query(
+export async function parkAwaitingSponsor(queries: GatewayQueries, deviceId: string, userId: string): Promise<void> {
+    await queries.query(
         "UPDATE nightly_gateway.device_sessions SET status = 'awaiting-sponsor', discord_user_id = $1 WHERE id = $2",
         [userId, deviceId],
     );
 }
 
 /** Returns the Discord user a device session waits to have sponsored, or null when it cannot be claimed. */
-export async function findClaimableDevice(context: GatewayContext, deviceId: string): Promise<{ userId: string } | null> {
-    const device = firstRow(await context.db.query<ClaimableDevice>(
+export async function findClaimableDevice(
+    queries: GatewayQueries,
+    deviceId: string,
+    now: number,
+): Promise<{ userId: string } | null> {
+    const device = firstRow(await queries.query<ClaimableDevice>(
         "SELECT discord_user_id, status, expires_at FROM nightly_gateway.device_sessions WHERE id = $1",
         [deviceId],
     ));
-    if (!isClaimableDevice(device, context.now())) return null;
+    if (!isClaimableDevice(device, now)) return null;
     return { userId: device.discord_user_id };
 }
 
 /** Marks a device session approved for a user under the given sponsor (themselves for direct members). */
 export async function approveDevice(
-    context: GatewayContext,
+    queries: GatewayQueries,
     deviceId: string,
     userId: string,
     sponsorId: string,
+    now: number,
 ): Promise<void> {
-    await context.db.query(
+    await queries.query(
         `UPDATE nightly_gateway.device_sessions
          SET status = 'approved', discord_user_id = $1, sponsor_discord_user_id = $2, authorized_at = $3
          WHERE id = $4`,
-        [userId, sponsorId, context.now(), deviceId],
+        [userId, sponsorId, now, deviceId],
     );
 }
 

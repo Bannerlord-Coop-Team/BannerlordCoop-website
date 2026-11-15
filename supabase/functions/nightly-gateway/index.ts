@@ -1,7 +1,7 @@
 // @ts-nocheck -- Deno npm specifiers are validated by the Edge deployment.
 import pg from "npm:pg@8.16.3";
 import { createNightlyGatewayHandler } from "../_shared/nightly/gateway.ts";
-import { createPostgresDatabaseProvider } from "../_shared/nightly/postgres-pool.ts";
+import { createPostgresGatewayDatabase } from "../_shared/nightly/postgres-pool.ts";
 
 // Edge Function: nightly-gateway. Owns everything that needs Discord for nightly access: installer
 // device sessions (forwarded by the Worker), Discord OAuth, sponsor seats and download-token issue.
@@ -23,7 +23,7 @@ Deno.serve(createNightlyGatewayHandler({
         botToken: required("DISCORD_BOT_TOKEN"),
     },
     fetch: (input, init) => fetch(input, init),
-    openDatabase: createPostgresDatabaseProvider(pg, required("SUPABASE_DB_URL"), {
+    database: createPostgresGatewayDatabase(pg, required("SUPABASE_DB_URL"), {
         applicationName: "bannerlordcoop-nightly-gateway-edge",
         maxConnections: 4,
         idleTimeoutMs: 10_000,

@@ -29,12 +29,13 @@ export async function revokeDownloadsForSupporter(tx: GatewayQueries, supporterI
     await tx.query("DELETE FROM nightly_gateway.download_sessions WHERE supporter_discord_user_id = $1", [supporterId]);
 }
 
-/** Ends a friend's download sessions: only those under `supporterId` when given, otherwise all of them. */
-export async function revokeDownloadsForFriend(tx: GatewayQueries, friendId: string, supporterId?: string): Promise<void> {
-    if (supporterId === undefined) {
-        await tx.query("DELETE FROM nightly_gateway.download_sessions WHERE discord_user_id = $1", [friendId]);
-        return;
-    }
+/** Ends every download session a friend holds, whichever supporter issued it. */
+export async function revokeFriendDownloads(tx: GatewayQueries, friendId: string): Promise<void> {
+    await tx.query("DELETE FROM nightly_gateway.download_sessions WHERE discord_user_id = $1", [friendId]);
+}
+
+/** Ends only the friend's download sessions issued under one supporter. */
+export async function revokeFriendDownloadsUnder(tx: GatewayQueries, friendId: string, supporterId: string): Promise<void> {
     await tx.query(
         "DELETE FROM nightly_gateway.download_sessions WHERE discord_user_id = $1 AND supporter_discord_user_id = $2",
         [friendId, supporterId],

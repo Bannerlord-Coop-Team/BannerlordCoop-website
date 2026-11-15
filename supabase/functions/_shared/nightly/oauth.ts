@@ -1,4 +1,5 @@
 import type { GatewayContext } from "./context.ts";
+import type { GatewayQueries } from "./database.ts";
 import {
     approveDevice,
     bindDeviceOAuthState,
@@ -36,8 +37,8 @@ export async function startOAuth(context: GatewayContext, body: Record<string, u
 export async function completeOAuth(context: GatewayContext, body: Record<string, unknown>): Promise<Response> {
     if (!isValidCompleteRequest(body)) throw new GatewayError(400, "invalid_request");
     const stateHash = await sha256(body.state);
-    if (await consumePortalState(context, stateHash)) return completePortalLogin(context, body.code);
-    const deviceId = await findAuthorizableDeviceByState(context, stateHash);
+    if (await consumePortalState(context.db, stateHash, context.now())) return completePortalLogin(context, body.code);
+    const deviceId = await findAuthorizableDeviceByState(context.db, stateHash, context.now());
     if (deviceId === null) throw new GatewayError(400, "expired");
     return completeDeviceLogin(context, deviceId, body.code);
 }
@@ -46,10 +47,10 @@ export async function completeOAuth(context: GatewayContext, body: Record<string
 async function startDeviceOAuth(context: GatewayContext, rawUserCode: unknown): Promise<Response> {
     const userCode = typeof rawUserCode === "string" ? normalizeUserCode(rawUserCode) : "";
     if (!USER_CODE_PATTERN.test(userCode)) throw new GatewayError(400, "invalid_code");
-    const deviceId = await findLiveDeviceByUserCode(context, userCode);
+    const deviceId = await findLiveDeviceByUserCode(context.db, userCode, context.now());
     if (deviceId === null) throw new GatewayError(400, "expired");
     const state = randomToken(context.random);
-    await bindDeviceOAuthState(context, deviceId, await sha256(state));
+    await bindDeviceOAuthState(context.db, deviceId, await sha256(state));
     return json({ authorize_url: context.discord.authorizeUrl(state) });
 }
 
@@ -65,22 +66,25 @@ async function startPortalOAuth(context: GatewayContext): Promise<Response> {
 }
 
 /** Deletes a live sponsor-portal state, reporting whether one existed; each state works once. */
-async function consumePortalState(context: GatewayContext, stateHash: string): Promise<boolean> {
-    const deleted = await context.db.query(
+async function consumePortalState(queries: GatewayQueries, stateHash: string, now: number): Promise<boolean> {
+    const deleted = await queries.query(
         "DELETE FROM nightly_gateway.oauth_states WHERE state_hash = $1 AND expires_at >= $2",
-        [stateHash, context.now()],
+        [stateHash, now],
     );
     return deleted.rowCount === 1;
 }
 
-/** Signs an eligible guild member into the sponsor portal with a 24-hour session. */
+/** Signs an eligible guild member into the sponsor portal: their grant and a 24-hour session, stored together. */
 async function completePortalLogin(context: GatewayContext, code: string): Promise<Response> {
     const accessToken = await context.discord.exchangeCode(code);
     const user = await context.discord.currentUser(accessToken);
     const member = await context.discord.currentMember(accessToken);
     if (!hasNightlyAccessRole(member.roles)) throw new GatewayError(403, "supporter_role_required");
-    await storeSupporterGrant(context, user.id);
-    const session = await openSponsorSession(context, user.id);
+    const now = context.now();
+    const session = await context.db.transaction(async (tx) => {
+        await storeSupporterGrant(tx, user.id, now);
+        return openSponsorSession(tx, user.id, context.random, now);
+    });
     return json({ outcome: "portal", session, expires_in: SPONSOR_SESSION_SECONDS });
 }
 
@@ -89,18 +93,24 @@ async function completeDeviceLogin(context: GatewayContext, deviceId: string, co
     const accessToken = await context.discord.exchangeCode(code);
     const user = await context.discord.currentUser(accessToken);
     const member = await context.discord.currentMemberIfPresent(accessToken);
-    if (member !== null && hasNightlyAccessRole(member.roles)) {
-        await storeSupporterGrant(context, user.id);
-        await approveDevice(context, deviceId, user.id, user.id);
-        return json({ outcome: "approved" });
-    }
-    const previousSponsorId = await findSeatHolder(context, user.id);
+    if (member !== null && hasNightlyAccessRole(member.roles)) return approveDirectMember(context, deviceId, user.id);
+    const previousSponsorId = await findSeatHolder(context.db, user.id);
     if (previousSponsorId === null) return awaitSponsorCode(context, deviceId, user, false);
     // A previous sponsor who lost access is revoked here, and the friend gets the code form instead.
     const sponsorStillEligible = await revokeSponsorIfIneligible(context, previousSponsorId);
     if (!sponsorStillEligible) return awaitSponsorCode(context, deviceId, user, true);
-    await approveDevice(context, deviceId, user.id, previousSponsorId);
+    await approveDevice(context.db, deviceId, user.id, previousSponsorId, context.now());
     return json({ outcome: "sponsored-approved" });
+}
+
+/** Records a qualifying member's grant and approves their device as their own sponsor, in one transaction. */
+async function approveDirectMember(context: GatewayContext, deviceId: string, userId: string): Promise<Response> {
+    const now = context.now();
+    await context.db.transaction(async (tx) => {
+        await storeSupporterGrant(tx, userId, now);
+        await approveDevice(tx, deviceId, userId, userId, now);
+    });
+    return json({ outcome: "approved" });
 }
 
 /** Parks the device for the signed-in user and tells the website to show the sponsor-code form. */
@@ -110,7 +120,7 @@ async function awaitSponsorCode(
     user: DiscordUser,
     previousSponsorRevoked: boolean,
 ): Promise<Response> {
-    await parkAwaitingSponsor(context, deviceId, user.id);
+    await parkAwaitingSponsor(context.db, deviceId, user.id);
     return json({
         outcome: "needs-sponsor",
         device_id: deviceId,

@@ -1,6 +1,6 @@
-// PostgreSQL access for the nightly gateway: typed parameterized queries and transactions on one
-// request-scoped connection. Handler SQL is native PostgreSQL and names tables as nightly_gateway.<table>.
-// INT8 columns arrive as JS numbers because createPostgresDatabaseProvider (postgres-pool.ts) registers the parser.
+// PostgreSQL access for the nightly gateway: typed parameterized queries and transactions over a connection pool.
+// A connection is held only for one statement or one transaction, never across a Discord call. Handler SQL is native
+// PostgreSQL naming tables as nightly_gateway.<table>; INT8 columns arrive as JS numbers (postgres-pool.ts registers it).
 
 /** The rows a statement returned and how many rows it inserted, updated or deleted. */
 export type QueryResult<T> = { rows: T[]; rowCount: number };
@@ -10,25 +10,40 @@ export interface GatewayQueries {
     query<T = Record<string, unknown>>(sql: string, values?: readonly unknown[]): Promise<QueryResult<T>>;
 }
 
-/** A request's database: single statements, plus all-or-nothing work inside one transaction. */
+/** The gateway's database: single statements, plus all-or-nothing work inside one transaction. */
 export interface GatewayDatabase extends GatewayQueries {
     transaction<T>(work: (tx: GatewayQueries) => Promise<T>): Promise<T>;
 }
 
-/** The slice of a `pg` client (or PGlite) the gateway needs: positional-parameter queries. */
+/** The slice of a `pg` client, pool or PGlite the gateway needs: positional-parameter queries. */
 export interface PostgresClient {
     query(sql: string, values?: unknown[]): Promise<{ rows: unknown[]; rowCount?: number | null; affectedRows?: number }>;
 }
 
-/** A request-scoped database plus the hook that returns its connection; a failed request discards it. */
-export type DatabaseLease = { database: GatewayDatabase; release(failed: boolean): void | Promise<void> };
+/** A connection leased from a pool: queries, plus release that destroys it when told it is broken. */
+export interface PooledConnection extends PostgresClient {
+    release(destroy?: boolean): void;
+}
 
-/** Hands out a database for one request; the handler always releases what it acquires. */
-export type DatabaseProvider = () => Promise<DatabaseLease>;
+/** A pool that runs single statements itself and leases a connection for a transaction (a `pg` Pool fits). */
+export interface ConnectionPool extends PostgresClient {
+    connect(): Promise<PooledConnection>;
+}
 
-/** Wraps one leased PostgreSQL connection as the gateway's database. */
-export function postgresGatewayDatabase(client: PostgresClient): GatewayDatabase {
-    return new PostgresGatewayDatabase(client);
+// A pool that could not hand out a connection; carries the driver's errno code (e.g. ECONNREFUSED) for the log.
+export class DatabaseUnavailableError extends Error {
+    override readonly name = "DatabaseUnavailableError";
+    readonly code: unknown;
+
+    constructor(cause: unknown) {
+        super("nightly_database_unavailable", { cause });
+        this.code = typeof cause === "object" && cause !== null ? (cause as { code?: unknown }).code : undefined;
+    }
+}
+
+/** Wraps a connection pool as the gateway's database. */
+export function pooledGatewayDatabase(pool: ConnectionPool): GatewayDatabase {
+    return new PooledGatewayDatabase(pool);
 }
 
 /** Returns a result's first row, or null when the statement matched nothing. */
@@ -41,33 +56,54 @@ export function isUniqueViolation(error: unknown): boolean {
     return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "23505";
 }
 
-// Runs statements on a single connection and wraps transactional work in BEGIN/COMMIT/ROLLBACK.
-class PostgresGatewayDatabase implements GatewayDatabase {
-    private readonly statements: GatewayQueries;
+// Runs single statements on the pool and each transaction on one connection leased for that transaction alone.
+class PooledGatewayDatabase implements GatewayDatabase {
+    constructor(private readonly pool: ConnectionPool) {}
 
-    constructor(private readonly client: PostgresClient) {
-        // Query-only view handed to transactional work, so `tx` cannot open a nested BEGIN.
-        this.statements = { query: (sql, values) => this.query(sql, values) };
-    }
-
-    /** Runs one statement and normalizes the driver's affected-row count. */
-    async query<T = Record<string, unknown>>(sql: string, values: readonly unknown[] = []): Promise<QueryResult<T>> {
-        const result = await this.client.query(sql, [...values]);
-        return { rows: result.rows as T[], rowCount: result.rowCount ?? result.affectedRows ?? 0 };
+    /** Runs one statement on whichever pooled connection is free, returned to the pool when it settles. */
+    query<T = Record<string, unknown>>(sql: string, values: readonly unknown[] = []): Promise<QueryResult<T>> {
+        return runStatement<T>(this.pool, sql, values);
     }
 
     /** Runs `work` in one transaction: commits its result, or rolls back and rethrows its error. */
     async transaction<T>(work: (tx: GatewayQueries) => Promise<T>): Promise<T> {
-        await this.client.query("BEGIN");
+        const connection = await this.lease();
+        await runControl(connection, "BEGIN");
         let result: T;
         try {
-            result = await work(this.statements);
+            result = await work({ query: (sql, values = []) => runStatement(connection, sql, values) });
         } catch (error) {
-            // A failing ROLLBACK propagates instead; being unexpected, it makes the lease discard the connection.
-            await this.client.query("ROLLBACK");
+            await runControl(connection, "ROLLBACK");
+            connection.release();
             throw error;
         }
-        await this.client.query("COMMIT");
+        await runControl(connection, "COMMIT");
+        connection.release();
         return result;
+    }
+
+    /** Leases a connection, reporting a pool that cannot supply one as `nightly_database_unavailable`. */
+    private async lease(): Promise<PooledConnection> {
+        try {
+            return await this.pool.connect();
+        } catch (error) {
+            throw new DatabaseUnavailableError(error);
+        }
+    }
+}
+
+/** Runs one statement and normalizes the driver's affected-row count. */
+async function runStatement<T>(client: PostgresClient, sql: string, values: readonly unknown[]): Promise<QueryResult<T>> {
+    const result = await client.query(sql, [...values]);
+    return { rows: result.rows as T[], rowCount: result.rowCount ?? result.affectedRows ?? 0 };
+}
+
+/** Runs BEGIN, COMMIT or ROLLBACK; when one fails the connection's state is unknown, so it is destroyed. */
+async function runControl(connection: PooledConnection, sql: string): Promise<void> {
+    try {
+        await connection.query(sql);
+    } catch (error) {
+        connection.release(true);
+        throw error;
     }
 }

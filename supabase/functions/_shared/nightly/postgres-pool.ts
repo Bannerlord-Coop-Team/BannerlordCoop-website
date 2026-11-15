@@ -1,32 +1,28 @@
-import { type DatabaseProvider, type PostgresClient, postgresGatewayDatabase } from "./database.ts";
+import { type ConnectionPool, type GatewayDatabase, pooledGatewayDatabase } from "./database.ts";
 
 // Edge-only composition of the gateway's PostgreSQL pool. The `pg` module is a parameter, so this file never
 // imports a driver and the INT8 parser the gateway database relies on cannot be left unregistered.
 
-/** A pooled `pg` connection: queries, plus release that destroys it when told the request failed. */
-interface PooledClient extends PostgresClient {
-    release(destroy?: boolean): void;
-}
-
-/** The slice of a `pg` Pool the provider uses. */
-interface PostgresPool {
-    connect(): Promise<PooledClient>;
+/** The slice of a `pg` Pool the gateway uses: statements, transaction leases and idle-client errors. */
+interface PostgresPool extends ConnectionPool {
     on(event: "error", listener: (error: unknown) => void): unknown;
 }
 
-/** The slice of the `pg` module the provider uses: the type-parser registry and the Pool class. */
+/** The slice of the `pg` module the gateway uses: the type-parser registry and the Pool class. */
 export interface PostgresModule {
     types: { builtins: { INT8: number }; setTypeParser(oid: number, parse: (value: string) => number): void };
     Pool: new (config: Record<string, unknown>) => PostgresPool;
 }
 
-/** Pool sizing, timeouts and the connection's application name, chosen by the composition root. */
+/** Pool sizing, timeouts, the connection's application name and the log sink, chosen by the composition root. */
 export type PostgresPoolOptions = {
     applicationName: string;
     maxConnections: number;
     idleTimeoutMs: number;
     /** Bounds both acquiring a connection and each query. */
     queryTimeoutMs: number;
+    /** Receives one structured event per idle-connection error; defaults to JSON on stderr. */
+    log?: (event: Record<string, unknown>) => void;
 };
 
 /** Parses an INT8 column as a JS number, refusing values beyond the safe-integer range. */
@@ -36,12 +32,12 @@ export function parseSafeInt8(value: string): number {
     return parsed;
 }
 
-/** Registers the safe INT8 parser, opens the pool, and returns a provider leasing one connection per request. */
-export function createPostgresDatabaseProvider(
+/** Registers the safe INT8 parser, opens the pool, and returns the gateway database backed by it. */
+export function createPostgresGatewayDatabase(
     pg: PostgresModule,
     connectionString: string,
     options: PostgresPoolOptions,
-): DatabaseProvider {
+): GatewayDatabase {
     pg.types.setTypeParser(pg.types.builtins.INT8, parseSafeInt8);
     const pool = new pg.Pool({
         connectionString,
@@ -51,15 +47,18 @@ export function createPostgresDatabaseProvider(
         connectionTimeoutMillis: options.queryTimeoutMs,
         query_timeout: options.queryTimeoutMs,
     });
-    pool.on("error", logPoolError);
-    return async () => {
-        const client = await pool.connect();
-        return { database: postgresGatewayDatabase(client), release: (failed) => client.release(failed) };
-    };
+    const log = options.log ?? logToConsole;
+    pool.on("error", (error) => log(poolErrorEvent(error)));
+    return pooledGatewayDatabase(pool);
 }
 
-/** Logs an idle-connection error by its SQLSTATE or driver code only, never its message. */
-function logPoolError(error: unknown): void {
+/** Describes an idle-connection error by its SQLSTATE or driver code only, never its message. */
+function poolErrorEvent(error: unknown): Record<string, unknown> {
     const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
-    console.error(JSON.stringify({ event: "nightly_gateway_pool_error", error: String(code ?? "unknown") }));
+    return { event: "nightly_gateway_pool_error", error: String(code ?? "unknown") };
+}
+
+/** The default log sink: one JSON line on stderr. */
+function logToConsole(event: Record<string, unknown>): void {
+    console.error(JSON.stringify(event));
 }

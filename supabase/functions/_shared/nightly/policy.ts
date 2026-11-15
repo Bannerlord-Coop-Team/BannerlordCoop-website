@@ -1,4 +1,4 @@
-// The single owner of the nightly-access policy: Discord roles, the seat limit, session lifetimes and fixed Discord URLs.
+// The single owner of the nightly-access policy: Discord roles, the seat limit and session lifetimes.
 // The values are part of the access contract; wire formats live in formats.ts. Dependency-free so Next.js can import it.
 
 /** Seats each eligible member can sponsor. */
@@ -31,10 +31,6 @@ export const DEVICE_POLL_INTERVAL_SECONDS = 3;
 export const DOWNLOAD_SESSION_SECONDS = 60 * 60;
 export const SPONSOR_SESSION_SECONDS = 24 * 60 * 60;
 export const OAUTH_STATE_SECONDS = 10 * 60;
-
-export const DISCORD_OAUTH_SCOPES = "identify guilds.members.read";
-export const DISCORD_REDIRECT_URI = "https://bannerlordcoop.com/nightly/callback";
-export const DISCORD_USER_AGENT = "DiscordBot (https://bannerlordcoop.com, 1)";
 
 /** Whether any of the given Discord role IDs grants nightly access. */
 export function hasNightlyAccessRole(roleIds: readonly string[]): boolean {

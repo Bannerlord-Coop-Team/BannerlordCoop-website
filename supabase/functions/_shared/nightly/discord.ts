@@ -1,16 +1,19 @@
 import { readBoundedBytes, RequestTooLargeError } from "../edge-http.ts";
 import { GatewayError, type UpstreamFailure } from "./http.ts";
-import {
-    DISCORD_GUILD_ID,
-    DISCORD_OAUTH_SCOPES,
-    DISCORD_REDIRECT_URI,
-    DISCORD_USER_AGENT,
-} from "./policy.ts";
 import { isDiscordSnowflake } from "./formats.ts";
+import { DISCORD_GUILD_ID } from "./policy.ts";
 
 const DISCORD_API = "https://discord.com/api/v10";
 const DISCORD_AUTHORIZE = "https://discord.com/oauth2/authorize";
 const DISCORD_TOKEN = `${DISCORD_API}/oauth2/token`;
+const DISCORD_OAUTH_SCOPES = "identify guilds.members.read";
+const DISCORD_REDIRECT_URI = "https://bannerlordcoop.com/nightly/callback";
+const DISCORD_USER_AGENT = "DiscordBot (https://bannerlordcoop.com, 1)";
+/**
+ * Longest a Discord call (request and body) may take. A timeout is an unexpected `500 internal_error`, which the
+ * installer retries; no database connection is held meanwhile, so a slow Discord cannot starve the pool.
+ */
+const DISCORD_TIMEOUT_MS = 8_000;
 /** Largest OAuth token-exchange body read from Discord. */
 const MAXIMUM_TOKEN_RESPONSE_BYTES = 16 * 1024;
 /** Largest user or guild-member body read from Discord's REST API. */
@@ -70,6 +73,7 @@ class DiscordHttpApi implements DiscordApi {
             method: "POST",
             headers: { "content-type": "application/x-www-form-urlencoded", "user-agent": DISCORD_USER_AGENT },
             body: form,
+            signal: AbortSignal.timeout(DISCORD_TIMEOUT_MS),
         });
         const text = await readDiscordText(response, MAXIMUM_TOKEN_RESPONSE_BYTES);
         if (!response.ok) throw new GatewayError(502, "discord_authorization_failed", discordFailure(response, text));
@@ -101,6 +105,7 @@ class DiscordHttpApi implements DiscordApi {
     async botGuildMember(userId: string): Promise<DiscordMember | null> {
         const response = await this.fetchImplementation(`${DISCORD_API}/guilds/${DISCORD_GUILD_ID}/members/${userId}`, {
             headers: { authorization: `Bot ${this.credentials.botToken}`, "user-agent": DISCORD_USER_AGENT },
+            signal: AbortSignal.timeout(DISCORD_TIMEOUT_MS),
         });
         const text = await readDiscordText(response, MAXIMUM_MEMBER_RESPONSE_BYTES);
         if (response.status === 404) return null;
@@ -129,6 +134,7 @@ class DiscordHttpApi implements DiscordApi {
     private async userFetch(path: string, accessToken: string): Promise<DiscordReply> {
         const response = await this.fetchImplementation(`${DISCORD_API}${path}`, {
             headers: { authorization: `Bearer ${accessToken}`, "user-agent": DISCORD_USER_AGENT },
+            signal: AbortSignal.timeout(DISCORD_TIMEOUT_MS),
         });
         return { response, text: await readDiscordText(response, MAXIMUM_MEMBER_RESPONSE_BYTES) };
     }
@@ -148,7 +154,7 @@ function membershipFailureStatus(response: Response): number {
 
 /**
  * Reads a bounded Discord body as strict UTF-8: oversized is `502 response_too_large`, undecodable
- * `502 discord_response_invalid`, and a network fault mid-body propagates as an unexpected error.
+ * `502 discord_response_invalid`, and a network fault or timeout mid-body propagates as an unexpected error.
  */
 async function readDiscordText(response: Response, maximumBytes: number): Promise<string> {
     const bytes = await readBoundedBytes(response, maximumBytes).catch(rethrowTooLargeAsResponseTooLarge);

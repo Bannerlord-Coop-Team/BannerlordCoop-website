@@ -43,7 +43,7 @@ function value<T>(result: { ok: true; value: T } | { ok: false; status: number; 
 test("the website client drives device sign-in, a sponsor claim and the sponsor portal against the Edge handler", async () => {
     await seedGrant(database, SPONSOR, SPONSOR_CODE);
     const script = discordScript({ bot: { [SPONSOR]: { roles: [PATREON_ROLE] } } });
-    const { handler, releases } = gatewayHandler(database, script);
+    const { handler } = gatewayHandler(database, script);
     const client = createNightlyClient(
         { functionUrl: FUNCTION_URL, websiteKey: WEBSITE_KEY },
         (url, init) => handler(new Request(url, init)),
@@ -85,7 +85,6 @@ test("the website client drives device sign-in, a sponsor claim and the sponsor 
     assert.deepEqual(await client.removeSponsoredAccount(portal.session, FRIEND), { ok: true, value: null });
     assert.deepEqual(value(await client.sponsorPortal(portal.session)), { seats: [] });
     assert.deepEqual(await client.sponsorPortal("x".repeat(43)), { ok: false, status: 401, code: "authorization_expired" });
-    assert.ok(releases.every((failed) => failed === false));
 });
 
 test("the website client decodes a wrong website key as the gateway's 401", async () => {

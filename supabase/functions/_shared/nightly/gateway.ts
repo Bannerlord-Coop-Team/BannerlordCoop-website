@@ -1,11 +1,10 @@
 import type { GatewayContext } from "./context.ts";
-import type { DatabaseProvider } from "./database.ts";
+import type { GatewayDatabase } from "./database.ts";
 import { createDeviceSession, pollDeviceSession } from "./device.ts";
-import { createDiscordApi, type DiscordApi, type DiscordCredentials } from "./discord.ts";
-import { WEBSITE_KEY_HEADER } from "./formats.ts";
+import { createDiscordApi, type DiscordCredentials } from "./discord.ts";
+import { isDiscordSnowflake, WEBSITE_KEY_HEADER } from "./formats.ts";
 import { errorJson, GatewayError, json, readJsonObject } from "./http.ts";
 import { completeOAuth, startOAuth } from "./oauth.ts";
-import { isDiscordSnowflake } from "./formats.ts";
 import { claimSponsorship, removeSponsoredAccount, rotateSponsorCode, sponsorPortal } from "./sponsor.ts";
 import { cryptoRandomBytes, type RandomBytes, secretsEqual } from "./tokens.ts";
 
@@ -14,6 +13,8 @@ const MINIMUM_WEBSITE_KEY_LENGTH = 32;
 const MINIMUM_CLIENT_SECRET_LENGTH = 32;
 const MINIMUM_BOT_TOKEN_LENGTH = 50;
 const SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/;
+/** A Node-style errno code naming a failed dependency, like ECONNREFUSED or ETIMEDOUT; checked before SQLSTATE. */
+const ERRNO_CODE_PATTERN = /^E[A-Z]{2,20}$/;
 /** A snake_case error code this code base throws as a plain Error's message; any other message is never logged. */
 const SAFE_ERROR_CODE_PATTERN = /^[a-z0-9_]{1,64}$/;
 
@@ -39,7 +40,8 @@ export type NightlyGatewayOptions = {
     websiteKey: string;
     discord: DiscordCredentials;
     fetch: typeof fetch;
-    openDatabase: DatabaseProvider;
+    /** Pool-backed: each statement or transaction holds a connection only while it runs. */
+    database: GatewayDatabase;
     /** Wall-clock milliseconds, like Date.now. */
     clock?: () => number;
     random?: RandomBytes;
@@ -49,12 +51,14 @@ export type NightlyGatewayOptions = {
 /** Builds the Edge Function's request handler: installer device routes plus the website's JSON routes. */
 export function createNightlyGatewayHandler(options: NightlyGatewayOptions): (request: Request) => Promise<Response> {
     assertConfiguration(options);
-    const discord = createDiscordApi(options.discord, options.fetch);
     const clock = options.clock ?? Date.now;
-    const random = options.random ?? cryptoRandomBytes;
     const log = options.log ?? ((event) => console.error(JSON.stringify(event)));
-    const now = () => Math.floor(clock() / 1000);
-    const router = new GatewayRouter(options.websiteKey, options.openDatabase, discord, now, random);
+    const router = new GatewayRouter(options.websiteKey, {
+        db: options.database,
+        discord: createDiscordApi(options.discord, options.fetch),
+        now: () => Math.floor(clock() / 1000),
+        random: options.random ?? cryptoRandomBytes,
+    });
     return async (request) => {
         try {
             return await router.route(request);
@@ -64,15 +68,9 @@ export function createNightlyGatewayHandler(options: NightlyGatewayOptions): (re
     };
 }
 
-// Authenticates each request for its route family and runs the route on a request-scoped database.
+// Authenticates each request for its route family and runs the route with the gateway's shared context.
 class GatewayRouter {
-    constructor(
-        private readonly websiteKey: string,
-        private readonly openDatabase: DatabaseProvider,
-        private readonly discord: DiscordApi,
-        private readonly now: () => number,
-        private readonly random: RandomBytes,
-    ) {}
+    constructor(private readonly websiteKey: string, private readonly context: GatewayContext) {}
 
     /** Dispatches a request by its function-relative path; unknown paths and non-POSTs are `404 not_found`. */
     async route(request: Request): Promise<Response> {
@@ -87,7 +85,7 @@ class GatewayRouter {
 
     /** Runs an installer route; the Worker forwards these unauthenticated, as installers send them. */
     private async routeInstaller(request: Request, route: InstallerRoute): Promise<Response> {
-        return this.withContext((context) => route(context, request));
+        return route(this.context, request);
     }
 
     /** Requires the website key, parses the JSON body, then runs a website route. */
@@ -97,21 +95,7 @@ class GatewayRouter {
             throw new GatewayError(401, "unauthorized");
         }
         const body = await readJsonObject(request);
-        return this.withContext((context) => route(context, body));
-    }
-
-    /** Leases a database for one route invocation and always releases it, discarding it after an unexpected failure. */
-    private async withContext(run: (context: GatewayContext) => Promise<Response>): Promise<Response> {
-        const lease = await this.openDatabase();
-        let failed = false;
-        try {
-            return await run({ db: lease.database, discord: this.discord, now: this.now, random: this.random });
-        } catch (error) {
-            failed = !(error instanceof GatewayError);
-            throw error;
-        } finally {
-            await lease.release(failed);
-        }
+        return route(this.context, body);
     }
 }
 
@@ -134,10 +118,10 @@ function failureResponse(request: Request, error: unknown, log: (event: Record<s
     return json({ error: "internal_error" }, 500);
 }
 
-/** Describes an unexpected failure by error class, safe snake_case code and SQLSTATE only, never other message text. */
-function unexpectedCause(error: unknown): { cause: string; message?: string; sqlstate?: string } {
+/** Describes an unexpected failure by error class, safe snake_case message and driver code only, never other text. */
+function unexpectedCause(error: unknown): { cause: string; message?: string; code?: string; sqlstate?: string } {
     const cause = error instanceof Error ? error.name : typeof error;
-    return { cause, ...safeMessage(error), ...sqlstate(error) };
+    return { cause, ...safeMessage(error), ...driverCode(error) };
 }
 
 /** The error's message only when it is one of the gateway's own snake_case codes, like `postgres_integer_out_of_range`. */
@@ -146,11 +130,13 @@ function safeMessage(error: unknown): { message?: string } {
     return { message: error.message };
 }
 
-/** The error's PostgreSQL SQLSTATE, when it carries a well-formed one. */
-function sqlstate(error: unknown): { sqlstate?: string } {
+/** The error's errno code (naming a failed connection or timeout) or else its PostgreSQL SQLSTATE, when well-formed. */
+function driverCode(error: unknown): { code?: string; sqlstate?: string } {
     const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
-    if (typeof code !== "string" || !SQLSTATE_PATTERN.test(code)) return {};
-    return { sqlstate: code };
+    if (typeof code !== "string") return {};
+    if (ERRNO_CODE_PATTERN.test(code)) return { code };
+    if (SQLSTATE_PATTERN.test(code)) return { sqlstate: code };
+    return {};
 }
 
 /** Refuses to start with a missing or implausible secret instead of failing per request. */

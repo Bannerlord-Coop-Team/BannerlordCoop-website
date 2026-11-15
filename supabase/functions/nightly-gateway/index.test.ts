@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { after, before, beforeEach, test } from "node:test";
 import type { PGlite } from "@electric-sql/pglite";
+import { type ConnectionPool, pooledGatewayDatabase } from "../_shared/nightly/database.ts";
 import { createNightlyGatewayHandler } from "../_shared/nightly/gateway.ts";
 import { hasNightlyAccessRole, isEligibleNightlySponsor } from "../_shared/nightly/policy.ts";
 import { sha256 } from "../_shared/nightly/tokens.ts";
@@ -12,6 +14,7 @@ import {
     COMPETITION_WINNER_ROLE,
     createGatewayDatabase,
     discordScript,
+    failingDatabase,
     FRIEND,
     gatewayHandler,
     installerRequest,
@@ -25,6 +28,7 @@ import {
     seedPortalState,
     seedSeat,
     seedSponsorSession,
+    SingleConnectionPool,
     SPONSOR,
     TOKEN_URL,
     WEBSITE_KEY,
@@ -53,6 +57,11 @@ async function count(table: string, where = "true", values: unknown[] = []): Pro
     return row!.count;
 }
 
+/** The token hash exactly as the Worker computes it to look a download session up. */
+function workerTokenHash(accessToken: string): string {
+    return createHash("sha256").update(accessToken).digest("hex");
+}
+
 // ---- Policy (ported from nightly-gateway/src/core.test.ts) ----
 
 test("supporters, Testers, Staff, and Competition Winners get nightly access and share the same seat limit", () => {
@@ -74,7 +83,7 @@ test("the handler refuses implausible secrets at construction", () => {
         websiteKey: WEBSITE_KEY,
         discord: { clientId: CLIENT_ID, clientSecret: "s".repeat(32), botToken: BOT_TOKEN },
         fetch,
-        openDatabase: async () => { throw new Error("unused"); },
+        database: failingDatabase(() => new Error("unused")),
     };
     assert.doesNotThrow(() => createNightlyGatewayHandler(base));
     assert.throws(() => createNightlyGatewayHandler({ ...base, websiteKey: "short" }), /nightly_gateway_configuration_invalid/);
@@ -92,7 +101,7 @@ test("the handler refuses implausible secrets at construction", () => {
 
 test("device sessions are 10-minute pending sessions; the Worker adds verification_uri", async () => {
     const script = discordScript();
-    const { handler, releases } = gatewayHandler(database, script);
+    const { handler } = gatewayHandler(database, script);
     for (let attempt = 0; attempt < 2; attempt += 1) {
         const response = await handler(installerRequest("/v1/device/sessions", "client=installer"));
         assert.equal(response.status, 201);
@@ -113,13 +122,12 @@ test("device sessions are 10-minute pending sessions; the Worker adds verificati
         );
         assert.deepEqual(row, { status: "pending", created_at: NOW, expires_at: NOW + 600 });
     }
-    assert.deepEqual(releases, [false, false]);
     assert.equal(script.calls.length, 0);
 });
 
 test("website routes require the shared website key", async () => {
     const script = discordScript();
-    const { handler, releases } = gatewayHandler(database, script);
+    const { handler } = gatewayHandler(database, script);
     for (const key of [null, "", "w".repeat(47), "x".repeat(48), `${WEBSITE_KEY}x`]) {
         for (const path of ["/oauth/start", "/oauth/complete", "/sponsorship/claim", "/sponsor/portal", "/sponsor/code", "/sponsor/remove"]) {
             const response = await handler(websiteRequest(path, { purpose: "sponsor-portal" }, key));
@@ -127,7 +135,6 @@ test("website routes require the shared website key", async () => {
             assert.deepEqual(await body(response), { error: "unauthorized" });
         }
     }
-    assert.deepEqual(releases, []);
     assert.equal(script.calls.length, 0);
     const allowed = await handler(websiteRequest("/oauth/start", { purpose: "sponsor-portal" }));
     assert.equal(allowed.status, 200);
@@ -185,7 +192,7 @@ test("an approved session trades for one 1-hour download token after re-checking
     assert.match(token.access_token as string, /^[A-Za-z0-9_-]{43}$/);
     assert.equal(token.token_type, "Bearer");
     assert.equal(token.expires_in, 3600);
-    const [session] = await rows(database, "select device_session_id, discord_user_id, supporter_discord_user_id, created_at, expires_at from nightly_gateway.download_sessions where token_hash = $1", [await sha256(token.access_token as string)]);
+    const [session] = await rows(database, "select device_session_id, discord_user_id, supporter_discord_user_id, created_at, expires_at from nightly_gateway.download_sessions where token_hash = $1", [workerTokenHash(token.access_token as string)]);
     assert.deepEqual(session, {
         device_session_id: approved.id, discord_user_id: FRIEND, supporter_discord_user_id: SPONSOR,
         created_at: NOW, expires_at: NOW + 3600,
@@ -201,7 +208,7 @@ test("an approved session trades for one 1-hour download token after re-checking
 
 test("a poll that loses the issue race to an existing download session is 409 already_used and changes nothing", async () => {
     await seedGrant(database, SPONSOR);
-    const { handler, releases } = gatewayHandler(database, discordScript({ bot: { [SPONSOR]: { roles: [PATREON_ROLE] } } }));
+    const { handler } = gatewayHandler(database, discordScript({ bot: { [SPONSOR]: { roles: [PATREON_ROLE] } } }));
     const approved = await seedDevice(database, { status: "approved", discordUserId: FRIEND, sponsorId: SPONSOR });
     await seedDownloadSession(database, FRIEND, SPONSOR, "r".repeat(43), approved.id);
     const response = await handler(installerRequest("/v1/device/token", `device_code=${approved.secret}`));
@@ -209,7 +216,6 @@ test("a poll that loses the issue race to an existing download session is 409 al
     assert.equal((await device(approved.id))!.status, "approved", "the consuming update rolls back with the failed insert");
     assert.equal(await count("download_sessions", "device_session_id = $1", [approved.id]), 1);
     assert.equal(await count("download_sessions"), 1);
-    assert.deepEqual(releases, [false], "a lost race keeps the connection");
 });
 
 test("a poll that loses the consuming update to a concurrent poll is 409 already_used and issues nothing", async () => {
@@ -220,12 +226,11 @@ test("a poll that loses the consuming update to a concurrent poll is 409 already
         // The concurrent poll consumes the session while this one re-checks the sponsor.
         await database.query("update nightly_gateway.device_sessions set status = 'consumed' where id = $1", [approved.id]);
     };
-    const { handler, releases } = gatewayHandler(database, script);
+    const { handler } = gatewayHandler(database, script);
     const response = await handler(installerRequest("/v1/device/token", `device_code=${approved.secret}`));
     assert.deepEqual([response.status, await body(response)], [409, { error: "already_used" }]);
     assert.equal((await device(approved.id))!.status, "consumed");
     assert.equal(await count("download_sessions", "device_session_id = $1", [approved.id]), 0);
-    assert.deepEqual(releases, [false], "a lost race keeps the connection");
 });
 
 test("a sponsor who lost the role at token issue loses grants and download sessions", async () => {
@@ -352,7 +357,10 @@ test("a direct member is approved as their own sponsor without storing a refresh
     assert.equal(form.get("grant_type"), "authorization_code");
     assert.equal(form.get("code"), "discord-code");
     assert.equal(form.get("client_id"), CLIENT_ID);
-    for (const call of script.calls) assert.equal(call.headers.get("user-agent"), "DiscordBot (https://bannerlordcoop.com, 1)");
+    for (const call of script.calls) {
+        assert.equal(call.headers.get("user-agent"), "DiscordBot (https://bannerlordcoop.com, 1)");
+        assert.ok(call.signal instanceof AbortSignal, `${call.url} has a timeout`);
+    }
     assert.equal(script.calls.find((call) => call.url.endsWith("/users/@me"))!.headers.get("authorization"), "Bearer user-access-token");
 });
 
@@ -459,6 +467,28 @@ test("invalid Discord payloads are discord_response_invalid", async () => {
     narrowScope.tokenFailure = () => Response.json({ access_token: "a", token_type: "Bearer", scope: "identify" });
     const scope = await gatewayHandler(database, narrowScope).handler(websiteRequest("/oauth/complete", { code: "code", state: pending.state }));
     assert.deepEqual([scope.status, await body(scope)], [502, { error: "discord_response_invalid" }]);
+});
+
+test("a Discord call that outlives its 8-second timeout is a logged 500 and leaves the session untouched", async (t) => {
+    const deadline = new AbortController();
+    const timeouts: number[] = [];
+    t.mock.method(AbortSignal, "timeout", (milliseconds: number) => {
+        timeouts.push(milliseconds);
+        return deadline.signal;
+    });
+    const pending = await seedDevice(database);
+    const script = discordScript({ stall: true });
+    script.beforeEachCall = () => {
+        setTimeout(() => deadline.abort(new DOMException("The operation timed out.", "TimeoutError")), 0);
+    };
+    const { handler, logs } = gatewayHandler(database, script);
+    const response = await handler(websiteRequest("/oauth/complete", { code: "code", state: pending.state }));
+    assert.deepEqual([response.status, await body(response)], [500, { error: "internal_error" }]);
+    assert.deepEqual(timeouts, [8_000]);
+    assert.deepEqual(logs.at(-1), {
+        event: "nightly_gateway_request_failed", path: "/nightly-gateway/oauth/complete", error: "internal_error", cause: "TimeoutError",
+    });
+    assert.deepEqual(await device(pending.id), { status: "pending", discord_user_id: null, sponsor_discord_user_id: null, authorized_at: null });
 });
 
 test("Discord bodies: oversized is response_too_large, undecodable is discord_response_invalid, a dropped stream is a 500", async () => {
@@ -654,10 +684,11 @@ test("removing a seat frees it and ends that friend's download sessions under th
 
 // ---- End to end ----
 
-test("an installer, a friend, and a sponsor complete the whole sponsored flow", async () => {
+test("an installer, a friend, and a sponsor complete the whole sponsored flow, holding no connection during Discord calls", async () => {
     await seedGrant(database, SPONSOR, "SPON-SORC-ODE2");
     const script = discordScript({ bot: { [SPONSOR]: { roles: [PATREON_ROLE] } } });
-    const { handler, releases } = gatewayHandler(database, script);
+    const { handler, pool } = gatewayHandler(database, script);
+    script.beforeEachCall = (url) => assert.equal(pool.inUse, false, `${url} runs while a database connection is held`);
     const created = await body(await handler(installerRequest("/v1/device/sessions", "client=installer")));
     const userCode = created.user_code;
     const poll = () => handler(installerRequest("/v1/device/token", `device_code=${created.device_code}`));
@@ -673,14 +704,16 @@ test("an installer, a friend, and a sponsor complete the whole sponsored flow", 
     assert.equal(token.status, 200);
     assert.equal((await body(token)).expires_in, 3600);
     assert.equal((await poll()).status, 403);
-    assert.ok(releases.every((failed) => failed === false));
+    assert.ok(script.calls.length >= 4, "the flow re-checked Discord");
 });
 
-test("unexpected failures are a logged 500 and discard the database connection", async () => {
-    const { handler, releases, logs } = gatewayHandler(database, discordScript(), () => Number.NaN);
+test("unexpected database failures are a logged 500 with the SQLSTATE, and later requests still work", async () => {
+    let clock = () => Number.NaN;
+    const { handler, logs } = gatewayHandler(database, discordScript(), () => clock());
     const response = await handler(installerRequest("/v1/device/sessions"));
     assert.deepEqual([response.status, await body(response)], [500, { error: "internal_error" }]);
-    assert.deepEqual(releases, [true]);
+    clock = () => NOW * 1000;
+    assert.equal((await handler(installerRequest("/v1/device/sessions"))).status, 201);
     const [event] = logs;
     assert.deepEqual(Object.keys(event!).sort(), ["cause", "error", "event", "path", "sqlstate"]);
     assert.equal(event!.error, "internal_error");
@@ -694,7 +727,7 @@ test("unexpected non-database failures log only the error class", async () => {
         websiteKey: WEBSITE_KEY,
         discord: { clientId: CLIENT_ID, clientSecret: "s".repeat(32), botToken: BOT_TOKEN },
         fetch,
-        openDatabase: async () => { throw new TypeError(`secret ${WEBSITE_KEY}`); },
+        database: failingDatabase(() => new TypeError(`secret ${WEBSITE_KEY}`)),
         clock: () => NOW * 1000,
         log: (event) => logs.push(event),
     });
@@ -716,7 +749,7 @@ test("unexpected failures log a snake_case error code from the message, and neve
         websiteKey: WEBSITE_KEY,
         discord: { clientId: CLIENT_ID, clientSecret: "s".repeat(32), botToken: BOT_TOKEN },
         fetch,
-        openDatabase: async () => { throw failure; },
+        database: failingDatabase(() => failure),
         clock: () => NOW * 1000,
         log: (event) => logs.push(event),
     });
@@ -734,4 +767,63 @@ test("unexpected failures log a snake_case error code from the message, and neve
         await throwing(installerRequest("/v1/device/sessions"));
         assert.equal(logs.at(-1)!.message, undefined, `message ${JSON.stringify(unsafe)} is not logged`);
     }
+});
+
+test("unexpected driver failures name the failing dependency by its errno code, never its message", async () => {
+    const logs: Record<string, unknown>[] = [];
+    let failure: Error = new Error("unset");
+    const throwing = createNightlyGatewayHandler({
+        websiteKey: WEBSITE_KEY,
+        discord: { clientId: CLIENT_ID, clientSecret: "s".repeat(32), botToken: BOT_TOKEN },
+        fetch,
+        database: failingDatabase(() => failure),
+        clock: () => NOW * 1000,
+        log: (event) => logs.push(event),
+    });
+    for (const code of ["ECONNREFUSED", "ETIMEDOUT", "ECONNRESET"]) {
+        failure = Object.assign(new Error(`connect ${code} 10.0.0.1:5432 secret-host`), { code });
+        await throwing(installerRequest("/v1/device/sessions"));
+        assert.deepEqual(logs.at(-1), {
+            event: "nightly_gateway_request_failed",
+            path: "/functions/v1/nightly-gateway/v1/device/sessions",
+            error: "internal_error",
+            cause: "Error",
+            code,
+        });
+    }
+    for (const code of ["econnrefused", "ERR_SOCKET_CLOSED", "E1", `E${"X".repeat(21)}`, 111]) {
+        failure = Object.assign(new Error("secret-host"), { code });
+        await throwing(installerRequest("/v1/device/sessions"));
+        assert.deepEqual(Object.keys(logs.at(-1)!).sort(), ["cause", "error", "event", "path"], `code ${String(code)} is not logged`);
+    }
+    assert.ok(!JSON.stringify(logs).includes("secret-host"));
+});
+
+test("a pool that cannot connect for a transaction logs nightly_database_unavailable with the errno code", async () => {
+    await seedGrant(database, SPONSOR);
+    const session = await seedSponsorSession(database, SPONSOR);
+    const statements = new SingleConnectionPool(database);
+    const refusingPool: ConnectionPool = {
+        query: (sql, values) => statements.query(sql, values),
+        connect: async () => { throw Object.assign(new Error("connect ECONNREFUSED secret-host"), { code: "ECONNREFUSED" }); },
+    };
+    const logs: Record<string, unknown>[] = [];
+    const handler = createNightlyGatewayHandler({
+        websiteKey: WEBSITE_KEY,
+        discord: { clientId: CLIENT_ID, clientSecret: "s".repeat(32), botToken: BOT_TOKEN },
+        fetch,
+        database: pooledGatewayDatabase(refusingPool),
+        clock: () => NOW * 1000,
+        log: (event) => logs.push(event),
+    });
+    const response = await handler(websiteRequest("/sponsor/remove", { session, discord_user_id: FRIEND }));
+    assert.deepEqual([response.status, await body(response)], [500, { error: "internal_error" }]);
+    assert.deepEqual(logs.at(-1), {
+        event: "nightly_gateway_request_failed",
+        path: "/nightly-gateway/sponsor/remove",
+        error: "internal_error",
+        cause: "DatabaseUnavailableError",
+        message: "nightly_database_unavailable",
+        code: "ECONNREFUSED",
+    });
 });
