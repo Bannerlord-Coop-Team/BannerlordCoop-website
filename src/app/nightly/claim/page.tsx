@@ -3,7 +3,7 @@ import { PreviousSponsorRevokedHelp, SupportNote } from "@/app/components/nightl
 import { NightlyError } from "@/app/components/nightly/NightlyStatus";
 import { SponsorClaimForm } from "@/app/components/nightly/SponsorClaimForm";
 import { headingClass, ledeClass } from "@/app/components/nightly/styles";
-import { CLAIM_COOKIE, decodeClaimContext } from "@/app/lib/nightly/cookies";
+import { readClaimCookie } from "@/app/lib/nightly/cookies";
 import { INSTALLER_AUTHORIZATION_EXPIRED_MESSAGE } from "@/app/lib/nightly/messages";
 import { QUALIFYING_ROLES_TEXT } from "../../../../supabase/functions/_shared/nightly/policy";
 import type { Metadata } from "next";
@@ -14,7 +14,7 @@ export const metadata: Metadata = { title: "Sponsor required", robots: { index: 
 
 /** Shows the sponsor-code form for a Discord account without a qualifying role (the `needs-sponsor` outcome). */
 export default async function SponsorClaimPage() {
-    const claim = decodeClaimContext((await cookies()).get(CLAIM_COOKIE)?.value);
+    const claim = readClaimCookie(await cookies());
     if (claim === null) {
         return (
             <NightlyCard eyebrow="Nightly installer">

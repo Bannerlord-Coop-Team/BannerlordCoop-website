@@ -3,7 +3,7 @@ import type { GatewayQueries } from "./database.ts";
 import {
     approveDevice,
     bindDeviceOAuthState,
-    findAuthorizableDeviceByState,
+    consumeDeviceOAuthState,
     findLiveDeviceByUserCode,
     parkAwaitingSponsor,
 } from "./device.ts";
@@ -30,8 +30,9 @@ export async function startOAuth(context: GatewayContext, body: Record<string, u
 export async function completeOAuth(context: GatewayContext, body: Record<string, unknown>): Promise<Response> {
     if (!isWellFormedOAuthCallback(body)) throw new GatewayError(400, "invalid_request");
     const stateHash = await sha256(body.state);
-    if (await consumePortalState(context.db, stateHash, context.now())) return completePortalLogin(context, body.code);
-    const deviceId = await findAuthorizableDeviceByState(context.db, stateHash, context.now());
+    const portalLogin = await consumePortalState(context.db, stateHash, context.now());
+    if (portalLogin) return completePortalLogin(context, body.code);
+    const deviceId = await consumeDeviceOAuthState(context.db, stateHash, context.now());
     if (deviceId === null) throw new GatewayError(400, "expired");
     return completeDeviceLogin(context, deviceId, body.code);
 }

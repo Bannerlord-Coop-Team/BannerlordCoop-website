@@ -4,7 +4,6 @@ import {
     normalizeSponsorCode,
 } from "../../../../supabase/functions/_shared/nightly/formats";
 import { isEligibilityRejection, isSessionRejection, type NightlyClient, type PendingClaim, type SponsorPortalData } from "./client";
-import { CLAIM_COOKIE, SPONSOR_COOKIE } from "./cookies";
 import {
     GENERIC_ERROR_MESSAGE,
     INSTALLER_AUTHORIZATION_EXPIRED_MESSAGE,
@@ -12,7 +11,7 @@ import {
     ROLE_REQUIRED_MESSAGE,
 } from "./messages";
 import { SESSION_EXPIRED_PATH, SPONSORED_APPROVED_PATH } from "./query-flags";
-import { clearedCookie, redirectPlan, type RedirectPlan } from "./redirect-plan";
+import { clearedClaimCookie, clearedSponsorCookie, redirectPlan, type RedirectPlan } from "./redirect-plan";
 
 /** What `GET /nightly/sponsor` renders for the current cookie and portal response. */
 export type PortalView =
@@ -39,11 +38,11 @@ export type ClaimActionRequest = { sameOrigin: boolean; claim: PendingClaim | nu
 export type SponsorActionRequest = { sameOrigin: boolean; session: string | null };
 
 // Server actions can write cookies, so an expired session is dropped here and the login prompt says why.
-const SESSION_EXPIRED_RESULT: ActionRedirect = { redirect: redirectPlan(SESSION_EXPIRED_PATH, clearedCookie(SPONSOR_COOKIE)) };
+const SESSION_EXPIRED_RESULT: ActionRedirect = { redirect: redirectPlan(SESSION_EXPIRED_PATH, clearedSponsorCookie()) };
 
 /**
- * Loads the sponsor portal: no session shows login (with the notice an action that dropped the session asked for),
- * a rejected session shows login with the expired notice, a lost qualifying role explains itself; a rejected website key is an error.
+ * Maps the sponsor cookie and the `/sponsor/portal` reply to the view the page renders; any failure other than a
+ * session or role rejection is an error view.
  */
 export async function loadPortalView(client: NightlyClient, session: string | null, expiredNotice: boolean): Promise<PortalView> {
     if (session === null) return { kind: "login", expired: expiredNotice };
@@ -67,7 +66,7 @@ export async function claimActionResult(
     if (code === null) return { state: { error: nightlyErrorMessage("claim", "invalid_sponsor_code") } };
     const result = await client.claimSponsorship(request.claim.deviceId, code);
     if (!result.ok) return { state: { error: nightlyErrorMessage("claim", result.code) } };
-    return { redirect: redirectPlan(SPONSORED_APPROVED_PATH, clearedCookie(CLAIM_COOKIE)) };
+    return { redirect: redirectPlan(SPONSORED_APPROVED_PATH, clearedClaimCookie()) };
 }
 
 /** `POST /nightly/sponsor` (create code): rotates the sponsor code and returns it once, or leaves an expired session. */

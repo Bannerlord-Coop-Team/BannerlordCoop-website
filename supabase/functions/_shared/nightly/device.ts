@@ -114,14 +114,19 @@ export async function bindDeviceOAuthState(queries: GatewayQueries, deviceId: st
     ]);
 }
 
-/** Returns the ID of the device session an OAuth state was bound to while it can still be authorized, or null. */
-export async function findAuthorizableDeviceByState(
+/**
+ * Uses up a device OAuth state, so it completes at most once, and returns the ID of the device session it was bound to
+ * while that session can still be authorized, or null.
+ */
+export async function consumeDeviceOAuthState(
     queries: GatewayQueries,
     stateHash: string,
     now: number,
 ): Promise<string | null> {
     const device = firstRow(await queries.query<AuthorizableDevice>(
-        "SELECT id, status, expires_at FROM nightly_gateway.device_sessions WHERE oauth_state_hash = $1",
+        `UPDATE nightly_gateway.device_sessions SET oauth_state_hash = NULL
+         WHERE oauth_state_hash = $1
+         RETURNING id, status, expires_at`,
         [stateHash],
     ));
     if (!isAuthorizableDevice(device, now)) return null;

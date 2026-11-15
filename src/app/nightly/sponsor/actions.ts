@@ -1,6 +1,6 @@
 "use server";
 
-import { readSponsorSession, SPONSOR_COOKIE } from "@/app/lib/nightly/cookies";
+import { readSponsorCookie } from "@/app/lib/nightly/cookies";
 import {
     createCodeActionResult,
     removeSeatActionResult,
@@ -27,6 +27,6 @@ export async function removeSponsoredSeat(_state: RemoveSeatState, form: FormDat
 async function sponsorRequest(): Promise<SponsorActionRequest> {
     return {
         sameOrigin: await submittedFromThisSite(),
-        session: readSponsorSession((await cookies()).get(SPONSOR_COOKIE)?.value),
+        session: readSponsorCookie(await cookies()),
     };
 }

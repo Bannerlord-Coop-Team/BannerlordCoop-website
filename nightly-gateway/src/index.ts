@@ -59,6 +59,7 @@ export function createGateway(dependencies: GatewayDependencies): GatewayHandler
     };
 }
 
+// fetch is wrapped rather than passed bare: Workers throw "Illegal invocation" when it is called with a foreign `this`.
 export default createGateway({ fetch: (url, init) => fetch(url, init), log: consoleLog }) satisfies ExportedHandler<Env>;
 
 // Logs a failed request with its stable code, the upstream status when relayed, and the class of the underlying cause.

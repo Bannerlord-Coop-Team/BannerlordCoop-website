@@ -437,8 +437,9 @@ test("an existing seat with a still-eligible sponsor is sponsored-approved", asy
     assert.equal(await count("supporter_grants"), 1);
 });
 
-test("Discord server membership is optional for a friend who needs a sponsor code", async () => {
-    const { handler } = gatewayHandler(database, discordScript());
+test("Discord server membership is optional for a friend who needs a sponsor code, and the state cannot be replayed", async () => {
+    const script = discordScript();
+    const { handler } = gatewayHandler(database, script);
     const pending = await seedDevice(database);
     const response = await handler(websiteRequest("/oauth/complete", { code: "code", state: pending.state }));
     assert.deepEqual(await body(response), {
@@ -446,6 +447,10 @@ test("Discord server membership is optional for a friend who needs a sponsor cod
     });
     assert.deepEqual(await device(pending.id), { status: "awaiting-sponsor", discord_user_id: FRIEND, sponsor_discord_user_id: null, authorized_at: null });
     assert.equal(await count("supporter_grants"), 0);
+    const discordCalls = script.calls.length;
+    const replay = await handler(websiteRequest("/oauth/complete", { code: "code", state: pending.state }));
+    assert.deepEqual([replay.status, await body(replay)], [400, { error: "expired" }]);
+    assert.equal(script.calls.length, discordCalls);
 });
 
 test("a guild member without a qualifying role also needs a sponsor code", async () => {
@@ -547,7 +552,8 @@ test("invalid Discord payloads are discord_response_invalid", async () => {
     assert.deepEqual([user.status, await body(user)], [502, { error: "discord_response_invalid" }]);
     const narrowScope = discordScript();
     narrowScope.tokenFailure = () => Response.json({ access_token: "a", token_type: "Bearer", scope: "identify" });
-    const scope = await gatewayHandler(database, narrowScope).handler(websiteRequest("/oauth/complete", { code: "code", state: pending.state }));
+    const another = await seedDevice(database, { suffix: "B" });
+    const scope = await gatewayHandler(database, narrowScope).handler(websiteRequest("/oauth/complete", { code: "code", state: another.state }));
     assert.deepEqual([scope.status, await body(scope)], [502, { error: "discord_response_invalid" }]);
 });
 
@@ -574,8 +580,10 @@ test("a Discord call that outlives its 8-second timeout is a logged 500 and leav
 });
 
 test("Discord bodies: oversized is discord_response_too_large, undecodable is discord_response_invalid, a dropped stream is a 500", async () => {
-    const pending = await seedDevice(database);
+    const suffixes = ["A", "B", "C"];
     const complete = async (tokenResponse: () => Response) => {
+        // Each attempt uses up its device's OAuth state, so each gets a fresh device.
+        const pending = await seedDevice(database, { suffix: suffixes.shift()! });
         const script = discordScript();
         script.tokenFailure = tokenResponse;
         const { handler, logs } = gatewayHandler(database, script);
@@ -810,27 +818,6 @@ test("unexpected database failures are a logged 500 with the SQLSTATE, and later
     assert.match(event!.sqlstate as string, /^[0-9A-Z]{5}$/);
 });
 
-test("unexpected non-database failures log only the error class", async () => {
-    const logs: Record<string, unknown>[] = [];
-    const throwing = createNightlyGatewayHandler({
-        websiteKey: WEBSITE_KEY,
-        discord: { clientId: CLIENT_ID, clientSecret: "s".repeat(32), botToken: BOT_TOKEN },
-        fetch,
-        database: failingDatabase(() => new TypeError(`secret ${WEBSITE_KEY}`)),
-        clock: () => NOW * 1000,
-        log: (event) => logs.push(event),
-    });
-    const response = await throwing(installerRequest("/v1/device/sessions"));
-    assert.deepEqual([response.status, await body(response)], [500, { error: "internal_error" }]);
-    assert.deepEqual(logs.at(-1), {
-        event: "nightly_gateway_request_failed",
-        path: "/functions/v1/nightly-gateway/v1/device/sessions",
-        error: "internal_error",
-        cause: "TypeError",
-    });
-    assert.ok(!JSON.stringify(logs).includes(WEBSITE_KEY));
-});
-
 test("unexpected failures log a snake_case error code from the message, and never any other message text", async () => {
     const logs: Record<string, unknown>[] = [];
     let failure: Error = new Error("postgres_integer_out_of_range");
@@ -851,11 +838,12 @@ test("unexpected failures log a snake_case error code from the message, and neve
         cause: "Error",
         message: "postgres_integer_out_of_range",
     });
-    for (const unsafe of ["Postgres_Out_Of_Range", "out of range", "x".repeat(65), `leaked_${"k".repeat(60)}`, ""]) {
+    for (const unsafe of ["Postgres_Out_Of_Range", "out of range", `secret ${WEBSITE_KEY}`, "x".repeat(65), `leaked_${"k".repeat(60)}`, ""]) {
         failure = new Error(unsafe);
         await throwing(installerRequest("/v1/device/sessions"));
         assert.equal(logs.at(-1)!.message, undefined, `message ${JSON.stringify(unsafe)} is not logged`);
     }
+    assert.ok(!JSON.stringify(logs).includes(WEBSITE_KEY));
 });
 
 test("unexpected driver failures name the failing dependency by its errno code, never its message", async () => {

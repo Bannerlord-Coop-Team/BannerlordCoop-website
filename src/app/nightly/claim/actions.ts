@@ -1,6 +1,6 @@
 "use server";
 
-import { CLAIM_COOKIE, decodeClaimContext } from "@/app/lib/nightly/cookies";
+import { readClaimCookie } from "@/app/lib/nightly/cookies";
 import { claimActionResult, type ClaimFormState } from "@/app/lib/nightly/flows";
 import { SPONSOR_CODE_FIELD } from "@/app/lib/nightly/form-fields";
 import { getNightlyClient } from "@/app/lib/nightly/server";
@@ -11,7 +11,7 @@ import { carryOut, submittedFromThisSite } from "../action-effects";
 export async function claimSponsorSeat(_state: ClaimFormState, form: FormData): Promise<ClaimFormState> {
     const request = {
         sameOrigin: await submittedFromThisSite(),
-        claim: decodeClaimContext((await cookies()).get(CLAIM_COOKIE)?.value),
+        claim: readClaimCookie(await cookies()),
     };
     return carryOut(await claimActionResult(getNightlyClient(), request, form.get(SPONSOR_CODE_FIELD)));
 }

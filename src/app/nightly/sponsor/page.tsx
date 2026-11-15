@@ -2,7 +2,7 @@ import { NightlyCard } from "@/app/components/nightly/NightlyCard";
 import { SponsorIneligibleHelp } from "@/app/components/nightly/NightlyNotes";
 import { NightlyError } from "@/app/components/nightly/NightlyStatus";
 import { SponsorLogin, SponsorPortal } from "@/app/components/nightly/SponsorPortal";
-import { readSponsorSession, SPONSOR_COOKIE } from "@/app/lib/nightly/cookies";
+import { readSponsorCookie } from "@/app/lib/nightly/cookies";
 import { loadPortalView } from "@/app/lib/nightly/flows";
 import { isSessionExpiredNotice, type PageSearchParams } from "@/app/lib/nightly/query-flags";
 import { getNightlyClient } from "@/app/lib/nightly/server";
@@ -16,7 +16,7 @@ type SponsorPageProps = { searchParams: Promise<PageSearchParams> };
 
 /** Sponsor portal: login prompt without a live session, otherwise the seat list from `/sponsor/portal`. */
 export default async function SponsorPage({ searchParams }: SponsorPageProps) {
-    const session = readSponsorSession((await cookies()).get(SPONSOR_COOKIE)?.value);
+    const session = readSponsorCookie(await cookies());
     const view = await loadPortalView(getNightlyClient(), session, isSessionExpiredNotice(await searchParams));
     if (view.kind === "login") {
         return <NightlyCard eyebrow="Nightly access portal"><SponsorLogin expired={view.expired} /></NightlyCard>;

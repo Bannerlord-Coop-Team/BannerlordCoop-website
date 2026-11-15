@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { NightlyClient, NightlyResult, OAuthOutcome } from "./client";
-import { decodeClaimContext, encodeClaimContext, readSponsorSession } from "./cookies";
+import { decodeClaimContext, encodeClaimContext, readClaimCookie, readSponsorCookie, readSponsorSession } from "./cookies";
 import { planActivate, planCallback, planOutcome, planSponsorLogin, redirectResponse } from "./routes";
 import {
     errorPath,
@@ -114,6 +114,15 @@ test("cookie readers reject tampered values", () => {
     for (const bad of [undefined, "", "!!!", "x".repeat(2000), ...forged]) {
         assert.equal(decodeClaimContext(bad), null, String(bad).slice(0, 40));
     }
+});
+
+test("each cookie reader decodes only its own cookie", () => {
+    const jar = (entries: Record<string, string>) => ({ get: (name: string) => (name in entries ? { value: entries[name]! } : undefined) });
+    const claim = { deviceId: DEVICE_ID, username: "u", previousSponsorRevoked: false };
+    assert.equal(readSponsorCookie(jar({ nightly_sponsor: SESSION })), SESSION);
+    assert.equal(readSponsorCookie(jar({ nightly_claim: SESSION })), null);
+    assert.deepEqual(readClaimCookie(jar({ nightly_claim: encodeClaimContext(claim) })), claim);
+    assert.equal(readClaimCookie(jar({ nightly_sponsor: encodeClaimContext(claim) })), null);
 });
 
 test("each query flag's reader recognises exactly the path that sets it", () => {

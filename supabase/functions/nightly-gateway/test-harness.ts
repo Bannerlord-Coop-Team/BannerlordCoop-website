@@ -28,7 +28,7 @@ export const TOKEN_URL = "https://discord.com/api/v10/oauth2/token";
 
 const MIGRATIONS_DIRECTORY = new URL("../../migrations/", import.meta.url);
 const GATEWAY_SCHEMA = "nightly_gateway";
-const TABLES = "device_sessions, supporter_grants, sponsorships, download_sessions, oauth_states, sponsor_sessions";
+const TABLES = ["device_sessions", "supporter_grants", "sponsorships", "download_sessions", "oauth_states", "sponsor_sessions"];
 
 /** Which gateway migrations to apply: all of them, or only those ordered before the named migration. */
 export type GatewaySchemaOptions = { before?: string };
@@ -68,7 +68,7 @@ export async function applyMigration(database: PGlite, name: string): Promise<vo
 
 /** Empties every gateway table between tests. */
 export async function clearGatewayTables(database: PGlite): Promise<void> {
-    await database.exec(`truncate ${TABLES.split(", ").map((table) => `nightly_gateway.${table}`).join(", ")} cascade`);
+    await database.exec(`truncate ${TABLES.map((table) => `${GATEWAY_SCHEMA}.${table}`).join(", ")} cascade`);
 }
 
 /** The scripted Discord: who signs in, their guild membership, and the bot's view of each sponsor. */

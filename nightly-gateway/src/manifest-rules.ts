@@ -121,16 +121,7 @@ export function validateLegacyNightlyClientManifest(
         || typeof client.publicUrl !== "string") {
         throw new Error("invalid_legacy_nightly_client_manifest");
     }
-    const parsed = new URL(client.publicUrl);
-    const legacyPath = `/${client.key}`;
-    const gatewayPath = `/v1/artifacts/${client.key}`;
-    const onGateway = GATEWAY_ORIGINS.includes(parsed.origin);
-    if (parsed.search || parsed.hash
-        || (parsed.origin === legacyOrigin && parsed.pathname !== legacyPath)
-        || (onGateway && parsed.pathname !== gatewayPath)
-        || (parsed.origin !== legacyOrigin && !onGateway)) {
-        throw new Error("invalid_legacy_nightly_client_manifest");
-    }
+    if (!publicUrlNamesKey(client.publicUrl, legacyOrigin, client.key)) throw new Error("invalid_legacy_nightly_client_manifest");
     return input;
 }
 
@@ -230,15 +221,19 @@ function validateLegacyReleaseArtifact(
         || typeof value.publicUrl !== "string") {
         throw new Error("invalid_legacy_nightly_release_artifact");
     }
-    const parsed = new URL(value.publicUrl);
-    const onGateway = GATEWAY_ORIGINS.includes(parsed.origin);
-    if (parsed.search || parsed.hash
-        || (parsed.origin === legacyOrigin && parsed.pathname !== `/${key}`)
-        || (onGateway && parsed.pathname !== `/v1/artifacts/${key}`)
-        || (parsed.origin !== legacyOrigin && !onGateway)
-        || !isAllowedArtifactKey(key)) {
+    if (!publicUrlNamesKey(value.publicUrl, legacyOrigin, key) || !isAllowedArtifactKey(key)) {
         throw new Error("invalid_legacy_nightly_release_artifact");
     }
+}
+
+// Whether a legacy manifest URL names the key on R2 (`<legacyOrigin>/<key>`) or on an allowlisted gateway host
+// (`<gateway>/v1/artifacts/<key>`), with no query or fragment. An unparseable URL throws.
+function publicUrlNamesKey(publicUrl: string, legacyOrigin: string, key: string): boolean {
+    const parsed = new URL(publicUrl);
+    if (parsed.search || parsed.hash) return false;
+    if (parsed.origin === legacyOrigin) return parsed.pathname === `/${key}`;
+    if (GATEWAY_ORIGINS.includes(parsed.origin)) return parsed.pathname === `/v1/artifacts/${key}`;
+    return false;
 }
 
 // Reads a required nested object field or throws a publication field error.

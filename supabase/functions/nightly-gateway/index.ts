@@ -33,6 +33,7 @@ Deno.serve(createNightlyGatewayHandler({
         // Local stacks and previews point Discord back at their own /nightly/callback; production leaves it unset.
         redirectUri: optional("DISCORD_REDIRECT_URI"),
     },
+    // Wrapped rather than passed bare, so fetch is never called with a foreign `this` ("Illegal invocation").
     fetch: (input, init) => fetch(input, init),
     database: createPostgresGatewayDatabase(pg, required("SUPABASE_DB_URL"), {
         applicationName: "bannerlordcoop-nightly-gateway-edge",

@@ -30,6 +30,19 @@ export function readSponsorSession(value: string | undefined): string | null {
     return value;
 }
 
+/** The read side of a request's cookie store, as Next's `cookies()` returns it. */
+export type CookieReader = { get(name: string): { value: string } | undefined };
+
+/** Reads the sponsor-portal session from the request's cookies; a missing or malformed one reads as null. */
+export function readSponsorCookie(jar: CookieReader): string | null {
+    return readSponsorSession(jar.get(SPONSOR_COOKIE)?.value);
+}
+
+/** Reads the pending claim from the request's cookies; a missing or malformed one reads as null. */
+export function readClaimCookie(jar: CookieReader): PendingClaim | null {
+    return decodeClaimContext(jar.get(CLAIM_COOKIE)?.value);
+}
+
 /** Encodes a pending claim as base64url JSON, which is cookie-safe for any Discord username. */
 export function encodeClaimContext(context: PendingClaim): string {
     const { deviceId, username, previousSponsorRevoked } = context;

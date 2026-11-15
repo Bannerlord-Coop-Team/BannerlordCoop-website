@@ -21,8 +21,18 @@ export function redirectPlan(location: string, ...cookies: NightlyCookie[]): Red
 }
 
 /** A cookie write that expires the named nightly cookie. */
-export function clearedCookie(name: string): NightlyCookie {
+function clearedCookie(name: string): NightlyCookie {
     return { name, value: "", maxAge: 0 };
+}
+
+/** Expires the sponsor session cookie. */
+export function clearedSponsorCookie(): NightlyCookie {
+    return clearedCookie(SPONSOR_COOKIE);
+}
+
+/** Expires the pending-claim cookie. */
+export function clearedClaimCookie(): NightlyCookie {
+    return clearedCookie(CLAIM_COOKIE);
 }
 
 /** The sponsor session cookie, living as long as the Edge Function said the session does. */
