@@ -1,7 +1,7 @@
 import type { GatewayContext } from "./context.ts";
 import type { GatewayDatabase } from "./database.ts";
 import { createDeviceSession, pollDeviceSession } from "./device.ts";
-import { createDiscordApi, type DiscordCredentials } from "./discord.ts";
+import { createDiscordApi, type DiscordCredentials, isAllowedDiscordRedirectUri } from "./discord.ts";
 import { isDiscordSnowflake, WEBSITE_KEY_HEADER } from "./formats.ts";
 import { errorJson, GatewayError, json, readJsonObject } from "./http.ts";
 import { completeOAuth, startOAuth } from "./oauth.ts";
@@ -139,7 +139,7 @@ function driverCode(error: unknown): { code?: string; sqlstate?: string } {
     return {};
 }
 
-/** Refuses to start with a missing or implausible secret instead of failing per request. */
+/** Refuses to start with a missing or implausible secret or setting instead of failing per request. */
 function assertConfiguration(options: NightlyGatewayOptions): void {
     if (!hasMinimumLength(options.websiteKey, MINIMUM_WEBSITE_KEY_LENGTH)) throw configurationInvalid("websiteKey");
     if (!isDiscordSnowflake(options.discord.clientId)) throw configurationInvalid("discord.clientId");
@@ -147,6 +147,8 @@ function assertConfiguration(options: NightlyGatewayOptions): void {
         throw configurationInvalid("discord.clientSecret");
     }
     if (!hasMinimumLength(options.discord.botToken, MINIMUM_BOT_TOKEN_LENGTH)) throw configurationInvalid("discord.botToken");
+    if (options.discord.redirectUri === undefined) return;
+    if (!isAllowedDiscordRedirectUri(options.discord.redirectUri)) throw configurationInvalid("discord.redirectUri");
 }
 
 /** Whether a configured secret is a string of at least `minimum` characters. */

@@ -7,7 +7,10 @@ const DISCORD_API = "https://discord.com/api/v10";
 const DISCORD_AUTHORIZE = "https://discord.com/oauth2/authorize";
 const DISCORD_TOKEN = `${DISCORD_API}/oauth2/token`;
 const DISCORD_OAUTH_SCOPES = "identify guilds.members.read";
-const DISCORD_REDIRECT_URI = "https://bannerlordcoop.com/nightly/callback";
+/** The production website's OAuth callback, used when no redirect URI is configured. */
+const DEFAULT_DISCORD_REDIRECT_URI = "https://bannerlordcoop.com/nightly/callback";
+/** Hosts that may receive the OAuth callback over plain http, for a local stack. */
+const LOOPBACK_HOSTS = Object.freeze(["localhost", "127.0.0.1"]);
 const DISCORD_USER_AGENT = "DiscordBot (https://bannerlordcoop.com, 1)";
 /**
  * Longest a Discord call (request and body) may take. A timeout is an unexpected `500 internal_error`, which the
@@ -21,7 +24,13 @@ const MAXIMUM_MEMBER_RESPONSE_BYTES = 64 * 1024;
 
 export type DiscordUser = { id: string; username: string };
 export type DiscordMember = { roles: string[]; user?: DiscordUser };
-export type DiscordCredentials = { clientId: string; clientSecret: string; botToken: string };
+export type DiscordCredentials = {
+    clientId: string;
+    clientSecret: string;
+    botToken: string;
+    /** The website's OAuth callback registered with Discord; defaults to the production callback. */
+    redirectUri?: string;
+};
 
 /** A successful token exchange carrying the gateway's scopes. */
 type BearerToken = { token_type: "Bearer"; access_token: string; scope: string };
@@ -46,16 +55,20 @@ export function createDiscordApi(credentials: DiscordCredentials, fetchImplement
 
 // Talks to Discord's REST API with the application's credentials and the DiscordBot user agent.
 class DiscordHttpApi implements DiscordApi {
-    constructor(private readonly credentials: DiscordCredentials, private readonly fetchImplementation: typeof fetch) {}
+    private readonly redirectUri: string;
 
-    /** Builds the consent URL for the website's fixed callback and the gateway's scopes. */
+    constructor(private readonly credentials: DiscordCredentials, private readonly fetchImplementation: typeof fetch) {
+        this.redirectUri = credentials.redirectUri ?? DEFAULT_DISCORD_REDIRECT_URI;
+    }
+
+    /** Builds the consent URL for the website's configured callback and the gateway's scopes. */
     authorizeUrl(state: string): string {
         const url = new URL(DISCORD_AUTHORIZE);
         url.searchParams.set("response_type", "code");
         url.searchParams.set("client_id", this.credentials.clientId);
         url.searchParams.set("scope", DISCORD_OAUTH_SCOPES);
         url.searchParams.set("state", state);
-        url.searchParams.set("redirect_uri", DISCORD_REDIRECT_URI);
+        url.searchParams.set("redirect_uri", this.redirectUri);
         url.searchParams.set("prompt", "consent");
         return url.toString();
     }
@@ -65,7 +78,7 @@ class DiscordHttpApi implements DiscordApi {
         const form = new URLSearchParams({
             grant_type: "authorization_code",
             code,
-            redirect_uri: DISCORD_REDIRECT_URI,
+            redirect_uri: this.redirectUri,
             client_id: this.credentials.clientId,
             client_secret: this.credentials.clientSecret,
         });
@@ -137,6 +150,27 @@ class DiscordHttpApi implements DiscordApi {
             signal: AbortSignal.timeout(DISCORD_TIMEOUT_MS),
         });
         return { response, text: await readDiscordText(response, MAXIMUM_MEMBER_RESPONSE_BYTES) };
+    }
+}
+
+/**
+ * Whether a redirect URI is an absolute https URL, or http on a loopback host, with no credentials, fragment or
+ * whitespace; it is sent verbatim, so it must match Discord's registered redirect exactly.
+ */
+export function isAllowedDiscordRedirectUri(value: unknown): boolean {
+    if (typeof value !== "string" || /\s|#/.test(value)) return false;
+    const url = parseAbsoluteUrl(value);
+    if (url === null || url.username !== "" || url.password !== "") return false;
+    if (url.protocol === "https:") return url.hostname !== "";
+    return url.protocol === "http:" && LOOPBACK_HOSTS.includes(url.hostname);
+}
+
+/** Parses an absolute URL, or null when the value is relative or malformed. */
+function parseAbsoluteUrl(value: string): URL | null {
+    try {
+        return new URL(value);
+    } catch {
+        return null;
     }
 }
 

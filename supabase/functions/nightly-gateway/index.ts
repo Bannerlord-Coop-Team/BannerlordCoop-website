@@ -15,12 +15,19 @@ function required(name) {
     return value;
 }
 
+/** Reads an optional setting; unset or blank is undefined, leaving the gateway's default. */
+function optional(name) {
+    return Deno.env.get(name)?.trim() || undefined;
+}
+
 Deno.serve(createNightlyGatewayHandler({
     websiteKey: required("NIGHTLY_WEBSITE_KEY"),
     discord: {
         clientId: required("DISCORD_CLIENT_ID"),
         clientSecret: required("DISCORD_CLIENT_SECRET"),
         botToken: required("DISCORD_BOT_TOKEN"),
+        // Local stacks and previews point Discord back at their own /nightly/callback; production leaves it unset.
+        redirectUri: optional("DISCORD_REDIRECT_URI"),
     },
     fetch: (input, init) => fetch(input, init),
     database: createPostgresGatewayDatabase(pg, required("SUPABASE_DB_URL"), {

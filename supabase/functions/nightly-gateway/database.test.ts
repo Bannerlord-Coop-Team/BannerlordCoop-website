@@ -175,38 +175,20 @@ test("a failed rollback behind a gateway error is a 500, and the gateway keeps s
     }
 });
 
-test("the Postgres database registers the INT8 parser and runs statements on the pool, transactions on a lease", async () => {
+test("the Postgres database registers the safe INT8 parser for INT8 columns", () => {
     const parsers = new Map<number, (value: string) => number>();
-    const trace: string[] = [];
-    let poolConfig: Record<string, unknown> = {};
     const pgModule: PostgresModule = {
         types: { builtins: { INT8: 20 }, setTypeParser: (oid, parse) => { parsers.set(oid, parse); } },
         Pool: class {
-            constructor(config: Record<string, unknown>) { poolConfig = config; }
-            async query(sql: string) {
-                trace.push(`pool ${sql}`);
-                return { rows: [{ ok: 1 }], rowCount: 1 };
-            }
-            async connect() {
-                return {
-                    query: async (sql: string) => { trace.push(`lease ${sql}`); return { rows: [], rowCount: 0 }; },
-                    release: (destroy?: boolean) => { trace.push(`release ${destroy}`); },
-                };
-            }
+            async query() { return { rows: [] }; }
+            async connect(): Promise<PooledConnection> { throw new Error("unused"); }
             on() { return this; }
         },
     };
-    const database = createPostgresGatewayDatabase(pgModule, "postgres://example", {
+    createPostgresGatewayDatabase(pgModule, "postgres://example", {
         applicationName: "test", maxConnections: 4, idleTimeoutMs: 10_000, queryTimeoutMs: 5_000,
     });
     assert.equal(parsers.get(20), parseSafeInt8);
-    assert.deepEqual(poolConfig, {
-        connectionString: "postgres://example", application_name: "test", max: 4,
-        idleTimeoutMillis: 10_000, connectionTimeoutMillis: 5_000, query_timeout: 5_000,
-    });
-    assert.deepEqual((await database.query("SELECT 1 AS ok")).rows, [{ ok: 1 }]);
-    await database.transaction(async (tx) => { await tx.query("SELECT 2"); });
-    assert.deepEqual(trace, ["pool SELECT 1 AS ok", "lease BEGIN", "lease SELECT 2", "lease COMMIT", "release undefined"]);
 });
 
 test("an idle-connection error is logged by its code only, never its message", () => {

@@ -13,6 +13,7 @@ import {
     CLIENT_ID,
     COMPETITION_WINNER_ROLE,
     createGatewayDatabase,
+    discordFetch,
     discordScript,
     failingDatabase,
     FRIEND,
@@ -28,6 +29,7 @@ import {
     seedPortalState,
     seedSeat,
     seedSponsorSession,
+    singleConnectionDatabase,
     SingleConnectionPool,
     SPONSOR,
     TOKEN_URL,
@@ -55,6 +57,25 @@ async function device(id: string) {
 async function count(table: string, where = "true", values: unknown[] = []): Promise<number> {
     const [row] = await rows<{ count: number }>(database, `select count(*)::int as count from nightly_gateway.${table} where ${where}`, values);
     return row!.count;
+}
+
+/** Runs a device sign-in through a handler with `redirectUri` and returns the redirect URIs sent to consent and exchange. */
+async function redirectUrisSent(redirectUri?: string): Promise<[string | null, string | null]> {
+    const script = discordScript({ member: { roles: [PATREON_ROLE] } });
+    const handler = createNightlyGatewayHandler({
+        websiteKey: WEBSITE_KEY,
+        discord: { clientId: CLIENT_ID, clientSecret: "s".repeat(32), botToken: BOT_TOKEN, redirectUri },
+        fetch: discordFetch(script),
+        database: singleConnectionDatabase(database),
+        clock: () => NOW * 1000,
+    });
+    const pending = await seedDevice(database);
+    const start = await handler(websiteRequest("/oauth/start", { purpose: "device", user_code: pending.userCode }));
+    const authorizeUrl = new URL((await body(start)).authorize_url as string);
+    const complete = await handler(websiteRequest("/oauth/complete", { code: "discord-code", state: authorizeUrl.searchParams.get("state") }));
+    assert.equal(complete.status, 200);
+    const exchange = script.calls.find((call) => call.url === TOKEN_URL)!;
+    return [authorizeUrl.searchParams.get("redirect_uri"), new URLSearchParams(exchange.body).get("redirect_uri")];
 }
 
 /** The token hash exactly as the Worker computes it to look a download session up. */
@@ -95,6 +116,43 @@ test("the handler refuses implausible secrets at construction", () => {
     );
     assert.throws(() => createNightlyGatewayHandler({ ...base, websiteKey: "w".repeat(31) }), (error: Error) =>
         /configuration_invalid: websiteKey$/.test(error.message) && !error.message.includes("w".repeat(31)));
+});
+
+test("the handler accepts an https or loopback-http Discord redirect URI and refuses anything else at construction", () => {
+    const base = {
+        websiteKey: WEBSITE_KEY,
+        discord: { clientId: CLIENT_ID, clientSecret: "s".repeat(32), botToken: BOT_TOKEN },
+        fetch,
+        database: failingDatabase(() => new Error("unused")),
+    };
+    const withRedirect = (redirectUri: string) => createNightlyGatewayHandler({ ...base, discord: { ...base.discord, redirectUri } });
+    for (const valid of [
+        "https://preview.bannerlordcoop.com/nightly/callback",
+        "http://localhost:3000/nightly/callback",
+        "http://127.0.0.1:3000/nightly/callback",
+    ]) assert.doesNotThrow(() => withRedirect(valid), valid);
+    for (const invalid of [
+        "",
+        "/nightly/callback",
+        "http://bannerlordcoop.com/nightly/callback",
+        "http://localhost.evil.example/nightly/callback",
+        "ftp://localhost/nightly/callback",
+        "https://user:secret-pass@bannerlordcoop.com/nightly/callback",
+        "https://bannerlordcoop.com/nightly/callback#fragment",
+        "https://bannerlordcoop.com/nightly/callback ",
+    ]) {
+        assert.throws(() => withRedirect(invalid), (error: Error) =>
+            /configuration_invalid: discord\.redirectUri$/.test(error.message) && !error.message.includes("secret-pass"), invalid);
+    }
+});
+
+test("the Discord redirect URI defaults to the production callback for both consent and token exchange", async () => {
+    assert.deepEqual(await redirectUrisSent(), ["https://bannerlordcoop.com/nightly/callback", "https://bannerlordcoop.com/nightly/callback"]);
+});
+
+test("a configured loopback redirect URI reaches both the consent URL and the token exchange", async () => {
+    const local = "http://localhost:3000/nightly/callback";
+    assert.deepEqual(await redirectUrisSent(local), [local, local]);
 });
 
 // ---- Routing and website key ----
