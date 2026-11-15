@@ -123,7 +123,7 @@ export function createManagedConsoleSignals(): ManagedConsoleSignals {
 }
 
 /** Reads a compact status fingerprint; polling re-renders the page only when it changes. */
-export type ManagedServerStatusReader = (serverId: string) => Promise<{ ok: true; fingerprint: string } | { ok: false }>;
+export type ManagedServerStatusReader = (serverId: string) => Promise<{ ok: true; fingerprint: string } | { ok: false; retryable?: boolean }>;
 
 /** Shares status polling and live console phases between the managed server's panels. */
 export function ManagedServerPollingProvider({ children, readStatus, initialServer }: {
@@ -236,13 +236,17 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
                     } catch { /* malformed evidence is handled as a failed read below */ }
                     if (result.fingerprint === polled.fingerprint) return;
                     polled.fingerprint = result.fingerprint;
-                } else {
+                } else if (result?.retryable) {
                     failures += 1;
                     if (failures >= MAXIMUM_POLL_FAILURES) {
                         setTimedOutSession(session);
                         setSession((current) => current?.sequence === sequence ? null : current);
                         return;
                     }
+                } else {
+                    setTimedOutSession(session);
+                    setSession((current) => current?.sequence === sequence ? null : current);
+                    return;
                 }
             }
             router.refresh();
@@ -278,17 +282,31 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
         }
 
         // The session's first refresh also records the baseline, so an unchanged first tick skips its render.
-        if (polled.opened) schedule();
-        else void check(OPENING_FINGERPRINT_WAIT_MILLISECONDS).then(() => {
+        const open = () => void check(OPENING_FINGERPRINT_WAIT_MILLISECONDS).then(() => {
             if (cancelled) return;
             polled.opened = true;
             schedule();
         });
+        if (polled.opened) schedule();
+        else if (document.visibilityState === "visible") open();
         const deadline = window.setTimeout(() => {
             setTimedOutSession(session);
             setSession((current) => current?.deadline === session.deadline ? null : current);
         }, Math.max(0, session.deadline - Date.now()));
         document.addEventListener("visibilitychange", refreshOnReturn);
+        if (!polled.opened) {
+            const openOnReturn = () => {
+                if (document.visibilityState === "visible" && !polled.opened) open();
+            };
+            document.addEventListener("visibilitychange", openOnReturn);
+            return () => {
+                cancelled = true;
+                window.clearTimeout(timer);
+                window.clearTimeout(deadline);
+                document.removeEventListener("visibilitychange", refreshOnReturn);
+                document.removeEventListener("visibilitychange", openOnReturn);
+            };
+        }
         return () => {
             cancelled = true;
             window.clearTimeout(timer);
