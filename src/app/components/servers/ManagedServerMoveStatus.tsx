@@ -17,7 +17,7 @@ import { useViewerTimeZone, ZONED_DATE_TIME_FORMAT } from "./viewer-time-zone";
 const IDLE_POLL_MILLISECONDS = 60_000;
 const SCHEDULED_POLL_MILLISECONDS = 30_000;
 /** Moves that are starting or under way, and the last two minutes before one, are followed every 5 s. */
-const ACTIVE_POLL_MILLISECONDS = 15_000;
+const ACTIVE_POLL_MILLISECONDS = 5_000;
 const FINAL_COUNTDOWN_MILLISECONDS = 2 * 60_000;
 /** Failed reads back off from the usual delay up to this, keeping the status last shown. */
 const MAXIMUM_RETRY_MILLISECONDS = 5 * 60_000;

@@ -81,7 +81,9 @@ export const ManagedServerStatusSlotContext = createContext<HTMLElement | null |
 
 /** Polling is deliberately quiet: one visible tab checks at most every fifteen seconds. */
 export function managedServerPollDelay(elapsedMilliseconds: number) {
-    return Math.max(15_000, Math.min(5 * 60_000, 15_000 * 2 ** Math.min(4, Math.floor(elapsedMilliseconds / 60_000))));
+    if (elapsedMilliseconds < 60_000) return 4_000;
+    if (elapsedMilliseconds < 3 * 60_000) return 8_000;
+    return 15_000;
 }
 
 const TERMINAL_OPERATION_STATES = new Set(["stopped", "awaiting-save", "succeeded", "failed", "cancelled", "deleted"]);
@@ -260,7 +262,7 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
 
         function schedule() {
             if (!cancelled) {
-                const base = managedServerPollDelay(Date.now() - startedAt);
+                const base = Math.max(15_000, managedServerPollDelay(Date.now() - startedAt));
                 const backoff = failures === 0 ? base : Math.min(5 * 60_000, base * 2 ** failures);
                 const jitter = backoff * (0.9 + Math.random() * 0.2);
                 timer = window.setTimeout(tick, jitter);
