@@ -68,6 +68,8 @@ export default {
                 event: "nightly_gateway_request_failed",
                 path: new URL(request.url).pathname,
                 error: error instanceof GatewayError ? error.code : "internal_error",
+                status: error instanceof GatewayError ? error.status : 500,
+                phase: error instanceof GatewayError ? gatewayErrorPhase(error.code) : "db",
             }));
             if (error instanceof GatewayError) {
                 if (prefersHtmlError(request)) {
@@ -1220,7 +1222,16 @@ async function discordBotGetGuildMember(env: Env, userId: string): Promise<Disco
     });
     const text = await boundedText(response, 64 * 1024);
     if (response.status === 404) return null;
-    if (!response.ok) throw new GatewayError(502, "discord_membership_required");
+    if (!response.ok) {
+        console.error(JSON.stringify({
+            event: "nightly_gateway_discord_check_failed",
+            path: "/guilds/:guild/members/:user",
+            error: "discord_membership_required",
+            status: response.status,
+            phase: "discord",
+        }));
+        throw new GatewayError(502, "discord_membership_required");
+    }
     return JSON.parse(text) as DiscordMember;
 }
 
@@ -1364,6 +1375,13 @@ export function gatewayErrorMessage(code: string, status?: number): string {
         return "Discord roles could not be checked right now. Try again later.";
     }
     return "Access could not be verified. Run the installer again or ask in the Bannerlord Co-op Discord.";
+}
+
+function gatewayErrorPhase(code: string): "db" | "discord" | "oauth" {
+    if (code.startsWith("discord_")) return "discord";
+    if (code === "authorization_required" || code === "authorization_invalid"
+        || code === "authorization_expired" || code === "expired_token") return "oauth";
+    return "db";
 }
 
 function previousSponsorAccessRevokedHelp(): string {

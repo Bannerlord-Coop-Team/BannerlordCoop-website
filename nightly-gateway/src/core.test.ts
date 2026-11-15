@@ -544,6 +544,9 @@ test("Discord approval sends users back to the installer window", () => {
     assert.match(source, /Return to the installer window\. It will continue automatically\./);
     assert.match(source, /Previous sponsor access ended/);
     assert.match(source, /Bot \$\{env.DISCORD_BOT_TOKEN\}/);
+    assert.match(source, /nightly_gateway_discord_check_failed/);
+    assert.match(source, /phase: "discord"/);
+    assert.match(source, /gatewayErrorPhase\(error\.code\)/);
     assert.match(source, /prefersHtmlError/);
     assert.doesNotMatch(source, /supporter_reauthorization_required/);
     assert.doesNotMatch(source, /Return to PowerShell/);
