@@ -899,7 +899,7 @@ function Get-NightlyPollFailureDetail {
 }
 
 # Reports whether a failed verification check is temporary and worth retrying: no HTTP response,
-# timeout, rate limit, or an unnamed/maintenance gateway outage. Named upstream failures fail fast.
+# timeout, rate limit, or an unnamed/internal gateway outage. Named upstream failures fail fast.
 function Test-NightlyTransientPollFailure {
     param([int]$StatusCode, [string]$ErrorCode)
 
@@ -907,7 +907,7 @@ function Test-NightlyTransientPollFailure {
     if ($StatusCode -eq 408 -or $StatusCode -eq 429) { return $true }
     if ($StatusCode -lt 500) { return $false }
     if (-not $ErrorCode) { return $true }
-    return $ErrorCode -ceq 'migration_in_progress' -or $ErrorCode -ceq 'internal_error' -or
+    return $ErrorCode -ceq 'internal_error' -or
         $ErrorCode -ceq 'function_unreachable' -or $ErrorCode -ceq 'function_response_invalid'
 }
 

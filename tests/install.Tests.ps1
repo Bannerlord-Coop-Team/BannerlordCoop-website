@@ -522,8 +522,8 @@ $statusPending = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 
 if ($statusPending.Action -cne 'Continue') {
     throw 'An HTTP 428 token poll did not continue waiting for Discord.'
 }
-$outage = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 503 'migration_in_progress')
-if ($outage.Action -cne 'Retry' -or $outage.Message -notmatch 'HTTP 503' -or $outage.Message -notmatch 'error=migration_in_progress') {
+$outage = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 503 'internal_error')
+if ($outage.Action -cne 'Retry' -or $outage.Message -notmatch 'HTTP 503' -or $outage.Message -notmatch 'error=internal_error') {
     throw 'A 503 token poll did not retry with its status and gateway error code.'
 }
 $discordUpstream = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 502 'discord_membership_required')
