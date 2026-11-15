@@ -866,6 +866,50 @@ function Get-NightlyDeviceSessionFailureMessage {
     return "$message`nSession diagnostics v2 (safe to share):`n  $($Attempts -join "`n  ")"
 }
 
+# Describes a failed verification check as safe-to-share text: HTTP status, gateway error code,
+# response kind and exception chain. Never includes device codes or raw response bodies.
+function Get-NightlyPollFailureDetail {
+    param(
+        [Parameter(Mandatory = $true)]$ErrorRecord,
+        [int]$StatusCode,
+        [string]$ErrorCode
+    )
+
+    $parts = @()
+    if ($StatusCode -gt 0) { $parts += "HTTP $StatusCode" }
+    $body = $null
+    try { $body = ConvertTo-NightlyJsonObject ([string]$ErrorRecord.ErrorDetails.Message) } catch { }
+    if (-not $ErrorCode) { $ErrorCode = Get-NightlyGatewayErrorCode $body }
+    if ($ErrorCode) { $parts += "error=$ErrorCode" }
+    if (-not [string]::IsNullOrWhiteSpace([string]$body) -and -not $ErrorCode) {
+        $parts += "response=$(Get-NightlyResponseInterceptKind $body)"
+        if (([string]$body).Trim() -match '^error code: \d{3,4}$') { $parts += ([string]$body).Trim() }
+    }
+    $exception = $null
+    try { $exception = $ErrorRecord.Exception } catch { }
+    while ($null -ne $exception) {
+        $text = ([string]$exception.Message).Trim()
+        if ($text) { $parts += "$($exception.GetType().Name): $text" }
+        $exception = $exception.InnerException
+    }
+    if ($parts.Count -eq 0) { return 'no error details were returned' }
+    return $parts -join '; '
+}
+
+# Reports whether a failed verification check is temporary and worth retrying: no HTTP response,
+# timeout, rate limit, or an unnamed/maintenance gateway outage. Named upstream failures fail fast.
+function Test-NightlyTransientPollFailure {
+    param([int]$StatusCode, [string]$ErrorCode)
+
+    if ($StatusCode -eq 0) { return $true }
+    if ($StatusCode -eq 408 -or $StatusCode -eq 429) { return $true }
+    if ($StatusCode -lt 500) { return $false }
+    if (-not $ErrorCode) { return $true }
+    return $ErrorCode -ceq 'migration_in_progress' -or $ErrorCode -ceq 'internal_error'
+}
+
+# Classifies one Discord verification check into Continue, Accept, Retry or Fail.
+# Every non-Accept outcome carries a message, so callers never need to rethrow.
 function Get-NightlyTokenPollDecision {
     param(
         $Response,
@@ -928,7 +972,18 @@ function Get-NightlyTokenPollDecision {
             Message = "The nightly authorization token is invalid. Details: $shape"
         }
     }
-    return [pscustomobject]@{ Action = 'Rethrow'; Token = ''; Message = '' }
+    if (-not $errorCode) {
+        try { $errorCode = Get-NightlyGatewayErrorCode (ConvertTo-NightlyJsonObject ([string]$ErrorRecord.ErrorDetails.Message)) } catch { }
+    }
+    $detail = Get-NightlyPollFailureDetail -ErrorRecord $ErrorRecord -StatusCode $statusCode -ErrorCode $errorCode
+    if (Test-NightlyTransientPollFailure -StatusCode $statusCode -ErrorCode $errorCode) {
+        return [pscustomobject]@{ Action = 'Retry'; Token = ''; Message = $detail }
+    }
+    return [pscustomobject]@{
+        Action = 'Fail'
+        Token = ''
+        Message = "The Discord verification check failed. Details: $detail"
+    }
 }
 
 function Get-NightlyAccessToken {
@@ -978,6 +1033,7 @@ function Get-NightlyAccessToken {
     Start-Process $verificationUri
 
     $deadline = [datetimeoffset]::UtcNow.AddSeconds([Math]::Min(600, [int]$session.expires_in))
+    $lastRetryDetail = ''
     while ([datetimeoffset]::UtcNow -lt $deadline) {
         Start-Sleep -Seconds ([Math]::Max($script:NightlyTokenPollMinimumSeconds, [int]$session.interval))
         $decision = $null
@@ -994,8 +1050,15 @@ function Get-NightlyAccessToken {
             Write-Host 'Nightly access verified.' -ForegroundColor Green
             return [string]$decision.Token
         }
-        if ($decision.Action -eq 'Fail') { throw $decision.Message }
-        throw
+        if ($decision.Action -eq 'Retry') {
+            $lastRetryDetail = [string]$decision.Message
+            Write-Host "Verification check failed, retrying. Details: $lastRetryDetail" -ForegroundColor Yellow
+            continue
+        }
+        throw $decision.Message
+    }
+    if ($lastRetryDetail) {
+        throw "Discord verification timed out after repeated check failures. Last error: $lastRetryDetail"
     }
     throw 'Discord verification timed out. Run the installer again when you are ready to authorize it.'
 }
@@ -1085,17 +1148,20 @@ function Get-CreateBuildPinAccessToken {
     Write-Host 'Create-build installer' -ForegroundColor Cyan
     Write-Host 'Redeeming the one-time installer link for this exact client and dedicated-server pair.'
     $decision = $null
+    $redeemError = $null
     try {
         $response = Invoke-RestMethod -Method Post -Uri "$($script:NightlyGatewayUri)/v1/pins/token" `
             -ContentType 'application/x-www-form-urlencoded' `
             -Body @{ pin = $Pin }
         $decision = Get-CreateBuildPinRedeemDecision -Response $response
     } catch {
+        $redeemError = $_
         $decision = Get-CreateBuildPinRedeemDecision -ErrorRecord $_
     }
     if ($decision.Action -eq 'Accept') { return [string]$decision.Token }
     if ($decision.Action -eq 'Fail') { throw $decision.Message }
-    throw
+    $detail = Get-NightlyPollFailureDetail -ErrorRecord $redeemError -StatusCode (Get-HttpStatusCode $redeemError)
+    throw "The create-build installer link could not be redeemed. Details: $detail"
 }
 
 function Get-NormalizedPath {

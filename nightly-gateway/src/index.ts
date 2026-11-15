@@ -68,12 +68,13 @@ export default {
                 event: "nightly_gateway_request_failed",
                 path: new URL(request.url).pathname,
                 error: error instanceof GatewayError ? error.code : "internal_error",
+                ...(error instanceof GatewayError ? error.upstream : undefined),
             }));
             if (error instanceof GatewayError) {
                 if (prefersHtmlError(request)) {
                     return html(errorPage(gatewayErrorMessage(error.code)), error.status);
                 }
-                return json({ error: error.code }, error.status);
+                return json({ error: error.code, ...error.upstream }, error.status);
             }
             return json({ error: "internal_error" }, 500);
         }
@@ -1189,7 +1190,7 @@ async function discordTokenRequest(env: Env, form: URLSearchParams): Promise<Dis
         body: form,
     });
     const text = await boundedText(response, 16 * 1024);
-    if (!response.ok) throw new GatewayError(502, "discord_authorization_failed");
+    if (!response.ok) throw new GatewayError(502, "discord_authorization_failed", discordFailure(response, text));
     const value = JSON.parse(text) as Partial<DiscordToken>;
     if (value.token_type !== "Bearer" || typeof value.access_token !== "string"
         || typeof value.refresh_token !== "string" || typeof value.scope !== "string"
@@ -1207,7 +1208,9 @@ async function discordGet<T>(path: string, accessToken: string, allowNotFound = 
     });
     const text = await boundedText(response, 64 * 1024);
     if (allowNotFound && response.status === 404) return null;
-    if (!response.ok) throw new GatewayError(response.status === 404 ? 403 : 502, "discord_membership_required");
+    if (!response.ok) {
+        throw new GatewayError(response.status === 404 ? 403 : 502, "discord_membership_required", discordFailure(response, text));
+    }
     return JSON.parse(text) as T;
 }
 
@@ -1220,7 +1223,7 @@ async function discordBotGetGuildMember(env: Env, userId: string): Promise<Disco
     });
     const text = await boundedText(response, 64 * 1024);
     if (response.status === 404) return null;
-    if (!response.ok) throw new GatewayError(502, "discord_membership_required");
+    if (!response.ok) throw new GatewayError(502, "discord_membership_required", discordFailure(response, text));
     return JSON.parse(text) as DiscordMember;
 }
 
@@ -1431,6 +1434,21 @@ function exactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
     return copy.buffer;
 }
 
+// Carries the HTTP status and stable error code returned to clients, plus Discord's own
+// status and error code when an upstream Discord call caused the failure.
 class GatewayError extends Error {
-    constructor(readonly status: number, readonly code: string) { super(code); }
+    constructor(readonly status: number, readonly code: string, readonly upstream?: DiscordFailure) { super(code); }
+}
+
+type DiscordFailure = { upstream_status: number; upstream_code?: number };
+
+// Extracts Discord's HTTP status and numeric JSON error code (e.g. 40333, 10007) from a failed response body.
+function discordFailure(response: Response, text: string): DiscordFailure {
+    try {
+        const code = (JSON.parse(text) as { code?: unknown }).code;
+        if (Number.isSafeInteger(code)) return { upstream_status: response.status, upstream_code: code as number };
+    } catch {
+        // Non-JSON bodies (e.g. Cloudflare error pages) carry only the status.
+    }
+    return { upstream_status: response.status };
 }
