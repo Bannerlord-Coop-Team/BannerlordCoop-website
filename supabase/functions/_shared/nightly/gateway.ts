@@ -1,18 +1,17 @@
 import type { GatewayContext } from "./context.ts";
-import type { GatewayDatabase } from "./database.ts";
+import { type GatewayDatabase, SQLSTATE_PATTERN } from "./database.ts";
 import { createDeviceSession, pollDeviceSession } from "./device.ts";
-import { createDiscordApi, type DiscordCredentials, isAllowedDiscordRedirectUri } from "./discord.ts";
-import { isDiscordSnowflake, WEBSITE_KEY_HEADER } from "./formats.ts";
+import { configurationInvalid, hasMinimumLength } from "./configuration.ts";
+import { assertDiscordCredentials, createDiscordApi, type DiscordCredentials } from "./discord.ts";
+import { WEBSITE_KEY_HEADER } from "./formats.ts";
 import { errorJson, GatewayError, json, readJsonObject } from "./http.ts";
+import { type GatewayLog, logToStderr } from "./log.ts";
 import { completeOAuth, startOAuth } from "./oauth.ts";
 import { claimSponsorship, removeSponsoredAccount, rotateSponsorCode, sponsorPortal } from "./sponsor.ts";
 import { cryptoRandomBytes, type RandomBytes, secretsEqual } from "./tokens.ts";
 
 const FUNCTION_PREFIXES = Object.freeze(["/functions/v1/nightly-gateway", "/nightly-gateway"]);
 const MINIMUM_WEBSITE_KEY_LENGTH = 32;
-const MINIMUM_CLIENT_SECRET_LENGTH = 32;
-const MINIMUM_BOT_TOKEN_LENGTH = 50;
-const SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/;
 /** A Node-style errno code naming a failed dependency, like ECONNREFUSED or ETIMEDOUT; checked before SQLSTATE. */
 const ERRNO_CODE_PATTERN = /^E[A-Z]{2,20}$/;
 /** A snake_case error code this code base throws as a plain Error's message; any other message is never logged. */
@@ -45,14 +44,15 @@ export type NightlyGatewayOptions = {
     /** Wall-clock milliseconds, like Date.now. */
     clock?: () => number;
     random?: RandomBytes;
-    log?: (event: Record<string, unknown>) => void;
+    /** Receives one structured event per failed request; defaults to JSON on stderr. */
+    log?: GatewayLog;
 };
 
 /** Builds the Edge Function's request handler: installer device routes plus the website's JSON routes. */
 export function createNightlyGatewayHandler(options: NightlyGatewayOptions): (request: Request) => Promise<Response> {
     assertConfiguration(options);
     const clock = options.clock ?? Date.now;
-    const log = options.log ?? ((event) => console.error(JSON.stringify(event)));
+    const log = options.log ?? logToStderr;
     const router = new GatewayRouter(options.websiteKey, {
         db: options.database,
         discord: createDiscordApi(options.discord, options.fetch),
@@ -108,7 +108,7 @@ function functionPath(pathname: string): string | null {
 }
 
 /** Maps a gateway error to its JSON envelope and anything else to a logged `500 internal_error`. */
-function failureResponse(request: Request, error: unknown, log: (event: Record<string, unknown>) => void): Response {
+function failureResponse(request: Request, error: unknown, log: GatewayLog): Response {
     const failure = { event: "nightly_gateway_request_failed", path: new URL(request.url).pathname };
     if (error instanceof GatewayError) {
         log({ ...failure, error: error.code, ...error.upstream });
@@ -142,21 +142,5 @@ function driverCode(error: unknown): { code?: string; sqlstate?: string } {
 /** Refuses to start with a missing or implausible secret or setting instead of failing per request. */
 function assertConfiguration(options: NightlyGatewayOptions): void {
     if (!hasMinimumLength(options.websiteKey, MINIMUM_WEBSITE_KEY_LENGTH)) throw configurationInvalid("websiteKey");
-    if (!isDiscordSnowflake(options.discord.clientId)) throw configurationInvalid("discord.clientId");
-    if (!hasMinimumLength(options.discord.clientSecret, MINIMUM_CLIENT_SECRET_LENGTH)) {
-        throw configurationInvalid("discord.clientSecret");
-    }
-    if (!hasMinimumLength(options.discord.botToken, MINIMUM_BOT_TOKEN_LENGTH)) throw configurationInvalid("discord.botToken");
-    if (options.discord.redirectUri === undefined) return;
-    if (!isAllowedDiscordRedirectUri(options.discord.redirectUri)) throw configurationInvalid("discord.redirectUri");
-}
-
-/** Whether a configured secret is a string of at least `minimum` characters. */
-function hasMinimumLength(value: unknown, minimum: number): boolean {
-    return typeof value === "string" && value.length >= minimum;
-}
-
-/** The boot error for one implausible setting, naming the setting but never its value. */
-function configurationInvalid(setting: string): Error {
-    return new Error(`nightly_gateway_configuration_invalid: ${setting}`);
+    assertDiscordCredentials(options.discord);
 }

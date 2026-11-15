@@ -129,17 +129,7 @@ export class SingleConnectionPool implements ConnectionPool {
 
     constructor(private readonly client: PostgresClient) {}
 
-    /** Runs one statement once the connection is free. */
-    async query(sql: string, values?: unknown[]) {
-        const free = await this.take();
-        try {
-            return await this.client.query(sql, values);
-        } finally {
-            free();
-        }
-    }
-
-    /** Leases the connection until the transaction releases it; it cannot be destroyed, only handed on. */
+    /** Leases the connection until its statement or transaction releases it; it cannot be destroyed, only handed on. */
     async connect(): Promise<PooledConnection> {
         const free = await this.take();
         return { query: (sql, values) => this.client.query(sql, values), release: () => free() };

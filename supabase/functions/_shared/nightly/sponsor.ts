@@ -79,10 +79,7 @@ export async function removeSponsoredAccount(context: GatewayContext, body: Reco
     const friendId = body.discord_user_id;
     if (!isDiscordSnowflake(friendId)) throw new GatewayError(400, "invalid_request");
     await context.db.transaction(async (tx) => {
-        await tx.query(
-            "DELETE FROM nightly_gateway.sponsorships WHERE supporter_discord_user_id = $1 AND sponsored_discord_user_id = $2",
-            [sponsorId, friendId],
-        );
+        await deleteSeat(tx, sponsorId, friendId);
         await revokeFriendDownloadsUnder(tx, friendId, sponsorId);
     });
     return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
@@ -152,11 +149,16 @@ async function applySeatPlan(tx: GatewayQueries, friendId: string, sponsorId: st
 
 /** Frees the friend's seat under a revoked holder and ends every download session the friend still holds. */
 async function releaseRevokedSeat(tx: GatewayQueries, friendId: string, holderId: string): Promise<void> {
-    await tx.query(
-        "DELETE FROM nightly_gateway.sponsorships WHERE sponsored_discord_user_id = $1 AND supporter_discord_user_id = $2",
-        [friendId, holderId],
-    );
+    await deleteSeat(tx, holderId, friendId);
     await revokeFriendDownloads(tx, friendId);
+}
+
+/** Deletes the seat a supporter gives a friend, if there is one. */
+async function deleteSeat(tx: GatewayQueries, supporterId: string, friendId: string): Promise<void> {
+    await tx.query(
+        "DELETE FROM nightly_gateway.sponsorships WHERE supporter_discord_user_id = $1 AND sponsored_discord_user_id = $2",
+        [supporterId, friendId],
+    );
 }
 
 /** Gives the friend a seat under the sponsor; a full sponsor is `409 seats_full`. */

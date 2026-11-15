@@ -1,6 +1,10 @@
 // PostgreSQL access for the nightly gateway: typed parameterized queries and transactions over a connection pool.
-// A connection is held only for one statement or one transaction, never across a Discord call. Handler SQL is native
-// PostgreSQL naming tables as nightly_gateway.<table>; INT8 columns arrive as JS numbers (postgres-pool.ts registers it).
+// Each statement and each transaction leases its own connection, held only while it runs, never across a Discord
+// call. Handler SQL is native PostgreSQL naming tables as nightly_gateway.<table>; INT8 columns arrive as JS numbers
+// (postgres-pool.ts registers it).
+
+/** A PostgreSQL SQLSTATE error code: five digits or capitals, like 23505. */
+export const SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/;
 
 /** The rows a statement returned and how many rows it inserted, updated or deleted. */
 export type QueryResult<T> = { rows: T[]; rowCount: number };
@@ -15,7 +19,7 @@ export interface GatewayDatabase extends GatewayQueries {
     transaction<T>(work: (tx: GatewayQueries) => Promise<T>): Promise<T>;
 }
 
-/** The slice of a `pg` client, pool or PGlite the gateway needs: positional-parameter queries. */
+/** The slice of a `pg` client or PGlite the gateway needs: positional-parameter queries. */
 export interface PostgresClient {
     query(sql: string, values?: unknown[]): Promise<{ rows: unknown[]; rowCount?: number | null; affectedRows?: number }>;
 }
@@ -25,8 +29,8 @@ export interface PooledConnection extends PostgresClient {
     release(destroy?: boolean): void;
 }
 
-/** A pool that runs single statements itself and leases a connection for a transaction (a `pg` Pool fits). */
-export interface ConnectionPool extends PostgresClient {
+/** A pool that leases a connection per statement or transaction (a `pg` Pool fits). */
+export interface ConnectionPool {
     connect(): Promise<PooledConnection>;
 }
 
@@ -56,13 +60,22 @@ export function isUniqueViolation(error: unknown): boolean {
     return typeof error === "object" && error !== null && (error as { code?: unknown }).code === "23505";
 }
 
-// Runs single statements on the pool and each transaction on one connection leased for that transaction alone.
+// Runs each statement, and each transaction, on a connection leased for it alone, so outages surface one way.
 class PooledGatewayDatabase implements GatewayDatabase {
     constructor(private readonly pool: ConnectionPool) {}
 
-    /** Runs one statement on whichever pooled connection is free, returned to the pool when it settles. */
-    query<T = Record<string, unknown>>(sql: string, values: readonly unknown[] = []): Promise<QueryResult<T>> {
-        return runStatement<T>(this.pool, sql, values);
+    /** Runs one statement on its own leased connection, returned to the pool (or destroyed if broken) when it settles. */
+    async query<T = Record<string, unknown>>(sql: string, values: readonly unknown[] = []): Promise<QueryResult<T>> {
+        const connection = await this.lease();
+        let result: QueryResult<T>;
+        try {
+            result = await runStatement<T>(connection, sql, values);
+        } catch (error) {
+            connection.release(!leavesConnectionReady(error));
+            throw error;
+        }
+        connection.release();
+        return result;
     }
 
     /** Runs `work` in one transaction: commits its result, or rolls back and rethrows its error. */
@@ -96,6 +109,16 @@ class PooledGatewayDatabase implements GatewayDatabase {
 async function runStatement<T>(client: PostgresClient, sql: string, values: readonly unknown[]): Promise<QueryResult<T>> {
     const result = await client.query(sql, [...values]);
     return { rows: result.rows as T[], rowCount: result.rowCount ?? result.affectedRows ?? 0 };
+}
+
+/**
+ * Whether a failed statement left its connection ready for the next one: the server answered with an ERROR-severity
+ * SQLSTATE (a constraint violation, say). A timeout, a dropped socket or a FATAL error leaves it broken or unknown.
+ */
+function leavesConnectionReady(error: unknown): boolean {
+    if (typeof error !== "object" || error === null) return false;
+    const { code, severity } = error as { code?: unknown; severity?: unknown };
+    return severity === "ERROR" && typeof code === "string" && SQLSTATE_PATTERN.test(code);
 }
 
 /** Runs BEGIN, COMMIT or ROLLBACK; when one fails the connection's state is unknown, so it is destroyed. */

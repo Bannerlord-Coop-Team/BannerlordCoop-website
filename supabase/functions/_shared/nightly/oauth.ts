@@ -16,6 +16,9 @@ import { hasNightlyAccessRole, OAUTH_STATE_SECONDS, SPONSOR_SESSION_SECONDS } fr
 import { findSeatHolder, openSponsorSession } from "./sponsor.ts";
 import { randomToken, sha256 } from "./tokens.ts";
 
+/** What the sponsor-code form tells the friend: whether a previous sponsor's seat was just revoked. */
+type SponsorCodeNotice = { previousSponsorRevoked: boolean };
+
 /** A well-formed `/oauth/complete` body: Discord's authorization code and a gateway-issued state. */
 type CompleteRequest = { code: string; state: string };
 
@@ -95,10 +98,10 @@ async function completeDeviceLogin(context: GatewayContext, deviceId: string, co
     const member = await context.discord.currentMemberIfPresent(accessToken);
     if (member !== null && hasNightlyAccessRole(member.roles)) return approveDirectMember(context, deviceId, user.id);
     const previousSponsorId = await findSeatHolder(context.db, user.id);
-    if (previousSponsorId === null) return awaitSponsorCode(context, deviceId, user, false);
+    if (previousSponsorId === null) return awaitSponsorCode(context, deviceId, user, { previousSponsorRevoked: false });
     // A previous sponsor who lost access is revoked here, and the friend gets the code form instead.
     const sponsorStillEligible = await revokeSponsorIfIneligible(context, previousSponsorId);
-    if (!sponsorStillEligible) return awaitSponsorCode(context, deviceId, user, true);
+    if (!sponsorStillEligible) return awaitSponsorCode(context, deviceId, user, { previousSponsorRevoked: true });
     await approveDevice(context.db, deviceId, user.id, previousSponsorId, context.now());
     return json({ outcome: "sponsored-approved" });
 }
@@ -118,7 +121,7 @@ async function awaitSponsorCode(
     context: GatewayContext,
     deviceId: string,
     user: DiscordUser,
-    previousSponsorRevoked: boolean,
+    { previousSponsorRevoked }: SponsorCodeNotice,
 ): Promise<Response> {
     await parkAwaitingSponsor(context.db, deviceId, user.id);
     return json({

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { after, before, beforeEach, test } from "node:test";
 import type { PGlite } from "@electric-sql/pglite";
+import { isBearerToken, sha256 as workerSha256 } from "../../../nightly-gateway/src/primitives.ts";
 import { type ConnectionPool, pooledGatewayDatabase } from "../_shared/nightly/database.ts";
+import { assertDiscordCredentials } from "../_shared/nightly/discord.ts";
 import { createNightlyGatewayHandler } from "../_shared/nightly/gateway.ts";
 import { hasNightlyAccessRole, isEligibleNightlySponsor } from "../_shared/nightly/policy.ts";
 import { sha256 } from "../_shared/nightly/tokens.ts";
@@ -78,11 +79,6 @@ async function redirectUrisSent(redirectUri?: string): Promise<[string | null, s
     return [authorizeUrl.searchParams.get("redirect_uri"), new URLSearchParams(exchange.body).get("redirect_uri")];
 }
 
-/** The token hash exactly as the Worker computes it to look a download session up. */
-function workerTokenHash(accessToken: string): string {
-    return createHash("sha256").update(accessToken).digest("hex");
-}
-
 // ---- Access policy ----
 
 test("supporters, Testers, Staff, and Competition Winners get nightly access and share the same seat limit", () => {
@@ -118,14 +114,10 @@ test("the handler refuses implausible secrets at construction", () => {
         /configuration_invalid: websiteKey$/.test(error.message) && !error.message.includes("w".repeat(31)));
 });
 
-test("the handler accepts an https or loopback-http Discord redirect URI and refuses anything else at construction", () => {
-    const base = {
-        websiteKey: WEBSITE_KEY,
-        discord: { clientId: CLIENT_ID, clientSecret: "s".repeat(32), botToken: BOT_TOKEN },
-        fetch,
-        database: failingDatabase(() => new Error("unused")),
-    };
-    const withRedirect = (redirectUri: string) => createNightlyGatewayHandler({ ...base, discord: { ...base.discord, redirectUri } });
+test("Discord credentials accept an https or loopback-http redirect URI and refuse anything else", () => {
+    const credentials = { clientId: CLIENT_ID, clientSecret: "s".repeat(32), botToken: BOT_TOKEN };
+    const withRedirect = (redirectUri: string) => assertDiscordCredentials({ ...credentials, redirectUri });
+    assert.doesNotThrow(() => assertDiscordCredentials(credentials), "the redirect URI is optional");
     for (const valid of [
         "https://preview.bannerlordcoop.com/nightly/callback",
         "http://localhost:3000/nightly/callback",
@@ -247,10 +239,10 @@ test("an approved session trades for one 1-hour download token after re-checking
     assert.equal(response.status, 200);
     const token = await body(response);
     assert.deepEqual(Object.keys(token), ["access_token", "token_type", "expires_in"]);
-    assert.match(token.access_token as string, /^[A-Za-z0-9_-]{43}$/);
+    assert.ok(isBearerToken(token.access_token), "the Worker accepts the token's shape");
     assert.equal(token.token_type, "Bearer");
     assert.equal(token.expires_in, 3600);
-    const [session] = await rows(database, "select device_session_id, discord_user_id, supporter_discord_user_id, created_at, expires_at from nightly_gateway.download_sessions where token_hash = $1", [workerTokenHash(token.access_token as string)]);
+    const [session] = await rows(database, "select device_session_id, discord_user_id, supporter_discord_user_id, created_at, expires_at from nightly_gateway.download_sessions where token_hash = $1", [await workerSha256(token.access_token as string)]);
     assert.deepEqual(session, {
         device_session_id: approved.id, discord_user_id: FRIEND, supporter_discord_user_id: SPONSOR,
         created_at: NOW, expires_at: NOW + 3600,
@@ -857,13 +849,17 @@ test("unexpected driver failures name the failing dependency by its errno code, 
     assert.ok(!JSON.stringify(logs).includes("secret-host"));
 });
 
-test("a pool that cannot connect for a transaction logs nightly_database_unavailable with the errno code", async () => {
+test("a pool that cannot connect logs nightly_database_unavailable with the errno code, for statements and transactions alike", async () => {
     await seedGrant(database, SPONSOR);
     const session = await seedSponsorSession(database, SPONSOR);
-    const statements = new SingleConnectionPool(database);
+    const shared = new SingleConnectionPool(database);
+    let leasesLeft = 0;
     const refusingPool: ConnectionPool = {
-        query: (sql, values) => statements.query(sql, values),
-        connect: async () => { throw Object.assign(new Error("connect ECONNREFUSED secret-host"), { code: "ECONNREFUSED" }); },
+        connect: async () => {
+            if (leasesLeft <= 0) throw Object.assign(new Error("connect ECONNREFUSED secret-host"), { code: "ECONNREFUSED" });
+            leasesLeft -= 1;
+            return shared.connect();
+        },
     };
     const logs: Record<string, unknown>[] = [];
     const handler = createNightlyGatewayHandler({
@@ -874,14 +870,18 @@ test("a pool that cannot connect for a transaction logs nightly_database_unavail
         clock: () => NOW * 1000,
         log: (event) => logs.push(event),
     });
-    const response = await handler(websiteRequest("/sponsor/remove", { session, discord_user_id: FRIEND }));
-    assert.deepEqual([response.status, await body(response)], [500, { error: "internal_error" }]);
+    const unavailable = { error: "internal_error", cause: "DatabaseUnavailableError", message: "nightly_database_unavailable", code: "ECONNREFUSED" };
+
+    const created = await handler(installerRequest("/v1/device/sessions"));
+    assert.deepEqual([created.status, await body(created)], [500, { error: "internal_error" }]);
     assert.deepEqual(logs.at(-1), {
-        event: "nightly_gateway_request_failed",
-        path: "/nightly-gateway/sponsor/remove",
-        error: "internal_error",
-        cause: "DatabaseUnavailableError",
-        message: "nightly_database_unavailable",
-        code: "ECONNREFUSED",
-    });
+        event: "nightly_gateway_request_failed", path: "/functions/v1/nightly-gateway/v1/device/sessions", ...unavailable,
+    }, "a single-statement route");
+
+    leasesLeft = 1; // The session lookup gets its connection; the removal's transaction does not.
+    const removed = await handler(websiteRequest("/sponsor/remove", { session, discord_user_id: FRIEND }));
+    assert.deepEqual([removed.status, await body(removed)], [500, { error: "internal_error" }]);
+    assert.equal(leasesLeft, 0);
+    assert.deepEqual(logs.at(-1), { event: "nightly_gateway_request_failed", path: "/nightly-gateway/sponsor/remove", ...unavailable }, "a transaction");
+    assert.ok(!JSON.stringify(logs).includes("secret-host"));
 });

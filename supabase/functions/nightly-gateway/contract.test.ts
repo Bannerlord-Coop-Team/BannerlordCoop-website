@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { after, before, test } from "node:test";
 import type { PGlite } from "@electric-sql/pglite";
+import {
+    CANONICAL_GATEWAY_ORIGIN,
+    LEGACY_GATEWAY_ORIGIN,
+    PUBLIC_MANUAL_SERVER_ORIGIN,
+} from "../../../nightly-gateway/src/origins.ts";
 import { createNightlyClient } from "../../../src/app/lib/nightly/client.ts";
 import {
     body,
@@ -16,10 +21,16 @@ import {
     WEBSITE_KEY,
 } from "./test-harness.ts";
 
-// Contract test: the website's real Edge Function client, routed in-process to the real Edge handler
-// over PGlite with the gateway migrations, so both sides of the website contract are checked together.
+// Contract tests: the website's real Edge Function client and the real Worker's installer forwarding, each routed
+// in-process to the real Edge handler over PGlite with the gateway migrations, so both sides of each contract are
+// checked together.
 
 const FUNCTION_URL = "https://wfvqnijwuyqjibhlcrhz.supabase.co/functions/v1/nightly-gateway";
+/**
+ * The Worker's entry module. It is imported at run time from a non-literal specifier so the website's `tsc` never
+ * compiles it: it is typed against the Worker's own globals (Env, ExportedHandler), which only its tsconfig declares.
+ */
+const WORKER_ENTRY = "../../../nightly-gateway/src/index.ts";
 const SPONSOR_CODE = "SPON-SORC-ODE2";
 
 let database: PGlite;
@@ -32,6 +43,28 @@ function stateOf(authorizeUrl: string): string {
     const state = new URL(authorizeUrl).searchParams.get("state");
     assert.ok(state !== null);
     return state;
+}
+
+/** The slice of the Worker entry module this test drives: `createGateway` over an injected fetch and log. */
+type WorkerEntry = {
+    createGateway(dependencies: {
+        fetch: (url: string, init: RequestInit) => Promise<Response>;
+        log?: (event: Record<string, unknown>) => void;
+    }): { fetch(request: Request, env: unknown): Promise<Response> };
+};
+
+/** The Worker's env for its forwarded device routes: no database binding, since those routes never open one. */
+function forwardingEnv(): Record<string, string> {
+    return { LEGACY_R2_ORIGIN: PUBLIC_MANUAL_SERVER_ORIGIN, NIGHTLY_FUNCTION_URL: FUNCTION_URL };
+}
+
+/** An installer's url-encoded POST to the Worker on one of its public hosts. */
+function installerPost(origin: string, path: string, form: string): Request {
+    return new Request(`${origin}${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: form,
+    });
 }
 
 /** Unwraps a successful client result, failing the test with the decoded failure otherwise. */
@@ -94,4 +127,25 @@ test("the website client decodes a wrong website key as the gateway's 401", asyn
         (url, init) => handler(new Request(url, init)),
     );
     assert.deepEqual(await client.startSponsorOAuth(), { ok: false, status: 401, code: "unauthorized" });
+});
+
+test("the Worker forwards an installer's device calls to the Edge handler and back, on both public hosts", async () => {
+    const { createGateway } = await import(WORKER_ENTRY) as WorkerEntry;
+    const { handler } = gatewayHandler(database, discordScript());
+    const workerLogs: Record<string, unknown>[] = [];
+    const worker = createGateway({ fetch: (url, init) => handler(new Request(url, init)), log: (event) => workerLogs.push(event) });
+    for (const origin of [CANONICAL_GATEWAY_ORIGIN, LEGACY_GATEWAY_ORIGIN]) {
+        const created = await worker.fetch(installerPost(origin, "/v1/device/sessions", "client=installer"), forwardingEnv());
+        assert.equal(created.status, 201, origin);
+        const session = await body(created);
+        assert.equal(session.verification_uri, `${origin}/activate?code=${encodeURIComponent(session.user_code as string)}`, origin);
+        assert.equal(session.expires_in, 600, origin);
+
+        const polled = await worker.fetch(
+            installerPost(origin, "/v1/device/token", `device_code=${session.device_code as string}`),
+            forwardingEnv(),
+        );
+        assert.deepEqual([polled.status, await body(polled)], [428, { error: "authorization_pending" }], origin);
+    }
+    assert.deepEqual(workerLogs, [], "the Worker logged no forwarding failure");
 });

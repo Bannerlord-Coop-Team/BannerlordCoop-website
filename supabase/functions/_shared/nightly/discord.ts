@@ -1,4 +1,5 @@
 import { readBoundedBytes, RequestTooLargeError } from "../edge-http.ts";
+import { configurationInvalid, hasMinimumLength } from "./configuration.ts";
 import { GatewayError, type UpstreamFailure } from "./http.ts";
 import { isDiscordSnowflake } from "./formats.ts";
 import { DISCORD_GUILD_ID } from "./policy.ts";
@@ -12,6 +13,10 @@ const DEFAULT_DISCORD_REDIRECT_URI = "https://bannerlordcoop.com/nightly/callbac
 /** Hosts that may receive the OAuth callback over plain http, for a local stack. */
 const LOOPBACK_HOSTS = Object.freeze(["localhost", "127.0.0.1"]);
 const DISCORD_USER_AGENT = "DiscordBot (https://bannerlordcoop.com, 1)";
+/** Shortest plausible OAuth client secret; Discord issues 32 characters. */
+const MINIMUM_CLIENT_SECRET_LENGTH = 32;
+/** Shortest plausible bot token; Discord's are well over 50 characters. */
+const MINIMUM_BOT_TOKEN_LENGTH = 50;
 /**
  * Longest a Discord call (request and body) may take. A timeout is an unexpected `500 internal_error`, which the
  * installer retries; no database connection is held meanwhile, so a slow Discord cannot starve the pool.
@@ -46,6 +51,20 @@ export interface DiscordApi {
     currentMember(accessToken: string): Promise<DiscordMember>;
     currentMemberIfPresent(accessToken: string): Promise<DiscordMember | null>;
     botGuildMember(userId: string): Promise<DiscordMember | null>;
+}
+
+/**
+ * Refuses implausible Discord credentials at boot: a non-snowflake client ID, a short secret or bot token, or a
+ * redirect URI Discord would not match. The error names the `discord.<field>` setting, never its value.
+ */
+export function assertDiscordCredentials(credentials: DiscordCredentials): void {
+    if (!isDiscordSnowflake(credentials.clientId)) throw configurationInvalid("discord.clientId");
+    if (!hasMinimumLength(credentials.clientSecret, MINIMUM_CLIENT_SECRET_LENGTH)) {
+        throw configurationInvalid("discord.clientSecret");
+    }
+    if (!hasMinimumLength(credentials.botToken, MINIMUM_BOT_TOKEN_LENGTH)) throw configurationInvalid("discord.botToken");
+    if (credentials.redirectUri === undefined) return;
+    if (!isAllowedDiscordRedirectUri(credentials.redirectUri)) throw configurationInvalid("discord.redirectUri");
 }
 
 /** Creates the Discord client over an injected fetch, mapping upstream failures to gateway errors. */
@@ -157,7 +176,7 @@ class DiscordHttpApi implements DiscordApi {
  * Whether a redirect URI is an absolute https URL, or http on a loopback host, with no credentials, fragment or
  * whitespace; it is sent verbatim, so it must match Discord's registered redirect exactly.
  */
-export function isAllowedDiscordRedirectUri(value: unknown): boolean {
+function isAllowedDiscordRedirectUri(value: unknown): boolean {
     if (typeof value !== "string" || /\s|#/.test(value)) return false;
     const url = parseAbsoluteUrl(value);
     if (url === null || url.username !== "" || url.password !== "") return false;

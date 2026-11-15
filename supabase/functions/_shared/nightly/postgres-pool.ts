@@ -1,9 +1,10 @@
 import { type ConnectionPool, type GatewayDatabase, pooledGatewayDatabase } from "./database.ts";
+import { type GatewayLog, logToStderr } from "./log.ts";
 
 // Edge-only composition of the gateway's PostgreSQL pool. The `pg` module is a parameter, so this file never
 // imports a driver and the INT8 parser the gateway database relies on cannot be left unregistered.
 
-/** The slice of a `pg` Pool the gateway uses: statements, transaction leases and idle-client errors. */
+/** The slice of a `pg` Pool the gateway uses: connection leases and idle-client errors. */
 interface PostgresPool extends ConnectionPool {
     on(event: "error", listener: (error: unknown) => void): unknown;
 }
@@ -22,7 +23,7 @@ export type PostgresPoolOptions = {
     /** Bounds both acquiring a connection and each query. */
     queryTimeoutMs: number;
     /** Receives one structured event per idle-connection error; defaults to JSON on stderr. */
-    log?: (event: Record<string, unknown>) => void;
+    log?: GatewayLog;
 };
 
 /** Parses an INT8 column as a JS number, refusing values beyond the safe-integer range. */
@@ -47,7 +48,7 @@ export function createPostgresGatewayDatabase(
         connectionTimeoutMillis: options.queryTimeoutMs,
         query_timeout: options.queryTimeoutMs,
     });
-    const log = options.log ?? logToConsole;
+    const log = options.log ?? logToStderr;
     pool.on("error", (error) => log(poolErrorEvent(error)));
     return pooledGatewayDatabase(pool);
 }
@@ -56,9 +57,4 @@ export function createPostgresGatewayDatabase(
 function poolErrorEvent(error: unknown): Record<string, unknown> {
     const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
     return { event: "nightly_gateway_pool_error", error: String(code ?? "unknown") };
-}
-
-/** The default log sink: one JSON line on stderr. */
-function logToConsole(event: Record<string, unknown>): void {
-    console.error(JSON.stringify(event));
 }

@@ -1,6 +1,7 @@
 // @ts-nocheck -- Deno npm specifiers are validated by the Edge deployment.
 import pg from "npm:pg@8.16.3";
 import { createNightlyGatewayHandler } from "../_shared/nightly/gateway.ts";
+import { logToStderr } from "../_shared/nightly/log.ts";
 import { createPostgresGatewayDatabase } from "../_shared/nightly/postgres-pool.ts";
 
 // Edge Function: nightly-gateway. Owns everything that needs Discord for nightly access: installer
@@ -20,6 +21,9 @@ function optional(name) {
     return Deno.env.get(name)?.trim() || undefined;
 }
 
+/** The one structured-log sink shared by the request handler and the connection pool. */
+const log = logToStderr;
+
 Deno.serve(createNightlyGatewayHandler({
     websiteKey: required("NIGHTLY_WEBSITE_KEY"),
     discord: {
@@ -35,5 +39,7 @@ Deno.serve(createNightlyGatewayHandler({
         maxConnections: 4,
         idleTimeoutMs: 10_000,
         queryTimeoutMs: QUERY_TIMEOUT_MS,
+        log,
     }),
+    log,
 }));

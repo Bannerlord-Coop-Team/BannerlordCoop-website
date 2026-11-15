@@ -36,28 +36,32 @@ const WORKER_GRANT_UPSERT = `
 `;
 const INSERT_GRANT = "INSERT INTO nightly_gateway.supporter_grants (supporter_discord_user_id, updated_at) VALUES ($1, $2)";
 
-/** What a scripted pool saw: statements it ran itself, statements per leased connection, and each release. */
-type PoolTrace = { poolStatements: string[]; connectionStatements: string[]; releases: Array<boolean | undefined> };
+/** What a scripted pool saw: how many connections it leased, the statements run on them, and each release. */
+type PoolTrace = { leases: number; statements: string[]; releases: Array<boolean | undefined> };
 
-/** A pool that answers every statement with one row, failing the statement named by `failOn` on leased connections. */
-function scriptedPool(failOn?: string): { pool: ConnectionPool; trace: PoolTrace } {
-    const trace: PoolTrace = { poolStatements: [], connectionStatements: [], releases: [] };
+/** A pool that answers every statement with one row, failing the statement named by `failOn` with `failure()`. */
+function scriptedPool(failOn?: string, failure: () => unknown = () => new Error("connection lost")): { pool: ConnectionPool; trace: PoolTrace } {
+    const trace: PoolTrace = { leases: 0, statements: [], releases: [] };
     const connection: PooledConnection = {
         query: async (sql) => {
-            trace.connectionStatements.push(sql);
-            if (sql === failOn) throw new Error("connection lost");
+            trace.statements.push(sql);
+            if (sql === failOn) throw failure();
             return { rows: [{ ok: 1 }], rowCount: 1 };
         },
         release: (destroy) => { trace.releases.push(destroy); },
     };
     const pool: ConnectionPool = {
-        query: async (sql) => {
-            trace.poolStatements.push(sql);
-            return { rows: [{ ok: 1 }], rowCount: 1 };
+        connect: async () => {
+            trace.leases += 1;
+            return connection;
         },
-        connect: async () => connection,
     };
     return { pool, trace };
+}
+
+/** A server-reported SQL error as `pg` and PGlite raise it: a SQLSTATE plus the server's severity. */
+function serverError(code: string, severity = "ERROR"): Error {
+    return Object.assign(new Error("server rejected the statement"), { code, severity });
 }
 
 test("INT8 columns parse as safe JavaScript numbers only", () => {
@@ -111,18 +115,53 @@ test("transactions commit together and roll back together, and later queries sti
     }
 });
 
-test("single statements run on the pool; only a transaction leases a connection, returned healthy when it ends", async () => {
+test("each statement leases its own connection and each transaction one for its whole span, returned healthy", async () => {
     const { pool, trace } = scriptedPool();
     const database = pooledGatewayDatabase(pool);
     await database.query("SELECT 1");
-    assert.deepEqual(trace, { poolStatements: ["SELECT 1"], connectionStatements: [], releases: [] });
-    await database.transaction(async (tx) => { await tx.query("SELECT 2"); });
-    assert.deepEqual(trace.connectionStatements, ["BEGIN", "SELECT 2", "COMMIT"]);
-    assert.deepEqual(trace.releases, [undefined]);
+    await database.query("SELECT 2");
+    assert.deepEqual(trace, { leases: 2, statements: ["SELECT 1", "SELECT 2"], releases: [undefined, undefined] });
+    await database.transaction(async (tx) => {
+        await tx.query("SELECT 3");
+        await tx.query("SELECT 4");
+    });
+    assert.equal(trace.leases, 3, "a transaction's statements share its one connection");
+    assert.deepEqual(trace.statements.slice(2), ["BEGIN", "SELECT 3", "SELECT 4", "COMMIT"]);
+    assert.deepEqual(trace.releases, [undefined, undefined, undefined]);
     const failure = new Error("stop");
     await assert.rejects(database.transaction(async () => { throw failure; }), (error) => error === failure);
-    assert.deepEqual(trace.connectionStatements.slice(3), ["BEGIN", "ROLLBACK"]);
-    assert.deepEqual(trace.releases, [undefined, undefined], "a rolled-back connection goes back to the pool");
+    assert.deepEqual(trace.statements.slice(6), ["BEGIN", "ROLLBACK"]);
+    assert.deepEqual(trace.releases, [undefined, undefined, undefined, undefined], "a rolled-back connection goes back to the pool");
+});
+
+test("a statement the server rejects returns its connection; a broken or unknown connection is destroyed", async () => {
+    const cases: Array<{ failure: () => unknown; destroy: boolean; label: string }> = [
+        { failure: () => serverError("23505"), destroy: false, label: "unique violation" },
+        { failure: () => serverError("57P01", "FATAL"), destroy: true, label: "server terminated the session" },
+        { failure: () => new Error("Query read timeout"), destroy: true, label: "query timeout" },
+        { failure: () => Object.assign(new Error("write EPIPE"), { code: "EPIPE" }), destroy: true, label: "broken socket" },
+        { failure: () => "not an error", destroy: true, label: "non-error throw" },
+    ];
+    for (const { failure, destroy, label } of cases) {
+        const { pool, trace } = scriptedPool("SELECT 1", failure);
+        await assert.rejects(pooledGatewayDatabase(pool).query("SELECT 1"), () => true, label);
+        assert.deepEqual(trace.releases, [destroy], label);
+    }
+});
+
+test("PGlite's constraint errors read as server-reported, so their connection is returned, not destroyed", async () => {
+    const pg = await createGatewayDatabase();
+    try {
+        const releases: Array<boolean | undefined> = [];
+        const database = pooledGatewayDatabase({
+            connect: async () => ({ query: (sql, values) => pg.query(sql, values), release: (destroy) => { releases.push(destroy); } }),
+        });
+        await database.query(INSERT_GRANT, [SPONSOR, NOW]);
+        await assert.rejects(database.query(INSERT_GRANT, [SPONSOR, NOW]), (error) => isUniqueViolation(error));
+        assert.deepEqual(releases, [undefined, false]);
+    } finally {
+        await pg.close();
+    }
 });
 
 test("a failed rollback destroys the connection and propagates its own error instead of the work's", async () => {
@@ -140,15 +179,14 @@ test("a failed commit destroys the connection", async () => {
     assert.deepEqual(trace.releases, [true]);
 });
 
-test("a pool that cannot supply a connection is nightly_database_unavailable with the driver's errno code", async () => {
+test("a pool that cannot supply a connection is nightly_database_unavailable for statements and transactions alike", async () => {
     const refused = Object.assign(new Error("connect ECONNREFUSED 10.0.0.1:5432"), { code: "ECONNREFUSED" });
-    const pool: ConnectionPool = {
-        query: async () => ({ rows: [] }),
-        connect: async () => { throw refused; },
-    };
-    await assert.rejects(pooledGatewayDatabase(pool).transaction(async () => "unused"), (error) =>
+    const database = pooledGatewayDatabase({ connect: async () => { throw refused; } });
+    const isUnavailable = (error: unknown) =>
         error instanceof DatabaseUnavailableError && error.message === "nightly_database_unavailable"
-        && error.code === "ECONNREFUSED" && error.cause === refused);
+        && error.code === "ECONNREFUSED" && error.cause === refused;
+    await assert.rejects(database.query("SELECT 1"), isUnavailable);
+    await assert.rejects(database.transaction(async () => "unused"), isUnavailable);
 });
 
 test("a failed rollback behind a gateway error is a 500, and the gateway keeps serving", async () => {
@@ -180,7 +218,6 @@ test("the Postgres database registers the safe INT8 parser for INT8 columns", ()
     const pgModule: PostgresModule = {
         types: { builtins: { INT8: 20 }, setTypeParser: (oid, parse) => { parsers.set(oid, parse); } },
         Pool: class {
-            async query() { return { rows: [] }; }
             async connect(): Promise<PooledConnection> { throw new Error("unused"); }
             on() { return this; }
         },
@@ -197,7 +234,6 @@ test("an idle-connection error is logged by its code only, never its message", (
     const pgModule: PostgresModule = {
         types: { builtins: { INT8: 20 }, setTypeParser: () => {} },
         Pool: class {
-            async query() { return { rows: [] }; }
             async connect(): Promise<PooledConnection> { throw new Error("unused"); }
             on(_event: "error", errorListener: (error: unknown) => void) { listener = errorListener; return this; }
         },
