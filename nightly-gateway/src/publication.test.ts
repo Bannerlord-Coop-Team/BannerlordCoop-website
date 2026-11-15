@@ -251,6 +251,30 @@ test("client fallback accepts the producer's null baseSha legacy shape", async (
     assert.doesNotThrow(() => validateLegacyNightlyClientManifest(legacy, origin));
 });
 
+test("client fallback rejects a publicUrl that names another object, carries a query or fragment, or is on a foreign host", () => {
+    const key = `nightly/clients/${"a".repeat(40)}/${"c".repeat(64)}/Coop.7z`;
+    const manifest = (publicUrl: string) => ({
+        version: 1,
+        releaseDate: "2026-11-04",
+        headSha: "a".repeat(40),
+        baseSha: null,
+        workflowRunId: 42007050452,
+        builtAt: "2026-11-05T10:04:43Z",
+        client: { fileName: "Coop 11-04-2026.7z", key, bytes: 10, sha256: "c".repeat(64), publicUrl },
+    });
+    assert.doesNotThrow(() => validateLegacyNightlyClientManifest(manifest(`${origin}/${key}`), origin));
+    for (const publicUrl of [
+        `${CANONICAL_GATEWAY_ORIGIN}/v1/artifacts/${key}?x=1`,
+        `${CANONICAL_GATEWAY_ORIGIN}/v1/artifacts/${key}#f`,
+        `${origin}/nightly/other.7z`,
+        `${origin}/v1/artifacts/${key}`,
+        `${CANONICAL_GATEWAY_ORIGIN}/${key}`,
+        `https://attacker.invalid/v1/artifacts/${key}`,
+    ]) {
+        assert.throws(() => validateLegacyNightlyClientManifest(manifest(publicUrl), origin), /invalid_legacy_nightly_client_manifest/, publicUrl);
+    }
+});
+
 test("the client route requires the complete publication while release keeps the legacy default", async () => {
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
