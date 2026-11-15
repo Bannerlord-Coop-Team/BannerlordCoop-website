@@ -1,87 +1,74 @@
 import {
     CREATE_BUILD_PIN_KIND,
     CREATE_BUILD_PIN_LIFETIME_SECONDS,
-    DEVICE_SESSION_SECONDS,
-    DISCORD_GUILD_ID,
-    DISCORD_OAUTH_SCOPES,
     DOWNLOAD_SESSION_SECONDS,
-    SPONSORED_ACCOUNT_LIMIT,
+    GATEWAY_ORIGINS,
     createBuildPinInstallUrl,
     createBuildPinToken,
-    createSponsorFormToken,
-    hasNightlyAccessRole,
     isAllowedArtifactKey,
     isAllowedManualServerKey,
     isAllowedPinClientKey,
-    isAllowedSponsorClaimRequest,
     isCreateBuildPinCommitSha,
     isCreateBuildPinToken,
     isDiscordSnowflake,
-    isEligibleNightlySponsor,
     isSha256Hex,
     mintSecretsEqual,
     pinClientObjectKey,
+    resolveGatewayOrigin,
     rewriteManifestArtifactUrls,
     type JsonObject,
     validateLegacyNightlyClientManifest,
     validateLegacyNightlyReleaseManifest,
-    verifySponsorFormToken,
 } from "./core";
 import { databaseForRequest } from "./database";
+import { FORWARDED_DEVICE_PATHS, deviceFunctionUrl, forwardDeviceRequest, type UpstreamFetch } from "./forwarding";
 import { NightlyPublicationReadError, readNightlyPublication } from "./publication";
+import { websiteRedirectFor } from "./redirects";
 
-const DISCORD_API = "https://discord.com/api/v10";
-const DISCORD_AUTHORIZE = "https://discord.com/oauth2/authorize";
-const DISCORD_TOKEN = `${DISCORD_API}/oauth2/token`;
 const JSON_HEADERS = Object.freeze({
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
 });
 const NIGHTLY_PUBLICATION_VERSION_HEADER = "x-bannerlord-coop-nightly-version";
 const DEVICE_SECRET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
-const USER_CODE_PATTERN = /^[A-Z2-9]{4}-[A-Z2-9]{4}$/;
 const MAXIMUM_PIN_SERVER_BYTES = 6 * 1024 * 1024 * 1024;
 const MANUAL_SERVER_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/;
 const PUBLIC_MANUAL_SERVER_ORIGIN = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
-const SPONSOR_SESSION_SECONDS = 24 * 60 * 60;
-const OAUTH_STATE_SECONDS = 10 * 60;
 const SITE_HERO_IMAGE = "https://raw.githubusercontent.com/Bannerlord-Coop-Team/BannerlordCoop-website/07491ba62e3b038b16458402b4cc92dccf71b985/public/images/singleleader.png";
 
-type DiscordToken = {
-    access_token: string;
-    refresh_token: string;
-    expires_in: number;
-    scope: string;
-    token_type: "Bearer";
+/** Outside services the gateway calls; injected so tests can stand in for the Edge Function. */
+export type GatewayDependencies = { fetch: UpstreamFetch };
+
+/** The Worker entry point: one fetch handler bound to its dependencies. */
+export type GatewayHandler = {
+    fetch(request: Request, env: Env, context?: ExecutionContext): Promise<Response>;
 };
 
-type DiscordUser = { id: string; username: string };
-type DiscordMember = { roles: string[]; user?: DiscordUser };
-
-export default {
-    async fetch(request: Request, env: Env): Promise<Response> {
-        try {
-            const database = await databaseForRequest(env);
-            return await route(request, { ...env, DB: database });
-        } catch (error) {
-            console.error(JSON.stringify({
-                event: "nightly_gateway_request_failed",
-                path: new URL(request.url).pathname,
-                error: error instanceof GatewayError ? error.code : "internal_error",
-                ...(error instanceof GatewayError ? error.upstream : undefined),
-            }));
-            if (error instanceof GatewayError) {
-                if (prefersHtmlError(request)) {
-                    return html(errorPage(gatewayErrorMessage(error.code)), error.status);
-                }
-                return json({ error: error.code, ...error.upstream }, error.status);
+// Builds the Worker fetch handler around its outbound dependencies.
+// Errors become stable JSON codes, or the HTML error page for browsers.
+export function createGateway(dependencies: GatewayDependencies): GatewayHandler {
+    return {
+        async fetch(request: Request, env: Env): Promise<Response> {
+            try {
+                return await route(request, env, dependencies);
+            } catch (error) {
+                console.error(JSON.stringify({
+                    event: "nightly_gateway_request_failed",
+                    path: new URL(request.url).pathname,
+                    error: error instanceof GatewayError ? error.code : "internal_error",
+                }));
+                if (!(error instanceof GatewayError)) return json({ error: "internal_error" }, 500);
+                if (prefersHtmlError(request)) return html(errorPage(gatewayErrorMessage(error.code)), error.status);
+                return json({ error: error.code }, error.status);
             }
-            return json({ error: "internal_error" }, 500);
-        }
-    },
-} satisfies ExportedHandler<Env>;
+        },
+    };
+}
 
-async function route(request: Request, env: Env): Promise<Response> {
+export default createGateway({ fetch: (url, init) => fetch(url, init) }) satisfies ExportedHandler<Env>;
+
+// Routes one request: maintenance lock first, then routes that need no database, then R2 and Postgres routes.
+async function route(request: Request, env: Env, dependencies: GatewayDependencies): Promise<Response> {
     assertConfiguration(env);
     const url = new URL(request.url);
     if (env.MIGRATION_MODE !== undefined && env.MIGRATION_MODE !== "locked") {
@@ -93,36 +80,30 @@ async function route(request: Request, env: Env): Promise<Response> {
         }
         throw new GatewayError(503, "migration_in_progress");
     }
-    if (request.method === "GET" && url.pathname === "/") {
-        return html(nightlyAccessPage());
-    }
-    if (request.method === "POST" && url.pathname === "/v1/device/sessions") {
-        return createDeviceSession(env);
-    }
-    if (request.method === "POST" && url.pathname === "/v1/device/token") {
-        return pollDeviceSession(request, env);
-    }
-    if (request.method === "GET" && url.pathname === "/activate") {
-        return beginDeviceAuthorization(url, env);
-    }
-    if (request.method === "GET" && url.pathname === "/oauth/callback") {
-        return completeOAuth(url, env);
-    }
-    if (request.method === "POST" && url.pathname === "/v1/sponsorship/claim") {
-        return claimSponsorship(request, env);
-    }
-    if (request.method === "GET" && url.pathname === "/sponsor") {
-        return sponsorPortal(request, env);
-    }
-    if (request.method === "GET" && url.pathname === "/sponsor/login") {
-        return beginSponsorAuthorization(env);
-    }
-    if (request.method === "POST" && url.pathname === "/v1/sponsor/code") {
-        return rotateSponsorCode(request, env);
-    }
-    if (request.method === "POST" && url.pathname === "/v1/sponsor/remove") {
-        return removeSponsoredAccount(request, env);
-    }
+    const stateless = routeWithoutDatabase(request, url, env, dependencies);
+    if (stateless !== null) return stateless;
+    const database = await databaseForRequest(env);
+    return routeWithDatabase(request, url, { ...env, DB: database });
+}
+
+// Answers the website redirects and the device-API forwarding, which never touch Postgres or R2.
+function routeWithoutDatabase(
+    request: Request,
+    url: URL,
+    env: Env,
+    dependencies: GatewayDependencies,
+): Promise<Response> | null {
+    const redirect = websiteRedirectFor(request.method, url);
+    if (redirect !== null) return Promise.resolve(redirectResponse(redirect.location, redirect.status));
+    if (request.method !== "POST" || !FORWARDED_DEVICE_PATHS.includes(url.pathname)) return null;
+    return forwardDeviceRequest(request, {
+        url: deviceFunctionUrl(env.NIGHTLY_FUNCTION_URL, url.pathname),
+        origin: resolveGatewayOrigin(url),
+    }, dependencies.fetch);
+}
+
+// Serves the pin, manifest, artifact, and health routes that read download state from Postgres.
+async function routeWithDatabase(request: Request, url: URL, env: Env): Promise<Response> {
     if (request.method === "GET" && url.pathname === "/install" && url.searchParams.has("pin")) {
         return serveCreateBuildPinPage(url, env);
     }
@@ -153,291 +134,9 @@ async function route(request: Request, env: Env): Promise<Response> {
     throw new GatewayError(404, "not_found");
 }
 
-async function createDeviceSession(env: Env): Promise<Response> {
-    const id = crypto.randomUUID();
-    const deviceSecret = randomToken(32);
-    const userCode = `${randomCode(4)}-${randomCode(4)}`;
-    const now = nowSeconds();
-    await env.DB.prepare(
-        "INSERT INTO device_sessions (id, device_secret_hash, user_code, status, created_at, expires_at) VALUES (?, ?, ?, 'pending', ?, ?)",
-    ).bind(id, await sha256(deviceSecret), userCode, now, now + DEVICE_SESSION_SECONDS).run();
-    return json({
-        device_code: deviceSecret,
-        user_code: userCode,
-        verification_uri: `${env.PUBLIC_ORIGIN}/activate?code=${encodeURIComponent(userCode)}`,
-        expires_in: DEVICE_SESSION_SECONDS,
-        interval: 3,
-    }, 201);
-}
-
-async function pollDeviceSession(request: Request, env: Env): Promise<Response> {
-    const body = await readForm(request);
-    const deviceSecret = body.get("device_code");
-    if (typeof deviceSecret !== "string" || !DEVICE_SECRET_PATTERN.test(deviceSecret)) {
-        throw new GatewayError(400, "invalid_request");
-    }
-    const now = nowSeconds();
-    const row = await env.DB.prepare(
-        "SELECT id, status, discord_user_id, sponsor_discord_user_id, expires_at FROM device_sessions WHERE device_secret_hash = ?",
-    ).bind(await sha256(deviceSecret)).first<{
-        id: string;
-        status: string;
-        discord_user_id: string | null;
-        sponsor_discord_user_id: string | null;
-        expires_at: number;
-    }>();
-    if (row === null || row.expires_at < now) throw new GatewayError(400, "expired_token");
-    if (row.status === "pending" || row.status === "awaiting-sponsor") {
-        throw new GatewayError(428, "authorization_pending");
-    }
-    if (row.status !== "approved" || !isDiscordSnowflake(row.discord_user_id)
-        || !isDiscordSnowflake(row.sponsor_discord_user_id)) {
-        throw new GatewayError(403, "access_denied");
-    }
-    await assertSponsorEligible(env, row.sponsor_discord_user_id);
-    const accessToken = randomToken(32);
-    const tokenHash = await sha256(accessToken);
-    const result = await env.DB.batch([
-        env.DB.prepare(`
-            INSERT INTO download_sessions (token_hash, device_session_id, discord_user_id, supporter_discord_user_id, created_at, expires_at)
-            SELECT ?, id, discord_user_id, sponsor_discord_user_id, ?, ?
-            FROM device_sessions WHERE id = ? AND status = 'approved'
-        `).bind(tokenHash, now, now + DOWNLOAD_SESSION_SECONDS, row.id),
-        env.DB.prepare("UPDATE device_sessions SET status = 'consumed' WHERE id = ? AND status = 'approved'")
-            .bind(row.id),
-    ]);
-    if (!result.every((entry) => entry.success && entry.meta.changes === 1)) {
-        throw new GatewayError(409, "already_used");
-    }
-    return json({ access_token: accessToken, token_type: "Bearer", expires_in: DOWNLOAD_SESSION_SECONDS });
-}
-
-async function beginDeviceAuthorization(url: URL, env: Env): Promise<Response> {
-    const userCode = url.searchParams.get("code")?.toUpperCase();
-    if (!userCode || !USER_CODE_PATTERN.test(userCode)) return html(errorPage("That installer code is invalid."), 400);
-    const session = await env.DB.prepare(
-        "SELECT id, expires_at FROM device_sessions WHERE user_code = ? AND status IN ('pending', 'awaiting-sponsor')",
-    ).bind(userCode).first<{ id: string; expires_at: number }>();
-    if (session === null || session.expires_at < nowSeconds()) return html(errorPage("That installer code has expired."), 400);
-    const state = randomToken(32);
-    await env.DB.prepare("UPDATE device_sessions SET oauth_state_hash = ? WHERE id = ?")
-        .bind(await sha256(state), session.id).run();
-    return Response.redirect(discordAuthorizationUrl(env, state), 302);
-}
-
-async function beginSponsorAuthorization(env: Env): Promise<Response> {
-    const state = randomToken(32);
-    const now = nowSeconds();
-    await env.DB.prepare(
-        "INSERT INTO oauth_states (state_hash, purpose, created_at, expires_at) VALUES (?, 'sponsor-portal', ?, ?)",
-    ).bind(await sha256(state), now, now + OAUTH_STATE_SECONDS).run();
-    return Response.redirect(discordAuthorizationUrl(env, state), 302);
-}
-
-export async function completeOAuth(url: URL, env: Env): Promise<Response> {
-    const code = url.searchParams.get("code");
-    const state = url.searchParams.get("state");
-    if (!code || code.length > 512 || !state || !DEVICE_SECRET_PATTERN.test(state)) {
-        return html(errorPage("Discord sign-in could not be verified."), 400);
-    }
-    const stateHash = await sha256(state);
-    const token = await exchangeDiscordCode(env, code);
-    const user = await discordGet<DiscordUser>("/users/@me", token.access_token);
-    if (!isDiscordSnowflake(user.id)) {
-        throw new GatewayError(502, "discord_response_invalid");
-    }
-    const portalState = await env.DB.prepare(
-        "SELECT state_hash FROM oauth_states WHERE state_hash = ? AND expires_at >= ?",
-    ).bind(stateHash, nowSeconds()).first();
-    if (portalState !== null) {
-        await env.DB.prepare("DELETE FROM oauth_states WHERE state_hash = ?").bind(stateHash).run();
-        const member = await discordGet<DiscordMember>(
-            `/users/@me/guilds/${DISCORD_GUILD_ID}/member`,
-            token.access_token,
-        );
-        if (!Array.isArray(member.roles)) throw new GatewayError(502, "discord_response_invalid");
-        if (!hasNightlyAccessRole(member.roles)) {
-            return html(errorPage(
-                "A Staff, Tester, Patreon, Boosty, or Afdian role is required.",
-                sponsorCodeHelp(),
-            ), 403);
-        }
-        await storeSupporterGrant(env, user.id, token.refresh_token);
-        const sponsorSession = randomToken(32);
-        const now = nowSeconds();
-        await env.DB.prepare(
-            "INSERT INTO sponsor_sessions (token_hash, supporter_discord_user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
-        ).bind(await sha256(sponsorSession), user.id, now, now + SPONSOR_SESSION_SECONDS).run();
-        return new Response(null, {
-            status: 302,
-            headers: {
-                location: `${env.PUBLIC_ORIGIN}/sponsor`,
-                "set-cookie": sponsorCookie(sponsorSession, SPONSOR_SESSION_SECONDS),
-                "cache-control": "no-store",
-            },
-        });
-    }
-    const device = await env.DB.prepare(
-        "SELECT id, status, expires_at FROM device_sessions WHERE oauth_state_hash = ?",
-    ).bind(stateHash).first<{ id: string; status: string; expires_at: number }>();
-    if (device === null || device.expires_at < nowSeconds() || !["pending", "awaiting-sponsor"].includes(device.status)) {
-        return html(errorPage("That installer authorization has expired."), 400);
-    }
-    const member = await discordGet<DiscordMember>(
-        `/users/@me/guilds/${DISCORD_GUILD_ID}/member`,
-        token.access_token,
-        true,
-    );
-    if (member !== null && !Array.isArray(member.roles)) {
-        throw new GatewayError(502, "discord_response_invalid");
-    }
-    if (member !== null && hasNightlyAccessRole(member.roles)) {
-        await storeSupporterGrant(env, user.id, token.refresh_token);
-        await env.DB.prepare(
-            "UPDATE device_sessions SET status = 'approved', discord_user_id = ?, sponsor_discord_user_id = ?, authorized_at = ? WHERE id = ?",
-        ).bind(user.id, user.id, nowSeconds(), device.id).run();
-        return html(successPage("Access approved", "Return to the installer window. It will continue automatically."));
-    }
-    const existing = await env.DB.prepare(
-        "SELECT supporter_discord_user_id FROM sponsorships WHERE sponsored_discord_user_id = ?",
-    ).bind(user.id).first<{ supporter_discord_user_id: string }>();
-    // Keep the code form available when the previous sponsor no longer has access.
-    if (existing !== null && await tryAssertSponsorEligible(env, existing.supporter_discord_user_id)) {
-        await env.DB.prepare(
-            "UPDATE device_sessions SET status = 'approved', discord_user_id = ?, sponsor_discord_user_id = ?, authorized_at = ? WHERE id = ?",
-        ).bind(user.id, existing.supporter_discord_user_id, nowSeconds(), device.id).run();
-        return html(successPage("Sponsored access approved", "Return to the installer window. It will continue automatically."));
-    }
-    await env.DB.prepare("UPDATE device_sessions SET status = 'awaiting-sponsor', discord_user_id = ? WHERE id = ?")
-        .bind(user.id, device.id).run();
-    return html(sponsorClaimPage(
-        device.id,
-        user.username,
-        existing === null ? "" : previousSponsorAccessRevokedHelp(),
-    ));
-}
-
-async function claimSponsorship(request: Request, env: Env): Promise<Response> {
-    assertSponsorClaimRequest(request, env);
-    const form = await request.formData();
-    const deviceId = form.get("device_id");
-    const sponsorCode = form.get("sponsor_code");
-    if (typeof deviceId !== "string" || deviceId.length > 64
-        || typeof sponsorCode !== "string" || sponsorCode.length > 128) {
-        throw new GatewayError(400, "invalid_request");
-    }
-    const device = await env.DB.prepare(
-        "SELECT discord_user_id, status, expires_at FROM device_sessions WHERE id = ?",
-    ).bind(deviceId).first<{ discord_user_id: string | null; status: string; expires_at: number }>();
-    if (device === null || device.status !== "awaiting-sponsor" || device.expires_at < nowSeconds()
-        || !isDiscordSnowflake(device.discord_user_id)) {
-        return html(errorPage("That installer authorization has expired."), 400);
-    }
-    const sponsor = await env.DB.prepare(
-        "SELECT supporter_discord_user_id FROM supporter_grants WHERE sponsor_code_hash = ?",
-    ).bind(await sha256(normalizeSponsorCode(sponsorCode))).first<{ supporter_discord_user_id: string }>();
-    if (sponsor === null) return html(errorPage("That sponsor code is not valid."), 403);
-    if (!await tryAssertSponsorEligible(env, sponsor.supporter_discord_user_id)) {
-        return html(errorPage(
-            "That sponsor no longer has a qualifying Staff, Tester, Patreon, Boosty, or Afdian role.",
-        ), 403);
-    }
-    const existingSeat = await env.DB.prepare(
-        "SELECT supporter_discord_user_id FROM sponsorships WHERE sponsored_discord_user_id = ?",
-    ).bind(device.discord_user_id).first<{ supporter_discord_user_id: string }>();
-    if (existingSeat !== null && existingSeat.supporter_discord_user_id !== sponsor.supporter_discord_user_id) {
-        if (await tryAssertSponsorEligible(env, existingSeat.supporter_discord_user_id)) {
-            return html(errorPage("This Discord account already has sponsored access."), 409);
-        }
-        await env.DB.batch([
-            env.DB.prepare("DELETE FROM sponsorships WHERE sponsored_discord_user_id = ?")
-                .bind(device.discord_user_id),
-            env.DB.prepare("DELETE FROM download_sessions WHERE discord_user_id = ?")
-                .bind(device.discord_user_id),
-        ]);
-    }
-    const inserted = await env.DB.prepare(`
-        INSERT OR IGNORE INTO sponsorships (supporter_discord_user_id, sponsored_discord_user_id, created_at)
-        SELECT ?, ?, ?
-        WHERE (SELECT COUNT(*) FROM sponsorships WHERE supporter_discord_user_id = ?) < ?
-    `).bind(
-        sponsor.supporter_discord_user_id,
-        device.discord_user_id,
-        nowSeconds(),
-        sponsor.supporter_discord_user_id,
-        SPONSORED_ACCOUNT_LIMIT,
-    ).run();
-    const seat = await env.DB.prepare(
-        "SELECT supporter_discord_user_id FROM sponsorships WHERE sponsored_discord_user_id = ?",
-    ).bind(device.discord_user_id).first<{ supporter_discord_user_id: string }>();
-    if (!inserted.success || seat?.supporter_discord_user_id !== sponsor.supporter_discord_user_id) {
-        return html(errorPage("That eligible member has already used all 10 sponsored-account seats."), 409);
-    }
-    await env.DB.prepare(
-        "UPDATE device_sessions SET status = 'approved', sponsor_discord_user_id = ?, authorized_at = ? WHERE id = ?",
-    ).bind(sponsor.supporter_discord_user_id, nowSeconds(), deviceId).run();
-    return html(successPage("Sponsored access approved", "Return to the installer window. It will continue automatically."));
-}
-
-async function sponsorPortal(request: Request, env: Env): Promise<Response> {
-    const sponsorId = await requireSponsorSession(request, env, false);
-    if (sponsorId === null) {
-        return html(page(
-            "Share nightlies with friends",
-            "Nightly access portal",
-            `<h1>Bring your <span>warband.</span></h1>
-            <p class="lede">Staff, Testers, and Patreon, Boosty, or Afdian supporters can each share nightly access with up to 10 Discord accounts.</p>
-            <div class="actions"><a class="button" href="/sponsor/login">Continue with Discord <span aria-hidden="true">&rarr;</span></a></div>
-            <p class="fine-print">We verify your qualifying Staff, Tester, Patreon, Boosty, or Afdian Discord role when you sign in and whenever a sponsored friend installs or updates.</p>`,
-            "portal",
-        ));
-    }
-    if (!await tryAssertSponsorEligible(env, sponsorId)) {
-        return Response.redirect(`${env.PUBLIC_ORIGIN}/sponsor/login`, 302);
-    }
-    const formToken = await sponsorFormToken(request);
-    const rows = await env.DB.prepare(
-        "SELECT sponsored_discord_user_id, created_at FROM sponsorships WHERE supporter_discord_user_id = ? ORDER BY created_at",
-    ).bind(sponsorId).all<{ sponsored_discord_user_id: string; created_at: number }>();
-    const seats = rows.results.map((row, index) => `<li class="seat"><span class="seat-number">${String(index + 1).padStart(2, "0")}</span><span class="seat-account"><span class="seat-label">Discord account</span><code>${escapeHtml(row.sponsored_discord_user_id)}</code></span><form method="post" action="/v1/sponsor/remove"><input type="hidden" name="form_token" value="${formToken}"><input type="hidden" name="discord_user_id" value="${escapeHtml(row.sponsored_discord_user_id)}"><button class="text-button">Remove access</button></form></li>`).join("");
-    const seatCount = rows.results.length;
-    return html(page(
-        `Sponsored accounts (${rows.results.length}/${SPONSORED_ACCOUNT_LIMIT})`,
-        "Nightly access portal",
-        `<div class="portal-heading"><div><h1>Your <span>warband.</span></h1><p class="lede">Create a code for friends to use during installation. Their access remains tied to your current qualifying Staff, Tester, Patreon, Boosty, or Afdian Discord role.</p></div><div class="seat-count" aria-label="${seatCount} of ${SPONSORED_ACCOUNT_LIMIT} seats used"><strong>${seatCount}</strong><span>of ${SPONSORED_ACCOUNT_LIMIT}<br>seats used</span></div></div>
-        <form class="code-action" method="post" action="/v1/sponsor/code"><input type="hidden" name="form_token" value="${formToken}"><button class="button">${seatCount === 0 ? "Create sponsor code" : "Create a new code"} <span aria-hidden="true">&rarr;</span></button><p>Creating a new code disables the previous one. Existing sponsored accounts keep access.</p></form>
-        <section class="seat-section" aria-labelledby="seat-heading"><div class="section-heading"><h2 id="seat-heading">Sponsored accounts</h2><span>${SPONSORED_ACCOUNT_LIMIT - seatCount} open</span></div><ul class="seat-list">${seats || `<li class="empty-state"><strong>No seats claimed yet.</strong><span>Create a sponsor code and send it to a friend you trust.</span></li>`}</ul></section>`,
-        "portal portal-wide",
-    ));
-}
-
-async function rotateSponsorCode(request: Request, env: Env): Promise<Response> {
-    const sponsorId = await requireSponsorSession(request, env, true);
-    const form = await readForm(request);
-    await assertSponsorFormRequest(request, form);
-    const code = `${randomCode(4)}-${randomCode(4)}-${randomCode(4)}`;
-    await env.DB.prepare("UPDATE supporter_grants SET sponsor_code_hash = ?, updated_at = ? WHERE supporter_discord_user_id = ?")
-        .bind(await sha256(code), nowSeconds(), sponsorId).run();
-    return html(successPage(
-        "Sponsor code created",
-        "Send this code only to friends you want to sponsor. It can add accounts until your 10 seats are full.",
-        `<div class="code-block"><span>Your sponsor code</span><p class="code">${escapeHtml(code)}</p></div><div class="actions"><a class="button secondary" href="/sponsor">Back to sponsored accounts</a></div>`,
-    ));
-}
-
-async function removeSponsoredAccount(request: Request, env: Env): Promise<Response> {
-    const sponsorId = await requireSponsorSession(request, env, true);
-    const form = await readForm(request);
-    await assertSponsorFormRequest(request, form);
-    const friendId = form.get("discord_user_id");
-    if (!isDiscordSnowflake(friendId)) throw new GatewayError(400, "invalid_request");
-    await env.DB.batch([
-        env.DB.prepare("DELETE FROM sponsorships WHERE supporter_discord_user_id = ? AND sponsored_discord_user_id = ?")
-            .bind(sponsorId, friendId),
-        env.DB.prepare("DELETE FROM download_sessions WHERE discord_user_id = ? AND supporter_discord_user_id = ?")
-            .bind(friendId, sponsorId),
-    ]);
-    return Response.redirect(`${env.PUBLIC_ORIGIN}/sponsor`, 303);
+// Sends a browser to a moved page without caching the redirect body.
+function redirectResponse(location: string, status: number): Response {
+    return new Response(null, { status, headers: { location, "cache-control": "no-store" } });
 }
 
 type DownloadAuthorization = { kind: "nightly" } | PinAuthorization;
@@ -476,6 +175,7 @@ type InstallerPinRow = {
     consumed_at: number | null;
 };
 
+// Stores one staff-built client archive behind a one-time pin and returns its install link on the caller's gateway host.
 export async function mintCreateBuildPin(request: Request, env: Env): Promise<Response> {
     await requirePinMintSecret(request, env);
     const contentLength = request.headers.get("content-length");
@@ -560,7 +260,7 @@ export async function mintCreateBuildPin(request: Request, env: Env): Promise<Re
     });
     return json({
         token,
-        installUrl: createBuildPinInstallUrl(env.PUBLIC_ORIGIN, token),
+        installUrl: createBuildPinInstallUrl(resolveGatewayOrigin(request.url), token),
         expiresAt: parsed.expiresAt,
     }, existing === null ? 201 : 200);
 }
@@ -597,6 +297,7 @@ export async function redeemCreateBuildPin(request: Request, env: Env): Promise<
     return json({ access_token: accessToken, token_type: "Bearer", expires_in: DOWNLOAD_SESSION_SECONDS });
 }
 
+// Describes the pinned client/server pair, pointing the client download at the gateway host the installer used.
 export async function servePinManifest(request: Request, env: Env): Promise<Response> {
     const session = await requirePinDownloadSession(request, env);
     const pin = await env.DB.prepare(`
@@ -620,7 +321,7 @@ export async function servePinManifest(request: Request, env: Env): Promise<Resp
         client: {
             fileName: pin.client_file_name,
             key: clientKey,
-            publicUrl: `${env.PUBLIC_ORIGIN}/v1/artifacts/${clientKey.split("/").map(encodeURIComponent).join("/")}`,
+            publicUrl: `${resolveGatewayOrigin(request.url)}/v1/artifacts/${clientKey.split("/").map(encodeURIComponent).join("/")}`,
             bytes: pin.client_bytes,
             sha256: pin.client_sha256,
         },
@@ -645,10 +346,11 @@ export async function serveCreateBuildPinPage(url: URL, env: Env): Promise<Respo
     ));
 }
 
+// Serves the one-time .cmd launcher for a still-valid create-build pin.
 export async function serveCreateBuildPinLauncher(url: URL, env: Env): Promise<Response> {
     const pin = await loadVisibleCreateBuildPin(url, env);
     if (typeof pin === "string") return new Response(pin, { status: 400, headers: { "content-type": "text/plain; charset=utf-8" } });
-    return new Response(createBuildPinLauncher(pin.token), {
+    return new Response(createBuildPinLauncher(pin.token, resolveGatewayOrigin(url)), {
         status: 200,
         headers: {
             "content-type": "application/x-bat; charset=utf-8",
@@ -728,7 +430,9 @@ function pinMintSecret(env: Env): string {
     return value;
 }
 
-function createBuildPinLauncher(token: string): string {
+// Writes the one-time Windows launcher that fetches the latest install.ps1 from the gateway host the user opened.
+// The GitHub raw copy stays as the fallback when that host is unreachable.
+function createBuildPinLauncher(token: string, origin: string): string {
     if (!isCreateBuildPinToken(token)) throw new GatewayError(400, "invalid_request");
     return [
         "@echo off",
@@ -740,7 +444,7 @@ function createBuildPinLauncher(token: string): string {
         "set \"BANNERLORDCOOP_INSTALLER_TEMP=%TEMP%\\BannerlordCoop-Create-Build-Installer-%RANDOM%-%RANDOM%.ps1\"",
         "set \"BANNERLORDCOOP_INSTALLER_LAUNCHER=1\"",
         `set "BANNERLORDCOOP_INSTALLER_PIN=${token}"`,
-        "set \"INSTALLER_PRIMARY=https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/install.ps1\"",
+        `set "INSTALLER_PRIMARY=${origin}/install.ps1"`,
         "set \"INSTALLER_MIRROR=https://raw.githubusercontent.com/Bannerlord-Coop-Team/BannerlordCoop-website/main/installer/install.ps1\"",
         "",
         "echo BannerlordCoop Create-Build Installer",
@@ -814,14 +518,17 @@ async function sha256Bytes(bytes: Uint8Array): Promise<string> {
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+// Serves the authorized nightly manifest with every artifact URL rewritten onto the gateway host the installer used.
+// Stored manifests may name either gateway host; both validate before the rewrite.
 async function serveManifest(request: Request, env: Env, clientOnly: boolean): Promise<Response> {
     await requireNightlyDownloadSession(request, env);
+    const origin = resolveGatewayOrigin(request.url);
     const wantsV2 = request.headers.get(NIGHTLY_PUBLICATION_VERSION_HEADER)?.trim() === "2";
     if (clientOnly && !wantsV2) {
         try {
             return json(rewriteManifestArtifactUrls(
                 await readHeaderlessNightlyClientManifest(env),
-                env.PUBLIC_ORIGIN,
+                origin,
                 env.LEGACY_R2_ORIGIN,
             ));
         } catch (error) {
@@ -837,7 +544,7 @@ async function serveManifest(request: Request, env: Env, clientOnly: boolean): P
         try {
             return json(rewriteManifestArtifactUrls(
                 await readLegacyNightlyManifest(env, clientOnly),
-                env.PUBLIC_ORIGIN,
+                origin,
                 env.LEGACY_R2_ORIGIN,
             ));
         } catch (error) {
@@ -876,13 +583,13 @@ async function serveManifest(request: Request, env: Env, clientOnly: boolean): P
                 const release = validateLegacyNightlyReleaseManifest(
                     await readLegacyJson(env, "nightly/release.json", 128 * 1024),
                     env.LEGACY_R2_ORIGIN,
-                    env.PUBLIC_ORIGIN,
+                    GATEWAY_ORIGINS,
                 );
                 validated = projectLegacyReleaseClient(
                     release,
                     await tryReadLegacyNightlyClientManifest(env),
                     env.LEGACY_R2_ORIGIN,
-                    env.PUBLIC_ORIGIN,
+                    GATEWAY_ORIGINS,
                 );
             } else {
                 validated = await readLegacyNightlyManifest(env, false);
@@ -909,7 +616,7 @@ async function serveManifest(request: Request, env: Env, clientOnly: boolean): P
             throw new GatewayError(503, "manifest_unavailable");
         }
     }
-    const rewritten = rewriteManifestArtifactUrls(validated, env.PUBLIC_ORIGIN, env.LEGACY_R2_ORIGIN);
+    const rewritten = rewriteManifestArtifactUrls(validated, origin, env.LEGACY_R2_ORIGIN);
     return json(rewritten);
 }
 
@@ -928,19 +635,19 @@ async function readHeaderlessNightlyClientManifest(env: Env): Promise<JsonObject
     if (publication !== null) {
         const legacy = await tryReadLegacyNightlyClientManifest(env);
         if (legacy !== null && legacyClientMatchesPublication(legacy, publication)) return legacy;
-        return projectPublicationClientAsLegacy(publication, env.LEGACY_R2_ORIGIN, env.PUBLIC_ORIGIN);
+        return projectPublicationClientAsLegacy(publication, env.LEGACY_R2_ORIGIN, GATEWAY_ORIGINS);
     }
 
     const legacyRelease = validateLegacyNightlyReleaseManifest(
         await readLegacyJson(env, "nightly/release.json", 128 * 1024),
         env.LEGACY_R2_ORIGIN,
-        env.PUBLIC_ORIGIN,
+        GATEWAY_ORIGINS,
     );
     return projectLegacyReleaseClient(
         legacyRelease,
         await tryReadLegacyNightlyClientManifest(env),
         env.LEGACY_R2_ORIGIN,
-        env.PUBLIC_ORIGIN,
+        GATEWAY_ORIGINS,
     );
 }
 
@@ -961,10 +668,11 @@ function legacyClientMatchesPublication(legacy: JsonObject, publication: JsonObj
         && legacyClient.sha256 === publicationClient.sha256;
 }
 
+// Projects a v2 publication's client into the bounded v1 client manifest shape.
 function projectPublicationClientAsLegacy(
     publication: JsonObject,
     legacyOrigin: string,
-    gatewayOrigin: string,
+    gatewayOrigins: readonly string[],
 ): JsonObject {
     return validateLegacyNightlyClientManifest({
         version: 1,
@@ -974,14 +682,15 @@ function projectPublicationClientAsLegacy(
         workflowRunId: Number(publication.clientRunId),
         builtAt: publication.builtAt,
         client: publication.client,
-    }, legacyOrigin, gatewayOrigin);
+    }, legacyOrigin, gatewayOrigins);
 }
 
+// Projects a legacy v1 release pair's client into the v1 client manifest shape.
 function projectLegacyReleaseClient(
     release: JsonObject,
     metadata: JsonObject | null,
     legacyOrigin: string,
-    gatewayOrigin: string,
+    gatewayOrigins: readonly string[],
 ): JsonObject {
     return validateLegacyNightlyClientManifest({
         version: 1,
@@ -991,14 +700,14 @@ function projectLegacyReleaseClient(
         ...(metadata?.headSha === release.headSha ? { workflowRunId: metadata.workflowRunId } : {}),
         builtAt: metadata?.headSha === release.headSha ? metadata.builtAt : release.builtAt,
         client: release.client,
-    }, legacyOrigin, gatewayOrigin);
+    }, legacyOrigin, gatewayOrigins);
 }
 
 async function readLegacyNightlyClientManifest(env: Env): Promise<JsonObject> {
     return validateLegacyNightlyClientManifest(
         await readLegacyJson(env, "nightly/client.json", 32 * 1024),
         env.LEGACY_R2_ORIGIN,
-        env.PUBLIC_ORIGIN,
+        GATEWAY_ORIGINS,
     );
 }
 
@@ -1009,12 +718,12 @@ async function readLegacyNightlyManifest(env: Env, clientOnly: boolean): Promise
     const legacyRelease = validateLegacyNightlyReleaseManifest(
         await readLegacyJson(env, "nightly/release.json", 128 * 1024),
         env.LEGACY_R2_ORIGIN,
-        env.PUBLIC_ORIGIN,
+        GATEWAY_ORIGINS,
     );
     const legacyClient = validateLegacyNightlyClientManifest(
         await readLegacyJson(env, "nightly/client.json", 32 * 1024),
         env.LEGACY_R2_ORIGIN,
-        env.PUBLIC_ORIGIN,
+        GATEWAY_ORIGINS,
     );
     const releaseClient = legacyRelease.client as Record<string, unknown>;
     const client = legacyClient.client as Record<string, unknown>;
@@ -1107,139 +816,6 @@ async function authorizeDownload(request: Request, env: Env): Promise<DownloadAu
     return { kind: "nightly" };
 }
 
-async function requireSponsorSession(request: Request, env: Env, required: true): Promise<string>;
-async function requireSponsorSession(request: Request, env: Env, required: false): Promise<string | null>;
-async function requireSponsorSession(request: Request, env: Env, required: boolean): Promise<string | null> {
-    const token = cookieValue(request.headers.get("cookie"), "nightly_sponsor");
-    if (!token || !DEVICE_SECRET_PATTERN.test(token)) {
-        if (required) throw new GatewayError(401, "authorization_required");
-        return null;
-    }
-    const row = await env.DB.prepare(
-        "SELECT supporter_discord_user_id, expires_at FROM sponsor_sessions WHERE token_hash = ?",
-    ).bind(await sha256(token)).first<{ supporter_discord_user_id: string; expires_at: number }>();
-    if (row === null || row.expires_at < nowSeconds()) {
-        if (required) throw new GatewayError(401, "authorization_expired");
-        return null;
-    }
-    return row.supporter_discord_user_id;
-}
-
-async function tryAssertSponsorEligible(env: Env, supporterId: string): Promise<boolean> {
-    try {
-        await assertSponsorEligible(env, supporterId);
-        return true;
-    } catch (error) {
-        if (error instanceof GatewayError && error.code === "supporter_role_required") {
-            return false;
-        }
-        throw error;
-    }
-}
-
-async function assertSponsorEligible(env: Env, supporterId: string): Promise<void> {
-    const member = await discordBotGetGuildMember(env, supporterId);
-    if (member !== null && !Array.isArray(member.roles)) {
-        throw new GatewayError(502, "discord_response_invalid");
-    }
-    if (isEligibleNightlySponsor(member)) return;
-    await env.DB.batch([
-        env.DB.prepare("DELETE FROM download_sessions WHERE supporter_discord_user_id = ?").bind(supporterId),
-        env.DB.prepare("DELETE FROM supporter_grants WHERE supporter_discord_user_id = ?").bind(supporterId),
-    ]);
-    throw new GatewayError(403, "supporter_role_required");
-}
-
-async function storeSupporterGrant(env: Env, supporterId: string, refreshToken: string): Promise<void> {
-    const encrypted = await encryptRefreshToken(env, refreshToken);
-    await env.DB.prepare(`
-        INSERT INTO supporter_grants (supporter_discord_user_id, encrypted_refresh_token, token_nonce, updated_at)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(supporter_discord_user_id) DO UPDATE SET
-          encrypted_refresh_token = excluded.encrypted_refresh_token,
-          token_nonce = excluded.token_nonce,
-          updated_at = excluded.updated_at
-    `).bind(supporterId, encrypted.ciphertext, encrypted.nonce, nowSeconds()).run();
-}
-
-function discordAuthorizationUrl(env: Env, state: string): string {
-    const url = new URL(DISCORD_AUTHORIZE);
-    url.searchParams.set("response_type", "code");
-    url.searchParams.set("client_id", env.DISCORD_CLIENT_ID);
-    url.searchParams.set("scope", DISCORD_OAUTH_SCOPES);
-    url.searchParams.set("state", state);
-    url.searchParams.set("redirect_uri", `${env.PUBLIC_ORIGIN}/oauth/callback`);
-    url.searchParams.set("prompt", "consent");
-    return url.toString();
-}
-
-async function exchangeDiscordCode(env: Env, code: string): Promise<DiscordToken> {
-    return discordTokenRequest(env, new URLSearchParams({
-        grant_type: "authorization_code",
-        code,
-        redirect_uri: `${env.PUBLIC_ORIGIN}/oauth/callback`,
-    }));
-}
-
-async function discordTokenRequest(env: Env, form: URLSearchParams): Promise<DiscordToken> {
-    form.set("client_id", env.DISCORD_CLIENT_ID);
-    form.set("client_secret", env.DISCORD_CLIENT_SECRET);
-    const response = await fetch(DISCORD_TOKEN, {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: form,
-    });
-    const text = await boundedText(response, 16 * 1024);
-    if (!response.ok) throw new GatewayError(502, "discord_authorization_failed", discordFailure(response, text));
-    const value = JSON.parse(text) as Partial<DiscordToken>;
-    if (value.token_type !== "Bearer" || typeof value.access_token !== "string"
-        || typeof value.refresh_token !== "string" || typeof value.scope !== "string"
-        || !DISCORD_OAUTH_SCOPES.split(" ").every((scope) => value.scope?.split(" ").includes(scope))) {
-        throw new GatewayError(502, "discord_response_invalid");
-    }
-    return value as DiscordToken;
-}
-
-async function discordGet<T>(path: string, accessToken: string): Promise<T>;
-async function discordGet<T>(path: string, accessToken: string, allowNotFound: true): Promise<T | null>;
-async function discordGet<T>(path: string, accessToken: string, allowNotFound = false): Promise<T | null> {
-    const response = await fetch(`${DISCORD_API}${path}`, {
-        headers: { authorization: `Bearer ${accessToken}`, "user-agent": "BannerlordCoop-Nightly-Gateway/1" },
-    });
-    const text = await boundedText(response, 64 * 1024);
-    if (allowNotFound && response.status === 404) return null;
-    if (!response.ok) {
-        throw new GatewayError(response.status === 404 ? 403 : 502, "discord_membership_required", discordFailure(response, text));
-    }
-    return JSON.parse(text) as T;
-}
-
-async function discordBotGetGuildMember(env: Env, userId: string): Promise<DiscordMember | null> {
-    const response = await fetch(`${DISCORD_API}/guilds/${DISCORD_GUILD_ID}/members/${userId}`, {
-        headers: {
-            authorization: `Bot ${env.DISCORD_BOT_TOKEN}`,
-            "user-agent": "BannerlordCoop-Nightly-Gateway/1",
-        },
-    });
-    const text = await boundedText(response, 64 * 1024);
-    if (response.status === 404) return null;
-    if (!response.ok) throw new GatewayError(502, "discord_membership_required", discordFailure(response, text));
-    return JSON.parse(text) as DiscordMember;
-}
-
-async function encryptRefreshToken(env: Env, plaintext: string): Promise<{ ciphertext: string; nonce: string }> {
-    const key = await encryptionKey(env);
-    const nonce = crypto.getRandomValues(new Uint8Array(12));
-    const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, key, new TextEncoder().encode(plaintext));
-    return { ciphertext: base64url(new Uint8Array(ciphertext)), nonce: base64url(nonce) };
-}
-
-async function encryptionKey(env: Env): Promise<CryptoKey> {
-    const bytes = fromBase64url(env.TOKEN_ENCRYPTION_KEY);
-    if (bytes.byteLength !== 32) throw new Error("invalid_encryption_key");
-    return crypto.subtle.importKey("raw", exactArrayBuffer(bytes), "AES-GCM", false, ["encrypt", "decrypt"]);
-}
-
 async function readForm(request: Request): Promise<URLSearchParams> {
     const contentLength = Number(request.headers.get("content-length") ?? 0);
     if (!Number.isSafeInteger(contentLength) || contentLength > 4096) throw new GatewayError(413, "request_too_large");
@@ -1269,49 +845,11 @@ async function boundedText(response: Response | Request, maximum: number): Promi
     return new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes);
 }
 
+// Rejects a deploy whose fixed R2 origin was changed; the gateway origin now comes from each request.
 function assertConfiguration(env: Env): void {
-    if (env.PUBLIC_ORIGIN !== "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev"
-        || env.LEGACY_R2_ORIGIN !== "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev"
-        || !/^\d{17,20}$/.test(env.DISCORD_CLIENT_ID)
-        || env.DISCORD_CLIENT_SECRET.length < 32
-        || env.DISCORD_BOT_TOKEN.length < 50
-        || env.TOKEN_ENCRYPTION_KEY.length < 40) {
+    if (env.LEGACY_R2_ORIGIN !== PUBLIC_MANUAL_SERVER_ORIGIN) {
         throw new Error("gateway_configuration_invalid");
     }
-}
-
-function assertSponsorClaimRequest(request: Request, env: Env): void {
-    if (!isAllowedSponsorClaimRequest(
-        request.headers.get("origin"),
-        request.headers.get("sec-fetch-site"),
-        env.PUBLIC_ORIGIN,
-    )) throw new GatewayError(403, "origin_invalid");
-}
-
-async function sponsorFormToken(request: Request): Promise<string> {
-    const token = cookieValue(request.headers.get("cookie"), "nightly_sponsor");
-    if (!token || !DEVICE_SECRET_PATTERN.test(token)) throw new GatewayError(401, "authorization_required");
-    return createSponsorFormToken(token);
-}
-
-async function assertSponsorFormRequest(request: Request, form: URLSearchParams): Promise<void> {
-    if (request.headers.get("sec-fetch-site") === "cross-site") throw new GatewayError(403, "origin_invalid");
-    const token = cookieValue(request.headers.get("cookie"), "nightly_sponsor");
-    if (!token || !await verifySponsorFormToken(token, form.get("form_token"))) {
-        throw new GatewayError(403, "form_token_invalid");
-    }
-}
-
-function sponsorCookie(token: string, maxAge: number): string {
-    return `nightly_sponsor=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
-}
-
-function cookieValue(header: string | null, name: string): string | null {
-    for (const part of header?.split(";") ?? []) {
-        const [key, ...rest] = part.trim().split("=");
-        if (key === name) return rest.join("=");
-    }
-    return null;
 }
 
 function json(value: unknown, status = 200): Response {
@@ -1326,12 +864,8 @@ export function page(title: string, eyebrow: string, content: string, pageClass 
     return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><meta name="theme-color" content="#070806"><title>${escapeHtml(title)} | Bannerlord Co-op</title><style>${GATEWAY_CSS}</style></head><body><div class="backdrop" style="--hero:url('${SITE_HERO_IMAGE}')" aria-hidden="true"></div><header class="site-header"><a class="brand" href="/" aria-label="Bannerlord Co-op Nightly Access home"><span class="brand-mark" aria-hidden="true"><i></i><b></b></span><span>Bannerlord Co-op</span></a><span class="product-label">Nightly Access</span></header><main class="shell ${escapeHtml(pageClass)}"><section class="card"><div class="card-accent" aria-hidden="true"></div><p class="eyebrow">${escapeHtml(eyebrow)}</p>${content}</section></main><footer><span>Bannerlord Co-op</span><span class="footer-rule"></span><span>Private nightly gateway</span></footer></body></html>`;
 }
 
-function successPage(title: string, message: string, extra = ""): string {
-    return page(title, "Nightly access", `<div class="status-icon success" aria-hidden="true"><span>&#10003;</span></div><h1>${escapeHtml(title)}</h1><p class="lede">${escapeHtml(message)}</p>${extra}<p class="fine-print">You may safely close this tab once the installer continues.</p>`, "status-page");
-}
-
-function errorPage(message: string, extra = ""): string {
-    return page("Access unavailable", "Nightly access", `<div class="status-icon error" aria-hidden="true"><span>!</span></div><h1>Access <span>unavailable.</span></h1><p class="lede">${escapeHtml(message)}</p>${extra}<div class="support-note"><strong>Need a hand?</strong><span><a href="https://discord.gg/bannerlordcoop">Ask in the Bannerlord Co-op Discord</a> and include the message shown above.</span></div>`, "status-page");
+function errorPage(message: string): string {
+    return page("Access unavailable", "Nightly access", `<div class="status-icon error" aria-hidden="true"><span>!</span></div><h1>Access <span>unavailable.</span></h1><p class="lede">${escapeHtml(message)}</p><div class="support-note"><strong>Need a hand?</strong><span><a href="https://discord.gg/bannerlordcoop">Ask in the Bannerlord Co-op Discord</a> and include the message shown above.</span></div>`, "status-page");
 }
 
 function prefersHtmlError(request: Request): boolean {
@@ -1341,9 +875,6 @@ function prefersHtmlError(request: Request): boolean {
 function gatewayErrorMessage(code: string): string {
     if (code === "migration_in_progress") {
         return "Nightly access is briefly paused while account data is moved. Try again in a few minutes.";
-    }
-    if (code === "supporter_role_required") {
-        return "That sponsor no longer has a qualifying Staff, Tester, Patreon, Boosty, or Afdian role.";
     }
     if (code === "already_used") {
         return "That create-build installer link was already used. Ask staff for a new /create-build link.";
@@ -1361,22 +892,6 @@ function gatewayErrorMessage(code: string): string {
         return "Create-build installer links are not configured on this gateway.";
     }
     return "Access could not be verified. Run the installer again or ask in the Bannerlord Co-op Discord.";
-}
-
-function previousSponsorAccessRevokedHelp(): string {
-    return `<div class="redeem-note"><div><strong>Previous sponsor access ended</strong><p>The friend who sponsored this Discord account no longer has a qualifying Staff, Tester, Patreon, Boosty, or Afdian role. Enter a new sponsor code below.</p></div></div>`;
-}
-
-function sponsorCodeHelp(): string {
-    return `<div class="redeem-note"><div><strong>Have a sponsor code?</strong><p>Codes are redeemed through the installer. Run it, sign in with your own Discord account, then enter the code on the &ldquo;One more step&rdquo; page.</p></div><a class="button secondary" href="/install.cmd" download="BannerlordCoop-Nightly-Installer.cmd">Download installer <span aria-hidden="true">&darr;</span></a></div>`;
-}
-
-function sponsorClaimPage(deviceId: string, username: string, extra = ""): string {
-    return page("Sponsor required", "Nightly installer", `<p class="account-chip"><span aria-hidden="true"></span>Signed in as <strong>${escapeHtml(username)}</strong></p><h1>One more step to <span>ride.</span></h1><p class="lede">This Discord account does not currently have a qualifying Staff, Tester, Patreon, Boosty, or Afdian role.</p>${extra}<div class="divider"><span>Have a sponsor?</span></div><form class="claim-form" method="post" action="/v1/sponsorship/claim"><input type="hidden" name="device_id" value="${escapeHtml(deviceId)}"><label for="sponsor-code">Enter your friend&rsquo;s sponsor code</label><div class="field-row"><input id="sponsor-code" name="sponsor_code" required maxlength="128" autocomplete="off" spellcheck="false" placeholder="XXXX-XXXX-XXXX" aria-describedby="sponsor-help"><button class="button">Claim a seat <span aria-hidden="true">&rarr;</span></button></div><p id="sponsor-help" class="field-help">Your friend must have a qualifying Staff, Tester, Patreon, Boosty, or Afdian role and an open seat. Access is checked again on every install and update.</p></form><div class="support-note"><strong>Already eligible?</strong><span>Make sure the correct Discord account has a qualifying Staff or Tester role or is connected to your Patreon, Boosty, or Afdian membership, then restart the installer.</span></div>`, "claim-page");
-}
-
-export function nightlyAccessPage(): string {
-    return page("Nightly Access", "Staff, Supporter & Tester builds", `<h1>Test tomorrow&rsquo;s battles <span>today.</span></h1><p class="lede">Install or update the Bannerlord Co-op client, Windows dedicated server, or both. Nightly builds are available to Staff, Testers, and Patreon, Boosty, and Afdian supporters, plus their sponsored friends.</p><div class="access-grid"><div><span class="step-number">01</span><strong>Download and run</strong><p>Save the Windows or Linux installer launcher, then run it. The window stays open so you can see every prompt or error.</p></div><div><span class="step-number">02</span><strong>Choose and verify</strong><p>Select the client, dedicated server, or both. Discord access is checked at install and update time.</p></div></div><div class="actions"><a class="button" href="/install.cmd" download="BannerlordCoop-Nightly-Installer.cmd">Download Windows installer <span aria-hidden="true">&darr;</span></a><a class="button" href="/install.sh" download="BannerlordCoop-Nightly-Installer.sh">Download Linux installer <span aria-hidden="true">&darr;</span></a><a class="button secondary" href="/sponsor">Manage sponsored accounts</a><a class="quiet-link" href="https://discord.gg/bannerlordcoop">Join the Discord</a></div>`, "landing-page");
 }
 
 const GATEWAY_CSS = `
@@ -1401,14 +916,6 @@ function escapeHtml(value: string): string {
 
 function nowSeconds(): number { return Math.floor(Date.now() / 1000); }
 
-function normalizeSponsorCode(value: string): string { return value.trim().toUpperCase(); }
-
-function randomCode(length: number): string {
-    const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    const bytes = crypto.getRandomValues(new Uint8Array(length));
-    return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("");
-}
-
 function randomToken(bytes: number): string { return base64url(crypto.getRandomValues(new Uint8Array(bytes))); }
 
 async function sha256(value: string): Promise<string> {
@@ -1422,33 +929,13 @@ function base64url(bytes: Uint8Array): string {
     return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-function fromBase64url(value: string): Uint8Array {
-    const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-    const binary = atob(normalized + "=".repeat((4 - normalized.length % 4) % 4));
-    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
-}
-
 function exactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
     const copy = new Uint8Array(bytes.byteLength);
     copy.set(bytes);
     return copy.buffer;
 }
 
-// Carries the HTTP status and stable error code returned to clients, plus Discord's own
-// status and error code when an upstream Discord call caused the failure.
+// Carries the HTTP status and stable error code returned to clients.
 class GatewayError extends Error {
-    constructor(readonly status: number, readonly code: string, readonly upstream?: DiscordFailure) { super(code); }
-}
-
-type DiscordFailure = { upstream_status: number; upstream_code?: number };
-
-// Extracts Discord's HTTP status and numeric JSON error code (e.g. 40333, 10007) from a failed response body.
-function discordFailure(response: Response, text: string): DiscordFailure {
-    try {
-        const code = (JSON.parse(text) as { code?: unknown }).code;
-        if (Number.isSafeInteger(code)) return { upstream_status: response.status, upstream_code: code as number };
-    } catch {
-        // Non-JSON bodies (e.g. Cloudflare error pages) carry only the status.
-    }
-    return { upstream_status: response.status };
+    constructor(readonly status: number, readonly code: string) { super(code); }
 }

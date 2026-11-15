@@ -3,222 +3,28 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+    CANONICAL_GATEWAY_ORIGIN,
+    GATEWAY_ORIGINS,
+    LEGACY_GATEWAY_ORIGIN,
     SPONSORED_ACCOUNT_LIMIT,
     artifactKeyFromUrl,
     createBuildPinInstallUrl,
     createBuildPinToken,
-    createSponsorFormToken,
     hasNightlyAccessRole,
-    isAllowedSponsorClaimRequest,
     isAllowedArtifactKey,
     isAllowedManualServerKey,
     isAllowedPinClientKey,
     isEligibleNightlySponsor,
     mintSecretsEqual,
     pinClientObjectKey,
+    resolveGatewayOrigin,
     rewriteManifestArtifactUrls,
     validateNightlyPublicationManifest,
-    verifySponsorFormToken,
 } from "./core";
-import { completeOAuth, nightlyAccessPage, page } from "./index";
+import { page } from "./index";
 
 const legacy = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
-const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
-
-type TestDatabaseOptions = { portalLogin?: boolean; existingSponsorId?: string };
-
-function testEnvironment(options: TestDatabaseOptions = {}): { env: Env; statements: string[] } {
-    const statements: string[] = [];
-    const database = {
-        prepare(sql: string) {
-            const statement = {
-                bind() { return statement; },
-                async first<T>() {
-                    if (sql.includes("FROM oauth_states")) {
-                        return (options.portalLogin ? { state_hash: "state" } : null) as T | null;
-                    }
-                    if (sql.includes("FROM device_sessions WHERE oauth_state_hash")) {
-                        return { id: "device-id", status: "pending", expires_at: Math.floor(Date.now() / 1000) + 60 } as T;
-                    }
-                    if (sql.includes("FROM sponsorships WHERE sponsored_discord_user_id")) {
-                        return (options.existingSponsorId
-                            ? { supporter_discord_user_id: options.existingSponsorId }
-                            : null) as T | null;
-                    }
-                    throw new Error(`Unexpected test query: ${sql}`);
-                },
-                async run() {
-                    statements.push(sql);
-                    return { success: true };
-                },
-            };
-            return statement;
-        },
-        async batch(entries: Array<{ run(): Promise<{ success: boolean }> }>) {
-            const results = [];
-            for (const entry of entries) results.push(await entry.run());
-            return results;
-        },
-    };
-    return {
-        env: {
-            DB: database,
-            DISCORD_BOT_TOKEN: "B".repeat(59),
-            DISCORD_CLIENT_ID: "1537575576745803799",
-            DISCORD_CLIENT_SECRET: "test-secret",
-            TOKEN_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString("base64url"),
-            PUBLIC_ORIGIN: gateway,
-        } as unknown as Env,
-        statements,
-    };
-}
-
-function installerOAuthFetch(sponsorMember: { roles: string[] } | null = null) {
-    return (input: string | URL | Request) => discordOAuthFetch(input, sponsorMember);
-}
-
-function discordOAuthFetch(
-    input: string | URL | Request,
-    sponsorMember: { roles: string[] } | null = null,
-): Promise<Response> {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-    if (url.endsWith("/oauth2/token")) {
-        return Promise.resolve(Response.json({
-            access_token: "access-token",
-            refresh_token: "refresh-token",
-            expires_in: 3600,
-            scope: "identify guilds.members.read",
-            token_type: "Bearer",
-        }));
-    }
-    if (url.endsWith("/users/@me")) {
-        return Promise.resolve(Response.json({ id: "123456789012345678", username: "Sponsored Friend" }));
-    }
-    if (url.includes("/users/@me/guilds/") && url.endsWith("/member")) {
-        return Promise.resolve(Response.json({ message: "Unknown Member", code: 10007 }, { status: 404 }));
-    }
-    if (/\/guilds\/\d+\/members\/\d+$/.test(url)) {
-        if (sponsorMember === null) {
-            return Promise.resolve(Response.json({ message: "Unknown Member", code: 10007 }, { status: 404 }));
-        }
-        return Promise.resolve(Response.json(sponsorMember));
-    }
-    throw new Error(`Unexpected test request: ${url}`);
-}
-
-function discordOAuthFetchWithoutRoles(input: string | URL | Request): Promise<Response> {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-    if (url.includes("/users/@me/guilds/") && url.endsWith("/member")) {
-        return Promise.resolve(Response.json({ roles: [] }));
-    }
-    return discordOAuthFetch(input);
-}
-
-test("Discord server membership is optional when claiming a sponsored seat", async () => {
-    const originalFetch = globalThis.fetch;
-    const { env, statements } = testEnvironment();
-    globalThis.fetch = installerOAuthFetch() as typeof fetch;
-    try {
-        const state = "A".repeat(43);
-        const response = await completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env);
-        const markup = await response.text();
-        assert.equal(response.status, 200);
-        assert.match(markup, /Enter your friend&rsquo;s sponsor code/);
-        assert.doesNotMatch(markup, /Previous sponsor access ended/);
-        assert.ok(statements.some((sql) => sql.includes("status = 'awaiting-sponsor'")));
-    } finally {
-        globalThis.fetch = originalFetch;
-    }
-});
-
-test("Discord server membership remains required to manage sponsor seats", async () => {
-    const originalFetch = globalThis.fetch;
-    const { env } = testEnvironment({ portalLogin: true });
-    globalThis.fetch = installerOAuthFetch() as typeof fetch;
-    try {
-        const state = "B".repeat(43);
-        await assert.rejects(
-            completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env),
-            /discord_membership_required/,
-        );
-    } finally {
-        globalThis.fetch = originalFetch;
-    }
-});
-
-test("sponsored installs stay approved while the sponsor still has a qualifying role", async () => {
-    const originalFetch = globalThis.fetch;
-    const { env, statements } = testEnvironment({ existingSponsorId: "987654321098765432" });
-    globalThis.fetch = installerOAuthFetch({ roles: ["1532151760012050452"] }) as typeof fetch;
-    try {
-        const state = "D".repeat(43);
-        const response = await completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env);
-        const markup = await response.text();
-        assert.equal(response.status, 200);
-        assert.match(markup, /Sponsored access approved/);
-        assert.doesNotMatch(markup, /Enter your friend&rsquo;s sponsor code/);
-        assert.ok(statements.some((sql) => sql.includes("status = 'approved'")));
-        assert.ok(!statements.some((sql) => sql.includes("DELETE FROM supporter_grants")));
-    } finally {
-        globalThis.fetch = originalFetch;
-    }
-});
-
-test("a sponsor who stays in Discord but loses the role has sponsored seats revoked", async () => {
-    const originalFetch = globalThis.fetch;
-    const { env, statements } = testEnvironment({ existingSponsorId: "987654321098765432" });
-    globalThis.fetch = installerOAuthFetch({ roles: [] }) as typeof fetch;
-    try {
-        const state = "F".repeat(43);
-        const response = await completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env);
-        const markup = await response.text();
-        assert.equal(response.status, 200);
-        assert.match(markup, /Enter your friend&rsquo;s sponsor code/);
-        assert.ok(statements.some((sql) => sql.includes("DELETE FROM supporter_grants")));
-    } finally {
-        globalThis.fetch = originalFetch;
-    }
-});
-
-test("losing a sponsor role cuts sponsored access and shows the installer code form", async () => {
-    const originalFetch = globalThis.fetch;
-    const { env, statements } = testEnvironment({ existingSponsorId: "987654321098765432" });
-    globalThis.fetch = installerOAuthFetch() as typeof fetch;
-    try {
-        const state = "E".repeat(43);
-        const response = await completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env);
-        const markup = await response.text();
-        assert.equal(response.status, 200);
-        assert.match(markup, /Enter your friend&rsquo;s sponsor code/);
-        assert.match(markup, /Previous sponsor access ended/);
-        assert.doesNotMatch(markup, /supporter_reauthorization_required/);
-        assert.ok(statements.some((sql) => sql.includes("DELETE FROM supporter_grants")));
-        assert.ok(statements.some((sql) => sql.includes("DELETE FROM download_sessions")));
-        assert.ok(statements.some((sql) => sql.includes("status = 'awaiting-sponsor'")));
-        assert.ok(!statements.some((sql) => sql.includes("status = 'approved'")));
-    } finally {
-        globalThis.fetch = originalFetch;
-    }
-});
-
-test("the sponsor portal directs code recipients to the installer redemption flow", async () => {
-    const originalFetch = globalThis.fetch;
-    const { env } = testEnvironment({ portalLogin: true });
-    globalThis.fetch = discordOAuthFetchWithoutRoles as typeof fetch;
-    try {
-        const state = "C".repeat(43);
-        const response = await completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${state}`), env);
-        const markup = await response.text();
-        assert.equal(response.status, 403);
-        assert.match(markup, /Have a sponsor code\?/);
-        assert.match(markup, /Codes are redeemed through the installer/);
-        assert.match(markup, /href="\/install\.cmd"/);
-        assert.match(markup, /download="BannerlordCoop-Nightly-Installer\.cmd"/);
-        assert.match(markup, /href="https:\/\/discord\.gg\/bannerlordcoop">Ask in the Bannerlord Co-op Discord<\/a>/);
-    } finally {
-        globalThis.fetch = originalFetch;
-    }
-});
+const gateway = "https://nightly.bannerlordcoop.com";
 
 test("supporters, Testers, Staff, and Competition Winners get nightly access and share the same seat limit", () => {
     assert.equal(hasNightlyAccessRole(["1532151760012050452"]), true);
@@ -238,56 +44,6 @@ test("supporters, Testers, Staff, and Competition Winners get nightly access and
     assert.equal(isEligibleNightlySponsor({ roles: [] }), false);
     assert.equal(isEligibleNightlySponsor(null), false);
     assert.equal(SPONSORED_ACCOUNT_LIMIT, 10);
-});
-
-test("Competition Winners can authorize installs and manage sponsor seats without website promotion", async () => {
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = ((input: string | URL | Request) => {
-        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-        if (url.includes("/users/@me/guilds/") && url.endsWith("/member")) {
-            return Promise.resolve(Response.json({ roles: ["1551834978570997792"] }));
-        }
-        return discordOAuthFetch(input);
-    }) as typeof fetch;
-    try {
-        for (const portalLogin of [false, true]) {
-            const { env, statements } = testEnvironment({ portalLogin });
-            const response = await completeOAuth(new URL(`${gateway}/oauth/callback?code=test-code&state=${"G".repeat(43)}`), env);
-            assert.equal(response.status, portalLogin ? 302 : 200);
-            if (portalLogin) {
-                assert.equal(response.headers.get("location"), `${gateway}/sponsor`);
-                assert.ok(statements.some((sql) => sql.includes("INSERT INTO sponsor_sessions")));
-            } else {
-                assert.match(await response.text(), /Access approved/);
-                assert.ok(statements.some((sql) => sql.includes("status = 'approved'")));
-            }
-        }
-        assert.doesNotMatch(nightlyAccessPage(), /Competition Winner|1551834978570997792/i);
-    } finally {
-        globalThis.fetch = originalFetch;
-    }
-});
-
-test("sponsor form tokens are bound to the authenticated browser session", async () => {
-    const session = "A".repeat(43);
-    const otherSession = "B".repeat(43);
-    const proof = await createSponsorFormToken(session);
-    assert.match(proof, /^[A-Za-z0-9_-]{43}$/);
-    assert.equal(await verifySponsorFormToken(session, proof), true);
-    assert.equal(await verifySponsorFormToken(otherSession, proof), false);
-    assert.equal(await verifySponsorFormToken(session, "invalid"), false);
-});
-
-test("sponsor claims tolerate omitted or opaque Origin headers without allowing cross-site forms", () => {
-    assert.equal(isAllowedSponsorClaimRequest(gateway, "same-origin", gateway), true);
-    assert.equal(isAllowedSponsorClaimRequest(null, "same-origin", gateway), true);
-    assert.equal(isAllowedSponsorClaimRequest(null, null, gateway), true);
-    assert.equal(isAllowedSponsorClaimRequest("null", "same-origin", gateway), true);
-    assert.equal(isAllowedSponsorClaimRequest("null", null, gateway), true);
-    assert.equal(isAllowedSponsorClaimRequest("https://attacker.invalid", "same-origin", gateway), false);
-    assert.equal(isAllowedSponsorClaimRequest(gateway, "cross-site", gateway), false);
-    assert.equal(isAllowedSponsorClaimRequest(null, "cross-site", gateway), false);
-    assert.equal(isAllowedSponsorClaimRequest("null", "cross-site", gateway), false);
 });
 
 test("artifact keys are limited to the two release namespaces", () => {
@@ -353,6 +109,28 @@ test("manifest URLs are rewritten to authenticated gateway paths", () => {
         : null, `${gateway}/v1/artifacts/${clientKey}`);
 });
 
+test("the gateway origin follows the allowlisted request host and falls back to the canonical host", () => {
+    assert.equal(CANONICAL_GATEWAY_ORIGIN, "https://nightly.bannerlordcoop.com");
+    assert.equal(LEGACY_GATEWAY_ORIGIN, "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev");
+    assert.deepEqual(GATEWAY_ORIGINS, [CANONICAL_GATEWAY_ORIGIN, LEGACY_GATEWAY_ORIGIN]);
+    assert.equal(resolveGatewayOrigin(`${CANONICAL_GATEWAY_ORIGIN}/v1/manifests/client`), CANONICAL_GATEWAY_ORIGIN);
+    assert.equal(resolveGatewayOrigin(new URL(`${LEGACY_GATEWAY_ORIGIN}/v1/pins`)), LEGACY_GATEWAY_ORIGIN);
+    assert.equal(resolveGatewayOrigin("https://attacker.invalid/v1/manifests/client"), CANONICAL_GATEWAY_ORIGIN);
+    assert.equal(resolveGatewayOrigin("http://nightly.bannerlordcoop.com/health"), CANONICAL_GATEWAY_ORIGIN);
+    assert.equal(resolveGatewayOrigin("https://nightly.bannerlordcoop.com:8443/health"), CANONICAL_GATEWAY_ORIGIN);
+    assert.equal(resolveGatewayOrigin("https://preview.bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/"), CANONICAL_GATEWAY_ORIGIN);
+});
+
+test("manifest URLs are rewritten onto whichever gateway host the installer used", () => {
+    const clientKey = `nightly/clients/${"a".repeat(40)}/${"b".repeat(64)}/Coop.7z`;
+    for (const origin of GATEWAY_ORIGINS) {
+        const manifest = rewriteManifestArtifactUrls({
+            client: { key: clientKey, publicUrl: `${legacy}/${clientKey}` },
+        }, origin, legacy) as { client: { publicUrl: string } };
+        assert.equal(manifest.client.publicUrl, `${origin}/v1/artifacts/${clientKey}`);
+    }
+});
+
 test("nightly publication validation rejects client-only or malformed markers", () => {
     assert.throws(
         () => validateNightlyPublicationManifest({ version: 1, client: {} }, legacy),
@@ -378,17 +156,31 @@ test("gateway pages use the site brand without weakening page security", () => {
     assert.doesNotMatch(markup, /<script/i);
 });
 
-test("gateway eligibility copy names every supported membership platform", () => {
-    const markup = nightlyAccessPage();
-    assert.match(markup, /available to Staff, Testers, and Patreon, Boosty, and Afdian supporters, plus their sponsored friends/);
-    assert.match(markup, /client, Windows dedicated server, or both/);
-    assert.match(markup, /Select the client, dedicated server, or both/);
-    assert.match(markup, /Staff, Supporter &amp; Tester builds/);
-    assert.match(markup, /href="\/install\.cmd" download="BannerlordCoop-Nightly-Installer\.cmd"/);
-    assert.match(markup, /href="\/install\.sh" download="BannerlordCoop-Nightly-Installer\.sh"/);
-    assert.doesNotMatch(markup, /Raw PowerShell script|href="\/install\.ps1"|href="\/install-linux\.sh"/);
-    assert.doesNotMatch(markup, /&amp;amp;/);
-    assert.doesNotMatch(markup, /community supporters/i);
+test("the Worker no longer talks to Discord or holds refresh-token secrets", () => {
+    const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+    const wrangler = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
+    const secrets = readFileSync(new URL("../secrets.d.ts", import.meta.url), "utf8");
+
+    for (const text of [source, wrangler, secrets]) {
+        assert.doesNotMatch(text, /DISCORD_(?:BOT_TOKEN|CLIENT_ID|CLIENT_SECRET)|TOKEN_ENCRYPTION_KEY|PUBLIC_ORIGIN/);
+    }
+    assert.doesNotMatch(source, /discord\.com\/api|supporter_grants|sponsor_sessions|oauth_states|device_sessions/);
+    assert.match(wrangler, /"NIGHTLY_FUNCTION_URL": "https:\/\/wfvqnijwuyqjibhlcrhz\.supabase\.co\/functions\/v1\/nightly-gateway"/);
+});
+
+test("both installers target the canonical gateway host for every check", () => {
+    const windows = readFileSync(new URL("../../installer/install.ps1", import.meta.url), "utf8");
+    const linux = readFileSync(new URL("../../installer/install-linux.sh", import.meta.url), "utf8");
+
+    assert.match(windows, /^\$script:NightlyGatewayHost = 'nightly\.bannerlordcoop\.com'\r?$/m);
+    assert.match(windows, /^\$script:NightlyGatewayUri = "https:\/\/\$\(\$script:NightlyGatewayHost\)"\r?$/m);
+    assert.match(windows, /\$script:NightlyActivationPattern = "\^\$\(\[regex\]::Escape\(\$script:NightlyGatewayUri\)\)\/activate\\\?"/);
+    assert.equal(windows.match(/-cne \$script:NightlyGatewayHost -or/g)?.length, 4);
+    assert.equal(windows.match(/-cmatch \$script:NightlyActivationPattern/g)?.length, 2);
+    assert.doesNotMatch(windows, /workers\.dev|workers\\\.dev/);
+    assert.match(linux, /^GATEWAY='https:\/\/nightly\.bannerlordcoop\.com'$/m);
+    assert.doesNotMatch(linux, /workers\.dev/);
+    assert.equal(/[^\x00-\x7f]/.test(windows), false);
 });
 
 test("the PowerShell installer is synchronized with the gateway copy", () => {
@@ -414,7 +206,7 @@ test("the Windows launcher is synchronized, falls back safely, and keeps failure
     assert.match(served, /"%FINDSTR_EXE%" \/b \/l \/c:"if \(\$env:BANNERLORDCOOP_INSTALLER_TEST -ne '1'\) \{"/);
     assert.match(served, /Management\.Automation\.Language\.Parser/);
     const gatewayIndex = served.indexOf(
-        "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/install.ps1",
+        "https://nightly.bannerlordcoop.com/install.ps1",
     );
     const mirrorIndex = served.indexOf(
         "https://raw.githubusercontent.com/Bannerlord-Coop-Team/BannerlordCoop-website/main/installer/install.ps1",
@@ -440,7 +232,7 @@ test("the Linux launcher is synchronized, falls back safely, and fetches the lat
     assert.match(served, /tr -d '\\r'/);
     assert.match(served, /\/install-linux\.sh/);
     const gatewayIndex = served.indexOf(
-        "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/install-linux.sh",
+        "https://nightly.bannerlordcoop.com/install-linux.sh",
     );
     const mirrorIndex = served.indexOf(
         "https://raw.githubusercontent.com/Bannerlord-Coop-Team/BannerlordCoop-website/main/installer/install-linux.sh",
@@ -536,15 +328,4 @@ test("the installer keeps long download, verification, and extraction progress v
     assert.doesNotMatch(installer, /-bsp0/);
     assert.match(installer, /Expand-SevenZipArchive \$SevenZip \$archive \$stage 'Coop client'/);
     assert.match(installer, /Expand-SevenZipArchive \$SevenZip \$archive \$stage 'dedicated server'/);
-});
-
-test("Discord approval sends users back to the installer window", () => {
-    const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-
-    assert.match(source, /Return to the installer window\. It will continue automatically\./);
-    assert.match(source, /Previous sponsor access ended/);
-    assert.match(source, /Bot \$\{env.DISCORD_BOT_TOKEN\}/);
-    assert.match(source, /prefersHtmlError/);
-    assert.doesNotMatch(source, /supporter_reauthorization_required/);
-    assert.doesNotMatch(source, /Return to PowerShell/);
 });

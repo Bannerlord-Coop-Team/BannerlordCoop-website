@@ -6,7 +6,7 @@
 
 set -u
 
-GATEWAY='https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev'
+GATEWAY='https://nightly.bannerlordcoop.com'
 CLIENT_ARCHIVE_URI="$GATEWAY/v1/artifacts/nightly/Coop.7z"
 SERVER_ARCHIVE_URI="$GATEWAY/v1/artifacts/nightly/BannerlordCoop-DedicatedServer-Win64.7z"
 MANIFEST_VERSION_HEADER='X-Bannerlord-Coop-Nightly-Version: 2'

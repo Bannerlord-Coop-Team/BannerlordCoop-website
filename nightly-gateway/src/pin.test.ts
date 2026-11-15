@@ -10,7 +10,8 @@ import worker, {
     serveCreateBuildPinPage,
 } from "./index";
 
-const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+const gateway = "https://nightly.bannerlordcoop.com";
+const legacyGateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
 const legacy = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const BUILD_ID = "1527333818711806084";
 const CLIENT_SHA = "1234567890abcdef1234567890abcdef12345678";
@@ -182,12 +183,8 @@ function pinEnvironment(): {
                     };
                 },
             },
-            DISCORD_BOT_TOKEN: "B".repeat(59),
-            DISCORD_CLIENT_ID: "1537575576745803799",
-            DISCORD_CLIENT_SECRET: "test-secret-value-that-is-long-enough",
-            PUBLIC_ORIGIN: gateway,
             LEGACY_R2_ORIGIN: legacy,
-            TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+            NIGHTLY_FUNCTION_URL: "https://example.supabase.co/functions/v1/nightly-gateway",
             PIN_MINT_SECRET: PIN_SECRET,
         } as unknown as Env,
     };
@@ -214,11 +211,16 @@ function metadata() {
     };
 }
 
-function mintRequest(envSecret = PIN_SECRET, body = metadata(), archive: Buffer = CLIENT_ARCHIVE): Request {
+function mintRequest(
+    envSecret = PIN_SECRET,
+    body = metadata(),
+    archive: Buffer = CLIENT_ARCHIVE,
+    origin = gateway,
+): Request {
     const form = new FormData();
     form.set("metadata", JSON.stringify(body));
     form.set("client", new File([archive], "Coop.7z"));
-    return new Request(`${gateway}/v1/pins`, {
+    return new Request(`${origin}/v1/pins`, {
         method: "POST",
         headers: { authorization: `Bearer ${envSecret}` },
         body: form,
@@ -256,6 +258,10 @@ test("the bot can mint a create-build pin and the installer can redeem it once",
     const cmd = await launcher.text();
     assert.match(cmd, new RegExp(`BANNERLORDCOOP_INSTALLER_PIN=${payload.token}`));
     assert.match(cmd, /Create-Build Installer/);
+    assert.ok(cmd.includes(`set "INSTALLER_PRIMARY=${gateway}/install.ps1"\r\n`));
+    assert.ok(cmd.includes(
+        'set "INSTALLER_MIRROR=https://raw.githubusercontent.com/Bannerlord-Coop-Team/BannerlordCoop-website/main/installer/install.ps1"',
+    ));
 
     const stillVisible = await serveCreateBuildPinPage(new URL(payload.installUrl), env);
     assert.equal(stillVisible.status, 200);
@@ -367,4 +373,48 @@ test("migration mode fails closed before any gateway state can change", async ()
     const create = await fetchGateway(new Request(`${gateway}/v1/device/sessions`, { method: "POST" }), locked);
     assert.equal(create.status, 503);
     assert.deepEqual(await create.json(), { error: "migration_in_progress" });
+});
+
+test("create-build pins keep install links, manifests, and launchers on the host that was used", async () => {
+    for (const origin of [gateway, legacyGateway]) {
+        const { env } = pinEnvironment();
+        const minted = await fetchGateway(mintRequest(PIN_SECRET, metadata(), CLIENT_ARCHIVE, origin), env);
+        assert.equal(minted.status, 201);
+        const { token, installUrl } = await minted.json() as { token: string; installUrl: string };
+        assert.equal(installUrl, `${origin}/install?pin=${token}`);
+
+        const page = await fetchGateway(new Request(installUrl), env);
+        assert.equal(page.status, 200);
+        assert.match(await page.text(), /href="\/v1\/pins\/install\.cmd\?pin=/);
+
+        const launcher = await fetchGateway(new Request(`${origin}/v1/pins/install.cmd?pin=${token}`), env);
+        assert.equal(launcher.status, 200);
+        assert.ok((await launcher.text()).includes(`set "INSTALLER_PRIMARY=${origin}/install.ps1"\r\n`));
+
+        const redeemed = await fetchGateway(new Request(`${origin}/v1/pins/token`, {
+            method: "POST",
+            headers: { "content-type": "application/x-www-form-urlencoded" },
+            body: `pin=${token}`,
+        }), env);
+        const { access_token: accessToken } = await redeemed.json() as { access_token: string };
+        const manifest = await fetchGateway(new Request(`${origin}/v1/manifests/pin`, {
+            headers: { authorization: `Bearer ${accessToken}` },
+        }), env);
+        const body = await manifest.json() as { client: { publicUrl: string }; server: { publicUrl: string } };
+        assert.equal(body.client.publicUrl, `${origin}/v1/artifacts/pins/${BUILD_ID}/Coop.7z`);
+        assert.equal(body.server.publicUrl, `${legacy}/${SERVER_KEY}`);
+    }
+});
+
+test("create-build pins requested on an unknown host use the canonical gateway host", async () => {
+    const { env } = pinEnvironment();
+    const minted = await fetchGateway(mintRequest(PIN_SECRET, metadata(), CLIENT_ARCHIVE, "https://gateway.attacker.invalid"), env);
+    assert.equal(minted.status, 201);
+    const { token, installUrl } = await minted.json() as { token: string; installUrl: string };
+    assert.equal(installUrl, `${gateway}/install?pin=${token}`);
+    const launcher = await serveCreateBuildPinLauncher(
+        new URL(`https://gateway.attacker.invalid/v1/pins/install.cmd?pin=${token}`),
+        env,
+    );
+    assert.ok((await launcher.text()).includes(`set "INSTALLER_PRIMARY=${gateway}/install.ps1"\r\n`));
 });

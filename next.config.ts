@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const GATEWAY_ORIGIN = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+const GATEWAY_ORIGIN = "https://nightly.bannerlordcoop.com";
 
 const nextConfig: NextConfig = {
     turbopack: {root: process.cwd()},

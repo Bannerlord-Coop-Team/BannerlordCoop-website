@@ -98,9 +98,7 @@ test("both authenticated manifest routes select the same pointer and keep privat
             },
         },
         RELEASES: { get: value.getObject },
-        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
-        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32),
-        DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+        LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
     context.mock.method(globalThis, "fetch", value.fetcher);
     const headers = {
@@ -208,9 +206,7 @@ test("client and release routes fall back only to a validated legacy pair", asyn
             };
             throw new Error("runtime_binding_read_failed");
         } },
-        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
-        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32),
-        DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+        LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
     const logs: string[] = [];
     context.mock.method(console, "error", (line: string) => logs.push(line));
@@ -307,9 +303,7 @@ test("the client route requires the complete publication while release keeps the
             if (key === "nightly/release.json") return object(legacyReleaseBytes);
             return value.getObject(key);
         } },
-        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
-        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32),
-        DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+        LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
     const authorization = `Bearer ${"n".repeat(43)}`;
     legacyClientBytes = Buffer.from(JSON.stringify({
@@ -375,9 +369,7 @@ test("the headerless client route returns 503 when no complete pair exists", asy
         },
         PUBLIC_RELEASES: { async get() { return object(value.pointerBytes); } },
         RELEASES: { async get() { return null; } },
-        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
-        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32),
-        DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+        LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
     context.mock.method(globalThis, "fetch", value.fetcher);
     const response = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, {
@@ -401,9 +393,7 @@ test("the client route fails closed when the paired publication is unavailable",
             },
         },
         RELEASES: { async get() { return null; } },
-        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
-        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32),
-        DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+        LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
     context.mock.method(globalThis, "fetch", value.fetcher);
     const response = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, {
@@ -429,8 +419,7 @@ test("v2 client fallback never serves a legacy client ahead of the release pair"
         DB: { prepare(sql: string) { return { bind() { return { async first() { return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null; } }; } }; }, async batch() { throw new Error("read-only"); } },
         PUBLIC_RELEASES: { async get() { return bytes(value.pointerBytes); } },
         RELEASES: { async get(key: string) { if (key === value.pointer.manifest.key) return null; if (key === "nightly/release.json") return bytes(legacyRelease); if (key === "nightly/client.json") return bytes(aheadClient); return null; } },
-        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
-        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32), DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+        LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
     context.mock.method(globalThis, "fetch", value.fetcher);
     const response = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, {
@@ -450,8 +439,7 @@ test("a complete release pair remains available when the legacy client object is
         DB: { prepare(sql: string) { return { bind() { return { async first() { return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null; } }; } }; }, async batch() { throw new Error("read-only"); } },
         PUBLIC_RELEASES: { async get() { return null; } },
         RELEASES: { async get(key: string) { return key === "nightly/release.json" ? bytes(releaseBytes) : null; } },
-        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
-        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32), DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+        LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
     context.mock.method(globalThis, "fetch", value.fetcher);
     const response = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, {
@@ -562,4 +550,67 @@ test("gateway bounds stalled public fetches and private reads to five seconds", 
         queueMicrotask(() => deadline.abort());
         return new Promise(() => {});
     }, value.fetcher), /timeout/);
+});
+
+test("manifest artifact URLs follow the gateway host the installer used", async (context) => {
+    const value = fixture();
+    const canonical = "https://nightly.bannerlordcoop.com";
+    const legacyGateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+    const clientKey = value.manifest.client.key;
+    // The stored v1 client names the legacy gateway host; it must still validate when served from the new host.
+    const storedClient = Buffer.from(JSON.stringify({
+        version: 1,
+        releaseDate: value.manifest.releaseDate,
+        headSha: value.manifest.headSha,
+        baseSha: null,
+        builtAt: value.manifest.builtAt,
+        client: { ...value.manifest.client, publicUrl: `${legacyGateway}/v1/artifacts/${clientKey}` },
+    }));
+    const env = {
+        DB: {
+            async batch() { throw new Error("manifest discovery must be read-only"); },
+            prepare(sql: string) {
+                return { bind() {
+                    return { async first() {
+                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
+                    } };
+                } };
+            },
+        },
+        RELEASES: { async get(key: string) {
+            if (key !== "nightly/client.json") return value.getObject(key);
+            return {
+                size: storedClient.byteLength,
+                arrayBuffer: async () => storedClient.buffer.slice(storedClient.byteOffset, storedClient.byteOffset + storedClient.byteLength),
+            };
+        } },
+        LEGACY_R2_ORIGIN: origin,
+    } as unknown as Env;
+    context.mock.method(globalThis, "fetch", value.fetcher);
+    const authorization = `Bearer ${"n".repeat(43)}`;
+    const cases = [
+        { host: canonical, expected: canonical },
+        { host: legacyGateway, expected: legacyGateway },
+        { host: "https://gateway.attacker.invalid", expected: canonical },
+    ];
+    for (const { host, expected } of cases) {
+        const v2 = await worker.fetch(new Request(`${host}/v1/manifests/release`, {
+            headers: { authorization, "x-bannerlord-coop-nightly-version": "2" },
+        }), env);
+        assert.equal(v2.status, 200);
+        const release = await v2.json() as {
+            client: { publicUrl: string };
+            server: { publicUrl: string; incremental: { base: { publicUrl: string }; update: { publicUrl: string } } };
+        };
+        assert.equal(release.client.publicUrl, `${expected}/v1/artifacts/${clientKey}`);
+        assert.equal(release.server.publicUrl, `${expected}/v1/artifacts/${value.manifest.server.key}`);
+        assert.equal(release.server.incremental.base.publicUrl, `${expected}/v1/artifacts/${value.manifest.server.incremental.base.key}`);
+        assert.equal(release.server.incremental.update.publicUrl, `${expected}/v1/artifacts/${value.manifest.server.incremental.update.key}`);
+
+        const headerless = await worker.fetch(new Request(`${host}/v1/manifests/client`, { headers: { authorization } }), env);
+        assert.equal(headerless.status, 200);
+        const client = await headerless.json() as { version: number; client: { publicUrl: string } };
+        assert.equal(client.version, 1);
+        assert.equal(client.client.publicUrl, `${expected}/v1/artifacts/${clientKey}`);
+    }
 });
