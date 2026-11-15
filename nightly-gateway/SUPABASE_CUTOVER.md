@@ -14,9 +14,10 @@ database to clean up, see [§5](../docs/nightly-backend-contract.md#5-worker) an
 [§7](../docs/nightly-backend-contract.md#7-rollout-each-step-after-explicit-approval)
 of the nightly backend contract.
 
-The SQL under `nightly-gateway/migrations/` and `migrate-d1-to-postgres.mjs`
-are historical records of the import, not the live schema;
-`supabase/migrations/` owns that.
+`supabase/migrations/` owns the live schema. The D1 import tooling
+(`migrate-d1-to-postgres.mjs`) and the old D1 SQL (`nightly-gateway/migrations/`)
+were deleted after the cutover; they remain in git history, for example at
+[`c9be2c7`](https://github.com/Bannerlord-Coop-Team/BannerlordCoop-website/tree/c9be2c76624473d3b27c46e2378d2ea0ff4fcfe7/nightly-gateway).
 
 ## Rolling back a gateway release
 
@@ -46,7 +47,7 @@ and the Edge Function, because website routes call the Edge Function directly.
 2. Created a cache-disabled Hyperdrive configuration for that login and bound it
    as `HYPERDRIVE`.
 3. Paused gateway writes for the import.
-4. Ran `npm run gateway:migrate-d1 -- --connection-string-stdin` with the
+4. Ran the since-deleted `npm run gateway:migrate-d1 -- --connection-string-stdin` with the
    `nightly_gateway_worker` connection string. The importer exported D1 to an
    owner-only temporary file, loaded only the fixed tables into an empty target,
    verified every table's row count, committed atomically, and removed the
