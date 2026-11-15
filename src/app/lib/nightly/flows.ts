@@ -3,14 +3,15 @@ import {
     MAXIMUM_SPONSOR_CODE_LENGTH,
     normalizeSponsorCode,
 } from "../../../../supabase/functions/_shared/nightly/formats";
-import type { NightlyClient, SponsorPortalData } from "./client";
-import { CLAIM_COOKIE, SPONSOR_COOKIE, type ClaimContext } from "./cookies";
+import type { NightlyClient, PendingClaim, SponsorPortalData } from "./client";
+import { CLAIM_COOKIE, SPONSOR_COOKIE } from "./cookies";
 import {
     GENERIC_ERROR_MESSAGE,
     INSTALLER_AUTHORIZATION_EXPIRED_MESSAGE,
     nightlyErrorMessage,
     ROLE_REQUIRED_MESSAGE,
 } from "./messages";
+import { SESSION_EXPIRED_PATH, SPONSORED_APPROVED_PATH } from "./query-flags";
 import type { NightlyCookie, RedirectPlan } from "./routes";
 
 /** What `GET /nightly/sponsor` renders for the current cookie and portal response. */
@@ -33,16 +34,19 @@ export type ActionRedirect = { redirect: RedirectPlan };
 export type ActionResult<State> = { state: State } | ActionRedirect;
 
 /** What the claim action read from Next before deciding: the origin verdict and the decoded claim cookie. */
-export type ClaimActionRequest = { sameOrigin: boolean; claim: ClaimContext | null };
+export type ClaimActionRequest = { sameOrigin: boolean; claim: PendingClaim | null };
 /** What a sponsor action read from Next before deciding: the origin verdict and the sponsor session cookie. */
 export type SponsorActionRequest = { sameOrigin: boolean; session: string | null };
 
 // Server actions can write cookies, so an expired session is dropped here and the login prompt says why.
-const SESSION_EXPIRED_RESULT = redirectTo("/nightly/sponsor?session=expired", clearedCookie(SPONSOR_COOKIE));
+const SESSION_EXPIRED_RESULT = redirectTo(SESSION_EXPIRED_PATH, clearedCookie(SPONSOR_COOKIE));
 
-/** Loads the sponsor portal: no session shows login, 401 shows login with the expired notice, 403 explains lost eligibility. */
-export async function loadPortalView(client: NightlyClient, session: string | null): Promise<PortalView> {
-    if (session === null) return { kind: "login", expired: false };
+/**
+ * Loads the sponsor portal: no session shows login (with the notice an action that dropped the session asked for),
+ * 401 shows login with the expired notice, 403 explains lost eligibility.
+ */
+export async function loadPortalView(client: NightlyClient, session: string | null, expiredNotice: boolean): Promise<PortalView> {
+    if (session === null) return { kind: "login", expired: expiredNotice };
     const result = await client.sponsorPortal(session);
     if (result.ok) return { kind: "seats", data: result.value };
     // Pages cannot write cookies; the stale HttpOnly session is overwritten at the next portal login.
@@ -63,7 +67,7 @@ export async function claimActionResult(
     if (code === null) return { state: { error: nightlyErrorMessage("claim", "invalid_sponsor_code") } };
     const result = await client.claimSponsorship(request.claim.deviceId, code);
     if (!result.ok) return { state: { error: nightlyErrorMessage("claim", result.code) } };
-    return redirectTo("/nightly/approved?via=sponsor", clearedCookie(CLAIM_COOKIE));
+    return redirectTo(SPONSORED_APPROVED_PATH, clearedCookie(CLAIM_COOKIE));
 }
 
 /** `POST /nightly/sponsor` (create code): rotates the sponsor code and returns it once, or leaves an expired session. */

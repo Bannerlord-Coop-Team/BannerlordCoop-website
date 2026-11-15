@@ -36,7 +36,8 @@ export function SponsorPortal({ data, createCode, removeSeat }: {
                     <span className="font-label text-xs font-semibold uppercase tracking-[0.14em] text-gold">{open} open</span>
                 </div>
                 <ul className="divide-y divide-white/10 border-b border-white/10">
-                    {used === 0 ? <EmptySeats /> : data.seats.map((seat, index) => (
+                    {used === 0 && <EmptySeats />}
+                    {data.seats.map((seat, index) => (
                         <SeatRow key={seat.discordUserId} seat={seat} index={index} removeSeat={removeSeat} />
                     ))}
                 </ul>

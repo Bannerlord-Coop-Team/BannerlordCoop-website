@@ -3,6 +3,7 @@ import test from "node:test";
 import type { NightlyClient, NightlyResult, OAuthOutcome } from "./client";
 import { decodeClaimContext, encodeClaimContext, readSponsorSession } from "./cookies";
 import { planActivate, planCallback, planOutcome, planSponsorLogin, redirectResponse } from "./routes";
+import { isSessionExpiredNotice, isSponsoredApproval, SESSION_EXPIRED_PATH, SPONSORED_APPROVED_PATH } from "./query-flags";
 
 const SESSION = "s".repeat(43);
 const STATE = "t".repeat(43);
@@ -106,5 +107,19 @@ test("cookie readers reject tampered values", () => {
     ];
     for (const bad of [undefined, "", "!!!", "x".repeat(2000), ...forged]) {
         assert.equal(decodeClaimContext(bad), null, String(bad).slice(0, 40));
+    }
+});
+
+test("each query flag's reader recognises exactly the path that sets it", () => {
+    const query = (path: string) => Object.fromEntries(new URL(path, "https://bannerlordcoop.com").searchParams);
+    assert.equal(SESSION_EXPIRED_PATH, "/nightly/sponsor?session=expired");
+    assert.equal(SPONSORED_APPROVED_PATH, "/nightly/approved?via=sponsor");
+    assert.equal(isSessionExpiredNotice(query(SESSION_EXPIRED_PATH)), true);
+    assert.equal(isSponsoredApproval(query(SPONSORED_APPROVED_PATH)), true);
+    for (const params of [{}, { session: "valid" }, { session: ["expired", "expired"] }, { via: "sponsor" }]) {
+        assert.equal(isSessionExpiredNotice(params), false, JSON.stringify(params));
+    }
+    for (const params of [{}, { via: "discord" }, { via: ["sponsor"] }, { session: "expired" }]) {
+        assert.equal(isSponsoredApproval(params), false, JSON.stringify(params));
     }
 });
