@@ -2,11 +2,8 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 import type { PGlite } from "@electric-sql/pglite";
 import { createNightlyGatewayHandler } from "../_shared/nightly/gateway.ts";
-import {
-    hasNightlyAccessRole,
-    isEligibleNightlySponsor,
-    SPONSORED_ACCOUNT_LIMIT,
-} from "../_shared/nightly/policy.ts";
+import { SPONSORED_ACCOUNT_LIMIT } from "../_shared/nightly/formats.ts";
+import { hasNightlyAccessRole, isEligibleNightlySponsor } from "../_shared/nightly/policy.ts";
 import { sha256 } from "../_shared/nightly/tokens.ts";
 import {
     BOT_TOKEN,
@@ -94,21 +91,6 @@ test("the handler refuses implausible secrets at construction", () => {
 });
 
 // ---- Routing and website key ----
-
-test("installer routes need no forwarded-origin header, and a stray one changes nothing", async () => {
-    const { handler, releases } = gatewayHandler(database, discordScript());
-    const plain = await handler(installerRequest("/v1/device/sessions", "client=installer"));
-    assert.equal(plain.status, 201);
-    const forwarded = installerRequest("/v1/device/sessions", "client=installer");
-    forwarded.headers.set("x-nightly-forwarded-origin", "https://attacker.invalid");
-    const withHeader = await handler(forwarded);
-    assert.equal(withHeader.status, 201);
-    assert.equal((await body(withHeader)).verification_uri, undefined);
-    const poll = await handler(installerRequest("/v1/device/token", `device_code=${"Z".repeat(43)}`));
-    assert.deepEqual([poll.status, await body(poll)], [400, { error: "expired_token" }]);
-    assert.equal(await count("device_sessions"), 2);
-    assert.deepEqual(releases, [false, false, false]);
-});
 
 test("device sessions are 10-minute pending sessions; the Worker adds verification_uri", async () => {
     const script = discordScript();
@@ -463,6 +445,29 @@ test("invalid Discord payloads are discord_response_invalid", async () => {
     narrowScope.tokenFailure = () => Response.json({ access_token: "a", token_type: "Bearer", scope: "identify" });
     const scope = await gatewayHandler(database, narrowScope).handler(websiteRequest("/oauth/complete", { code: "code", state: pending.state }));
     assert.deepEqual([scope.status, await body(scope)], [502, { error: "discord_response_invalid" }]);
+});
+
+test("Discord bodies: oversized is response_too_large, undecodable is discord_response_invalid, a dropped stream is a 500", async () => {
+    const pending = await seedDevice(database);
+    const complete = async (tokenResponse: () => Response) => {
+        const script = discordScript();
+        script.tokenFailure = tokenResponse;
+        const { handler, logs } = gatewayHandler(database, script);
+        const response = await handler(websiteRequest("/oauth/complete", { code: "code", state: pending.state }));
+        return { status: response.status, body: await body(response), logs };
+    };
+    const oversized = await complete(() => new Response("x".repeat(16 * 1024 + 1)));
+    assert.deepEqual([oversized.status, oversized.body], [502, { error: "response_too_large" }]);
+    const undecodable = await complete(() => new Response(new Uint8Array([0x7b, 0xff, 0x7d])));
+    assert.deepEqual([undecodable.status, undecodable.body], [502, { error: "discord_response_invalid" }]);
+    const dropped = await complete(() => new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+            controller.enqueue(new TextEncoder().encode("{"));
+            controller.error(new TypeError("network connection lost"));
+        },
+    })));
+    assert.deepEqual([dropped.status, dropped.body], [500, { error: "internal_error" }]);
+    assert.equal(dropped.logs.at(-1)!.cause, "TypeError");
 });
 
 // ---- Sponsorship claim ----

@@ -2,6 +2,7 @@ import type { GatewayContext } from "./context.ts";
 import type { DatabaseProvider } from "./database.ts";
 import { createDeviceSession, pollDeviceSession } from "./device.ts";
 import { createDiscordApi, type DiscordApi, type DiscordCredentials } from "./discord.ts";
+import { WEBSITE_KEY_HEADER } from "./formats.ts";
 import { errorJson, GatewayError, json, readJsonObject } from "./http.ts";
 import { completeOAuth, startOAuth } from "./oauth.ts";
 import { isDiscordSnowflake } from "./policy.ts";
@@ -9,7 +10,6 @@ import { claimSponsorship, removeSponsoredAccount, rotateSponsorCode, sponsorPor
 import { cryptoRandomBytes, type RandomBytes, secretsEqual } from "./tokens.ts";
 
 const FUNCTION_PREFIXES = Object.freeze(["/functions/v1/nightly-gateway", "/nightly-gateway"]);
-const WEBSITE_KEY_HEADER = "x-nightly-website-key";
 const MINIMUM_WEBSITE_KEY_LENGTH = 32;
 const MINIMUM_CLIENT_SECRET_LENGTH = 32;
 const MINIMUM_BOT_TOKEN_LENGTH = 50;

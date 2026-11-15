@@ -1,5 +1,6 @@
-// Nightly-access policy shared by the gateway: Discord roles, seat limits, lifetimes and fixed URLs.
-// Copied verbatim from nightly-gateway/src/core.ts; the values are part of the access contract.
+// The single owner of the nightly-access policy: Discord roles, session lifetimes and fixed Discord URLs.
+// The values are part of the access contract; wire formats and the seat limit live in formats.ts.
+import { DISCORD_SNOWFLAKE_PATTERN } from "./formats.ts";
 
 export const DISCORD_GUILD_ID = "709516043332354119";
 export const SUPPORTER_ROLE_IDS = Object.freeze([
@@ -23,7 +24,6 @@ export const NIGHTLY_ACCESS_ROLE_IDS = Object.freeze([
     "1551834978570997792", // Competition Winner; eligible but not advertised on the website.
 ]);
 
-export const SPONSORED_ACCOUNT_LIMIT = 10;
 export const DEVICE_SESSION_SECONDS = 10 * 60;
 export const DEVICE_POLL_INTERVAL_SECONDS = 3;
 export const DOWNLOAD_SESSION_SECONDS = 60 * 60;
@@ -33,8 +33,6 @@ export const OAUTH_STATE_SECONDS = 10 * 60;
 export const DISCORD_OAUTH_SCOPES = "identify guilds.members.read";
 export const DISCORD_REDIRECT_URI = "https://bannerlordcoop.com/nightly/callback";
 export const DISCORD_USER_AGENT = "DiscordBot (https://bannerlordcoop.com, 1)";
-
-const SNOWFLAKE = /^\d{17,20}$/;
 
 /** Whether any of the given Discord role IDs grants nightly access. */
 export function hasNightlyAccessRole(roleIds: readonly string[]): boolean {
@@ -49,5 +47,5 @@ export function isEligibleNightlySponsor(member: { roles?: unknown } | null): bo
 
 /** Whether a value is a Discord snowflake ID string. */
 export function isDiscordSnowflake(value: unknown): value is string {
-    return typeof value === "string" && SNOWFLAKE.test(value);
+    return typeof value === "string" && DISCORD_SNOWFLAKE_PATTERN.test(value);
 }

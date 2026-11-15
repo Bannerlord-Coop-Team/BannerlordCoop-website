@@ -1,4 +1,5 @@
 import type { GatewayContext } from "./context.ts";
+import { revokeDownloadsForSupporter } from "./downloads.ts";
 import { GatewayError } from "./http.ts";
 import { isEligibleNightlySponsor } from "./policy.ts";
 
@@ -10,7 +11,7 @@ export async function revokeSponsorIfIneligible(context: GatewayContext, support
     const member = await context.discord.botGuildMember(supporterId);
     if (isEligibleNightlySponsor(member)) return true;
     await context.db.transaction(async (tx) => {
-        await tx.query("DELETE FROM nightly_gateway.download_sessions WHERE supporter_discord_user_id = $1", [supporterId]);
+        await revokeDownloadsForSupporter(tx, supporterId);
         await tx.query("DELETE FROM nightly_gateway.supporter_grants WHERE supporter_discord_user_id = $1", [supporterId]);
     });
     return false;

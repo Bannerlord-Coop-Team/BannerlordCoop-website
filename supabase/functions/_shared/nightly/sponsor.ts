@@ -1,35 +1,40 @@
 import type { GatewayContext } from "./context.ts";
 import { firstRow } from "./database.ts";
-import { approveDevice } from "./device.ts";
+import { approveDevice, findClaimableDevice } from "./device.ts";
+import { revokeDownloadsForFriend } from "./downloads.ts";
 import { assertSponsorEligible, revokeSponsorIfIneligible } from "./eligibility.ts";
+import {
+    DEVICE_ID_PATTERN,
+    MAXIMUM_SPONSOR_CODE_LENGTH,
+    normalizeSponsorCode,
+    SECRET_TOKEN_PATTERN,
+    SPONSORED_ACCOUNT_LIMIT,
+} from "./formats.ts";
 import { GatewayError, json } from "./http.ts";
-import { isDiscordSnowflake, SPONSORED_ACCOUNT_LIMIT } from "./policy.ts";
-import { normalizeSponsorCode, randomSponsorCode, SECRET_TOKEN_PATTERN, sha256, UUID_PATTERN } from "./tokens.ts";
+import { isDiscordSnowflake } from "./policy.ts";
+import { randomSponsorCode, sha256 } from "./tokens.ts";
 
-const MAXIMUM_SPONSOR_CODE_LENGTH = 128;
-
-type ClaimableDevice = { discord_user_id: string | null; status: string; expires_at: number };
 type SupporterRow = { supporter_discord_user_id: string };
+
+/** A well-formed `/sponsorship/claim` body: a device session ID and a plausibly sized sponsor code. */
+type ClaimRequest = { device_id: string; sponsor_code: string };
+
+/** Whether a website body is a well-formed sponsorship claim. */
+function isValidClaimRequest(body: Record<string, unknown>): body is Record<string, unknown> & ClaimRequest {
+    const { device_id: deviceId, sponsor_code: sponsorCode } = body;
+    return typeof deviceId === "string" && DEVICE_ID_PATTERN.test(deviceId)
+        && typeof sponsorCode === "string" && sponsorCode.length <= MAXIMUM_SPONSOR_CODE_LENGTH;
+}
 
 /** `POST /sponsorship/claim`: spends a sponsor's seat on an awaiting device's Discord account and approves it. */
 export async function claimSponsorship(context: GatewayContext, body: Record<string, unknown>): Promise<Response> {
-    const { device_id: deviceId, sponsor_code: sponsorCode } = body;
-    if (typeof deviceId !== "string" || !UUID_PATTERN.test(deviceId)
-        || typeof sponsorCode !== "string" || sponsorCode.length > MAXIMUM_SPONSOR_CODE_LENGTH) {
-        throw new GatewayError(400, "invalid_request");
-    }
-    const device = firstRow(await context.db.query<ClaimableDevice>(
-        "SELECT discord_user_id, status, expires_at FROM nightly_gateway.device_sessions WHERE id = $1",
-        [deviceId],
-    ));
-    if (device === null || device.status !== "awaiting-sponsor" || device.expires_at < context.now()
-        || !isDiscordSnowflake(device.discord_user_id)) {
-        throw new GatewayError(400, "expired");
-    }
-    const sponsorId = await eligibleSponsorForCode(context, sponsorCode);
-    const holder = await releaseRevokedSeat(context, device.discord_user_id, sponsorId);
-    await takeSeat(context, device.discord_user_id, sponsorId, holder);
-    await approveDevice(context, deviceId, device.discord_user_id, sponsorId);
+    if (!isValidClaimRequest(body)) throw new GatewayError(400, "invalid_request");
+    const device = await findClaimableDevice(context, body.device_id);
+    if (device === null) throw new GatewayError(400, "expired");
+    const sponsorId = await eligibleSponsorForCode(context, body.sponsor_code);
+    const friendAlreadyHasThisSponsor = await releaseRevokedSeat(context, device.userId, sponsorId);
+    if (!friendAlreadyHasThisSponsor) await takeSeat(context, device.userId, sponsorId);
+    await approveDevice(context, body.device_id, device.userId, sponsorId);
     return json({ outcome: "sponsored-approved" });
 }
 
@@ -69,12 +74,18 @@ export async function removeSponsoredAccount(context: GatewayContext, body: Reco
             "DELETE FROM nightly_gateway.sponsorships WHERE supporter_discord_user_id = $1 AND sponsored_discord_user_id = $2",
             [sponsorId, friendId],
         );
-        await tx.query(
-            "DELETE FROM nightly_gateway.download_sessions WHERE discord_user_id = $1 AND supporter_discord_user_id = $2",
-            [friendId, sponsorId],
-        );
+        await revokeDownloadsForFriend(tx, friendId, sponsorId);
     });
     return new Response(null, { status: 204, headers: { "cache-control": "no-store" } });
+}
+
+/** Returns the supporter whose seat a friend holds, or null when nobody sponsors them. */
+export async function findSeatHolder(context: GatewayContext, friendId: string): Promise<string | null> {
+    const seat = firstRow(await context.db.query<SupporterRow>(
+        "SELECT supporter_discord_user_id FROM nightly_gateway.sponsorships WHERE sponsored_discord_user_id = $1",
+        [friendId],
+    ));
+    return seat?.supporter_discord_user_id ?? null;
 }
 
 /** Resolves a sponsor session token to its supporter; malformed is `authorization_required`, stale `authorization_expired`. */
@@ -100,26 +111,24 @@ async function eligibleSponsorForCode(context: GatewayContext, sponsorCode: stri
 }
 
 /**
- * Returns who holds the friend's seat once a revoked holder is released: null, or `sponsorId` itself.
- * A different holder is revoked and released when ineligible; a still-eligible one is `409 already_sponsored`.
+ * Frees the friend's seat when another holder lost eligibility, and reports whether `sponsorId` already holds it.
+ * Another holder who is still eligible is `409 already_sponsored`.
  */
-async function releaseRevokedSeat(context: GatewayContext, friendId: string, sponsorId: string): Promise<string | null> {
-    const holder = firstRow(await context.db.query<SupporterRow>(
-        "SELECT supporter_discord_user_id FROM nightly_gateway.sponsorships WHERE sponsored_discord_user_id = $1",
-        [friendId],
-    ))?.supporter_discord_user_id ?? null;
-    if (holder === null || holder === sponsorId) return holder;
-    if (await revokeSponsorIfIneligible(context, holder)) throw new GatewayError(409, "already_sponsored");
+async function releaseRevokedSeat(context: GatewayContext, friendId: string, sponsorId: string): Promise<boolean> {
+    const holder = await findSeatHolder(context, friendId);
+    if (holder === null) return false;
+    if (holder === sponsorId) return true;
+    const holderStillEligible = await revokeSponsorIfIneligible(context, holder);
+    if (holderStillEligible) throw new GatewayError(409, "already_sponsored");
     await context.db.transaction(async (tx) => {
         await tx.query("DELETE FROM nightly_gateway.sponsorships WHERE sponsored_discord_user_id = $1", [friendId]);
-        await tx.query("DELETE FROM nightly_gateway.download_sessions WHERE discord_user_id = $1", [friendId]);
+        await revokeDownloadsForFriend(tx, friendId);
     });
-    return null;
+    return false;
 }
 
-/** Gives the friend a seat under the sponsor unless they already hold one; a full sponsor is `409 seats_full`. */
-async function takeSeat(context: GatewayContext, friendId: string, sponsorId: string, holder: string | null): Promise<void> {
-    if (holder === sponsorId) return;
+/** Gives the friend a seat under the sponsor; a full sponsor is `409 seats_full`. */
+async function takeSeat(context: GatewayContext, friendId: string, sponsorId: string): Promise<void> {
     // The enforce_sponsorship_limit trigger also skips the insert at the limit, serializing concurrent claims.
     const inserted = await context.db.query(
         `INSERT INTO nightly_gateway.sponsorships (supporter_discord_user_id, sponsored_discord_user_id, created_at)

@@ -1,12 +1,30 @@
 import type { GatewayContext } from "./context.ts";
-import { firstRow } from "./database.ts";
-import { approveDevice } from "./device.ts";
+import {
+    approveDevice,
+    bindDeviceOAuthState,
+    findAuthorizableDeviceByState,
+    findLiveDeviceByUserCode,
+    parkAwaitingSponsor,
+} from "./device.ts";
+import type { DiscordUser } from "./discord.ts";
 import { revokeSponsorIfIneligible, storeSupporterGrant } from "./eligibility.ts";
+import { SECRET_TOKEN_PATTERN, USER_CODE_PATTERN } from "./formats.ts";
 import { GatewayError, json } from "./http.ts";
 import { hasNightlyAccessRole, OAUTH_STATE_SECONDS, SPONSOR_SESSION_SECONDS } from "./policy.ts";
-import { randomToken, SECRET_TOKEN_PATTERN, sha256, USER_CODE_PATTERN } from "./tokens.ts";
+import { findSeatHolder } from "./sponsor.ts";
+import { randomToken, sha256 } from "./tokens.ts";
 
-type AuthorizableDevice = { id: string; status: string; expires_at: number };
+const MAXIMUM_OAUTH_CODE_LENGTH = 512;
+
+/** A well-formed `/oauth/complete` body: Discord's authorization code and a gateway-issued state. */
+type CompleteRequest = { code: string; state: string };
+
+/** Whether a website body carries a plausible authorization code and a well-formed OAuth state. */
+function isValidCompleteRequest(body: Record<string, unknown>): body is Record<string, unknown> & CompleteRequest {
+    const { code, state } = body;
+    return typeof code === "string" && code.length > 0 && code.length <= MAXIMUM_OAUTH_CODE_LENGTH
+        && typeof state === "string" && SECRET_TOKEN_PATTERN.test(state);
+}
 
 /** `POST /oauth/start`: stores a state hash for the device or sponsor-portal flow and returns Discord's URL. */
 export async function startOAuth(context: GatewayContext, body: Record<string, unknown>): Promise<Response> {
@@ -17,38 +35,22 @@ export async function startOAuth(context: GatewayContext, body: Record<string, u
 
 /** `POST /oauth/complete`: resolves the state to a portal login or a device session and finishes that flow. */
 export async function completeOAuth(context: GatewayContext, body: Record<string, unknown>): Promise<Response> {
-    const { code, state } = body;
-    if (typeof code !== "string" || code.length === 0 || code.length > 512
-        || typeof state !== "string" || !SECRET_TOKEN_PATTERN.test(state)) {
-        throw new GatewayError(400, "invalid_request");
-    }
-    const stateHash = await sha256(state);
-    if (await consumePortalState(context, stateHash)) return completePortalLogin(context, code);
-    const device = firstRow(await context.db.query<AuthorizableDevice>(
-        "SELECT id, status, expires_at FROM nightly_gateway.device_sessions WHERE oauth_state_hash = $1",
-        [stateHash],
-    ));
-    if (device === null || device.expires_at < context.now() || !["pending", "awaiting-sponsor"].includes(device.status)) {
-        throw new GatewayError(400, "expired");
-    }
-    return completeDeviceLogin(context, device.id, code);
+    if (!isValidCompleteRequest(body)) throw new GatewayError(400, "invalid_request");
+    const stateHash = await sha256(body.state);
+    if (await consumePortalState(context, stateHash)) return completePortalLogin(context, body.code);
+    const deviceId = await findAuthorizableDeviceByState(context, stateHash);
+    if (deviceId === null) throw new GatewayError(400, "expired");
+    return completeDeviceLogin(context, deviceId, body.code);
 }
 
 /** Binds a fresh OAuth state to a live pending or awaiting-sponsor device session. */
 async function startDeviceOAuth(context: GatewayContext, rawUserCode: unknown): Promise<Response> {
     const userCode = typeof rawUserCode === "string" ? rawUserCode.toUpperCase() : "";
     if (!USER_CODE_PATTERN.test(userCode)) throw new GatewayError(400, "invalid_code");
-    const session = firstRow(await context.db.query<{ id: string; expires_at: number }>(
-        `SELECT id, expires_at FROM nightly_gateway.device_sessions
-         WHERE user_code = $1 AND status IN ('pending', 'awaiting-sponsor')`,
-        [userCode],
-    ));
-    if (session === null || session.expires_at < context.now()) throw new GatewayError(400, "expired");
+    const deviceId = await findLiveDeviceByUserCode(context, userCode);
+    if (deviceId === null) throw new GatewayError(400, "expired");
     const state = randomToken(context.random);
-    await context.db.query("UPDATE nightly_gateway.device_sessions SET oauth_state_hash = $1 WHERE id = $2", [
-        await sha256(state),
-        session.id,
-    ]);
+    await bindDeviceOAuthState(context, deviceId, await sha256(state));
     return json({ authorize_url: context.discord.authorizeUrl(state) });
 }
 
@@ -98,23 +100,27 @@ async function completeDeviceLogin(context: GatewayContext, deviceId: string, co
         await approveDevice(context, deviceId, user.id, user.id);
         return json({ outcome: "approved" });
     }
-    const existing = firstRow(await context.db.query<{ supporter_discord_user_id: string }>(
-        "SELECT supporter_discord_user_id FROM nightly_gateway.sponsorships WHERE sponsored_discord_user_id = $1",
-        [user.id],
-    ));
+    const previousSponsorId = await findSeatHolder(context, user.id);
+    if (previousSponsorId === null) return awaitSponsorCode(context, deviceId, user, false);
     // A previous sponsor who lost access is revoked here, and the friend gets the code form instead.
-    if (existing !== null && await revokeSponsorIfIneligible(context, existing.supporter_discord_user_id)) {
-        await approveDevice(context, deviceId, user.id, existing.supporter_discord_user_id);
-        return json({ outcome: "sponsored-approved" });
-    }
-    await context.db.query(
-        "UPDATE nightly_gateway.device_sessions SET status = 'awaiting-sponsor', discord_user_id = $1 WHERE id = $2",
-        [user.id, deviceId],
-    );
+    const sponsorStillEligible = await revokeSponsorIfIneligible(context, previousSponsorId);
+    if (!sponsorStillEligible) return awaitSponsorCode(context, deviceId, user, true);
+    await approveDevice(context, deviceId, user.id, previousSponsorId);
+    return json({ outcome: "sponsored-approved" });
+}
+
+/** Parks the device for the signed-in user and tells the website to show the sponsor-code form. */
+async function awaitSponsorCode(
+    context: GatewayContext,
+    deviceId: string,
+    user: DiscordUser,
+    previousSponsorRevoked: boolean,
+): Promise<Response> {
+    await parkAwaitingSponsor(context, deviceId, user.id);
     return json({
         outcome: "needs-sponsor",
         device_id: deviceId,
         username: user.username,
-        previous_sponsor_revoked: existing !== null,
+        previous_sponsor_revoked: previousSponsorRevoked,
     });
 }

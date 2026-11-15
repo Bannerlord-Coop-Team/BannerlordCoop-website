@@ -1,6 +1,8 @@
 import type { GatewayContext } from "./context.ts";
 import { firstRow, isUniqueViolation } from "./database.ts";
+import { insertDownloadSession } from "./downloads.ts";
 import { assertSponsorEligible } from "./eligibility.ts";
+import { SECRET_TOKEN_PATTERN } from "./formats.ts";
 import { GatewayError, json, readForm } from "./http.ts";
 import {
     DEVICE_POLL_INTERVAL_SECONDS,
@@ -8,7 +10,10 @@ import {
     DOWNLOAD_SESSION_SECONDS,
     isDiscordSnowflake,
 } from "./policy.ts";
-import { randomToken, randomUserCode, randomUuid, SECRET_TOKEN_PATTERN, sha256 } from "./tokens.ts";
+import { randomToken, randomUserCode, randomUuid, sha256 } from "./tokens.ts";
+
+// The single owner of nightly_gateway.device_sessions: the installer's device routes plus the device-session
+// queries the OAuth and sponsorship flows need, so no other module names the table or its statuses.
 
 type DeviceSessionRow = {
     id: string;
@@ -17,6 +22,37 @@ type DeviceSessionRow = {
     sponsor_discord_user_id: string | null;
     expires_at: number;
 };
+
+/** A polled session that may trade for a download token: approved, with both Discord IDs set. */
+type DownloadableDevice = DeviceSessionRow & { discord_user_id: string; sponsor_discord_user_id: string };
+
+/** Whether a polled device session was approved for a member under a known sponsor. */
+function isApprovedForDownload(row: DeviceSessionRow): row is DownloadableDevice {
+    return row.status === "approved" && isDiscordSnowflake(row.discord_user_id) && isDiscordSnowflake(row.sponsor_discord_user_id);
+}
+
+/** Whether a device-session status still waits for a sign-in or a sponsor. */
+function isAwaitingAuthorization(status: string): boolean {
+    return status === "pending" || status === "awaiting-sponsor";
+}
+
+type AuthorizableDevice = { id: string; status: string; expires_at: number };
+
+/** Whether an OAuth-bound device session exists, is unexpired, and still waits to be authorized. */
+function isAuthorizableDevice(device: AuthorizableDevice | null, now: number): device is AuthorizableDevice {
+    return device !== null && device.expires_at >= now && isAwaitingAuthorization(device.status);
+}
+
+type ClaimableDevice = { discord_user_id: string | null; status: string; expires_at: number };
+
+/** Whether a device session exists, is unexpired, awaits a sponsor, and is bound to a signed-in Discord user. */
+function isClaimableDevice(
+    device: ClaimableDevice | null,
+    now: number,
+): device is ClaimableDevice & { discord_user_id: string } {
+    return device !== null && device.status === "awaiting-sponsor" && device.expires_at >= now
+        && isDiscordSnowflake(device.discord_user_id);
+}
 
 type ApprovedDevice = { discord_user_id: string; sponsor_discord_user_id: string };
 
@@ -52,13 +88,57 @@ export async function pollDeviceSession(context: GatewayContext, request: Reques
         [await sha256(deviceSecret)],
     ));
     if (row === null || row.expires_at < now) throw new GatewayError(400, "expired_token");
-    if (row.status === "pending" || row.status === "awaiting-sponsor") throw new GatewayError(428, "authorization_pending");
-    if (row.status !== "approved" || !isDiscordSnowflake(row.discord_user_id)
-        || !isDiscordSnowflake(row.sponsor_discord_user_id)) {
-        throw new GatewayError(403, "access_denied");
-    }
+    if (isAwaitingAuthorization(row.status)) throw new GatewayError(428, "authorization_pending");
+    if (!isApprovedForDownload(row)) throw new GatewayError(403, "access_denied");
     await assertSponsorEligible(context, row.sponsor_discord_user_id);
     return issueDownloadToken(context, row.id, now);
+}
+
+/** Returns the ID of the live, not yet authorized device session a typed user code names, or null. */
+export async function findLiveDeviceByUserCode(context: GatewayContext, userCode: string): Promise<string | null> {
+    const session = firstRow(await context.db.query<{ id: string; expires_at: number }>(
+        `SELECT id, expires_at FROM nightly_gateway.device_sessions
+         WHERE user_code = $1 AND status IN ('pending', 'awaiting-sponsor')`,
+        [userCode],
+    ));
+    if (session === null || session.expires_at < context.now()) return null;
+    return session.id;
+}
+
+/** Binds an OAuth state hash to a device session, replacing any earlier one. */
+export async function bindDeviceOAuthState(context: GatewayContext, deviceId: string, stateHash: string): Promise<void> {
+    await context.db.query("UPDATE nightly_gateway.device_sessions SET oauth_state_hash = $1 WHERE id = $2", [
+        stateHash,
+        deviceId,
+    ]);
+}
+
+/** Returns the ID of the device session an OAuth state was bound to while it can still be authorized, or null. */
+export async function findAuthorizableDeviceByState(context: GatewayContext, stateHash: string): Promise<string | null> {
+    const device = firstRow(await context.db.query<AuthorizableDevice>(
+        "SELECT id, status, expires_at FROM nightly_gateway.device_sessions WHERE oauth_state_hash = $1",
+        [stateHash],
+    ));
+    if (!isAuthorizableDevice(device, context.now())) return null;
+    return device.id;
+}
+
+/** Records the signed-in Discord user on a device session and parks it until a sponsor code is redeemed. */
+export async function parkAwaitingSponsor(context: GatewayContext, deviceId: string, userId: string): Promise<void> {
+    await context.db.query(
+        "UPDATE nightly_gateway.device_sessions SET status = 'awaiting-sponsor', discord_user_id = $1 WHERE id = $2",
+        [userId, deviceId],
+    );
+}
+
+/** Returns the Discord user a device session waits to have sponsored, or null when it cannot be claimed. */
+export async function findClaimableDevice(context: GatewayContext, deviceId: string): Promise<{ userId: string } | null> {
+    const device = firstRow(await context.db.query<ClaimableDevice>(
+        "SELECT discord_user_id, status, expires_at FROM nightly_gateway.device_sessions WHERE id = $1",
+        [deviceId],
+    ));
+    if (!isClaimableDevice(device, context.now())) return null;
+    return { userId: device.discord_user_id };
 }
 
 /** Marks a device session approved for a user under the given sponsor (themselves for direct members). */
@@ -91,12 +171,14 @@ async function issueDownloadToken(context: GatewayContext, deviceId: string, now
             [deviceId],
         ));
         if (device === null) throw new GatewayError(409, "already_used");
-        await tx.query(
-            `INSERT INTO nightly_gateway.download_sessions
-                (token_hash, device_session_id, discord_user_id, supporter_discord_user_id, created_at, expires_at)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [tokenHash, deviceId, device.discord_user_id, device.sponsor_discord_user_id, now, now + DOWNLOAD_SESSION_SECONDS],
-        );
+        await insertDownloadSession(tx, {
+            tokenHash,
+            deviceId,
+            userId: device.discord_user_id,
+            sponsorId: device.sponsor_discord_user_id,
+            createdAt: now,
+            expiresAt: now + DOWNLOAD_SESSION_SECONDS,
+        });
     }).catch(rethrowUniqueViolationAsAlreadyUsed);
     return json({ access_token: accessToken, token_type: "Bearer", expires_in: DOWNLOAD_SESSION_SECONDS });
 }
