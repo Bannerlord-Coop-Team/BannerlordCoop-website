@@ -26,7 +26,7 @@ export type OAuthOutcome =
     | { outcome: "approved" }
     | { outcome: "sponsored-approved" }
     | { outcome: "needs-sponsor"; claim: PendingClaim }
-    | { outcome: "portal"; session: string; expires_in: number };
+    | { outcome: "portal"; session: string; expiresIn: number };
 
 export type SponsorSeat = { discordUserId: string; createdAt: Date | null };
 export type SponsorPortalData = { seats: SponsorSeat[] };
@@ -222,7 +222,7 @@ function decodePortalOutcome(body: Record<string, unknown>): OAuthOutcome | unde
     if (typeof body.expires_in !== "number") return undefined;
     const expiresIn = Math.floor(body.expires_in);
     if (!Number.isSafeInteger(expiresIn) || expiresIn <= 0) return undefined;
-    return { outcome: "portal", session: body.session, expires_in: expiresIn };
+    return { outcome: "portal", session: body.session, expiresIn };
 }
 
 /** Validates a needs-sponsor outcome into the pending claim the claim cookie carries to the claim form. */
@@ -238,14 +238,22 @@ function decodeSponsoredApproval(body: unknown): null | undefined {
     return null;
 }
 
-/** Validates the portal body, dropping malformed seats rather than rendering them. */
+/** Validates the portal body; one malformed seat means contract drift, so the whole reply is rejected. */
 export function decodePortal(body: unknown): SponsorPortalData | undefined {
     if (!isRecord(body) || !Array.isArray(body.seats)) return undefined;
-    const seats = body.seats.flatMap((seat): SponsorSeat[] => {
-        if (!isRecord(seat) || !isDiscordSnowflake(seat.discord_user_id)) return [];
-        return [{ discordUserId: seat.discord_user_id, createdAt: seatDate(seat.created_at) }];
-    });
+    const seats: SponsorSeat[] = [];
+    for (const row of body.seats) {
+        const seat = decodeSeat(row);
+        if (seat === undefined) return undefined;
+        seats.push(seat);
+    }
     return { seats };
+}
+
+/** Validates one seat row; undefined unless it is a record with a snowflake id (a bad date only reads as unknown). */
+function decodeSeat(row: unknown): SponsorSeat | undefined {
+    if (!isRecord(row) || !isDiscordSnowflake(row.discord_user_id)) return undefined;
+    return { discordUserId: row.discord_user_id, createdAt: seatDate(row.created_at) };
 }
 
 /** Reads a seat timestamp sent as Unix seconds; anything else, or an out-of-range value, reads as unknown. */

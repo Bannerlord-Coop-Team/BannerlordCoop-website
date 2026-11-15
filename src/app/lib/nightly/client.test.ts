@@ -15,10 +15,16 @@ function fakeFetch(status: number, body?: unknown): { fetch: NightlyFetch; calls
     const calls: Captured[] = [];
     const fetch: NightlyFetch = async (url, init) => {
         calls.push({ url, init });
-        const text = body === undefined ? null : typeof body === "string" ? body : JSON.stringify(body);
-        return new Response(text, { status });
+        return new Response(responseText(body), { status });
     };
     return { fetch, calls };
+}
+
+/** Turns a fake reply body into response text: no body stays empty, a string is sent raw, anything else as JSON. */
+function responseText(body: unknown): string | null {
+    if (body === undefined) return null;
+    if (typeof body === "string") return body;
+    return JSON.stringify(body);
 }
 
 test("every call is an authenticated JSON POST to the contract route with the contract body", async () => {
@@ -181,8 +187,8 @@ test("OAuth outcomes decode exactly the four contract shapes", () => {
         decodeOAuthOutcome({ outcome: "needs-sponsor", device_id: DEVICE_ID, username: "friend" }),
         { outcome: "needs-sponsor", claim: { deviceId: DEVICE_ID, username: "friend", previousSponsorRevoked: false } },
     );
-    assert.deepEqual(decodeOAuthOutcome({ outcome: "portal", session: SESSION, expires_in: 86400 }), { outcome: "portal", session: SESSION, expires_in: 86400 });
-    assert.deepEqual(decodeOAuthOutcome({ outcome: "portal", session: SESSION, expires_in: 3600.9 }), { outcome: "portal", session: SESSION, expires_in: 3600 });
+    assert.deepEqual(decodeOAuthOutcome({ outcome: "portal", session: SESSION, expires_in: 86400 }), { outcome: "portal", session: SESSION, expiresIn: 86400 });
+    assert.deepEqual(decodeOAuthOutcome({ outcome: "portal", session: SESSION, expires_in: 3600.9 }), { outcome: "portal", session: SESSION, expiresIn: 3600 });
     const portalExpiring = (expiresIn: unknown) => ({ outcome: "portal", session: SESSION, ...(expiresIn === undefined ? {} : { expires_in: expiresIn }) });
     const badPortals = [undefined, null, "86400", 0, -5, 0.5, Number.NaN, Number.POSITIVE_INFINITY, 1e300].map(portalExpiring);
     for (const bad of [null, [], { outcome: "unknown" }, { outcome: "portal", session: "short", expires_in: 86400 }, ...badPortals, { outcome: "needs-sponsor", device_id: "bad id!", username: "x" }, { outcome: "needs-sponsor", device_id: "device-1", username: "x" }, { outcome: "needs-sponsor", device_id: DEVICE_ID.toUpperCase(), username: "x" }, { outcome: "needs-sponsor", device_id: DEVICE_ID, username: "" }, { outcome: "needs-sponsor", device_id: DEVICE_ID, username: "x".repeat(101) }]) {
@@ -190,14 +196,12 @@ test("OAuth outcomes decode exactly the four contract shapes", () => {
     }
 });
 
-test("portal seats keep valid snowflakes, read epoch-second timestamps and drop malformed rows", () => {
+test("portal seats keep valid snowflakes and read epoch-second timestamps, a bad date reading as unknown", () => {
     const portal = decodePortal({
         seats: [
             { discord_user_id: "123456789012345678", created_at: 1_700_000_000 },
             { discord_user_id: "223456789012345678", created_at: "2026-11-01T10:00:00Z" },
             { discord_user_id: "323456789012345678" },
-            { discord_user_id: "<b>not-a-snowflake</b>", created_at: 1 },
-            "junk",
         ],
     });
     assert.deepEqual(portal, {
@@ -210,6 +214,17 @@ test("portal seats keep valid snowflakes, read epoch-second timestamps and drop 
     assert.deepEqual(decodePortal({ seats: [] }), { seats: [] });
     assert.equal(decodePortal({ seats: "x" }), undefined);
     assert.equal(decodePortal({}), undefined);
+});
+
+test("one malformed portal seat fails the whole reply as an invalid response", async () => {
+    const valid = { discord_user_id: "123456789012345678", created_at: 1_700_000_000 };
+    for (const malformed of [{ discord_user_id: "<b>not-a-snowflake</b>", created_at: 1 }, { created_at: 1 }, "junk", null]) {
+        const { fetch } = fakeFetch(200, { seats: [valid, malformed] });
+        const { log, entries } = recordingLogger();
+        const result = await createNightlyClient(config, fetch, log).sponsorPortal(SESSION);
+        assert.deepEqual(result, { ok: false, status: 200, code: "invalid_response" }, JSON.stringify(malformed));
+        assert.deepEqual(entries, [{ event: "nightly_function_invalid_response", path: "/sponsor/portal" }]);
+    }
 });
 
 test("config requires a website key and a clean https function URL", () => {

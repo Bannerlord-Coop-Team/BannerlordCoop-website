@@ -74,7 +74,7 @@ test("callback forwards the code and state once and maps failures to the callbac
 test("each OAuth outcome maps to its page and cookies, and the sponsor cookie lives as long as the Edge Function says", () => {
     assert.deepEqual(planOutcome({ outcome: "approved" }), { location: "/nightly/approved", cookies: [] });
     assert.deepEqual(planOutcome({ outcome: "sponsored-approved" }), { location: "/nightly/approved?via=sponsor", cookies: [] });
-    assert.deepEqual(planOutcome({ outcome: "portal", session: SESSION, expires_in: 3600 }), {
+    assert.deepEqual(planOutcome({ outcome: "portal", session: SESSION, expiresIn: 3600 }), {
         location: "/nightly/sponsor",
         cookies: [{ name: "nightly_sponsor", value: SESSION, maxAge: 3600 }],
     });
