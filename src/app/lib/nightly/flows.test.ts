@@ -11,8 +11,6 @@ import {
     GENERIC_ERROR_MESSAGE,
     nightlyErrorMessage,
     nightlyErrorView,
-    nightlyErrorViewFor,
-    parseErrorContext,
     ROLE_REQUIRED_MESSAGE,
 } from "./messages";
 
@@ -126,18 +124,13 @@ test("error messages use the gateway's wording per step and never echo the code"
     }
     assert.deepEqual(nightlyErrorView("callback", "supporter_role_required"), { message: ROLE_REQUIRED_MESSAGE, help: "sponsor-code" });
     assert.deepEqual(nightlyErrorView("claim", "supporter_role_required").help, null);
-    assert.equal(parseErrorContext("claim"), "claim");
-    assert.equal(parseErrorContext("toString"), null);
-    assert.equal(parseErrorContext(undefined), null);
-    assert.equal(parseErrorContext(["claim", "claim"]), null);
     assert.equal(nightlyErrorMessage("sponsor-remove", "http_400"), GENERIC_ERROR_MESSAGE);
 });
 
-test("the error page view falls back to the generic message for an unknown context or a repeated code", () => {
-    assert.deepEqual(nightlyErrorViewFor(null, "expired"), { message: GENERIC_ERROR_MESSAGE, help: null });
-    assert.deepEqual(nightlyErrorViewFor("activate", "expired"), { message: "That installer code has expired.", help: null });
-    assert.deepEqual(nightlyErrorViewFor("activate", ["expired", "expired"]), { message: GENERIC_ERROR_MESSAGE, help: null });
-    assert.deepEqual(nightlyErrorViewFor("callback", "supporter_role_required").help, "sponsor-code");
+test("the error view falls back to the generic message for an unknown context or an empty code", () => {
+    assert.deepEqual(nightlyErrorView(null, "expired"), { message: GENERIC_ERROR_MESSAGE, help: null });
+    assert.deepEqual(nightlyErrorView("activate", "expired"), { message: "That installer code has expired.", help: null });
+    assert.deepEqual(nightlyErrorView("activate", ""), { message: GENERIC_ERROR_MESSAGE, help: null });
 });
 
 test("claim action refuses a cross-origin post without calling the Edge Function", async () => {

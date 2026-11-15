@@ -37,7 +37,12 @@ export type NightlyClient = {
 };
 
 const MAXIMUM_RESPONSE_BYTES = 64 * 1024;
-const REQUEST_TIMEOUT_MILLISECONDS = 15_000;
+/**
+ * Longest one Edge Function call may take, above its worst case so the website never gives up on a call that still
+ * succeeds: `/oauth/complete` chains up to four Discord calls (token exchange, user, member, the bot's lookup of a
+ * previous sponsor) at the Edge Function's 8 s per-call Discord timeout, about 32 s; the rest covers its queries.
+ */
+const CALL_TIMEOUT_MS = 40_000;
 const CLIENT_ERROR_STATUS = 400;
 const UNAUTHORIZED_STATUS = 401;
 const NOT_FOUND_STATUS = 404;
@@ -112,7 +117,7 @@ function post({ config, fetcher }: Transport, path: string, body: unknown): Prom
         body: JSON.stringify(body),
         cache: "no-store",
         redirect: "manual",
-        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MILLISECONDS),
+        signal: AbortSignal.timeout(CALL_TIMEOUT_MS),
     });
 }
 

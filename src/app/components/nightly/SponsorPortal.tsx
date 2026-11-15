@@ -1,6 +1,5 @@
 import type { SponsorPortalData, SponsorSeat } from "@/app/lib/nightly/client";
-import { QUALIFYING_ROLES_TEXT } from "../../../../supabase/functions/_shared/nightly/policy";
-import { SPONSORED_ACCOUNT_LIMIT } from "../../../../supabase/functions/_shared/nightly/policy";
+import { QUALIFYING_ROLES_TEXT, SPONSORED_ACCOUNT_LIMIT } from "../../../../supabase/functions/_shared/nightly/policy";
 import { CreateSponsorCodeForm, RemoveSeatForm, type CreateCodeAction, type RemoveSeatAction } from "./SponsorPortalForms";
 import { finePrintClass, headingClass, ledeClass, primaryButtonClass } from "./styles";
 
@@ -20,8 +19,8 @@ export function SponsorPortal({ data, createCode, removeSeat }: {
                 <div>
                     <h1 className={headingClass}>Your <span className="text-crimson">warband.</span></h1>
                     <p className={ledeClass}>
-                        Create a code for friends to use during installation. Their access remains tied to your current qualifying
-                        {` ${QUALIFYING_ROLES_TEXT} `}Discord role.
+                        Create a code for friends to use during installation. Their access remains tied to your current
+                        qualifying {QUALIFYING_ROLES_TEXT} Discord role.
                     </p>
                 </div>
                 <div className="inline-flex shrink-0 items-center gap-3 self-start border border-gold/25 bg-gold/[0.04] px-4 py-3 lg:self-auto" aria-label={`${used} of ${SPONSORED_ACCOUNT_LIMIT} seats used`}>

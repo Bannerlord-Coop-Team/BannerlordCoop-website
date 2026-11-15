@@ -51,21 +51,11 @@ export function nightlyErrorMessage(context: NightlyErrorContext, code: string):
     return own(CONTEXT_MESSAGES[context], code) ?? GENERIC_ERROR_MESSAGE;
 }
 
-/** Resolves the full error view, adding the sponsor-code help where the gateway showed it. */
-export function nightlyErrorView(context: NightlyErrorContext, code: string): NightlyErrorView {
+/** Resolves the full error view, adding the sponsor-code help where the gateway showed it; no context reads as generic. */
+export function nightlyErrorView(context: NightlyErrorContext | null, code: string): NightlyErrorView {
+    if (context === null) return { message: GENERIC_ERROR_MESSAGE, help: null };
     const help: NightlyErrorHelp = context === "callback" && code === "supporter_role_required" ? "sponsor-code" : null;
     return { message: nightlyErrorMessage(context, code), help };
-}
-
-/** Resolves the error page's view from its query; an unknown context or a repeated code gets the generic message. */
-export function nightlyErrorViewFor(context: NightlyErrorContext | null, code: string | string[] | undefined): NightlyErrorView {
-    if (context === null) return { message: GENERIC_ERROR_MESSAGE, help: null };
-    return nightlyErrorView(context, typeof code === "string" ? code : "");
-}
-
-/** Narrows an untrusted query value (repeated or missing values included) to a known error context. */
-export function parseErrorContext(value: string | string[] | undefined): NightlyErrorContext | null {
-    return NIGHTLY_ERROR_CONTEXTS.find((context) => context === value) ?? null;
 }
 
 /** Reads an own property only, so codes like `constructor` never resolve to prototype members. */
