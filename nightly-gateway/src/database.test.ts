@@ -1,21 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { databaseForRequest } from "./database";
+import { openHyperdriveDatabase, type GatewayDatabase } from "./database";
 
 test("the gateway fails closed without Hyperdrive", async () => {
     await assert.rejects(
-        databaseForRequest({}),
+        openHyperdriveDatabase({}),
         /gateway_database_configuration_invalid/,
     );
 });
 
-test("a D1-shaped binding is not mistaken for the gateway database", async () => {
-    const d1Shaped = {
-        prepare() { throw new Error("not used"); },
-        async batch() { return []; },
+test("a stray DB binding never replaces Hyperdrive", async () => {
+    const stray: GatewayDatabase = {
+        async query() { throw new Error("a DB binding must never be used"); },
+        async transaction() { throw new Error("a DB binding must never be used"); },
     };
     await assert.rejects(
-        databaseForRequest({ DB: d1Shaped as never }),
+        openHyperdriveDatabase({ DB: stray } as never),
         /gateway_database_configuration_invalid/,
     );
 });

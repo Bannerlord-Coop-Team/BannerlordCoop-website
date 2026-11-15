@@ -1,4 +1,4 @@
-import { firstRow } from "./database";
+import { firstRow, type GatewayQuery } from "./database";
 import { GatewayError } from "./http";
 import { isBearerToken, nowSeconds, sha256 } from "./primitives";
 
@@ -10,27 +10,27 @@ export type DownloadAuthorization = { kind: "nightly" } | PinAuthorization;
 export type PinAuthorization = { kind: "pin"; buildId: string };
 
 // Requires a nightly download session, refusing pin sessions.
-export async function requireNightlyDownloadSession(request: Request, env: Env): Promise<void> {
-    const authorization = await authorizeDownload(request, env);
+export async function requireNightlyDownloadSession(request: Request, database: GatewayQuery): Promise<void> {
+    const authorization = await authorizeDownload(request, database);
     if (authorization.kind !== "nightly") throw new GatewayError(403, "access_denied");
 }
 
 // Requires a create-build pin download session and returns the build it unlocks.
-export async function requirePinDownloadSession(request: Request, env: Env): Promise<PinAuthorization> {
-    const authorization = await authorizeDownload(request, env);
+export async function requirePinDownloadSession(request: Request, database: GatewayQuery): Promise<PinAuthorization> {
+    const authorization = await authorizeDownload(request, database);
     if (authorization.kind !== "pin") throw new GatewayError(403, "access_denied");
     return authorization;
 }
 
 // Resolves a bearer token to a live pin or nightly download session, or throws 401.
-export async function authorizeDownload(request: Request, env: Env): Promise<DownloadAuthorization> {
+export async function authorizeDownload(request: Request, database: GatewayQuery): Promise<DownloadAuthorization> {
     const authorization = request.headers.get("authorization");
     if (!authorization?.startsWith("Bearer ")) throw new GatewayError(401, "authorization_required");
     const token = authorization.slice(7);
     if (!isBearerToken(token)) throw new GatewayError(401, "authorization_invalid");
     const tokenHash = await sha256(token);
     const now = nowSeconds();
-    const pinSession = firstRow(await env.DB.query<{
+    const pinSession = firstRow(await database.query<{
         build_id: string;
         session_expires_at: number;
         pin_expires_at: number;
@@ -46,7 +46,7 @@ export async function authorizeDownload(request: Request, env: Env): Promise<Dow
         }
         return { kind: "pin", buildId: pinSession.build_id };
     }
-    const row = firstRow(await env.DB.query<{ expires_at: number }>(
+    const row = firstRow(await database.query<{ expires_at: number }>(
         "SELECT expires_at FROM nightly_gateway.download_sessions WHERE token_hash = $1",
         [tokenHash],
     ));

@@ -1,5 +1,5 @@
 import { serveArtifact } from "./artifacts";
-import { databaseForRequest } from "./database";
+import { openHyperdriveDatabase, type GatewayDatabase, type RequestEnv } from "./database";
 import { FORWARDED_DEVICE_PATHS, deviceFunctionUrl, forwardDeviceRequest } from "./forwarding";
 import { GatewayError, json, safeErrorCode, type GatewayLog, type UpstreamFetch } from "./http";
 import { serveManifest } from "./manifests";
@@ -14,8 +14,16 @@ import {
 } from "./pins";
 import { websiteRedirectFor } from "./redirects";
 
-/** Outside services the gateway uses; injected so tests can stand in for the Edge Function and collect logs. */
-export type GatewayDependencies = { fetch: UpstreamFetch; log?: GatewayLog };
+/** Outside services the gateway uses; injected so tests can stand in for the Edge Function, logs and Postgres. */
+export type GatewayDependencies = {
+    fetch: UpstreamFetch;
+    log?: GatewayLog;
+    /** Opens the request's database; production defaults to the Hyperdrive binding and never reads one from env. */
+    openDatabase?: (env: Env) => Promise<GatewayDatabase>;
+};
+
+/** The dependencies with every optional one resolved to its production default. */
+type ResolvedDependencies = Required<GatewayDependencies>;
 
 /** The Worker entry point: one fetch handler bound to its dependencies. */
 export type GatewayHandler = {
@@ -30,11 +38,16 @@ function consoleLog(event: Record<string, unknown>): void {
 // Builds the Worker fetch handler around its outbound dependencies.
 // Errors become stable JSON codes, or the HTML error page for browsers.
 export function createGateway(dependencies: GatewayDependencies): GatewayHandler {
-    const log = dependencies.log ?? consoleLog;
+    const resolved: ResolvedDependencies = {
+        fetch: dependencies.fetch,
+        log: dependencies.log ?? consoleLog,
+        openDatabase: dependencies.openDatabase ?? openHyperdriveDatabase,
+    };
+    const log = resolved.log;
     return {
         async fetch(request: Request, env: Env): Promise<Response> {
             try {
-                return await route(request, env, dependencies.fetch, log);
+                return await route(request, env, resolved);
             } catch (error) {
                 logRequestFailure(log, request, error);
                 if (!(error instanceof GatewayError)) return json({ error: "internal_error" }, 500);
@@ -82,7 +95,7 @@ function safeMessage(error: Error): { message?: string } {
 }
 
 // Routes one request: the stateless redirect and device-forwarding routes first, then the R2 and Postgres routes.
-async function route(request: Request, env: Env, upstreamFetch: UpstreamFetch, log: GatewayLog): Promise<Response> {
+async function route(request: Request, env: Env, dependencies: ResolvedDependencies): Promise<Response> {
     assertConfiguration(env);
     const url = new URL(request.url);
     const redirect = websiteRedirectFor(request.method, url);
@@ -92,19 +105,18 @@ async function route(request: Request, env: Env, upstreamFetch: UpstreamFetch, l
             path: url.pathname,
             url: deviceFunctionUrl(env.NIGHTLY_FUNCTION_URL, url.pathname),
             origin: resolveGatewayOrigin(url),
-        }, upstreamFetch);
+        }, dependencies.fetch);
     }
-    const database = await databaseForRequest(env);
-    return routeWithDatabase(request, url, { ...env, DB: database }, upstreamFetch, log);
+    const database = await dependencies.openDatabase(env);
+    return routeWithDatabase(request, url, { ...env, DB: database }, dependencies);
 }
 
 // Serves the pin, manifest, artifact, and health routes that read download state from Postgres.
 async function routeWithDatabase(
     request: Request,
     url: URL,
-    env: Env,
-    upstreamFetch: UpstreamFetch,
-    log: GatewayLog,
+    env: RequestEnv,
+    { fetch: upstreamFetch, log }: ResolvedDependencies,
 ): Promise<Response> {
     if (request.method === "GET" && url.pathname === "/install" && url.searchParams.has("pin")) {
         return serveCreateBuildPinPage(url, env);
