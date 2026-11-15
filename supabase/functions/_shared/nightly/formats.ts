@@ -18,6 +18,16 @@ export const DISCORD_SNOWFLAKE_PATTERN = /^\d{17,20}$/u;
 /** Header carrying the shared secret on every website-to-Edge-Function request. */
 export const WEBSITE_KEY_HEADER = "x-nightly-website-key";
 
+/** Whether a value is a Discord snowflake ID string. */
+export function isDiscordSnowflake(value: unknown): value is string {
+    return typeof value === "string" && DISCORD_SNOWFLAKE_PATTERN.test(value);
+}
+
+/** Normalizes a typed installer user code before validation, so case and padding do not matter. */
+export function normalizeUserCode(value: string): string {
+    return value.trim().toUpperCase();
+}
+
 /** Normalizes a typed sponsor code before validation and hashing, so case and padding do not matter. */
 export function normalizeSponsorCode(value: string): string {
     return value.trim().toUpperCase();

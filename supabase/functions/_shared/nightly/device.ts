@@ -2,13 +2,12 @@ import type { GatewayContext } from "./context.ts";
 import { firstRow, isUniqueViolation } from "./database.ts";
 import { insertDownloadSession } from "./downloads.ts";
 import { assertSponsorEligible } from "./eligibility.ts";
-import { SECRET_TOKEN_PATTERN } from "./formats.ts";
+import { isDiscordSnowflake, SECRET_TOKEN_PATTERN } from "./formats.ts";
 import { GatewayError, json, readForm } from "./http.ts";
 import {
     DEVICE_POLL_INTERVAL_SECONDS,
     DEVICE_SESSION_SECONDS,
     DOWNLOAD_SESSION_SECONDS,
-    isDiscordSnowflake,
 } from "./policy.ts";
 import { randomToken, randomUserCode, randomUuid, sha256 } from "./tokens.ts";
 

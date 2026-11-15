@@ -1,6 +1,5 @@
 // The single owner of the nightly-access policy: Discord roles, the seat limit, session lifetimes and fixed Discord URLs.
 // The values are part of the access contract; wire formats live in formats.ts. Dependency-free so Next.js can import it.
-import { DISCORD_SNOWFLAKE_PATTERN } from "./formats.ts";
 
 /** Seats each eligible member can sponsor. */
 export const SPONSORED_ACCOUNT_LIMIT = 10;
@@ -46,9 +45,4 @@ export function hasNightlyAccessRole(roleIds: readonly string[]): boolean {
 export function isEligibleNightlySponsor(member: { roles?: unknown } | null): boolean {
     if (member === null || !Array.isArray(member.roles)) return false;
     return hasNightlyAccessRole(member.roles.filter((roleId): roleId is string => typeof roleId === "string"));
-}
-
-/** Whether a value is a Discord snowflake ID string. */
-export function isDiscordSnowflake(value: unknown): value is string {
-    return typeof value === "string" && DISCORD_SNOWFLAKE_PATTERN.test(value);
 }

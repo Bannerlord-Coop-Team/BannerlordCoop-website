@@ -5,7 +5,7 @@ import { createDiscordApi, type DiscordApi, type DiscordCredentials } from "./di
 import { WEBSITE_KEY_HEADER } from "./formats.ts";
 import { errorJson, GatewayError, json, readJsonObject } from "./http.ts";
 import { completeOAuth, startOAuth } from "./oauth.ts";
-import { isDiscordSnowflake } from "./policy.ts";
+import { isDiscordSnowflake } from "./formats.ts";
 import { claimSponsorship, removeSponsoredAccount, rotateSponsorCode, sponsorPortal } from "./sponsor.ts";
 import { cryptoRandomBytes, type RandomBytes, secretsEqual } from "./tokens.ts";
 

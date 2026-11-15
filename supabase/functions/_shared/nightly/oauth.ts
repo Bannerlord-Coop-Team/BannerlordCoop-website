@@ -8,7 +8,7 @@ import {
 } from "./device.ts";
 import type { DiscordUser } from "./discord.ts";
 import { revokeSponsorIfIneligible } from "./eligibility.ts";
-import { MAXIMUM_OAUTH_CODE_LENGTH, SECRET_TOKEN_PATTERN, USER_CODE_PATTERN } from "./formats.ts";
+import { MAXIMUM_OAUTH_CODE_LENGTH, normalizeUserCode, SECRET_TOKEN_PATTERN, USER_CODE_PATTERN } from "./formats.ts";
 import { storeSupporterGrant } from "./grants.ts";
 import { GatewayError, json } from "./http.ts";
 import { hasNightlyAccessRole, OAUTH_STATE_SECONDS, SPONSOR_SESSION_SECONDS } from "./policy.ts";
@@ -44,7 +44,7 @@ export async function completeOAuth(context: GatewayContext, body: Record<string
 
 /** Binds a fresh OAuth state to a live pending or awaiting-sponsor device session. */
 async function startDeviceOAuth(context: GatewayContext, rawUserCode: unknown): Promise<Response> {
-    const userCode = typeof rawUserCode === "string" ? rawUserCode.toUpperCase() : "";
+    const userCode = typeof rawUserCode === "string" ? normalizeUserCode(rawUserCode) : "";
     if (!USER_CODE_PATTERN.test(userCode)) throw new GatewayError(400, "invalid_code");
     const deviceId = await findLiveDeviceByUserCode(context, userCode);
     if (deviceId === null) throw new GatewayError(400, "expired");

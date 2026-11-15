@@ -5,13 +5,14 @@ import { revokeDownloadsForFriend } from "./downloads.ts";
 import { assertSponsorEligible, revokeSponsorIfIneligible } from "./eligibility.ts";
 import {
     DEVICE_ID_PATTERN,
+    isDiscordSnowflake,
     MAXIMUM_SPONSOR_CODE_LENGTH,
     normalizeSponsorCode,
     SECRET_TOKEN_PATTERN,
 } from "./formats.ts";
 import { findSupporterByCodeHash, replaceSponsorCodeHash } from "./grants.ts";
 import { GatewayError, json } from "./http.ts";
-import { isDiscordSnowflake, SPONSOR_SESSION_SECONDS, SPONSORED_ACCOUNT_LIMIT } from "./policy.ts";
+import { SPONSOR_SESSION_SECONDS, SPONSORED_ACCOUNT_LIMIT } from "./policy.ts";
 import { randomSponsorCode, randomToken, sha256 } from "./tokens.ts";
 
 // The single owner of nightly_gateway.sponsorships and nightly_gateway.sponsor_sessions: the website's

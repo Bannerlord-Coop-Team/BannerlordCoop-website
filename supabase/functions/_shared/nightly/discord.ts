@@ -5,8 +5,8 @@ import {
     DISCORD_OAUTH_SCOPES,
     DISCORD_REDIRECT_URI,
     DISCORD_USER_AGENT,
-    isDiscordSnowflake,
 } from "./policy.ts";
+import { isDiscordSnowflake } from "./formats.ts";
 
 const DISCORD_API = "https://discord.com/api/v10";
 const DISCORD_AUTHORIZE = "https://discord.com/oauth2/authorize";
