@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 import {
     type ConnectionPool,
@@ -26,26 +26,44 @@ export const OTHER_SPONSOR = "876543210987654321";
 export const FRIEND = "123456789012345678";
 export const TOKEN_URL = "https://discord.com/api/v10/oauth2/token";
 
-const MIGRATIONS = [
-    "202608260004_create_nightly_gateway_schema",
-    "202608260005_enforce_nightly_sponsorship_limit",
-    "20261105200000_remove_client_archive_size_limit",
-    "20261115090000_nightly_gateway_retire_refresh_tokens",
-    "20261116000000_nightly_gateway_fix_pin_server_file_check",
-];
+const MIGRATIONS_DIRECTORY = new URL("../../migrations/", import.meta.url);
+const GATEWAY_SCHEMA = "nightly_gateway";
 const TABLES = "device_sessions, supporter_grants, sponsorships, download_sessions, oauth_states, sponsor_sessions";
 
-/** Creates an in-memory database with the gateway schema applied up to `migrationCount` migrations. */
-export async function createGatewayDatabase(migrationCount = MIGRATIONS.length): Promise<PGlite> {
+/** Which gateway migrations to apply: all of them, or only those ordered before the named migration. */
+export type GatewaySchemaOptions = { before?: string };
+
+/** Creates an in-memory database with every gateway migration applied, or those before `options.before`. */
+export async function createGatewayDatabase(options: GatewaySchemaOptions = {}): Promise<PGlite> {
+    const migrations = migrationsBefore(await gatewayMigrations(), options.before);
     const database = new PGlite();
     await database.exec("create role anon; create role authenticated;");
-    for (const name of MIGRATIONS.slice(0, migrationCount)) await applyMigration(database, name);
+    for (const name of migrations) await applyMigration(database, name);
     return database;
+}
+
+/** Lists, in filename order, every supabase/migrations file that touches the gateway schema, so none can be missed. */
+async function gatewayMigrations(): Promise<string[]> {
+    const files = (await readdir(MIGRATIONS_DIRECTORY)).filter((file) => file.endsWith(".sql")).sort();
+    const names: string[] = [];
+    for (const file of files) {
+        const text = await readFile(new URL(file, MIGRATIONS_DIRECTORY), "utf8");
+        if (text.includes(GATEWAY_SCHEMA)) names.push(file.slice(0, -".sql".length));
+    }
+    return names;
+}
+
+/** Cuts the ordered migration list just before `name`; refuses a name that is not a gateway migration. */
+function migrationsBefore(migrations: string[], name: string | undefined): string[] {
+    if (name === undefined) return migrations;
+    const index = migrations.indexOf(name);
+    if (index < 0) throw new Error(`Unknown gateway migration: ${name}`);
+    return migrations.slice(0, index);
 }
 
 /** Applies one migration file from supabase/migrations by name. */
 export async function applyMigration(database: PGlite, name: string): Promise<void> {
-    await database.exec(await readFile(new URL(`../../migrations/${name}.sql`, import.meta.url), "utf8"));
+    await database.exec(await readFile(new URL(`${name}.sql`, MIGRATIONS_DIRECTORY), "utf8"));
 }
 
 /** Empties every gateway table between tests. */

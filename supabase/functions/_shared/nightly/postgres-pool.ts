@@ -1,4 +1,4 @@
-import { type ConnectionPool, type GatewayDatabase, pooledGatewayDatabase } from "./database.ts";
+import { type ConnectionPool, driverCode, type GatewayDatabase, pooledGatewayDatabase } from "./database.ts";
 import { type GatewayLog, logToStderr } from "./log.ts";
 
 // Edge-only composition of the gateway's PostgreSQL pool. The `pg` module is a parameter, so this file never
@@ -53,8 +53,7 @@ export function createPostgresGatewayDatabase(
     return pooledGatewayDatabase(pool);
 }
 
-/** Describes an idle-connection error by its SQLSTATE or driver code only, never its message. */
+/** Describes an idle-connection error by its well-formed errno code or SQLSTATE only, never its message. */
 function poolErrorEvent(error: unknown): Record<string, unknown> {
-    const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
-    return { event: "nightly_gateway_pool_error", error: String(code ?? "unknown") };
+    return { event: "nightly_gateway_pool_error", ...driverCode(error) };
 }

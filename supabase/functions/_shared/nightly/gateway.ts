@@ -1,5 +1,5 @@
 import type { GatewayContext } from "./context.ts";
-import { type GatewayDatabase, SQLSTATE_PATTERN } from "./database.ts";
+import { driverCode, type GatewayDatabase } from "./database.ts";
 import { createDeviceSession, pollDeviceSession } from "./device.ts";
 import { configurationInvalid, hasMinimumLength } from "./configuration.ts";
 import { assertDiscordCredentials, createDiscordApi, type DiscordCredentials } from "./discord.ts";
@@ -12,8 +12,6 @@ import { cryptoRandomBytes, type RandomBytes, secretsEqual } from "./tokens.ts";
 
 const FUNCTION_PREFIXES = Object.freeze(["/functions/v1/nightly-gateway", "/nightly-gateway"]);
 const MINIMUM_WEBSITE_KEY_LENGTH = 32;
-/** A Node-style errno code naming a failed dependency, like ECONNREFUSED or ETIMEDOUT; checked before SQLSTATE. */
-const ERRNO_CODE_PATTERN = /^E[A-Z]{2,20}$/;
 /** A snake_case error code this code base throws as a plain Error's message; any other message is never logged. */
 const SAFE_ERROR_CODE_PATTERN = /^[a-z0-9_]{1,64}$/;
 
@@ -128,15 +126,6 @@ function unexpectedCause(error: unknown): { cause: string; message?: string; cod
 function safeMessage(error: unknown): { message?: string } {
     if (!(error instanceof Error) || !SAFE_ERROR_CODE_PATTERN.test(error.message)) return {};
     return { message: error.message };
-}
-
-/** The error's errno code (naming a failed connection or timeout) or else its PostgreSQL SQLSTATE, when well-formed. */
-function driverCode(error: unknown): { code?: string; sqlstate?: string } {
-    const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
-    if (typeof code !== "string") return {};
-    if (ERRNO_CODE_PATTERN.test(code)) return { code };
-    if (SQLSTATE_PATTERN.test(code)) return { sqlstate: code };
-    return {};
 }
 
 /** Refuses to start with a missing or implausible secret or setting instead of failing per request. */

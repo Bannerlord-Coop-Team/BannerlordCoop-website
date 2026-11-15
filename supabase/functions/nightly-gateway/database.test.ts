@@ -26,6 +26,7 @@ import {
     SPONSOR,
 } from "./test-harness.ts";
 
+const RETIRE_REFRESH_TOKENS = "20261115090000_nightly_gateway_retire_refresh_tokens";
 const WORKER_GRANT_UPSERT = `
     INSERT INTO nightly_gateway.supporter_grants (supporter_discord_user_id, encrypted_refresh_token, token_nonce, updated_at)
     VALUES ($1, $2, $3, $4)
@@ -228,7 +229,7 @@ test("the Postgres database registers the safe INT8 parser for INT8 columns", ()
     assert.equal(parsers.get(20), parseSafeInt8);
 });
 
-test("an idle-connection error is logged by its code only, never its message", () => {
+test("an idle-connection error is logged by its well-formed driver code only, never its message", () => {
     let listener: ((error: unknown) => void) | undefined;
     const logs: Record<string, unknown>[] = [];
     const pgModule: PostgresModule = {
@@ -242,20 +243,24 @@ test("an idle-connection error is logged by its code only, never its message", (
         applicationName: "test", maxConnections: 4, idleTimeoutMs: 10_000, queryTimeoutMs: 5_000, log: (event) => logs.push(event),
     });
     listener!(Object.assign(new Error("terminating connection for user secret-admin"), { code: "57P01" }));
+    listener!(Object.assign(new Error("connect ECONNRESET secret-admin"), { code: "ECONNRESET" }));
+    listener!(Object.assign(new Error("odd driver failure"), { code: "secret-admin" }));
     listener!(new Error("password authentication failed for secret-admin"));
     assert.deepEqual(logs, [
-        { event: "nightly_gateway_pool_error", error: "57P01" },
-        { event: "nightly_gateway_pool_error", error: "unknown" },
+        { event: "nightly_gateway_pool_error", sqlstate: "57P01" },
+        { event: "nightly_gateway_pool_error", code: "ECONNRESET" },
+        { event: "nightly_gateway_pool_error" },
+        { event: "nightly_gateway_pool_error" },
     ]);
     assert.ok(!JSON.stringify(logs).includes("secret-admin"));
 });
 
 test("the refresh-token migration clears stored tokens and keeps the running Worker's upsert valid", async () => {
-    const pg = await createGatewayDatabase(2);
+    const pg = await createGatewayDatabase({ before: RETIRE_REFRESH_TOKENS });
     try {
         const database = singleConnectionDatabase(pg);
         await database.query(WORKER_GRANT_UPSERT, [SPONSOR, "c".repeat(64), "n".repeat(16), NOW]);
-        await applyMigration(pg, "20261115090000_nightly_gateway_retire_refresh_tokens");
+        await applyMigration(pg, RETIRE_REFRESH_TOKENS);
         const select = "SELECT encrypted_refresh_token, token_nonce FROM nightly_gateway.supporter_grants WHERE supporter_discord_user_id = $1";
         assert.deepEqual(firstRow(await database.query(select, [SPONSOR])), { encrypted_refresh_token: null, token_nonce: null });
 

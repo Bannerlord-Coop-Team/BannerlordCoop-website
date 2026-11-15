@@ -5,6 +5,17 @@
 
 /** A PostgreSQL SQLSTATE error code: five digits or capitals, like 23505. */
 export const SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/;
+/** A Node-style errno code naming a failed dependency, like ECONNREFUSED or ETIMEDOUT; checked before SQLSTATE. */
+const ERRNO_CODE_PATTERN = /^E[A-Z]{2,20}$/;
+
+/** The error's errno code (naming a failed connection or timeout) or else its PostgreSQL SQLSTATE, when well-formed. */
+export function driverCode(error: unknown): { code?: string; sqlstate?: string } {
+    const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
+    if (typeof code !== "string") return {};
+    if (ERRNO_CODE_PATTERN.test(code)) return { code };
+    if (SQLSTATE_PATTERN.test(code)) return { sqlstate: code };
+    return {};
+}
 
 /** The rows a statement returned and how many rows it inserted, updated or deleted. */
 export type QueryResult<T> = { rows: T[]; rowCount: number };
