@@ -1,3 +1,4 @@
+import type { RequestEnv } from "./database";
 import { requireNightlyDownloadSession } from "./downloads";
 import { GatewayError, decodeUtf8, json, safeErrorCode, type GatewayLog, type UpstreamFetch } from "./http";
 import {
@@ -20,11 +21,11 @@ export type ManifestDependencies = { fetch: UpstreamFetch; log: GatewayLog };
 // Stored manifests may name either gateway host; both validate before the rewrite.
 export async function serveManifest(
     request: Request,
-    env: Env,
+    env: RequestEnv,
     clientOnly: boolean,
     { fetch: upstreamFetch, log }: ManifestDependencies,
 ): Promise<Response> {
-    await requireNightlyDownloadSession(request, env);
+    await requireNightlyDownloadSession(request, env.DB);
     const origin = resolveGatewayOrigin(request.url);
     const wantsV2 = request.headers.get(NIGHTLY_PUBLICATION_VERSION_HEADER)?.trim() === "2";
     if (clientOnly && !wantsV2) {

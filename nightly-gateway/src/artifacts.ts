@@ -1,11 +1,12 @@
 import { isAllowedArtifactKey } from "./artifact-keys";
 import { isAllowedPinClientKey } from "./pin-rules";
+import type { RequestEnv } from "./database";
 import { authorizeDownload } from "./downloads";
 import { GatewayError } from "./http";
 
 // Streams one authorized R2 artifact, honouring range and conditional request headers.
-export async function serveArtifact(request: Request, env: Env, encodedKey: string): Promise<Response> {
-    const authorization = await authorizeDownload(request, env);
+export async function serveArtifact(request: Request, env: RequestEnv, encodedKey: string): Promise<Response> {
+    const authorization = await authorizeDownload(request, env.DB);
     let key: string;
     try {
         key = encodedKey.split("/").map(decodeURIComponent).join("/");

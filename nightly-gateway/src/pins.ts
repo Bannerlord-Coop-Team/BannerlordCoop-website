@@ -1,4 +1,4 @@
-import { firstRow } from "./database";
+import { firstRow, type RequestEnv } from "./database";
 import { PUBLIC_MANUAL_SERVER_ORIGIN, resolveGatewayOrigin } from "./origins";
 import {
     CREATE_BUILD_PIN_KIND,
@@ -59,7 +59,7 @@ type InstallerPinRow = {
 };
 
 // Stores one staff-built client archive behind a one-time pin and returns its install link on the caller's gateway host.
-export async function mintCreateBuildPin(request: Request, env: Env): Promise<Response> {
+export async function mintCreateBuildPin(request: Request, env: RequestEnv): Promise<Response> {
     await requirePinMintSecret(request, env);
     const contentLength = request.headers.get("content-length");
     if (contentLength !== null) {
@@ -149,7 +149,7 @@ export async function mintCreateBuildPin(request: Request, env: Env): Promise<Re
 }
 
 // Consumes a one-time pin and opens a short download session bound to its build.
-export async function redeemCreateBuildPin(request: Request, env: Env): Promise<Response> {
+export async function redeemCreateBuildPin(request: Request, env: RequestEnv): Promise<Response> {
     const body = await readForm(request);
     const pin = body.get("pin");
     if (!isBearerToken(pin)) throw new GatewayError(400, "invalid_request");
@@ -183,8 +183,8 @@ export async function redeemCreateBuildPin(request: Request, env: Env): Promise<
 }
 
 // Describes the pinned client/server pair, pointing the client download at the gateway host the installer used.
-export async function servePinManifest(request: Request, env: Env): Promise<Response> {
-    const session = await requirePinDownloadSession(request, env);
+export async function servePinManifest(request: Request, env: RequestEnv): Promise<Response> {
+    const session = await requirePinDownloadSession(request, env.DB);
     const pin = firstRow(await env.DB.query<InstallerPinRow>(`
         SELECT build_id, client_sha, server_sha, client_file_name, client_bytes, client_sha256,
                server_file_name, server_key, server_public_url, server_bytes, server_sha256,
@@ -221,7 +221,7 @@ export async function servePinManifest(request: Request, env: Env): Promise<Resp
 }
 
 // Shows the install page for a still-valid create-build pin, or the error page when it is not.
-export async function serveCreateBuildPinPage(url: URL, env: Env): Promise<Response> {
+export async function serveCreateBuildPinPage(url: URL, env: RequestEnv): Promise<Response> {
     const pin = await loadVisibleCreateBuildPin(url, env);
     if (typeof pin === "string") return html(errorPage(pin), 400);
     return html(page(
@@ -233,7 +233,7 @@ export async function serveCreateBuildPinPage(url: URL, env: Env): Promise<Respo
 }
 
 // Serves the one-time .cmd launcher for a still-valid create-build pin.
-export async function serveCreateBuildPinLauncher(url: URL, env: Env): Promise<Response> {
+export async function serveCreateBuildPinLauncher(url: URL, env: RequestEnv): Promise<Response> {
     const pin = await loadVisibleCreateBuildPin(url, env);
     if (typeof pin === "string") return new Response(pin, { status: 400, headers: { "content-type": "text/plain; charset=utf-8" } });
     return new Response(createBuildPinLauncher(pin.token, resolveGatewayOrigin(url)), {
@@ -256,7 +256,7 @@ type VisibleCreateBuildPin = {
 };
 
 // Looks up an unused, unexpired pin from the query string, or returns the user-facing reason it cannot be shown.
-async function loadVisibleCreateBuildPin(url: URL, env: Env): Promise<string | VisibleCreateBuildPin> {
+async function loadVisibleCreateBuildPin(url: URL, env: RequestEnv): Promise<string | VisibleCreateBuildPin> {
     const token = url.searchParams.get("pin");
     if (!isBearerToken(token)) return "That create-build installer link is invalid.";
     const row = firstRow(await env.DB.query<{

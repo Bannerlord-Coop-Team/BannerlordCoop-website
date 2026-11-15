@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import type { GatewayDatabase } from "./database";
 import { deviceFunctionUrl } from "./forwarding";
 import { type UpstreamFetch } from "./http";
 import { createGateway } from "./index";
@@ -12,7 +13,7 @@ const SESSION = Object.freeze({ device_code: "d".repeat(43), user_code: "AB2D-EF
 
 type UpstreamCall = { url: string; init: RequestInit; body: string };
 
-// Env without DB or Hyperdrive: these routes must answer without opening a database connection.
+// Env without Hyperdrive: these routes must answer without opening a database connection.
 function statelessEnv(functionUrl = FUNCTION_URL): Env {
     return { LEGACY_R2_ORIGIN: LEGACY_R2, NIGHTLY_FUNCTION_URL: functionUrl } as unknown as Env;
 }
@@ -135,6 +136,8 @@ test("an unreachable or broken Edge Function becomes a logged 502 with a named c
         { respond: () => new Response("x".repeat(64 * 1024), { status: 200 }), code: "function_response_invalid", upstreamStatus: 200 },
         { respond: () => new Response(null, { status: 302, headers: { location: "https://example.invalid/" } }), code: "function_response_invalid", upstreamStatus: 302 },
         { respond: () => new Response(erroringStream(), { status: 200 }), code: "function_response_invalid", cause: "Error", upstreamStatus: 200 },
+        { respond: () => Response.json({ code: "NOT_FOUND", message: "Requested function was not found" }, { status: 404 }), code: "function_response_invalid", upstreamStatus: 404 },
+        { respond: () => Response.json({ error: "not_found" }, { status: 404 }), code: "function_response_invalid", upstreamStatus: 404 },
     ];
     for (const failure of failures) {
         const logger = recordingLog();
@@ -252,9 +255,12 @@ test("routes the gateway still serves are never redirected", () => {
 });
 
 test("health still answers once the database is reachable", async () => {
-    const gateway = createGateway({ fetch: () => Promise.reject(new Error("health must not call upstream")) });
-    const env = { ...statelessEnv(), DB: { query() { throw new Error("unused"); }, transaction() { throw new Error("unused"); } } } as unknown as Env;
-    const response = await gateway.fetch(new Request(`${LEGACY_GATEWAY_ORIGIN}/health`), env);
+    const unused = { query() { throw new Error("unused"); }, transaction() { throw new Error("unused"); } } as unknown as GatewayDatabase;
+    const gateway = createGateway({
+        fetch: () => Promise.reject(new Error("health must not call upstream")),
+        openDatabase: async () => unused,
+    });
+    const response = await gateway.fetch(new Request(`${LEGACY_GATEWAY_ORIGIN}/health`), statelessEnv());
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { ok: true });
 });

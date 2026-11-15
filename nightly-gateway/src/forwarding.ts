@@ -7,6 +7,7 @@ const MAXIMUM_DEVICE_REQUEST_BYTES = 4 * 1024;
 const MAXIMUM_DEVICE_RESPONSE_BYTES = 16 * 1024;
 const DEVICE_FORWARD_TIMEOUT_MS = 10_000;
 const USER_CODE = /^[A-Z2-9]{4}-[A-Z2-9]{4}$/;
+const MISROUTED_STATUS = 404;
 
 /** Where one installer call is relayed: the device-API path, its Edge Function URL, and the gateway origin the installer used. */
 export type DeviceForwardTarget = { path: string; url: string; origin: string };
@@ -28,7 +29,7 @@ export function deviceFunctionUrl(functionUrl: unknown, path: string): string {
 }
 
 // Relays one installer device-API call to the Edge Function and returns its status and JSON body.
-// A new device session also gets the gateway's own activation link; upstream failures throw a 502 GatewayError.
+// A new device session also gets the gateway's own activation link; upstream failures and misroutes throw a 502 GatewayError.
 export async function forwardDeviceRequest(
     request: Request,
     target: DeviceForwardTarget,
@@ -37,6 +38,7 @@ export async function forwardDeviceRequest(
     const body = await readBoundedBytes(request, MAXIMUM_DEVICE_REQUEST_BYTES);
     if (body === null) throw new GatewayError(413, "request_too_large");
     const upstream = await callFunction(request, target.url, body, upstreamFetch);
+    assertRouted(upstream);
     const payload = await readUpstreamJson(upstream);
     return json(withVerificationUri(payload, target.path, upstream.status, target.origin), upstream.status);
 }
@@ -54,6 +56,13 @@ async function callFunction(request: Request, url: string, body: Uint8Array, ups
     } catch (cause) {
         throw new GatewayError(502, "function_unreachable", { cause });
     }
+}
+
+// Refuses an upstream 404: the Worker forwards only known device paths, so it means NIGHTLY_FUNCTION_URL names the
+// wrong function or project, and becomes a logged 502 instead of reaching the installer.
+function assertRouted(response: Response): void {
+    if (response.status !== MISROUTED_STATUS) return;
+    throw new GatewayError(502, "function_response_invalid", { upstreamStatus: MISROUTED_STATUS });
 }
 
 // Chooses the only headers the Edge Function needs: the body type and a JSON accept.

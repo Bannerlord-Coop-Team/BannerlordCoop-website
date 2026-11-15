@@ -20,7 +20,7 @@ export interface GatewayQuery {
     query<T = Record<string, unknown>>(sql: string, values?: readonly unknown[]): Promise<GatewayQueryResult<T>>;
 }
 
-/** The request's Postgres access the gateway modules depend on, served by pg in production and fakes in tests. */
+/** The request's Postgres access the gateway modules depend on, opened by createGateway's openDatabase dependency. */
 export interface GatewayDatabase extends GatewayQuery {
     transaction<T>(work: (database: GatewayQuery) => Promise<T>): Promise<T>;
 }
@@ -30,16 +30,20 @@ export function firstRow<T>(result: GatewayQueryResult<T>): T | null {
     return result.rows[0] ?? null;
 }
 
-type HyperdriveBinding = { connectionString: string };
-type DatabaseEnvironment = {
-    DB?: GatewayDatabase;
-    HYPERDRIVE?: HyperdriveBinding;
-};
+/** The Worker bindings plus the request's opened database, as the Postgres-backed route handlers receive them. */
+export type RequestEnv = Env & { DB: GatewayDatabase };
 
-// Picks the request's database: an injected test database, otherwise a new Hyperdrive Postgres client.
-// Postgres is the only production store since the Edge Function split; a missing Hyperdrive binding fails closed.
-export async function databaseForRequest(env: DatabaseEnvironment): Promise<GatewayDatabase> {
-    if (isGatewayDatabase(env.DB)) return env.DB;
+/** The connection slice the gateway runs statements on: a pg Client in production, any adapted driver in tests. */
+export interface PostgresConnection {
+    query(sql: string, values: unknown[]): Promise<{ rows: unknown[]; rowCount: number | null }>;
+}
+
+/** The only binding the production database opener reads: the Hyperdrive connection string. */
+type HyperdriveEnvironment = { HYPERDRIVE?: { connectionString: string } };
+
+// Opens the request's Postgres connection through Hyperdrive, the only production store since the Edge Function split.
+// A missing or malformed binding fails closed.
+export async function openHyperdriveDatabase(env: HyperdriveEnvironment): Promise<GatewayDatabase> {
     const connectionString = env.HYPERDRIVE?.connectionString;
     if (typeof connectionString !== "string" || connectionString.length < 16 || connectionString.length > 8_192) {
         throw new Error("gateway_database_configuration_invalid");
@@ -55,29 +59,22 @@ export async function databaseForRequest(env: DatabaseEnvironment): Promise<Gate
     return new PostgresGatewayDatabase(client);
 }
 
-// Tells whether a binding exposes the query and transaction calls the gateway needs.
-function isGatewayDatabase(value: unknown): value is GatewayDatabase {
-    return typeof value === "object" && value !== null
-        && typeof (value as GatewayDatabase).query === "function"
-        && typeof (value as GatewayDatabase).transaction === "function";
-}
-
-// Runs the gateway's statements on one request-scoped pg Client, wrapping transactions in BEGIN/COMMIT.
-class PostgresGatewayDatabase implements GatewayDatabase {
-    constructor(private readonly client: Client) {}
+// Runs the gateway's statements on one request-scoped connection, wrapping transactions in BEGIN/COMMIT/ROLLBACK.
+export class PostgresGatewayDatabase implements GatewayDatabase {
+    constructor(private readonly client: PostgresConnection) {}
 
     // Runs one parameterized statement and returns its rows and affected-row count.
     async query<T = Record<string, unknown>>(sql: string, values: readonly unknown[] = []): Promise<GatewayQueryResult<T>> {
-        const result = await this.client.query<T & Record<string, unknown>>(sql, [...values]);
-        return { rows: result.rows, rowCount: result.rowCount ?? 0 };
+        const result = await this.client.query(sql, [...values]);
+        return { rows: result.rows as T[], rowCount: result.rowCount ?? 0 };
     }
 
     // Runs the work in one transaction, committing its result or rolling back on the first failure.
     async transaction<T>(work: (database: GatewayQuery) => Promise<T>): Promise<T> {
-        await this.client.query("BEGIN");
+        await this.client.query("BEGIN", []);
         try {
             const result = await work(this);
-            await this.client.query("COMMIT");
+            await this.client.query("COMMIT", []);
             return result;
         } catch (error) {
             await this.rollbackQuietly();
@@ -88,7 +85,7 @@ class PostgresGatewayDatabase implements GatewayDatabase {
     // Rolls back the open transaction, keeping the caller's original error; the connection is discarded anyway.
     private async rollbackQuietly(): Promise<void> {
         try {
-            await this.client.query("ROLLBACK");
+            await this.client.query("ROLLBACK", []);
         } catch {
             // The request-scoped connection is discarded, so a failed rollback changes nothing.
         }
