@@ -18,7 +18,6 @@
     "gateway:check": "npm run gateway:types && tsc --project nightly-gateway/tsconfig.json",
     "gateway:dry-run": "npm run gateway:sync-installer && npx --yes wrangler@4.40.2 deploy --dry-run --config nightly-gateway/wrangler.jsonc",
     "gateway:sync-installer": "node nightly-gateway/sync-installer.mjs",
-    "gateway:migrate-d1": "node nightly-gateway/migrate-d1-to-postgres.mjs",
     "gateway:provision-postgres": "node nightly-gateway/provision-postgres.mjs",
     "test:components": "vitest run",
     "test:campaign-reset": "tsx --test supabase/functions/my-servers/campaigns.test.ts src/app/lib/hosting/server-campaigns.test.ts && npm run test:components -- src/app/components/servers/ManagedServerCampaigns.component.test.tsx src/app/servers/managed-server-campaign-actions.component.test.tsx",

@@ -104,5 +104,5 @@ Outcomes returned by `/oauth/complete`:
 3. **Website:** set the same `NIGHTLY_WEBSITE_KEY` on the website Worker, then deploy the `/nightly/*` pages.
 4. **Worker:** deploy the slimmed gateway. Device login runs on Supabase from this point.
 5. **Smoke test:** a real install end to end, plus the sponsor portal.
-6. **Clean up:** delete the Worker's retired secrets (`DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_SECRET`, `TOKEN_ENCRYPTION_KEY`) and, once nothing needs it, the old D1 database.
+6. **Clean up:** delete the Worker's retired secrets (`DISCORD_BOT_TOKEN`, `DISCORD_CLIENT_SECRET`, `TOKEN_ENCRYPTION_KEY`, `DATABASE_BACKEND`) and, once nothing needs it, the old D1 database.
 7. **Later:** retire the `workers.dev` host, and switch the Discord bot and app back to the project's long-term application.
