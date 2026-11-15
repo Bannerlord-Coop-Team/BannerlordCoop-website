@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { USER_CODE_PATTERN } from "../../../../supabase/functions/_shared/nightly/formats";
+import { MAXIMUM_OAUTH_CODE_LENGTH, USER_CODE_PATTERN } from "../../../../supabase/functions/_shared/nightly/formats";
 import type { NightlyClient, NightlyResult, OAuthOutcome } from "./client";
 import {
     CLAIM_COOKIE,
@@ -15,8 +15,6 @@ import type { NightlyErrorContext } from "./messages";
 export type NightlyCookie = { name: string; value: string; maxAge: number };
 /** Where a nightly GET route sends the browser, plus any cookies it sets on the way. */
 export type RedirectPlan = { location: string; cookies: NightlyCookie[] };
-
-const MAXIMUM_OAUTH_CODE_LENGTH = 512;
 
 /** Builds the error-page path for one context and sanitized code. */
 export function errorPath(context: NightlyErrorContext, code: string): string {

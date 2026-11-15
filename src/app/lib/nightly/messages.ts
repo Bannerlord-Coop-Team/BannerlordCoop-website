@@ -1,4 +1,4 @@
-import { SPONSORED_ACCOUNT_LIMIT } from "../../../../supabase/functions/_shared/nightly/formats";
+import { SPONSORED_ACCOUNT_LIMIT } from "../../../../supabase/functions/_shared/nightly/policy";
 
 /** Where an Edge Function error surfaced; the same code can need different wording per step. */
 export type NightlyErrorContext = "activate" | "callback" | "claim" | "sponsor-login" | "sponsor-code" | "sponsor-remove";

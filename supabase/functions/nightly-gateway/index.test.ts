@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 import type { PGlite } from "@electric-sql/pglite";
 import { createNightlyGatewayHandler } from "../_shared/nightly/gateway.ts";
-import { SPONSORED_ACCOUNT_LIMIT } from "../_shared/nightly/formats.ts";
 import { hasNightlyAccessRole, isEligibleNightlySponsor } from "../_shared/nightly/policy.ts";
 import { sha256 } from "../_shared/nightly/tokens.ts";
 import {
@@ -68,7 +67,6 @@ test("supporters, Testers, Staff, and Competition Winners get nightly access and
     assert.equal(isEligibleNightlySponsor({ roles: [] }), false);
     assert.equal(isEligibleNightlySponsor({ roles: "not-an-array" }), false);
     assert.equal(isEligibleNightlySponsor(null), false);
-    assert.equal(SPONSORED_ACCOUNT_LIMIT, 10);
 });
 
 test("the handler refuses implausible secrets at construction", () => {

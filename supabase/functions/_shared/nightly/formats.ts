@@ -7,6 +7,8 @@ export const SECRET_TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/u;
 export const USER_CODE_PATTERN = /^[A-Z2-9]{4}-[A-Z2-9]{4}$/u;
 /** A sponsor code as issued: three groups of four from the same alphabet. */
 export const SPONSOR_CODE_PATTERN = /^[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}$/u;
+/** Longest Discord OAuth authorization code accepted on the callback. */
+export const MAXIMUM_OAUTH_CODE_LENGTH = 512;
 /** Longest sponsor code text accepted from a form before normalization. */
 export const MAXIMUM_SPONSOR_CODE_LENGTH = 128;
 /** Device session ids are lowercase RFC 4122 UUIDs. */
@@ -15,8 +17,6 @@ export const DEVICE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 export const DISCORD_SNOWFLAKE_PATTERN = /^\d{17,20}$/u;
 /** Header carrying the shared secret on every website-to-Edge-Function request. */
 export const WEBSITE_KEY_HEADER = "x-nightly-website-key";
-/** Seats each eligible member can sponsor. */
-export const SPONSORED_ACCOUNT_LIMIT = 10;
 
 /** Normalizes a typed sponsor code before validation and hashing, so case and padding do not matter. */
 export function normalizeSponsorCode(value: string): string {

@@ -1,6 +1,9 @@
-// The single owner of the nightly-access policy: Discord roles, session lifetimes and fixed Discord URLs.
-// The values are part of the access contract; wire formats and the seat limit live in formats.ts.
+// The single owner of the nightly-access policy: Discord roles, the seat limit, session lifetimes and fixed Discord URLs.
+// The values are part of the access contract; wire formats live in formats.ts. Dependency-free so Next.js can import it.
 import { DISCORD_SNOWFLAKE_PATTERN } from "./formats.ts";
+
+/** Seats each eligible member can sponsor. */
+export const SPONSORED_ACCOUNT_LIMIT = 10;
 
 export const DISCORD_GUILD_ID = "709516043332354119";
 export const SUPPORTER_ROLE_IDS = Object.freeze([

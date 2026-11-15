@@ -8,13 +8,11 @@ import {
 } from "./device.ts";
 import type { DiscordUser } from "./discord.ts";
 import { revokeSponsorIfIneligible, storeSupporterGrant } from "./eligibility.ts";
-import { SECRET_TOKEN_PATTERN, USER_CODE_PATTERN } from "./formats.ts";
+import { MAXIMUM_OAUTH_CODE_LENGTH, SECRET_TOKEN_PATTERN, USER_CODE_PATTERN } from "./formats.ts";
 import { GatewayError, json } from "./http.ts";
 import { hasNightlyAccessRole, OAUTH_STATE_SECONDS, SPONSOR_SESSION_SECONDS } from "./policy.ts";
 import { findSeatHolder } from "./sponsor.ts";
 import { randomToken, sha256 } from "./tokens.ts";
-
-const MAXIMUM_OAUTH_CODE_LENGTH = 512;
 
 /** A well-formed `/oauth/complete` body: Discord's authorization code and a gateway-issued state. */
 type CompleteRequest = { code: string; state: string };

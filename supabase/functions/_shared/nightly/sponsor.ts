@@ -8,10 +8,9 @@ import {
     MAXIMUM_SPONSOR_CODE_LENGTH,
     normalizeSponsorCode,
     SECRET_TOKEN_PATTERN,
-    SPONSORED_ACCOUNT_LIMIT,
 } from "./formats.ts";
 import { GatewayError, json } from "./http.ts";
-import { isDiscordSnowflake } from "./policy.ts";
+import { isDiscordSnowflake, SPONSORED_ACCOUNT_LIMIT } from "./policy.ts";
 import { randomSponsorCode, sha256 } from "./tokens.ts";
 
 type SupporterRow = { supporter_discord_user_id: string };
