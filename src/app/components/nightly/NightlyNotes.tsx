@@ -1,7 +1,7 @@
 import { DISCORD_INVITE_URL, WINDOWS_INSTALLER_FILENAME, WINDOWS_INSTALLER_URL } from "@/app/lib/nightly/links";
 import { QUALIFYING_ROLES_TEXT } from "@/app/lib/nightly/messages";
 import type { ReactNode } from "react";
-import { secondaryButtonClass } from "./styles";
+import { primaryButtonClass, secondaryButtonClass } from "./styles";
 
 /** Renders a gold-ruled callout with a short label and body. */
 export function SupportNote({ title, children }: { title: string; children: ReactNode }) {
@@ -62,5 +62,19 @@ export function PreviousSponsorRevokedHelp() {
             The friend who sponsored this Discord account no longer has a qualifying {QUALIFYING_ROLES_TEXT} role. Enter a new
             sponsor code below.
         </HelpPanel>
+    );
+}
+
+/** Explains that sponsored seats follow the sponsor's role and offers to sign in again once it is restored. */
+export function SponsorIneligibleHelp() {
+    return (
+        <>
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-foreground-muted">
+                Your sponsored accounts only keep access while you hold a qualifying role. Once it is restored, sign in again.
+            </p>
+            <div className="mt-6">
+                <a className={primaryButtonClass} href="/nightly/sponsor/login">Sign in again <span aria-hidden="true">&rarr;</span></a>
+            </div>
+        </>
     );
 }

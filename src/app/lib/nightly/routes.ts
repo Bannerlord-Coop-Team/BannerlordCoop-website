@@ -8,6 +8,7 @@ import type { NightlyClient, NightlyResult, OAuthOutcome } from "./client";
 import { CLAIM_COOKIE, CLAIM_COOKIE_SECONDS, encodeClaimContext, nightlyCookieOptions, SPONSOR_COOKIE } from "./cookies";
 import { OAUTH_STATE_PATTERN } from "./formats";
 import type { NightlyErrorContext } from "./messages";
+import { SPONSORED_APPROVED_PATH } from "./query-flags";
 
 /** One nightly cookie a redirect sets; a zero lifetime clears it. */
 export type NightlyCookie = { name: string; value: string; maxAge: number };
@@ -43,13 +44,16 @@ export async function planCallback(params: URLSearchParams, client: NightlyClien
 
 /** Maps each `/oauth/complete` outcome to its page and cookies; the sponsor cookie lives as long as the Edge Function says. */
 export function planOutcome(outcome: OAuthOutcome): RedirectPlan {
-    if (outcome.outcome === "approved") return plan("/nightly/approved");
-    if (outcome.outcome === "sponsored-approved") return plan("/nightly/approved?via=sponsor");
-    if (outcome.outcome === "portal") {
-        return plan("/nightly/sponsor", [{ name: SPONSOR_COOKIE, value: outcome.session, maxAge: outcome.expires_in }]);
+    switch (outcome.outcome) {
+        case "approved":
+            return plan("/nightly/approved");
+        case "sponsored-approved":
+            return plan(SPONSORED_APPROVED_PATH);
+        case "portal":
+            return plan("/nightly/sponsor", [{ name: SPONSOR_COOKIE, value: outcome.session, maxAge: outcome.expires_in }]);
+        case "needs-sponsor":
+            return plan("/nightly/claim", [{ name: CLAIM_COOKIE, value: encodeClaimContext(outcome.claim), maxAge: CLAIM_COOKIE_SECONDS }]);
     }
-    const claim = encodeClaimContext(outcome.claim);
-    return plan("/nightly/claim", [{ name: CLAIM_COOKIE, value: claim, maxAge: CLAIM_COOKIE_SECONDS }]);
 }
 
 /** Converts a plan into a no-store 302 on the request's origin, setting each cookie with the shared nightly attributes. */

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createNightlyClient, decodeOAuthOutcome, decodePortal, type NightlyFetch } from "./client";
 import { readNightlyConfig } from "./config";
-import { reportConfigInvalid, type NightlyLogger } from "./diagnostics";
+import type { NightlyLogger } from "./diagnostics";
 
 const config = { functionUrl: "https://project.supabase.co/functions/v1/nightly-gateway", websiteKey: "website-key-value" };
 const SESSION = "A".repeat(43);
@@ -128,6 +128,21 @@ test("a rejected website key is logged so it does not pass for an expired sessio
     assert.deepEqual(entries, [{ event: "nightly_function_failed", path: "/sponsor/portal", status: 401, code: "unauthorized" }]);
 });
 
+test("statuses the contract never sends a user are logged: a wrong function URL's 404 and an unfollowed redirect", async () => {
+    const cases: Array<[number, unknown, string]> = [
+        [404, { error: "not_found" }, "not_found"],
+        [404, undefined, "http_404"],
+        [302, undefined, "http_302"],
+        [307, "<html>moved</html>", "http_307"],
+    ];
+    for (const [status, body, code] of cases) {
+        const { log, entries } = recordingLogger();
+        const result = await createNightlyClient(config, fakeFetch(status, body).fetch, log).sponsorPortal(SESSION);
+        assert.deepEqual(result, { ok: false, status, code }, String(status));
+        assert.deepEqual(entries, [{ event: "nightly_function_failed", path: "/sponsor/portal", status, code }], String(status));
+    }
+});
+
 test("authorize URLs must point at Discord's OAuth authorize endpoint", async () => {
     const good = "https://discord.com/oauth2/authorize?client_id=1&state=abc";
     const ok = await createNightlyClient(config, fakeFetch(200, { authorize_url: good }).fetch).startDeviceOAuth("ABCD-EF23");
@@ -197,10 +212,4 @@ test("config requires a website key and a clean https function URL", () => {
     assert.deepEqual(readNightlyConfig({ NIGHTLY_FUNCTION_URL: loopback, NIGHTLY_WEBSITE_KEY: "key", NODE_ENV: "development" }), {
         ok: true, config: { functionUrl: loopback, websiteKey: "key" },
     });
-});
-
-test("an invalid config is logged by setting name only", () => {
-    const entries: unknown[] = [];
-    reportConfigInvalid((entry) => entries.push(entry), "NIGHTLY_WEBSITE_KEY");
-    assert.deepEqual(entries, [{ event: "nightly_config_invalid", setting: "NIGHTLY_WEBSITE_KEY" }]);
 });

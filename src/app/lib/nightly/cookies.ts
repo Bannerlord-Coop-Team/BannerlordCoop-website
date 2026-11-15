@@ -1,12 +1,12 @@
 import { DEVICE_ID_PATTERN } from "../../../../supabase/functions/_shared/nightly/formats";
+import { DEVICE_SESSION_SECONDS } from "../../../../supabase/functions/_shared/nightly/policy";
+import type { PendingClaim } from "./client";
 import { isValidUsername, SESSION_TOKEN_PATTERN } from "./formats";
 
 export const SPONSOR_COOKIE = "nightly_sponsor";
 export const CLAIM_COOKIE = "nightly_claim";
-export const CLAIM_COOKIE_SECONDS = 10 * 60;
-
-/** Pending sponsor claim carried from the Discord callback to the claim form. */
-export type ClaimContext = { deviceId: string; username: string; previousSponsorRevoked: boolean };
+/** The claim cookie lives as long as the device session it claims for. */
+export const CLAIM_COOKIE_SECONDS = DEVICE_SESSION_SECONDS;
 
 export type CookieOptions = {
     path: string;
@@ -29,14 +29,14 @@ export function readSponsorSession(value: string | undefined): string | null {
     return value;
 }
 
-/** Encodes a claim context as base64url JSON, which is cookie-safe for any Discord username. */
-export function encodeClaimContext(context: ClaimContext): string {
+/** Encodes a pending claim as base64url JSON, which is cookie-safe for any Discord username. */
+export function encodeClaimContext(context: PendingClaim): string {
     const { deviceId, username, previousSponsorRevoked } = context;
     return Buffer.from(JSON.stringify({ deviceId, username, previousSponsorRevoked })).toString("base64url");
 }
 
 /** Decodes and validates a claim cookie; anything malformed reads as no pending claim. */
-export function decodeClaimContext(value: string | undefined): ClaimContext | null {
+export function decodeClaimContext(value: string | undefined): PendingClaim | null {
     if (!value || value.length > MAXIMUM_CLAIM_COOKIE_LENGTH || !/^[A-Za-z0-9_-]+$/u.test(value)) return null;
     let parsed: unknown;
     try {

@@ -40,17 +40,25 @@ function fail(status: number, code: string): NightlyFailure {
 }
 
 test("portal view: no session shows login, success shows seats, 401 shows expired login, 403 explains lost eligibility", async () => {
-    assert.deepEqual(await loadPortalView(stubClient({}), null), { kind: "login", expired: false });
+    assert.deepEqual(await loadPortalView(stubClient({}), null, false), { kind: "login", expired: false });
     const sessions: string[] = [];
     const seats = stubClient({ sponsorPortal: async (session) => { sessions.push(session); return { ok: true, value: PORTAL }; } });
-    assert.deepEqual(await loadPortalView(seats, SESSION), { kind: "seats", data: PORTAL });
+    assert.deepEqual(await loadPortalView(seats, SESSION, false), { kind: "seats", data: PORTAL });
     assert.deepEqual(sessions, [SESSION]);
     const expired = stubClient({ sponsorPortal: async () => fail(401, "authorization_expired") });
-    assert.deepEqual(await loadPortalView(expired, SESSION), { kind: "login", expired: true });
+    assert.deepEqual(await loadPortalView(expired, SESSION, false), { kind: "login", expired: true });
     const ineligible = stubClient({ sponsorPortal: async () => fail(403, "supporter_role_required") });
-    assert.deepEqual(await loadPortalView(ineligible, SESSION), { kind: "ineligible", message: ROLE_REQUIRED_MESSAGE });
+    assert.deepEqual(await loadPortalView(ineligible, SESSION, false), { kind: "ineligible", message: ROLE_REQUIRED_MESSAGE });
     const down = stubClient({ sponsorPortal: async () => fail(502, "discord_unavailable") });
-    assert.deepEqual(await loadPortalView(down, SESSION), { kind: "error", message: GENERIC_ERROR_MESSAGE });
+    assert.deepEqual(await loadPortalView(down, SESSION, false), { kind: "error", message: GENERIC_ERROR_MESSAGE });
+});
+
+test("portal view: the expired notice an action asked for shows on the login view only, and a 401 shows it regardless", async () => {
+    assert.deepEqual(await loadPortalView(stubClient({}), null, true), { kind: "login", expired: true });
+    const seats = stubClient({ sponsorPortal: async () => ({ ok: true, value: PORTAL }) });
+    assert.deepEqual(await loadPortalView(seats, SESSION, true), { kind: "seats", data: PORTAL });
+    const expired = stubClient({ sponsorPortal: async () => fail(401, "authorization_expired") });
+    assert.deepEqual(await loadPortalView(expired, SESSION, true), { kind: "login", expired: true });
 });
 
 test("claim sends the cookie's device and the normalized code, and maps every contract error", async () => {

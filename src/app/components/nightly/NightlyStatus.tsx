@@ -2,12 +2,18 @@ import type { ReactNode } from "react";
 import { DiscordHelpNote } from "./NightlyNotes";
 import { finePrintClass, headingClass, ledeClass } from "./styles";
 
+/** The colours and glyph of each status tone. */
+const TONES = {
+    success: { colors: "border-[#5f9565]/60 text-[#88b28b]", glyph: "✓" },
+    error: { colors: "border-crimson/70 text-[#cf555c]", glyph: "!" },
+} as const;
+
 /** Draws the diamond status mark used on success and error pages. */
-function StatusMark({ tone }: { tone: "success" | "error" }) {
-    const colors = tone === "success" ? "border-[#5f9565]/60 text-[#88b28b]" : "border-crimson/70 text-[#cf555c]";
+function StatusMark({ tone }: { tone: keyof typeof TONES }) {
+    const { colors, glyph } = TONES[tone];
     return (
         <div aria-hidden="true" className={`mb-6 flex size-11 rotate-45 items-center justify-center border ${colors}`}>
-            <span className="-rotate-45 font-display text-2xl leading-none">{tone === "success" ? "✓" : "!"}</span>
+            <span className="-rotate-45 font-display text-2xl leading-none">{glyph}</span>
         </div>
     );
 }

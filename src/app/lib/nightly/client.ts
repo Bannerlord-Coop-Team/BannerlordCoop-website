@@ -5,7 +5,6 @@ import {
     WEBSITE_KEY_HEADER,
 } from "../../../../supabase/functions/_shared/nightly/formats";
 import type { NightlyConfig } from "./config";
-import type { ClaimContext } from "./cookies";
 import { reportFailed, reportInvalidResponse, reportUnreachable, type NightlyLogger } from "./diagnostics";
 import { ERROR_CODE_PATTERN, isValidUsername, SESSION_TOKEN_PATTERN } from "./formats";
 
@@ -13,10 +12,13 @@ import { ERROR_CODE_PATTERN, isValidUsername, SESSION_TOKEN_PATTERN } from "./fo
 export type NightlyFailure = { ok: false; status: number; code: string };
 export type NightlyResult<T> = { ok: true; value: T } | NightlyFailure;
 
+/** A device waiting for a sponsor code: decoded from `needs-sponsor` and carried by the claim cookie to the claim form. */
+export type PendingClaim = { deviceId: string; username: string; previousSponsorRevoked: boolean };
+
 export type OAuthOutcome =
     | { outcome: "approved" }
     | { outcome: "sponsored-approved" }
-    | { outcome: "needs-sponsor"; claim: ClaimContext }
+    | { outcome: "needs-sponsor"; claim: PendingClaim }
     | { outcome: "portal"; session: string; expires_in: number };
 
 export type SponsorSeat = { discordUserId: string; createdAt: Date | null };
@@ -36,8 +38,10 @@ export type NightlyClient = {
 
 const MAXIMUM_RESPONSE_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MILLISECONDS = 15_000;
-const SERVER_ERROR_STATUS = 500;
+const CLIENT_ERROR_STATUS = 400;
 const UNAUTHORIZED_STATUS = 401;
+const NOT_FOUND_STATUS = 404;
+const SERVER_ERROR_STATUS = 500;
 const SESSION_REJECTION_PREFIX = "authorization_";
 const DISCORD_AUTHORIZE_ORIGIN = "https://discord.com";
 const DISCORD_AUTHORIZE_PATHS = new Set(["/oauth2/authorize", "/api/oauth2/authorize", "/api/v10/oauth2/authorize"]);
@@ -134,11 +138,11 @@ function parseBoundedJson(text: string): unknown {
 }
 
 /**
- * Whether a failure needs an operator: a server error, or a 401 that rejects the website key itself (such as
- * `unauthorized`) rather than a user's session (`authorization_*`), which the pages explain instead.
+ * Whether a failure needs an operator: a status the contract never sends a user (a redirect, a 404 from a wrong function
+ * URL, a server error), or a 401 that rejects the website key rather than a user's session (`authorization_*`).
  */
 function isOperatorFailure(status: number, code: string): boolean {
-    if (status >= SERVER_ERROR_STATUS) return true;
+    if (status < CLIENT_ERROR_STATUS || status === NOT_FOUND_STATUS || status >= SERVER_ERROR_STATUS) return true;
     return status === UNAUTHORIZED_STATUS && !code.startsWith(SESSION_REJECTION_PREFIX);
 }
 
@@ -194,7 +198,7 @@ function decodePortalOutcome(body: Record<string, unknown>): OAuthOutcome | unde
     return { outcome: "portal", session: body.session, expires_in: expiresIn };
 }
 
-/** Validates a needs-sponsor outcome into the claim context the claim cookie carries to the claim form. */
+/** Validates a needs-sponsor outcome into the pending claim the claim cookie carries to the claim form. */
 function decodeNeedsSponsor(body: Record<string, unknown>): OAuthOutcome | undefined {
     if (typeof body.device_id !== "string" || !DEVICE_ID_PATTERN.test(body.device_id)) return undefined;
     if (!isValidUsername(body.username)) return undefined;
