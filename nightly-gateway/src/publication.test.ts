@@ -262,7 +262,7 @@ test("client fallback accepts the producer's null baseSha legacy shape", async (
     assert.doesNotThrow(() => validateLegacyNightlyClientManifest(legacy, origin, gateway));
 });
 
-test("legacy v1 is the default while an explicit version header selects v2", async () => {
+test("the client route requires the complete publication while release keeps the legacy default", async () => {
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
     const legacyRelease = JSON.parse(await readFile(new URL("../fixtures/legacy-release-2026-11-04.json", import.meta.url), "utf8")) as Record<string, unknown>;
@@ -310,7 +310,7 @@ test("legacy v1 is the default while an explicit version header selects v2", asy
         }), env);
         assert.equal(response.status, 200);
         const manifest = await response.json() as { version: number; headSha: string };
-        assert.equal(manifest.version, 1);
+        assert.equal(manifest.version, path === "client" ? 2 : 1);
         assert.equal(manifest.headSha, legacyRelease.headSha);
     }
     const v2 = await worker.fetch(new Request(`${gateway}/v1/manifests/release`, {
@@ -318,6 +318,32 @@ test("legacy v1 is the default while an explicit version header selects v2", asy
     }), env);
     assert.equal(v2.status, 200);
     assert.equal((await v2.json() as { version: number }).version, 2);
+});
+
+test("the client route fails closed when the paired publication is unavailable", async (context) => {
+    const value = fixture();
+    const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+    const env = {
+        DB: {
+            async batch() { throw new Error("manifest discovery must be read-only"); },
+            prepare(sql: string) {
+                return { bind() {
+                    return { async first() {
+                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
+                    } };
+                } };
+            },
+        },
+        RELEASES: { async get() { return null; } },
+        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
+        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32),
+        DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+    } as unknown as Env;
+    context.mock.method(globalThis, "fetch", value.fetcher);
+    const response = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, {
+        headers: { authorization: `Bearer ${"n".repeat(43)}` },
+    }), env);
+    assert.equal(response.status, 503);
 });
 
 test("accepts the production-shaped legacy release fixture and rejects missing artifact keys", async () => {

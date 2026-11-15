@@ -138,7 +138,7 @@ async function route(request: Request, env: Env): Promise<Response> {
         return servePinManifest(request, env);
     }
     if (request.method === "GET" && url.pathname === "/v1/manifests/client") {
-        return serveManifest(request, env, true);
+        return serveManifest(request, env, true, true);
     }
     if (request.method === "GET" && url.pathname === "/v1/manifests/release") {
         return serveManifest(request, env, false);
@@ -813,10 +813,15 @@ async function sha256Bytes(bytes: Uint8Array): Promise<string> {
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function serveManifest(request: Request, env: Env, clientOnly: boolean): Promise<Response> {
+async function serveManifest(
+    request: Request,
+    env: Env,
+    clientOnly: boolean,
+    requireCompletePublication = false,
+): Promise<Response> {
     await requireNightlyDownloadSession(request, env);
     const wantsV2 = request.headers.get(NIGHTLY_PUBLICATION_VERSION_HEADER)?.trim() === "2";
-    if (!wantsV2) {
+    if (!wantsV2 && !requireCompletePublication) {
         try {
             return json(rewriteManifestArtifactUrls(
                 await readLegacyNightlyManifest(env, clientOnly),
@@ -841,6 +846,7 @@ async function serveManifest(request: Request, env: Env, clientOnly: boolean): P
             env.PUBLIC_RELEASES === undefined ? undefined : () => env.PUBLIC_RELEASES.get("nightly/release.json"),
         );
     } catch (error) {
+        if (requireCompletePublication) throw new GatewayError(503, "manifest_unavailable");
         const errorCode = error instanceof Error && /^[a-z0-9_]{1,64}$/.test(error.message)
             ? error.message : "publication_read_failed";
         const publicationError = error instanceof NightlyPublicationReadError ? error : null;
