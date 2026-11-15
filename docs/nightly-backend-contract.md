@@ -30,7 +30,7 @@ Installers call the gateway host. The Worker forwards these two routes to the Ed
 - **`verification_uri`** is `<origin>/activate?code=XXXX-XXXX` on the allowlisted host the installer used, or the canonical host for anything else. Old and new installers both receive a URI on their own host, so the installer host check keeps passing.
 - **`GET /activate?code=`** on the Worker answers `302` to `https://bannerlordcoop.com/nightly/activate?code=…`.
 - **Forwarding limits.** A request body over 4 KiB returns `413 request_too_large` and is not forwarded; a failing request stream is a `500`. The upstream timeout is 10 s.
-- **Forwarding failures.** An unreachable function returns `502 function_unreachable`. A non-JSON, empty, oversized (>16 KiB) or redirecting reply returns `502 function_response_invalid`. Both are logged with the cause class and, for unusable replies, the upstream HTTP status. The installer treats both as transient while polling.
+- **Forwarding failures.** An unreachable function returns `502 function_unreachable`. A redirecting (3xx) or misrouted (404) reply, or a non-JSON, empty or oversized (>16 KiB) body, returns `502 function_response_invalid`. Both are logged with the cause class and, for unusable replies, the upstream HTTP status. The installer treats both as transient while polling.
 - **Token formats.** Secrets are 32 random bytes, base64url-encoded (43 chars). The user code is `XXXX-XXXX` from `A-Z2-9`, normalized by trimming and upper-casing. Only SHA-256 hex digests are stored.
 - **Legacy (v1) manifests** accept either gateway host, and their URLs are rewritten to the host the installer used.
 
