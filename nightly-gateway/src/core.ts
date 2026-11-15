@@ -25,6 +25,9 @@ export const DOWNLOAD_SESSION_SECONDS = 60 * 60;
 export const CREATE_BUILD_PIN_LIFETIME_SECONDS = 24 * 60 * 60;
 export const CREATE_BUILD_PIN_KIND = "create-build-pin";
 export const DISCORD_OAUTH_SCOPES = "identify guilds.members.read";
+export const CANONICAL_GATEWAY_ORIGIN = "https://nightly.bannerlordcoop.com";
+export const LEGACY_GATEWAY_ORIGIN = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+export const GATEWAY_ORIGINS: readonly string[] = Object.freeze([CANONICAL_GATEWAY_ORIGIN, LEGACY_GATEWAY_ORIGIN]);
 
 const SNOWFLAKE = /^\d{17,20}$/;
 const SESSION_TOKEN = /^[A-Za-z0-9_-]{43}$/;
@@ -34,7 +37,6 @@ const MANUAL_SERVER_KEY = /^manual\/\d{17,20}\/[A-Za-z0-9][A-Za-z0-9._-]{0,199}\
 const COMMIT_SHA = /^[a-f0-9]{40}$/;
 const SHA256_HEX = /^[a-f0-9]{64}$/;
 const PIN_MINT_MESSAGE = new TextEncoder().encode("bannerlordcoop-create-build-pin-v1");
-const SPONSOR_FORM_MESSAGE = new TextEncoder().encode("bannerlordcoop-sponsor-form-v1");
 
 export function hasNightlyAccessRole(roleIds: readonly string[]): boolean {
     return roleIds.some((roleId) => NIGHTLY_ACCESS_ROLE_IDS.includes(roleId));
@@ -50,42 +52,16 @@ export function isDiscordSnowflake(value: unknown): value is string {
     return typeof value === "string" && SNOWFLAKE.test(value);
 }
 
-export function isAllowedSponsorClaimRequest(
-    origin: string | null,
-    fetchSite: string | null,
-    publicOrigin: string,
-): boolean {
-    if (fetchSite === "cross-site") return false;
-    return origin === null || origin === "null" || origin === publicOrigin;
+// Picks the allowlisted gateway origin the client called, so every URL handed back stays on that host.
+// Any other host (custom routes, previews, spoofed Host headers) falls back to the canonical origin.
+export function resolveGatewayOrigin(requestUrl: string | URL): string {
+    const origin = new URL(requestUrl).origin;
+    return GATEWAY_ORIGINS.includes(origin) ? origin : CANONICAL_GATEWAY_ORIGIN;
 }
 
-export async function createSponsorFormToken(sessionToken: string): Promise<string> {
-    if (!SESSION_TOKEN.test(sessionToken)) throw new Error("invalid_sponsor_session");
-    const key = await crypto.subtle.importKey(
-        "raw",
-        exactArrayBuffer(fromBase64url(sessionToken)),
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["sign"],
-    );
-    return base64url(new Uint8Array(await crypto.subtle.sign("HMAC", key, SPONSOR_FORM_MESSAGE)));
-}
-
-export async function verifySponsorFormToken(sessionToken: string, proof: unknown): Promise<boolean> {
-    if (!SESSION_TOKEN.test(sessionToken) || typeof proof !== "string" || !SESSION_TOKEN.test(proof)) return false;
-    const key = await crypto.subtle.importKey(
-        "raw",
-        exactArrayBuffer(fromBase64url(sessionToken)),
-        { name: "HMAC", hash: "SHA-256" },
-        false,
-        ["verify"],
-    );
-    return crypto.subtle.verify(
-        "HMAC",
-        key,
-        exactArrayBuffer(fromBase64url(proof)),
-        SPONSOR_FORM_MESSAGE,
-    );
+// Reports whether a URL origin is one of the accepted gateway origins.
+function isGatewayOrigin(origin: string, gatewayOrigins: string | readonly string[]): boolean {
+    return typeof gatewayOrigins === "string" ? origin === gatewayOrigins : gatewayOrigins.includes(origin);
 }
 
 export function isAllowedArtifactKey(value: unknown): value is string {
@@ -295,7 +271,7 @@ export function validateNightlyPublicationManifest(input: unknown, legacyOrigin:
 export function validateLegacyNightlyClientManifest(
     input: unknown,
     legacyOrigin: string,
-    gatewayOrigin: string,
+    gatewayOrigins: string | readonly string[],
 ): JsonObject {
     if (!isRecord(input) || input.version !== 1 || typeof input.releaseDate !== "string"
         || !NIGHTLY_PUBLICATION_DATE.test(input.releaseDate)
@@ -320,10 +296,11 @@ export function validateLegacyNightlyClientManifest(
     const parsed = new URL(client.publicUrl);
     const legacyPath = `/${client.key}`;
     const gatewayPath = `/v1/artifacts/${client.key}`;
+    const onGateway = isGatewayOrigin(parsed.origin, gatewayOrigins);
     if (parsed.search || parsed.hash
         || (parsed.origin === legacyOrigin && parsed.pathname !== legacyPath)
-        || (parsed.origin === gatewayOrigin && parsed.pathname !== gatewayPath)
-        || (parsed.origin !== legacyOrigin && parsed.origin !== gatewayOrigin)) {
+        || (onGateway && parsed.pathname !== gatewayPath)
+        || (parsed.origin !== legacyOrigin && !onGateway)) {
         throw new Error("invalid_legacy_nightly_client_manifest");
     }
     return input;
@@ -333,7 +310,7 @@ export function validateLegacyNightlyClientManifest(
 export function validateLegacyNightlyReleaseManifest(
     input: unknown,
     legacyOrigin: string,
-    gatewayOrigin: string,
+    gatewayOrigins: string | readonly string[],
 ): JsonObject {
     if (!isRecord(input) || !exactKeys(input, ["version", "releaseDate", "headSha", "builtAt", "client", "server"])
         || input.version !== 1 || typeof input.releaseDate !== "string"
@@ -346,7 +323,7 @@ export function validateLegacyNightlyReleaseManifest(
     validateLegacyReleaseArtifact(
         recordField(input, "client"),
         legacyOrigin,
-        gatewayOrigin,
+        gatewayOrigins,
         `nightly/clients/${input.headSha}/${stringField(recordField(input, "client"), "sha256", NIGHTLY_PUBLICATION_SHA256)}/Coop.7z`,
         NIGHTLY_PUBLICATION_FILE,
         undefined,
@@ -361,7 +338,7 @@ export function validateLegacyNightlyReleaseManifest(
     validateLegacyReleaseArtifact(
         serverArtifact,
         legacyOrigin,
-        gatewayOrigin,
+        gatewayOrigins,
         "nightly/BannerlordCoop-DedicatedServer-Win64.7z",
         /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/,
         8 * 1024 * 1024 * 1024,
@@ -381,7 +358,7 @@ export function validateLegacyNightlyReleaseManifest(
     validateLegacyReleaseArtifact(
         base,
         legacyOrigin,
-        gatewayOrigin,
+        gatewayOrigins,
         `windows/base/v1/${incremental.baseFingerprint}/${baseSha}/server-base.7z`,
         /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/,
         8 * 1024 * 1024 * 1024,
@@ -403,7 +380,7 @@ export function validateLegacyNightlyReleaseManifest(
     validateLegacyReleaseArtifact(
         update,
         legacyOrigin,
-        gatewayOrigin,
+        gatewayOrigins,
         updateKey,
         /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/,
         512 * 1024 * 1024,
@@ -415,7 +392,7 @@ export function validateLegacyNightlyReleaseManifest(
 function validateLegacyReleaseArtifact(
     value: JsonObject,
     legacyOrigin: string,
-    gatewayOrigin: string,
+    gatewayOrigins: string | readonly string[],
     key: string,
     filePattern: RegExp,
     maximumBytes: number | undefined,
@@ -431,10 +408,11 @@ function validateLegacyReleaseArtifact(
         throw new Error("invalid_legacy_nightly_release_artifact");
     }
     const parsed = new URL(value.publicUrl);
+    const onGateway = isGatewayOrigin(parsed.origin, gatewayOrigins);
     if (parsed.search || parsed.hash
         || (parsed.origin === legacyOrigin && parsed.pathname !== `/${key}`)
-        || (parsed.origin === gatewayOrigin && parsed.pathname !== `/v1/artifacts/${key}`)
-        || (parsed.origin !== legacyOrigin && parsed.origin !== gatewayOrigin)
+        || (onGateway && parsed.pathname !== `/v1/artifacts/${key}`)
+        || (parsed.origin !== legacyOrigin && !onGateway)
         || !isAllowedArtifactKey(key)) {
         throw new Error("invalid_legacy_nightly_release_artifact");
     }
@@ -503,12 +481,6 @@ function base64url(bytes: Uint8Array): string {
     let binary = "";
     for (const byte of bytes) binary += String.fromCharCode(byte);
     return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function fromBase64url(value: string): Uint8Array {
-    const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
-    const binary = atob(normalized + "=".repeat((4 - normalized.length % 4) % 4));
-    return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
 function exactArrayBuffer(bytes: Uint8Array): ArrayBuffer {

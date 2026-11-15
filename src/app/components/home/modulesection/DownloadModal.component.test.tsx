@@ -21,7 +21,7 @@ it("uses only common messages outside home and preserves download links and dial
         expect(dialog.textContent).toContain(common["download.description"]);
         expect(dialog.textContent).toContain(common["download.installer.description"]);
         expect([...dialog.querySelectorAll("a")].map((link) => link.href)).toEqual([
-            "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/",
+            "https://nightly.bannerlordcoop.com/",
             "https://steamcommunity.com/sharedfiles/filedetails/?id=3770450698",
             "https://www.nexusmods.com/mountandblade2bannerlord/mods/2387",
             "https://www.moddb.com/mods/bannerlord-coop",

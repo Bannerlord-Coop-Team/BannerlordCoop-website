@@ -7,7 +7,7 @@ set "CURL_EXE=%SystemRoot%\System32\curl.exe"
 set "FINDSTR_EXE=%SystemRoot%\System32\findstr.exe"
 set "BANNERLORDCOOP_INSTALLER_TEMP=%TEMP%\BannerlordCoop-Nightly-Installer-%RANDOM%-%RANDOM%.ps1"
 set "BANNERLORDCOOP_INSTALLER_LAUNCHER=1"
-set "INSTALLER_PRIMARY=https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/install.ps1"
+set "INSTALLER_PRIMARY=https://nightly.bannerlordcoop.com/install.ps1"
 set "INSTALLER_MIRROR=https://raw.githubusercontent.com/Bannerlord-Coop-Team/BannerlordCoop-website/main/installer/install.ps1"
 
 echo BannerlordCoop Nightly Installer

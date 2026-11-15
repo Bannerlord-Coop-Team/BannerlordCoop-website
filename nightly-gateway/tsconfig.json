@@ -14,6 +14,9 @@
     "secrets.d.ts",
     "src/index.ts",
     "src/core.ts",
-    "src/database.ts"
+    "src/database.ts",
+    "src/forwarding.ts",
+    "src/redirects.ts",
+    "src/publication.ts"
   ]
 }

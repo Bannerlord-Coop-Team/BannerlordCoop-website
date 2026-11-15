@@ -4,8 +4,10 @@ $ProgressPreference = 'SilentlyContinue'
 # Windows adds Expect: 100-continue on POST; some DPI and proxies then return an empty body.
 try { [Net.ServicePointManager]::Expect100Continue = $false } catch { }
 
-$script:InstallerUri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/install.ps1'
-$script:NightlyGatewayUri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev'
+$script:NightlyGatewayHost = 'nightly.bannerlordcoop.com'
+$script:NightlyGatewayUri = "https://$($script:NightlyGatewayHost)"
+$script:InstallerUri = "$($script:NightlyGatewayUri)/install.ps1"
+$script:NightlyActivationPattern = "^$([regex]::Escape($script:NightlyGatewayUri))/activate\?"
 $script:ClientManifestUri = "$($script:NightlyGatewayUri)/v1/manifests/client"
 $script:ReleaseManifestUri = "$($script:NightlyGatewayUri)/v1/manifests/release"
 $script:NightlyManifestVersionHeader = 'X-Bannerlord-Coop-Nightly-Version'
@@ -193,7 +195,7 @@ function Test-NightlyDeviceSessionResponse {
     if ($null -eq $Response -or $Response -is [string] -or $Response -is [xml]) { return $false }
     return [string]$Response.device_code -cmatch '^[A-Za-z0-9_-]{43}$' -and
         [string]$Response.user_code -cmatch '^[A-Z2-9]{4}-[A-Z2-9]{4}$' -and
-        [string]$Response.verification_uri -cmatch '^https://bannerlordcoop-nightly-gateway\.garrett-luskey\.workers\.dev/activate\?'
+        [string]$Response.verification_uri -cmatch $script:NightlyActivationPattern
 }
 
 function Get-NightlyDeviceSessionShape {
@@ -217,7 +219,7 @@ function Get-NightlyDeviceSessionShape {
     $uri = [string]$Response.verification_uri
     $deviceValid = ($deviceCode -cmatch '^[A-Za-z0-9_-]{43}$').ToString().ToLowerInvariant()
     $userValid = ($userCode -cmatch '^[A-Z2-9]{4}-[A-Z2-9]{4}$').ToString().ToLowerInvariant()
-    $uriValid = ($uri -cmatch '^https://bannerlordcoop-nightly-gateway\.garrett-luskey\.workers\.dev/activate\?').ToString().ToLowerInvariant()
+    $uriValid = ($uri -cmatch $script:NightlyActivationPattern).ToString().ToLowerInvariant()
     $expires = [string]$Response.expires_in
     $interval = [string]$Response.interval
     if ($expires -notmatch '^\d{1,5}$') { $expires = 'invalid' }
@@ -1378,7 +1380,7 @@ function Test-NightlyClientArtifactUri {
     }
     try { $parsed = [Uri]$Uri } catch { return $false }
     if ($parsed.Scheme -cne 'https' -or
-        $parsed.Authority -cne 'bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev' -or
+        $parsed.Authority -cne $script:NightlyGatewayHost -or
         -not [string]::IsNullOrEmpty($parsed.Query) -or
         -not [string]::IsNullOrEmpty($parsed.Fragment)) { return $false }
     return $parsed.AbsolutePath -ceq "/v1/artifacts/nightly/clients/$HeadSha/$Sha256/Coop.7z"
@@ -1397,7 +1399,7 @@ function Test-NightlyServerArtifactUri {
     }
     try { $parsed = [Uri]$Uri } catch { return $false }
     if ($parsed.Scheme -cne 'https' -or
-        $parsed.Authority -cne 'bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev' -or
+        $parsed.Authority -cne $script:NightlyGatewayHost -or
         -not [string]::IsNullOrEmpty($parsed.Query) -or
         -not [string]::IsNullOrEmpty($parsed.Fragment)) { return $false }
     return $parsed.AbsolutePath -ceq "/v1/artifacts/nightly/windows/full/$HeadSha/$ServerSha/$Sha256/BannerlordCoop-DedicatedServer-Win64.7z"
@@ -1581,7 +1583,7 @@ function Test-PinClientArtifactUri {
 
     try { $parsed = [Uri]$Uri } catch { return $false }
     if ($parsed.Scheme -cne 'https' -or
-        $parsed.Host -cne 'bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev' -or
+        $parsed.Host -cne $script:NightlyGatewayHost -or
         -not [string]::IsNullOrEmpty($parsed.Query) -or
         -not [string]::IsNullOrEmpty($parsed.Fragment)) { return $false }
     return $parsed.AbsolutePath -cmatch '^/v1/artifacts/pins/\d{17,20}/Coop\.7z$'
@@ -1642,7 +1644,7 @@ function Test-PublicArtifactUri {
 
     try { $parsed = [Uri]$Uri } catch { return $false }
     if ($parsed.Scheme -cne 'https' -or
-        $parsed.Host -cne 'bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev' -or
+        $parsed.Host -cne $script:NightlyGatewayHost -or
         -not [string]::IsNullOrEmpty($parsed.Query) -or
         -not [string]::IsNullOrEmpty($parsed.Fragment)) { return $false }
     $pattern = if ($Kind -eq 'base') {
