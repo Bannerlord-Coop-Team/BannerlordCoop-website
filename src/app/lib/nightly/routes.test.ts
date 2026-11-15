@@ -3,7 +3,14 @@ import test from "node:test";
 import type { NightlyClient, NightlyResult, OAuthOutcome } from "./client";
 import { decodeClaimContext, encodeClaimContext, readSponsorSession } from "./cookies";
 import { planActivate, planCallback, planOutcome, planSponsorLogin, redirectResponse } from "./routes";
-import { isSessionExpiredNotice, isSponsoredApproval, SESSION_EXPIRED_PATH, SPONSORED_APPROVED_PATH } from "./query-flags";
+import {
+    errorPath,
+    isSessionExpiredNotice,
+    isSponsoredApproval,
+    readErrorQuery,
+    SESSION_EXPIRED_PATH,
+    SPONSORED_APPROVED_PATH,
+} from "./query-flags";
 
 const SESSION = "s".repeat(43);
 const STATE = "t".repeat(43);
@@ -122,4 +129,13 @@ test("each query flag's reader recognises exactly the path that sets it", () => 
     for (const params of [{}, { via: "discord" }, { via: ["sponsor"] }, { session: "expired" }]) {
         assert.equal(isSponsoredApproval(params), false, JSON.stringify(params));
     }
+});
+
+test("the error query reader reads back what errorPath writes and narrows anything else", () => {
+    const query = (path: string) => Object.fromEntries(new URL(path, "https://bannerlordcoop.com").searchParams);
+    assert.equal(errorPath("sponsor-code", "seats_full"), "/nightly/error?context=sponsor-code&code=seats_full");
+    assert.deepEqual(readErrorQuery(query(errorPath("claim", "expired"))), { context: "claim", code: "expired" });
+    assert.deepEqual(readErrorQuery({}), { context: null, code: "" });
+    assert.deepEqual(readErrorQuery({ context: "toString", code: "expired" }), { context: null, code: "expired" });
+    assert.deepEqual(readErrorQuery({ context: ["claim", "claim"], code: ["expired", "expired"] }), { context: null, code: "" });
 });

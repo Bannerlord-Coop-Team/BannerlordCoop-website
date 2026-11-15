@@ -8,17 +8,12 @@ import type { NightlyClient, NightlyResult, OAuthOutcome } from "./client";
 import { CLAIM_COOKIE, CLAIM_COOKIE_SECONDS, encodeClaimContext, nightlyCookieOptions, SPONSOR_COOKIE } from "./cookies";
 import { OAUTH_STATE_PATTERN } from "./formats";
 import type { NightlyErrorContext } from "./messages";
-import { SPONSORED_APPROVED_PATH } from "./query-flags";
+import { errorPath, SPONSORED_APPROVED_PATH } from "./query-flags";
 
 /** One nightly cookie a redirect sets; a zero lifetime clears it. */
 export type NightlyCookie = { name: string; value: string; maxAge: number };
 /** Where a nightly route handler or server action sends the browser, plus any cookies it sets on the way. */
 export type RedirectPlan = { location: string; cookies: NightlyCookie[] };
-
-/** Builds the error-page path for one context and sanitized code. */
-export function errorPath(context: NightlyErrorContext, code: string): string {
-    return `/nightly/error?${new URLSearchParams({ context, code })}`;
-}
 
 /** Handles `GET /nightly/activate?code=`: starts device OAuth or explains why the code cannot be used. */
 export async function planActivate(params: URLSearchParams, client: NightlyClient): Promise<RedirectPlan> {

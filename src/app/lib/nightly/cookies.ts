@@ -17,6 +17,8 @@ export type CookieOptions = {
 };
 
 const MAXIMUM_CLAIM_COOKIE_LENGTH = 1024;
+/** The unpadded base64url alphabet `encodeClaimContext` writes. */
+const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/u;
 
 /** Cookie attributes shared by both nightly cookies (contract §2: Path=/nightly; HttpOnly; Secure; SameSite=Lax). */
 export function nightlyCookieOptions(maxAge: number): CookieOptions {
@@ -37,7 +39,7 @@ export function encodeClaimContext(context: PendingClaim): string {
 
 /** Decodes and validates a claim cookie; anything malformed reads as no pending claim. */
 export function decodeClaimContext(value: string | undefined): PendingClaim | null {
-    if (!value || value.length > MAXIMUM_CLAIM_COOKIE_LENGTH || !/^[A-Za-z0-9_-]+$/u.test(value)) return null;
+    if (!value || value.length > MAXIMUM_CLAIM_COOKIE_LENGTH || !BASE64URL_PATTERN.test(value)) return null;
     let parsed: unknown;
     try {
         parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
