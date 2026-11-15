@@ -2,7 +2,7 @@ import type { GatewayContext } from "./context.ts";
 import { revokeDownloadsForSupporter } from "./downloads.ts";
 import { revokeSupporterGrant } from "./grants.ts";
 import { GatewayError } from "./http.ts";
-import { isEligibleNightlySponsor } from "./policy.ts";
+import { qualifiesForNightly } from "./policy.ts";
 
 /**
  * Re-checks a sponsor's live Discord roles and returns whether they still qualify. An ineligible sponsor's
@@ -10,7 +10,7 @@ import { isEligibleNightlySponsor } from "./policy.ts";
  */
 export async function revokeSponsorIfIneligible(context: GatewayContext, supporterId: string): Promise<boolean> {
     const member = await context.discord.botGuildMember(supporterId);
-    if (isEligibleNightlySponsor(member)) return true;
+    if (qualifiesForNightly(member)) return true;
     await context.db.transaction(async (tx) => {
         await revokeDownloadsForSupporter(tx, supporterId);
         await revokeSupporterGrant(tx, supporterId);

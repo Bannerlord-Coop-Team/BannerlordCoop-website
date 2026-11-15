@@ -12,7 +12,7 @@ import { revokeSponsorIfIneligible } from "./eligibility.ts";
 import { isWellFormedOAuthCallback, normalizeUserCode, USER_CODE_PATTERN } from "./formats.ts";
 import { storeSupporterGrant } from "./grants.ts";
 import { GatewayError, json } from "./http.ts";
-import { hasNightlyAccessRole, OAUTH_STATE_SECONDS, SPONSOR_SESSION_SECONDS } from "./policy.ts";
+import { OAUTH_STATE_SECONDS, qualifiesForNightly, SPONSOR_SESSION_SECONDS } from "./policy.ts";
 import { findSeatHolder, openSponsorSession } from "./sponsor.ts";
 import { randomToken, sha256 } from "./tokens.ts";
 
@@ -73,7 +73,7 @@ async function completePortalLogin(context: GatewayContext, code: string): Promi
     const accessToken = await context.discord.exchangeCode(code);
     const user = await context.discord.currentUser(accessToken);
     const member = await context.discord.currentMember(accessToken);
-    if (!hasNightlyAccessRole(member.roles)) throw new GatewayError(403, "supporter_role_required");
+    if (!qualifiesForNightly(member)) throw new GatewayError(403, "supporter_role_required");
     const now = context.now();
     const session = await context.db.transaction(async (tx) => {
         await storeSupporterGrant(tx, user.id, now);
@@ -87,7 +87,7 @@ async function completeDeviceLogin(context: GatewayContext, deviceId: string, co
     const accessToken = await context.discord.exchangeCode(code);
     const user = await context.discord.currentUser(accessToken);
     const member = await context.discord.currentMemberIfPresent(accessToken);
-    if (member !== null && hasNightlyAccessRole(member.roles)) return approveDirectMember(context, deviceId, user.id);
+    if (qualifiesForNightly(member)) return approveDirectMember(context, deviceId, user.id);
     const previousSponsorId = await findSeatHolder(context.db, user.id);
     if (previousSponsorId === null) return awaitSponsorCode(context, deviceId, user, { previousSponsorRevoked: false });
     // A previous sponsor who lost access is revoked here, and the friend gets the code form instead.

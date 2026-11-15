@@ -1,6 +1,6 @@
 import { GatewayError, decodeUtf8, json, readBoundedBytes, type UpstreamFetch } from "./http";
 
-export const DEVICE_SESSIONS_PATH = "/v1/device/sessions";
+const DEVICE_SESSIONS_PATH = "/v1/device/sessions";
 export const FORWARDED_DEVICE_PATHS: readonly string[] = Object.freeze([DEVICE_SESSIONS_PATH, "/v1/device/token"]);
 
 const MAXIMUM_DEVICE_REQUEST_BYTES = 4 * 1024;

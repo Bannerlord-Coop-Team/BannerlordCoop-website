@@ -5,7 +5,7 @@ import { isBearerToken, sha256 as workerSha256 } from "../../../nightly-gateway/
 import { type ConnectionPool, pooledGatewayDatabase } from "../_shared/nightly/database.ts";
 import { assertDiscordCredentials } from "../_shared/nightly/discord.ts";
 import { createNightlyGatewayHandler } from "../_shared/nightly/gateway.ts";
-import { hasNightlyAccessRole, isEligibleNightlySponsor } from "../_shared/nightly/policy.ts";
+import { qualifiesForNightly } from "../_shared/nightly/policy.ts";
 import { sha256 } from "../_shared/nightly/tokens.ts";
 import {
     BOT_TOKEN,
@@ -88,13 +88,13 @@ test("supporters, Testers, Staff, and Competition Winners get nightly access and
         "1532151760012050452", "1532744756151455834", "1533090199104524338", "710222948375593010",
         "730945590011232296", "711610715152056331", "750401609045115114", "709516608741048390",
         "730631536122003548", "730631233524072588", "1551834978570997792",
-    ]) assert.equal(hasNightlyAccessRole([role]), true, role);
-    assert.equal(hasNightlyAccessRole(["709516043332354119"]), false);
-    assert.equal(isEligibleNightlySponsor({ roles: [PATREON_ROLE] }), true);
-    assert.equal(isEligibleNightlySponsor({ roles: [COMPETITION_WINNER_ROLE] }), true);
-    assert.equal(isEligibleNightlySponsor({ roles: [] }), false);
-    assert.equal(isEligibleNightlySponsor({ roles: "not-an-array" }), false);
-    assert.equal(isEligibleNightlySponsor(null), false);
+    ]) assert.equal(qualifiesForNightly({ roles: [role] }), true, role);
+    assert.equal(qualifiesForNightly({ roles: ["709516043332354119"] }), false);
+    assert.equal(qualifiesForNightly({ roles: [PATREON_ROLE] }), true);
+    assert.equal(qualifiesForNightly({ roles: [COMPETITION_WINNER_ROLE] }), true);
+    assert.equal(qualifiesForNightly({ roles: [] }), false);
+    assert.equal(qualifiesForNightly({ roles: "not-an-array" }), false);
+    assert.equal(qualifiesForNightly(null), false);
 });
 
 test("the handler refuses implausible secrets at construction", () => {

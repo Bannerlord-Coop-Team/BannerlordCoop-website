@@ -36,12 +36,12 @@ export const SPONSOR_SESSION_SECONDS = 24 * 60 * 60;
 export const OAUTH_STATE_SECONDS = 10 * 60;
 
 /** Whether any of the given Discord role IDs grants nightly access. */
-export function hasNightlyAccessRole(roleIds: readonly string[]): boolean {
+function hasNightlyAccessRole(roleIds: readonly string[]): boolean {
     return roleIds.some((roleId) => NIGHTLY_ACCESS_ROLE_IDS.includes(roleId));
 }
 
-/** Whether a bot-fetched guild member (null when absent) currently qualifies to sponsor and install. */
-export function isEligibleNightlySponsor(member: { roles?: unknown } | null): boolean {
+/** Whether a guild member (null when absent) qualifies for nightly access: to install, sign in to the portal and sponsor. */
+export function qualifiesForNightly(member: { roles?: unknown } | null): boolean {
     if (member === null || !Array.isArray(member.roles)) return false;
     return hasNightlyAccessRole(member.roles.filter((roleId): roleId is string => typeof roleId === "string"));
 }
