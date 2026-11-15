@@ -1,7 +1,6 @@
-import { DEVICE_ID_PATTERN } from "../../../../supabase/functions/_shared/nightly/formats";
 import { DEVICE_SESSION_SECONDS } from "../../../../supabase/functions/_shared/nightly/policy";
-import type { PendingClaim } from "./client";
-import { isValidUsername, SESSION_TOKEN_PATTERN } from "./formats";
+import { toPendingClaim, type PendingClaim } from "./client";
+import { SESSION_TOKEN_PATTERN } from "./formats";
 
 export const SPONSOR_COOKIE = "nightly_sponsor";
 export const CLAIM_COOKIE = "nightly_claim";
@@ -48,7 +47,5 @@ export function decodeClaimContext(value: string | undefined): PendingClaim | nu
     }
     if (typeof parsed !== "object" || parsed === null) return null;
     const { deviceId, username, previousSponsorRevoked } = parsed as Record<string, unknown>;
-    if (typeof deviceId !== "string" || !DEVICE_ID_PATTERN.test(deviceId)) return null;
-    if (!isValidUsername(username)) return null;
-    return { deviceId, username, previousSponsorRevoked: previousSponsorRevoked === true };
+    return toPendingClaim(deviceId, username, previousSponsorRevoked);
 }

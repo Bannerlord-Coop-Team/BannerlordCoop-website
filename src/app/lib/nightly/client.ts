@@ -15,6 +15,13 @@ export type NightlyResult<T> = { ok: true; value: T } | NightlyFailure;
 /** A device waiting for a sponsor code: decoded from `needs-sponsor` and carried by the claim cookie to the claim form. */
 export type PendingClaim = { deviceId: string; username: string; previousSponsorRevoked: boolean };
 
+/** Validates untrusted claim fields into a pending claim; null when the device id or username is malformed. */
+export function toPendingClaim(deviceId: unknown, username: unknown, previousSponsorRevoked: unknown): PendingClaim | null {
+    if (typeof deviceId !== "string" || !DEVICE_ID_PATTERN.test(deviceId)) return null;
+    if (!isValidUsername(username)) return null;
+    return { deviceId, username, previousSponsorRevoked: previousSponsorRevoked === true };
+}
+
 export type OAuthOutcome =
     | { outcome: "approved" }
     | { outcome: "sponsored-approved" }
@@ -55,8 +62,8 @@ const DISCORD_AUTHORIZE_PATHS = new Set(["/oauth2/authorize", "/api/oauth2/autho
 type Decoder<T> = (body: unknown) => T | undefined;
 /** The injected dependencies one call runs against. */
 type Transport = { config: NightlyConfig; fetcher: NightlyFetch; log: NightlyLogger };
-/** A response body: parsed JSON (undefined when empty, oversized or malformed), or unreadable when the stream failed. */
-type BodyRead = { readable: true; body: unknown } | { readable: false };
+/** A response body: parsed JSON (undefined when empty, oversized or malformed), or the error that broke its stream. */
+type BodyRead = { readable: true; body: unknown } | { readable: false; error: unknown };
 
 /** Builds the typed Edge Function client; fetch, config and logging are injected so tests never touch the network. */
 export function createNightlyClient(
@@ -93,11 +100,15 @@ async function callFunction<T>(transport: Transport, path: string, body: unknown
     }
     const read = await readJson(response);
     if (!response.ok) {
-        const code = errorCode(read.readable ? read.body : undefined, response.status);
-        if (isOperatorFailure(response.status, code)) reportFailed(log, path, response.status, code);
-        return failure(response.status, code);
+        const rejected = failure(response.status, errorCode(read.readable ? read.body : undefined, response.status));
+        if (isOperatorFailure(rejected)) reportFailed(log, path, rejected.status, rejected.code);
+        return rejected;
     }
-    const value = read.readable ? decode(read.body) : undefined;
+    if (!read.readable) {
+        reportInvalidResponse(log, path, read.error);
+        return failure(response.status, "invalid_response");
+    }
+    const value = decode(read.body);
     if (value === undefined) {
         reportInvalidResponse(log, path);
         return failure(response.status, "invalid_response");
@@ -121,13 +132,13 @@ function post({ config, fetcher }: Transport, path: string, body: unknown): Prom
     });
 }
 
-/** Reads a response body; a stream that fails is reported as unreadable rather than read as empty. */
+/** Reads a response body; a stream that fails is reported as unreadable, with its error, rather than read as empty. */
 async function readJson(response: Response): Promise<BodyRead> {
     let text: string;
     try {
         text = await response.text();
-    } catch {
-        return { readable: false };
+    } catch (error) {
+        return { readable: false, error };
     }
     return { readable: true, body: parseBoundedJson(text) };
 }
@@ -143,12 +154,21 @@ function parseBoundedJson(text: string): unknown {
 }
 
 /**
- * Whether a failure needs an operator: a status the contract never sends a user (a redirect, a 404 from a wrong function
- * URL, a server error), or a 401 that rejects the website key rather than a user's session (`authorization_*`).
+ * Whether the Edge Function rejected the user's session or authorization (a 401 `authorization_*`), as opposed to a 401
+ * that rejects the website key itself, which signing in again cannot fix.
  */
-function isOperatorFailure(status: number, code: string): boolean {
+export function isSessionRejection(rejected: NightlyFailure): boolean {
+    return rejected.status === UNAUTHORIZED_STATUS && rejected.code.startsWith(SESSION_REJECTION_PREFIX);
+}
+
+/**
+ * Whether a failure needs an operator: a status the contract never sends a user (a redirect, a 404 from a wrong function
+ * URL, a server error), or a 401 that is not a session rejection (a wrong or rotated website key).
+ */
+function isOperatorFailure(rejected: NightlyFailure): boolean {
+    const { status } = rejected;
     if (status < CLIENT_ERROR_STATUS || status === NOT_FOUND_STATUS || status >= SERVER_ERROR_STATUS) return true;
-    return status === UNAUTHORIZED_STATUS && !code.startsWith(SESSION_REJECTION_PREFIX);
+    return status === UNAUTHORIZED_STATUS && !isSessionRejection(rejected);
 }
 
 /** The default logger: drops every entry. */
@@ -205,15 +225,15 @@ function decodePortalOutcome(body: Record<string, unknown>): OAuthOutcome | unde
 
 /** Validates a needs-sponsor outcome into the pending claim the claim cookie carries to the claim form. */
 function decodeNeedsSponsor(body: Record<string, unknown>): OAuthOutcome | undefined {
-    if (typeof body.device_id !== "string" || !DEVICE_ID_PATTERN.test(body.device_id)) return undefined;
-    if (!isValidUsername(body.username)) return undefined;
-    const previousSponsorRevoked = body.previous_sponsor_revoked === true;
-    return { outcome: "needs-sponsor", claim: { deviceId: body.device_id, username: body.username, previousSponsorRevoked } };
+    const claim = toPendingClaim(body.device_id, body.username, body.previous_sponsor_revoked);
+    if (claim === null) return undefined;
+    return { outcome: "needs-sponsor", claim };
 }
 
-/** Validates the claim success body. */
+/** Validates the claim success body; `null` is the success value (the claim carries no payload), undefined a mismatch. */
 function decodeSponsoredApproval(body: unknown): null | undefined {
-    return isRecord(body) && body.outcome === "sponsored-approved" ? null : undefined;
+    if (!isRecord(body) || body.outcome !== "sponsored-approved") return undefined;
+    return null;
 }
 
 /** Validates the portal body, dropping malformed seats rather than rendering them. */

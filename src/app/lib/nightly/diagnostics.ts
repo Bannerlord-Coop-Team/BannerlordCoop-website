@@ -18,9 +18,13 @@ export function reportFailed(log: NightlyLogger, path: string, status: number, c
     log({ event: "nightly_function_failed", path, status, code });
 }
 
-/** Logs a success reply whose body could not be read or does not match the contract. */
-export function reportInvalidResponse(log: NightlyLogger, path: string): void {
-    log({ event: "nightly_function_invalid_response", path });
+/** Logs a success reply that does not match the contract, or whose body stream failed (then with the error's class name). */
+export function reportInvalidResponse(log: NightlyLogger, path: string, readError?: unknown): void {
+    if (readError === undefined) {
+        log({ event: "nightly_function_invalid_response", path });
+        return;
+    }
+    log({ event: "nightly_function_invalid_response", path, error: errorName(readError) });
 }
 
 /** The error's class name only; messages can echo URLs or upstream text. */
