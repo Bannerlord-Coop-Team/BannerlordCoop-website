@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { CANONICAL_GATEWAY_ORIGIN, validateLegacyNightlyClientManifest, validateLegacyNightlyReleaseManifest, validateNightlyPublicationPointer } from "./core";
+import { validateLegacyNightlyClientManifest, validateLegacyNightlyReleaseManifest, validateNightlyPublicationPointer } from "./manifest-rules";
+import { CANONICAL_GATEWAY_ORIGIN } from "./origins";
 import { NIGHTLY_POINTER_URL, NightlyPublicationReadError, readNightlyPublication } from "./publication";
 import worker, { createGateway } from "./index";
 
@@ -83,7 +84,7 @@ test("gateway reads the pointer through the public R2 binding without an HTTP re
     assert.deepEqual(value.objects, [value.pointer.manifest.key]);
 });
 
-test("both authenticated manifest routes select the same pointer and keep private JSON inaccessible", async (context) => {
+test("both authenticated manifest routes select the same pointer and keep private JSON inaccessible", async () => {
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
     const env = {
@@ -100,13 +101,13 @@ test("both authenticated manifest routes select the same pointer and keep privat
         RELEASES: { get: value.getObject },
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    context.mock.method(globalThis, "fetch", value.fetcher);
+    const manifestGateway = createGateway({ fetch: value.fetcher });
     const headers = {
         authorization: `Bearer ${"n".repeat(43)}`,
         "x-bannerlord-coop-nightly-version": "2",
     };
     for (const path of ["client", "release"]) {
-        const response = await worker.fetch(new Request(`${gateway}/v1/manifests/${path}`, { headers }), env);
+        const response = await manifestGateway.fetch(new Request(`${gateway}/v1/manifests/${path}`, { headers }), env);
         assert.equal(response.status, 200);
         const manifest = await response.json() as { version: number; client: { publicUrl: string } };
         assert.equal(manifest.version, 2);
@@ -114,14 +115,14 @@ test("both authenticated manifest routes select the same pointer and keep privat
     }
     assert.deepEqual(value.objects, [value.pointer.manifest.key, value.pointer.manifest.key]);
     assert.deepEqual(value.requests.map(({ url }) => url), [NIGHTLY_POINTER_URL, NIGHTLY_POINTER_URL]);
-    const anonymous = await worker.fetch(new Request(`${gateway}/v1/manifests/release`), env);
+    const anonymous = await manifestGateway.fetch(new Request(`${gateway}/v1/manifests/release`), env);
     assert.equal(anonymous.status, 401);
-    const privateJson = await worker.fetch(new Request(`${gateway}/v1/artifacts/${value.pointer.manifest.key}`, { headers }), env);
+    const privateJson = await manifestGateway.fetch(new Request(`${gateway}/v1/artifacts/${value.pointer.manifest.key}`, { headers }), env);
     assert.equal(privateJson.status, 400);
     assert.equal(value.requests.length, 2);
 });
 
-test("client and release routes fall back only to a validated legacy pair", async (context) => {
+test("client and release routes fall back only to a validated legacy pair", async () => {
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
     const legacy = {
@@ -209,8 +210,7 @@ test("client and release routes fall back only to a validated legacy pair", asyn
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
     const logs: Array<Record<string, unknown>> = [];
-    const logged = createGateway({ fetch: () => Promise.reject(new Error("manifests must not forward")), log: (event) => logs.push(event) });
-    context.mock.method(globalThis, "fetch", value.fetcher);
+    const logged = createGateway({ fetch: value.fetcher, log: (event) => logs.push(event) });
     const headers = {
         authorization: `Bearer ${"n".repeat(43)}`,
         "x-bannerlord-coop-nightly-version": "2",
@@ -352,7 +352,7 @@ test("the client route requires the complete publication while release keeps the
     assert.equal((await v2.json() as { version: number }).version, 2);
 });
 
-test("the headerless client route returns 503 when no complete pair exists", async (context) => {
+test("the headerless client route returns 503 when no complete pair exists", async () => {
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
     const env = {
@@ -370,14 +370,14 @@ test("the headerless client route returns 503 when no complete pair exists", asy
         RELEASES: { async get() { return null; } },
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    context.mock.method(globalThis, "fetch", value.fetcher);
-    const response = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, {
+    const manifestGateway = createGateway({ fetch: value.fetcher });
+    const response = await manifestGateway.fetch(new Request(`${gateway}/v1/manifests/client`, {
         headers: { authorization: `Bearer ${"n".repeat(43)}` },
     }), env);
     assert.equal(response.status, 503);
 });
 
-test("the client route fails closed when the paired publication is unavailable", async (context) => {
+test("the client route fails closed when the paired publication is unavailable", async () => {
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
     const env = {
@@ -394,14 +394,14 @@ test("the client route fails closed when the paired publication is unavailable",
         RELEASES: { async get() { return null; } },
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    context.mock.method(globalThis, "fetch", value.fetcher);
-    const response = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, {
+    const manifestGateway = createGateway({ fetch: value.fetcher });
+    const response = await manifestGateway.fetch(new Request(`${gateway}/v1/manifests/client`, {
         headers: { authorization: `Bearer ${"n".repeat(43)}` },
     }), env);
     assert.equal(response.status, 503);
 });
 
-test("v2 client fallback never serves a legacy client ahead of the release pair", async (context) => {
+test("v2 client fallback never serves a legacy client ahead of the release pair", async () => {
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
     const legacyRelease = JSON.parse(await readFile(new URL("../fixtures/legacy-release-2026-11-04.json", import.meta.url), "utf8")) as Record<string, unknown>;
@@ -420,15 +420,15 @@ test("v2 client fallback never serves a legacy client ahead of the release pair"
         RELEASES: { async get(key: string) { if (key === value.pointer.manifest.key) return null; if (key === "nightly/release.json") return bytes(legacyRelease); if (key === "nightly/client.json") return bytes(aheadClient); return null; } },
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    context.mock.method(globalThis, "fetch", value.fetcher);
-    const response = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, {
+    const manifestGateway = createGateway({ fetch: value.fetcher });
+    const response = await manifestGateway.fetch(new Request(`${gateway}/v1/manifests/client`, {
         headers: { authorization: `Bearer ${"n".repeat(43)}`, "x-bannerlord-coop-nightly-version": "2" },
     }), env);
     assert.equal(response.status, 200);
     assert.equal((await response.json() as { headSha: string }).headSha, legacyRelease.headSha);
 });
 
-test("a complete release pair remains available when the legacy client object is missing", async (context) => {
+test("a complete release pair remains available when the legacy client object is missing", async () => {
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
     const legacyRelease = JSON.parse(await readFile(new URL("../fixtures/legacy-release-2026-11-04.json", import.meta.url), "utf8")) as Record<string, unknown>;
@@ -440,8 +440,8 @@ test("a complete release pair remains available when the legacy client object is
         RELEASES: { async get(key: string) { return key === "nightly/release.json" ? bytes(releaseBytes) : null; } },
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    context.mock.method(globalThis, "fetch", value.fetcher);
-    const response = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, {
+    const manifestGateway = createGateway({ fetch: value.fetcher });
+    const response = await manifestGateway.fetch(new Request(`${gateway}/v1/manifests/client`, {
         headers: { authorization: `Bearer ${"n".repeat(43)}` },
     }), env);
     assert.equal(response.status, 200);
@@ -550,7 +550,7 @@ test("gateway bounds stalled public fetches and private reads to five seconds", 
     }, value.fetcher), /timeout/);
 });
 
-test("manifest artifact URLs follow the gateway host the installer used", async (context) => {
+test("manifest artifact URLs follow the gateway host the installer used", async () => {
     const value = fixture();
     const canonical = "https://nightly.bannerlordcoop.com";
     const legacyGateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
@@ -584,7 +584,7 @@ test("manifest artifact URLs follow the gateway host the installer used", async 
         } },
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    context.mock.method(globalThis, "fetch", value.fetcher);
+    const manifestGateway = createGateway({ fetch: value.fetcher });
     const authorization = `Bearer ${"n".repeat(43)}`;
     const cases = [
         { host: canonical, expected: canonical },
@@ -592,7 +592,7 @@ test("manifest artifact URLs follow the gateway host the installer used", async 
         { host: "https://gateway.attacker.invalid", expected: canonical },
     ];
     for (const { host, expected } of cases) {
-        const v2 = await worker.fetch(new Request(`${host}/v1/manifests/release`, {
+        const v2 = await manifestGateway.fetch(new Request(`${host}/v1/manifests/release`, {
             headers: { authorization, "x-bannerlord-coop-nightly-version": "2" },
         }), env);
         assert.equal(v2.status, 200);
@@ -605,7 +605,7 @@ test("manifest artifact URLs follow the gateway host the installer used", async 
         assert.equal(release.server.incremental.base.publicUrl, `${expected}/v1/artifacts/${value.manifest.server.incremental.base.key}`);
         assert.equal(release.server.incremental.update.publicUrl, `${expected}/v1/artifacts/${value.manifest.server.incremental.update.key}`);
 
-        const headerless = await worker.fetch(new Request(`${host}/v1/manifests/client`, { headers: { authorization } }), env);
+        const headerless = await manifestGateway.fetch(new Request(`${host}/v1/manifests/client`, { headers: { authorization } }), env);
         assert.equal(headerless.status, 200);
         const client = await headerless.json() as { version: number; client: { publicUrl: string } };
         assert.equal(client.version, 1);

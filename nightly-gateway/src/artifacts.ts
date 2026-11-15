@@ -1,4 +1,5 @@
-import { isAllowedArtifactKey, isAllowedPinClientKey } from "./core";
+import { isAllowedArtifactKey } from "./core";
+import { isAllowedPinClientKey } from "./pin-rules";
 import { authorizeDownload } from "./downloads";
 import { GatewayError } from "./http";
 

@@ -1,9 +1,9 @@
-import { PUBLIC_MANUAL_SERVER_ORIGIN, resolveGatewayOrigin } from "./core";
 import { serveArtifact } from "./artifacts";
 import { databaseForRequest } from "./database";
-import { FORWARDED_DEVICE_PATHS, deviceFunctionUrl, forwardDeviceRequest, type UpstreamFetch } from "./forwarding";
-import { GatewayError, json, type GatewayLog } from "./http";
+import { FORWARDED_DEVICE_PATHS, deviceFunctionUrl, forwardDeviceRequest } from "./forwarding";
+import { GatewayError, json, safeErrorCode, type GatewayLog, type UpstreamFetch } from "./http";
 import { serveManifest } from "./manifests";
+import { PUBLIC_MANUAL_SERVER_ORIGIN, resolveGatewayOrigin } from "./origins";
 import { errorPage, gatewayErrorMessage, html } from "./pages";
 import {
     mintCreateBuildPin,
@@ -47,21 +47,24 @@ export function createGateway(dependencies: GatewayDependencies): GatewayHandler
 
 export default createGateway({ fetch: (url, init) => fetch(url, init), log: consoleLog }) satisfies ExportedHandler<Env>;
 
-// Logs a failed request with its stable code and, when known, the class of the underlying cause (never its message).
+// Logs a failed request with its stable code and, when known, the class of the underlying cause.
+// The cause's message is logged only when it is a bare snake_case code; any other text is never logged.
 function logRequestFailure(log: GatewayLog, request: Request, error: unknown): void {
-    const cause = failureCauseName(error);
     log({
         event: "nightly_gateway_request_failed",
         path: new URL(request.url).pathname,
         error: error instanceof GatewayError ? error.code : "internal_error",
-        ...(cause === undefined ? {} : { cause }),
+        ...describeFailureCause(error),
     });
 }
 
-// Names the class behind a failure: a GatewayError's cause, or the unexpected error itself.
-function failureCauseName(error: unknown): string | undefined {
-    if (error instanceof GatewayError) return error.cause instanceof Error ? error.cause.name : undefined;
-    return error instanceof Error ? error.name : typeof error;
+// Describes the failure behind a request: a GatewayError's cause, or the unexpected error itself.
+// Yields its class and, when safe, its snake_case code; a GatewayError without an Error cause yields nothing.
+function describeFailureCause(error: unknown): { cause?: string; message?: string } {
+    const cause = error instanceof GatewayError ? error.cause : error;
+    if (!(cause instanceof Error)) return error instanceof GatewayError ? {} : { cause: typeof error };
+    const message = safeErrorCode(cause);
+    return message === undefined ? { cause: cause.name } : { cause: cause.name, message };
 }
 
 // Routes one request: maintenance lock first, then routes that need no database, then R2 and Postgres routes.
@@ -80,7 +83,7 @@ async function route(request: Request, env: Env, upstreamFetch: UpstreamFetch, l
     const stateless = routeWithoutDatabase(request, url, env, upstreamFetch);
     if (stateless !== null) return stateless;
     const database = await databaseForRequest(env);
-    return routeWithDatabase(request, url, { ...env, DB: database }, log);
+    return routeWithDatabase(request, url, { ...env, DB: database }, upstreamFetch, log);
 }
 
 // Answers the website redirects and the device-API forwarding, which never touch Postgres or R2.
@@ -92,15 +95,23 @@ function routeWithoutDatabase(
 ): Promise<Response> | null {
     const redirect = websiteRedirectFor(request.method, url);
     if (redirect !== null) return Promise.resolve(redirectResponse(redirect.location, redirect.status));
-    if (request.method !== "POST" || !FORWARDED_DEVICE_PATHS.includes(url.pathname)) return null;
+    const path = url.pathname;
+    if (request.method !== "POST" || !FORWARDED_DEVICE_PATHS.includes(path)) return null;
     return forwardDeviceRequest(request, {
-        url: deviceFunctionUrl(env.NIGHTLY_FUNCTION_URL, url.pathname),
+        path,
+        url: deviceFunctionUrl(env.NIGHTLY_FUNCTION_URL, path),
         origin: resolveGatewayOrigin(url),
     }, upstreamFetch);
 }
 
 // Serves the pin, manifest, artifact, and health routes that read download state from Postgres.
-async function routeWithDatabase(request: Request, url: URL, env: Env, log: GatewayLog): Promise<Response> {
+async function routeWithDatabase(
+    request: Request,
+    url: URL,
+    env: Env,
+    upstreamFetch: UpstreamFetch,
+    log: GatewayLog,
+): Promise<Response> {
     if (request.method === "GET" && url.pathname === "/install" && url.searchParams.has("pin")) {
         return serveCreateBuildPinPage(url, env);
     }
@@ -117,10 +128,10 @@ async function routeWithDatabase(request: Request, url: URL, env: Env, log: Gate
         return servePinManifest(request, env);
     }
     if (request.method === "GET" && url.pathname === "/v1/manifests/client") {
-        return serveManifest(request, env, true, log);
+        return serveManifest(request, env, true, { fetch: upstreamFetch, log });
     }
     if (request.method === "GET" && url.pathname === "/v1/manifests/release") {
-        return serveManifest(request, env, false, log);
+        return serveManifest(request, env, false, { fetch: upstreamFetch, log });
     }
     if (request.method === "GET" && url.pathname.startsWith("/v1/artifacts/")) {
         return serveArtifact(request, env, url.pathname.slice("/v1/artifacts/".length));

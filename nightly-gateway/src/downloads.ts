@@ -1,9 +1,7 @@
 import { GatewayError } from "./http";
-import { nowSeconds, sha256 } from "./primitives";
+import { isBearerToken, nowSeconds, sha256 } from "./primitives";
 
 // Authorizes artifact and manifest downloads from a bearer download session, nightly or create-build pin.
-
-const DEVICE_SECRET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
 /** What a download session grants: the latest nightly, or one pinned create-build. */
 export type DownloadAuthorization = { kind: "nightly" } | PinAuthorization;
@@ -28,7 +26,7 @@ export async function authorizeDownload(request: Request, env: Env): Promise<Dow
     const authorization = request.headers.get("authorization");
     if (!authorization?.startsWith("Bearer ")) throw new GatewayError(401, "authorization_required");
     const token = authorization.slice(7);
-    if (!DEVICE_SECRET_PATTERN.test(token)) throw new GatewayError(401, "authorization_invalid");
+    if (!isBearerToken(token)) throw new GatewayError(401, "authorization_invalid");
     const tokenHash = await sha256(token);
     const now = nowSeconds();
     const pinSession = await env.DB.prepare(`
@@ -44,8 +42,8 @@ export async function authorizeDownload(request: Request, env: Env): Promise<Dow
         return { kind: "pin", buildId: pinSession.build_id };
     }
     const row = await env.DB.prepare(
-        "SELECT supporter_discord_user_id, expires_at FROM download_sessions WHERE token_hash = ?",
-    ).bind(tokenHash).first<{ supporter_discord_user_id: string; expires_at: number }>();
+        "SELECT expires_at FROM download_sessions WHERE token_hash = ?",
+    ).bind(tokenHash).first<{ expires_at: number }>();
     if (row === null || row.expires_at < now) throw new GatewayError(401, "authorization_expired");
     return { kind: "nightly" };
 }

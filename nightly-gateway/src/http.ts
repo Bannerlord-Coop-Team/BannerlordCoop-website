@@ -3,13 +3,25 @@ const JSON_HEADERS = Object.freeze({
     "cache-control": "no-store",
 });
 
+const SAFE_ERROR_CODE = /^[a-z0-9_]{1,64}$/;
+
 /** Receives one structured log event; the Worker writes it as a JSON line, tests collect it. */
 export type GatewayLog = (event: Record<string, unknown>) => void;
+
+/** The outbound HTTP call the gateway depends on; production passes the Workers global fetch. */
+export type UpstreamFetch = (url: string, init: RequestInit) => Promise<Response>;
 
 // Carries the HTTP status and stable error code returned to clients.
 // The optional cause keeps the underlying failure so the top-level log can name its class.
 export class GatewayError extends Error {
     constructor(readonly status: number, readonly code: string, options?: { cause?: unknown }) { super(code, options); }
+}
+
+// Returns an error's message only when it is a bare snake_case code, which is safe to log.
+// Any other message text may carry secrets or user input, so it yields undefined.
+export function safeErrorCode(error: unknown): string | undefined {
+    if (!(error instanceof Error) || !SAFE_ERROR_CODE.test(error.message)) return undefined;
+    return error.message;
 }
 
 // Serializes one JSON body with the gateway's no-store headers.
