@@ -301,8 +301,9 @@ export function validateLegacyNightlyClientManifest(
         || !NIGHTLY_PUBLICATION_DATE.test(input.releaseDate)
         || typeof input.headSha !== "string" || !NIGHTLY_PUBLICATION_COMMIT.test(input.headSha)
         || (input.baseSha !== null && (typeof input.baseSha !== "string" || !NIGHTLY_PUBLICATION_COMMIT.test(input.baseSha)))
-        || typeof input.workflowRunId !== "number" || !Number.isSafeInteger(input.workflowRunId)
-        || input.workflowRunId <= 0 || typeof input.builtAt !== "string"
+        || (input.workflowRunId !== undefined && (typeof input.workflowRunId !== "number"
+            || !Number.isSafeInteger(input.workflowRunId) || input.workflowRunId <= 0))
+        || typeof input.builtAt !== "string"
         || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$/.test(input.builtAt)) {
         throw new Error("invalid_legacy_nightly_client_manifest");
     }
