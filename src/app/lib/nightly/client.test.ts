@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createNightlyClient, decodeOAuthOutcome, decodePortal, type NightlyFetch } from "./client";
+import { createNightlyClient, decodeOAuthOutcome, decodePortal, isSessionRejection, toPendingClaim, type NightlyFetch } from "./client";
 import { readNightlyConfig } from "./config";
 import type { NightlyLogger } from "./diagnostics";
 
@@ -104,13 +104,13 @@ test("each failed call is logged once with its route, never with bodies or secre
     assert.ok(!logged.includes(config.websiteKey) && !logged.includes(SESSION), logged);
 });
 
-test("a success reply whose body cannot be read is an invalid response, not an empty success", async () => {
+test("a success reply whose body cannot be read is an invalid response logged with the read error's class", async () => {
     const { log, entries } = recordingLogger();
     const brokenStream = new ReadableStream({ start: (controller) => controller.error(new TypeError("stream reset")) });
     const breaking: NightlyFetch = async () => new Response(brokenStream, { status: 200 });
     const result = await createNightlyClient(config, breaking, log).removeSponsoredAccount(SESSION, "123456789012345678");
     assert.deepEqual(result, { ok: false, status: 200, code: "invalid_response" });
-    assert.deepEqual(entries, [{ event: "nightly_function_invalid_response", path: "/sponsor/remove" }]);
+    assert.deepEqual(entries, [{ event: "nightly_function_invalid_response", path: "/sponsor/remove", error: "TypeError" }]);
 });
 
 test("client errors are not logged: they are expected outcomes the pages explain", async () => {
@@ -126,6 +126,22 @@ test("a rejected website key is logged so it does not pass for an expired sessio
     const result = await createNightlyClient(config, rejected.fetch, log).sponsorPortal(SESSION);
     assert.deepEqual(result, { ok: false, status: 401, code: "unauthorized" });
     assert.deepEqual(entries, [{ event: "nightly_function_failed", path: "/sponsor/portal", status: 401, code: "unauthorized" }]);
+});
+
+test("only a 401 authorization_* is a session rejection; a rejected website key or another status is not", () => {
+    assert.equal(isSessionRejection({ ok: false, status: 401, code: "authorization_expired" }), true);
+    assert.equal(isSessionRejection({ ok: false, status: 401, code: "authorization_required" }), true);
+    assert.equal(isSessionRejection({ ok: false, status: 401, code: "unauthorized" }), false);
+    assert.equal(isSessionRejection({ ok: false, status: 401, code: "http_401" }), false);
+    assert.equal(isSessionRejection({ ok: false, status: 403, code: "authorization_expired" }), false);
+});
+
+test("pending claims validate the device id and username, and only a literal true marks a revoked sponsor", () => {
+    assert.deepEqual(toPendingClaim(DEVICE_ID, "friend", true), { deviceId: DEVICE_ID, username: "friend", previousSponsorRevoked: true });
+    assert.deepEqual(toPendingClaim(DEVICE_ID, "friend", "yes"), { deviceId: DEVICE_ID, username: "friend", previousSponsorRevoked: false });
+    for (const [deviceId, username] of [[42, "friend"], ["device-1", "friend"], [DEVICE_ID.toUpperCase(), "friend"], [DEVICE_ID, ""], [DEVICE_ID, 7]]) {
+        assert.equal(toPendingClaim(deviceId, username, false), null, JSON.stringify([deviceId, username]));
+    }
 });
 
 test("statuses the contract never sends a user are logged: a wrong function URL's 404 and an unfollowed redirect", async () => {

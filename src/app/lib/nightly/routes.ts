@@ -5,20 +5,16 @@ import {
     USER_CODE_PATTERN,
 } from "../../../../supabase/functions/_shared/nightly/formats";
 import type { NightlyClient, NightlyResult, OAuthOutcome } from "./client";
-import { CLAIM_COOKIE, CLAIM_COOKIE_SECONDS, encodeClaimContext, nightlyCookieOptions, SPONSOR_COOKIE } from "./cookies";
+import { nightlyCookieOptions } from "./cookies";
 import { OAUTH_STATE_PATTERN } from "./formats";
 import type { NightlyErrorContext } from "./messages";
 import { errorPath, SPONSORED_APPROVED_PATH } from "./query-flags";
-
-/** One nightly cookie a redirect sets; a zero lifetime clears it. */
-export type NightlyCookie = { name: string; value: string; maxAge: number };
-/** Where a nightly route handler or server action sends the browser, plus any cookies it sets on the way. */
-export type RedirectPlan = { location: string; cookies: NightlyCookie[] };
+import { claimCookie, redirectPlan, sponsorSessionCookie, type RedirectPlan } from "./redirect-plan";
 
 /** Handles `GET /nightly/activate?code=`: starts device OAuth or explains why the code cannot be used. */
 export async function planActivate(params: URLSearchParams, client: NightlyClient): Promise<RedirectPlan> {
     const userCode = normalizeUserCode(params.get("code") ?? "");
-    if (!USER_CODE_PATTERN.test(userCode)) return plan(errorPath("activate", "invalid_code"));
+    if (!USER_CODE_PATTERN.test(userCode)) return redirectPlan(errorPath("activate", "invalid_code"));
     return planAuthorize(await client.startDeviceOAuth(userCode), "activate");
 }
 
@@ -31,9 +27,9 @@ export async function planSponsorLogin(client: NightlyClient): Promise<RedirectP
 export async function planCallback(params: URLSearchParams, client: NightlyClient): Promise<RedirectPlan> {
     const code = params.get("code") ?? "";
     const state = params.get("state") ?? "";
-    if (!isWellFormedCallback(code, state)) return plan(errorPath("callback", "invalid_request"));
+    if (!isWellFormedCallback(code, state)) return redirectPlan(errorPath("callback", "invalid_request"));
     const result = await client.completeOAuth(code, state);
-    if (!result.ok) return plan(errorPath("callback", result.code));
+    if (!result.ok) return redirectPlan(errorPath("callback", result.code));
     return planOutcome(result.value);
 }
 
@@ -41,13 +37,13 @@ export async function planCallback(params: URLSearchParams, client: NightlyClien
 export function planOutcome(outcome: OAuthOutcome): RedirectPlan {
     switch (outcome.outcome) {
         case "approved":
-            return plan("/nightly/approved");
+            return redirectPlan("/nightly/approved");
         case "sponsored-approved":
-            return plan(SPONSORED_APPROVED_PATH);
+            return redirectPlan(SPONSORED_APPROVED_PATH);
         case "portal":
-            return plan("/nightly/sponsor", [{ name: SPONSOR_COOKIE, value: outcome.session, maxAge: outcome.expires_in }]);
+            return redirectPlan("/nightly/sponsor", sponsorSessionCookie(outcome.session, outcome.expires_in));
         case "needs-sponsor":
-            return plan("/nightly/claim", [{ name: CLAIM_COOKIE, value: encodeClaimContext(outcome.claim), maxAge: CLAIM_COOKIE_SECONDS }]);
+            return redirectPlan("/nightly/claim", claimCookie(outcome.claim));
     }
 }
 
@@ -70,11 +66,6 @@ function isWellFormedCallback(code: string, state: string): boolean {
 
 /** Redirects to Discord on success, otherwise to the matching error page. */
 function planAuthorize(result: NightlyResult<string>, context: NightlyErrorContext): RedirectPlan {
-    if (!result.ok) return plan(errorPath(context, result.code));
-    return plan(result.value);
-}
-
-/** Creates a redirect plan. */
-function plan(location: string, cookies: NightlyCookie[] = []): RedirectPlan {
-    return { location, cookies };
+    if (!result.ok) return redirectPlan(errorPath(context, result.code));
+    return redirectPlan(result.value);
 }

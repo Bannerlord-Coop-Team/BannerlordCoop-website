@@ -59,6 +59,19 @@ test("portal view: the expired notice an action asked for shows on the login vie
     assert.deepEqual(await loadPortalView(expired, SESSION, true), { kind: "login", expired: true });
 });
 
+test("portal view: a rejected website key is an error, not an expired session", async () => {
+    const rejected = stubClient({ sponsorPortal: async () => fail(401, "unauthorized") });
+    assert.deepEqual(await loadPortalView(rejected, SESSION, false), { kind: "error", message: GENERIC_ERROR_MESSAGE });
+});
+
+test("sponsor actions show the generic error and keep the session cookie when the website key is rejected", async () => {
+    const codeRejected = stubClient({ createSponsorCode: async () => fail(401, "unauthorized") });
+    assert.deepEqual(await createCodeActionResult(codeRejected, SPONSOR_REQUEST), { state: { code: null, error: GENERIC_ERROR_MESSAGE } });
+    const removeRejected = stubClient({ removeSponsoredAccount: async () => fail(401, "unauthorized") });
+    const removal = await removeSeatActionResult(removeRejected, SPONSOR_REQUEST, "123456789012345678");
+    assert.deepEqual(removal, { state: { error: GENERIC_ERROR_MESSAGE } });
+});
+
 test("claim sends the cookie's device and the normalized code, and maps every contract error", async () => {
     const calls: string[][] = [];
     const approve = stubClient({ claimSponsorship: async (device, code) => { calls.push([device, code]); return { ok: true, value: null }; } });
