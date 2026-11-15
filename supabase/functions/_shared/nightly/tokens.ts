@@ -1,5 +1,6 @@
 // Token and code formats for the nightly gateway. Secrets are 32 random bytes base64url-encoded
 // (43 chars), codes use A-Z2-9 without look-alikes, and storage keeps only SHA-256 hex digests.
+import { createHash, timingSafeEqual } from "node:crypto";
 
 /** Supplies cryptographically random bytes; injected so tests can make tokens deterministic. */
 export type RandomBytes = (count: number) => Uint8Array;
@@ -54,13 +55,9 @@ export async function sha256(value: string): Promise<string> {
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-/** Compares two secrets in constant time by XOR-ing their fixed-length digests in full. */
-export async function secretsEqual(expected: string, provided: string): Promise<boolean> {
-    const left = await sha256(expected);
-    const right = await sha256(provided);
-    let difference = 0;
-    for (let index = 0; index < left.length; index += 1) difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
-    return difference === 0;
+/** Compares two secrets in constant time over fixed-length digests, so neither length nor content leaks. */
+export function secretsEqual(expected: string, provided: string): boolean {
+    return timingSafeEqual(createHash("sha256").update(expected).digest(), createHash("sha256").update(provided).digest());
 }
 
 /** Encodes bytes as unpadded base64url. */

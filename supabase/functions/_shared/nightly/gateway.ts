@@ -4,20 +4,23 @@ import { createDeviceSession, pollDeviceSession } from "./device.ts";
 import { createDiscordApi, type DiscordApi, type DiscordCredentials } from "./discord.ts";
 import { errorJson, GatewayError, json, readJsonObject } from "./http.ts";
 import { completeOAuth, startOAuth } from "./oauth.ts";
-import { isDiscordSnowflake, isForwardedOrigin } from "./policy.ts";
+import { isDiscordSnowflake } from "./policy.ts";
 import { claimSponsorship, removeSponsoredAccount, rotateSponsorCode, sponsorPortal } from "./sponsor.ts";
 import { cryptoRandomBytes, type RandomBytes, secretsEqual } from "./tokens.ts";
 
 const FUNCTION_PREFIXES = Object.freeze(["/functions/v1/nightly-gateway", "/nightly-gateway"]);
-const FORWARDED_ORIGIN_HEADER = "x-nightly-forwarded-origin";
 const WEBSITE_KEY_HEADER = "x-nightly-website-key";
+const MINIMUM_WEBSITE_KEY_LENGTH = 32;
+const MINIMUM_CLIENT_SECRET_LENGTH = 32;
+const MINIMUM_BOT_TOKEN_LENGTH = 50;
+const SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/;
 
-type InstallerRoute = (context: GatewayContext, request: Request, origin: string) => Promise<Response>;
+type InstallerRoute = (context: GatewayContext, request: Request) => Promise<Response>;
 type WebsiteRoute = (context: GatewayContext, body: Record<string, unknown>) => Promise<Response>;
 
 const INSTALLER_ROUTES: Readonly<Record<string, InstallerRoute>> = Object.freeze({
-    "/v1/device/sessions": (context: GatewayContext, _request: Request, origin: string) => createDeviceSession(context, origin),
-    "/v1/device/token": (context: GatewayContext, request: Request) => pollDeviceSession(context, request),
+    "/v1/device/sessions": (context: GatewayContext) => createDeviceSession(context),
+    "/v1/device/token": pollDeviceSession,
 });
 
 const WEBSITE_ROUTES: Readonly<Record<string, WebsiteRoute>> = Object.freeze({
@@ -78,17 +81,15 @@ class GatewayRouter {
         throw new GatewayError(404, "not_found");
     }
 
-    /** Requires a forwarded gateway origin, then runs an installer route. */
+    /** Runs an installer route; the Worker forwards these unauthenticated, as installers send them. */
     private async routeInstaller(request: Request, route: InstallerRoute): Promise<Response> {
-        const origin = request.headers.get(FORWARDED_ORIGIN_HEADER);
-        if (!isForwardedOrigin(origin)) throw new GatewayError(400, "invalid_request");
-        return this.withContext((context) => route(context, request, origin));
+        return this.withContext((context) => route(context, request));
     }
 
     /** Requires the website key, parses the JSON body, then runs a website route. */
     private async routeWebsite(request: Request, route: WebsiteRoute): Promise<Response> {
         const provided = request.headers.get(WEBSITE_KEY_HEADER);
-        if (provided === null || !await secretsEqual(this.options.websiteKey, provided)) {
+        if (provided === null || !secretsEqual(this.options.websiteKey, provided)) {
             throw new GatewayError(401, "unauthorized");
         }
         const body = await readJsonObject(request);
@@ -120,23 +121,39 @@ function functionPath(pathname: string): string | null {
 
 /** Maps a gateway error to its JSON envelope and anything else to a logged `500 internal_error`. */
 function failureResponse(request: Request, error: unknown, log: (event: Record<string, unknown>) => void): Response {
-    const gatewayError = error instanceof GatewayError ? error : null;
-    log({
-        event: "nightly_gateway_request_failed",
-        path: new URL(request.url).pathname,
-        error: gatewayError?.code ?? "internal_error",
-        ...gatewayError?.upstream,
-    });
-    if (gatewayError !== null) return errorJson(gatewayError);
+    const failure = { event: "nightly_gateway_request_failed", path: new URL(request.url).pathname };
+    if (error instanceof GatewayError) {
+        log({ ...failure, error: error.code, ...error.upstream });
+        return errorJson(error);
+    }
+    log({ ...failure, error: "internal_error", ...unexpectedCause(error) });
     return json({ error: "internal_error" }, 500);
+}
+
+/** Describes an unexpected failure by its error class and PostgreSQL SQLSTATE only, never its message or data. */
+function unexpectedCause(error: unknown): { cause: string; sqlstate?: string } {
+    const cause = error instanceof Error ? error.name : typeof error;
+    const code = typeof error === "object" && error !== null ? (error as { code?: unknown }).code : undefined;
+    if (typeof code !== "string" || !SQLSTATE_PATTERN.test(code)) return { cause };
+    return { cause, sqlstate: code };
 }
 
 /** Refuses to start with a missing or implausible secret instead of failing per request. */
 function assertConfiguration(options: NightlyGatewayOptions): void {
-    if (typeof options.websiteKey !== "string" || options.websiteKey.length < 32
-        || !isDiscordSnowflake(options.discord.clientId)
-        || typeof options.discord.clientSecret !== "string" || options.discord.clientSecret.length < 32
-        || typeof options.discord.botToken !== "string" || options.discord.botToken.length < 50) {
-        throw new Error("nightly_gateway_configuration_invalid");
+    if (!hasMinimumLength(options.websiteKey, MINIMUM_WEBSITE_KEY_LENGTH)) throw configurationInvalid("websiteKey");
+    if (!isDiscordSnowflake(options.discord.clientId)) throw configurationInvalid("discord.clientId");
+    if (!hasMinimumLength(options.discord.clientSecret, MINIMUM_CLIENT_SECRET_LENGTH)) {
+        throw configurationInvalid("discord.clientSecret");
     }
+    if (!hasMinimumLength(options.discord.botToken, MINIMUM_BOT_TOKEN_LENGTH)) throw configurationInvalid("discord.botToken");
+}
+
+/** Whether a configured secret is a string of at least `minimum` characters. */
+function hasMinimumLength(value: unknown, minimum: number): boolean {
+    return typeof value === "string" && value.length >= minimum;
+}
+
+/** The boot error for one implausible setting, naming the setting but never its value. */
+function configurationInvalid(setting: string): Error {
+    return new Error(`nightly_gateway_configuration_invalid: ${setting}`);
 }

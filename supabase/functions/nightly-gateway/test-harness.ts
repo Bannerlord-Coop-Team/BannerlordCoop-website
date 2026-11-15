@@ -10,8 +10,6 @@ import { sha256 } from "../_shared/nightly/tokens.ts";
 
 export const NOW = 1_800_000_000;
 export const WEBSITE_KEY = "w".repeat(48);
-export const GATEWAY = "https://nightly.bannerlordcoop.com";
-export const LEGACY_GATEWAY = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
 export const CLIENT_ID = "1537575576745803799";
 export const BOT_TOKEN = "B".repeat(59);
 export const PATREON_ROLE = "1532151760012050452";
@@ -66,7 +64,7 @@ export function discordScript(overrides: Partial<DiscordScript> = {}): DiscordSc
 /** A fetch that answers exactly the Discord endpoints the gateway calls, recording every call. */
 export function discordFetch(script: DiscordScript): typeof fetch {
     return (async (input: string | URL | Request, init?: RequestInit) => {
-        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        const url = requestUrl(input);
         script.calls.push({ url, headers: new Headers(init?.headers), body: String(init?.body ?? "") });
         if (url === TOKEN_URL) return script.tokenFailure?.() ?? Response.json({
             access_token: "user-access-token",
@@ -87,6 +85,13 @@ export function discordFetch(script: DiscordScript): typeof fetch {
         }
         throw new Error(`Unexpected Discord request: ${url}`);
     }) as typeof fetch;
+}
+
+/** Normalizes any fetch input to its URL string. */
+function requestUrl(input: string | URL | Request): string {
+    if (typeof input === "string") return input;
+    if (input instanceof URL) return input.href;
+    return input.url;
 }
 
 /** Discord's 404 body for a user who is not in the guild. */
@@ -112,10 +117,9 @@ export function gatewayHandler(database: PGlite, script: DiscordScript, clock = 
     return { handler, releases, logs };
 }
 
-/** An installer request as the Worker forwards it, with the forwarded-origin header. */
-export function installerRequest(path: string, form = "", origin: string | null = GATEWAY): Request {
+/** An installer request as the Worker forwards it: the installer's form body, with no extra headers. */
+export function installerRequest(path: string, form = ""): Request {
     const headers = new Headers({ "content-type": "application/x-www-form-urlencoded" });
-    if (origin !== null) headers.set("x-nightly-forwarded-origin", origin);
     return new Request(`https://wfvqnijwuyqjibhlcrhz.supabase.co/functions/v1/nightly-gateway${path}`, {
         method: "POST", headers, body: form,
     });
@@ -167,13 +171,19 @@ export async function seedSeat(database: PGlite, supporterId: string, friendId: 
     );
 }
 
-/** Seeds a download session for a friend under a sponsor. */
-export async function seedDownloadSession(database: PGlite, friendId: string, supporterId: string, token = "d".repeat(43)) {
+/** Seeds a download session for a friend under a sponsor, optionally issued for a device session. */
+export async function seedDownloadSession(
+    database: PGlite,
+    friendId: string,
+    supporterId: string,
+    token = "d".repeat(43),
+    deviceSessionId: string | null = null,
+) {
     await database.query(
         `insert into nightly_gateway.download_sessions
             (token_hash, device_session_id, discord_user_id, supporter_discord_user_id, created_at, expires_at)
-         values ($1, null, $2, $3, $4, $5)`,
-        [await sha256(token), friendId, supporterId, NOW - 10, NOW + 3000],
+         values ($1, $2, $3, $4, $5, $6)`,
+        [await sha256(token), deviceSessionId, friendId, supporterId, NOW - 10, NOW + 3000],
     );
 }
 

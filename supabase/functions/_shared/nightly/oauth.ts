@@ -1,5 +1,7 @@
 import type { GatewayContext } from "./context.ts";
-import { approveDevice, isSponsorStillEligible, storeSupporterGrant } from "./eligibility.ts";
+import { firstRow } from "./database.ts";
+import { approveDevice } from "./device.ts";
+import { revokeSponsorIfIneligible, storeSupporterGrant } from "./eligibility.ts";
 import { GatewayError, json } from "./http.ts";
 import { hasNightlyAccessRole, OAUTH_STATE_SECONDS, SPONSOR_SESSION_SECONDS } from "./policy.ts";
 import { randomToken, SECRET_TOKEN_PATTERN, sha256, USER_CODE_PATTERN } from "./tokens.ts";
@@ -22,9 +24,10 @@ export async function completeOAuth(context: GatewayContext, body: Record<string
     }
     const stateHash = await sha256(state);
     if (await consumePortalState(context, stateHash)) return completePortalLogin(context, code);
-    const device = await context.db.prepare(
-        "SELECT id, status, expires_at FROM device_sessions WHERE oauth_state_hash = ?",
-    ).bind(stateHash).first<AuthorizableDevice>();
+    const device = firstRow(await context.db.query<AuthorizableDevice>(
+        "SELECT id, status, expires_at FROM nightly_gateway.device_sessions WHERE oauth_state_hash = $1",
+        [stateHash],
+    ));
     if (device === null || device.expires_at < context.now() || !["pending", "awaiting-sponsor"].includes(device.status)) {
         throw new GatewayError(400, "expired");
     }
@@ -35,13 +38,17 @@ export async function completeOAuth(context: GatewayContext, body: Record<string
 async function startDeviceOAuth(context: GatewayContext, rawUserCode: unknown): Promise<Response> {
     const userCode = typeof rawUserCode === "string" ? rawUserCode.toUpperCase() : "";
     if (!USER_CODE_PATTERN.test(userCode)) throw new GatewayError(400, "invalid_code");
-    const session = await context.db.prepare(
-        "SELECT id, expires_at FROM device_sessions WHERE user_code = ? AND status IN ('pending', 'awaiting-sponsor')",
-    ).bind(userCode).first<{ id: string; expires_at: number }>();
+    const session = firstRow(await context.db.query<{ id: string; expires_at: number }>(
+        `SELECT id, expires_at FROM nightly_gateway.device_sessions
+         WHERE user_code = $1 AND status IN ('pending', 'awaiting-sponsor')`,
+        [userCode],
+    ));
     if (session === null || session.expires_at < context.now()) throw new GatewayError(400, "expired");
     const state = randomToken(context.random);
-    await context.db.prepare("UPDATE device_sessions SET oauth_state_hash = ? WHERE id = ?")
-        .bind(await sha256(state), session.id).run();
+    await context.db.query("UPDATE nightly_gateway.device_sessions SET oauth_state_hash = $1 WHERE id = $2", [
+        await sha256(state),
+        session.id,
+    ]);
     return json({ authorize_url: context.discord.authorizeUrl(state) });
 }
 
@@ -49,18 +56,20 @@ async function startDeviceOAuth(context: GatewayContext, rawUserCode: unknown): 
 async function startPortalOAuth(context: GatewayContext): Promise<Response> {
     const state = randomToken(context.random);
     const now = context.now();
-    await context.db.prepare(
-        "INSERT INTO oauth_states (state_hash, purpose, created_at, expires_at) VALUES (?, 'sponsor-portal', ?, ?)",
-    ).bind(await sha256(state), now, now + OAUTH_STATE_SECONDS).run();
+    await context.db.query(
+        "INSERT INTO nightly_gateway.oauth_states (state_hash, purpose, created_at, expires_at) VALUES ($1, 'sponsor-portal', $2, $3)",
+        [await sha256(state), now, now + OAUTH_STATE_SECONDS],
+    );
     return json({ authorize_url: context.discord.authorizeUrl(state) });
 }
 
 /** Deletes a live sponsor-portal state, reporting whether one existed; each state works once. */
 async function consumePortalState(context: GatewayContext, stateHash: string): Promise<boolean> {
-    const row = await context.db.prepare(
-        "DELETE FROM oauth_states WHERE state_hash = ? AND expires_at >= ? RETURNING state_hash",
-    ).bind(stateHash, context.now()).first();
-    return row !== null;
+    const deleted = await context.db.query(
+        "DELETE FROM nightly_gateway.oauth_states WHERE state_hash = $1 AND expires_at >= $2",
+        [stateHash, context.now()],
+    );
+    return deleted.rowCount === 1;
 }
 
 /** Signs an eligible guild member into the sponsor portal with a 24-hour session. */
@@ -72,9 +81,10 @@ async function completePortalLogin(context: GatewayContext, code: string): Promi
     await storeSupporterGrant(context, user.id);
     const session = randomToken(context.random);
     const now = context.now();
-    await context.db.prepare(
-        "INSERT INTO sponsor_sessions (token_hash, supporter_discord_user_id, created_at, expires_at) VALUES (?, ?, ?, ?)",
-    ).bind(await sha256(session), user.id, now, now + SPONSOR_SESSION_SECONDS).run();
+    await context.db.query(
+        "INSERT INTO nightly_gateway.sponsor_sessions (token_hash, supporter_discord_user_id, created_at, expires_at) VALUES ($1, $2, $3, $4)",
+        [await sha256(session), user.id, now, now + SPONSOR_SESSION_SECONDS],
+    );
     return json({ outcome: "portal", session, expires_in: SPONSOR_SESSION_SECONDS });
 }
 
@@ -88,16 +98,19 @@ async function completeDeviceLogin(context: GatewayContext, deviceId: string, co
         await approveDevice(context, deviceId, user.id, user.id);
         return json({ outcome: "approved" });
     }
-    const existing = await context.db.prepare(
-        "SELECT supporter_discord_user_id FROM sponsorships WHERE sponsored_discord_user_id = ?",
-    ).bind(user.id).first<{ supporter_discord_user_id: string }>();
-    // Keep the code form available when the previous sponsor no longer has access.
-    if (existing !== null && await isSponsorStillEligible(context, existing.supporter_discord_user_id)) {
+    const existing = firstRow(await context.db.query<{ supporter_discord_user_id: string }>(
+        "SELECT supporter_discord_user_id FROM nightly_gateway.sponsorships WHERE sponsored_discord_user_id = $1",
+        [user.id],
+    ));
+    // A previous sponsor who lost access is revoked here, and the friend gets the code form instead.
+    if (existing !== null && await revokeSponsorIfIneligible(context, existing.supporter_discord_user_id)) {
         await approveDevice(context, deviceId, user.id, existing.supporter_discord_user_id);
         return json({ outcome: "sponsored-approved" });
     }
-    await context.db.prepare("UPDATE device_sessions SET status = 'awaiting-sponsor', discord_user_id = ? WHERE id = ?")
-        .bind(user.id, deviceId).run();
+    await context.db.query(
+        "UPDATE nightly_gateway.device_sessions SET status = 'awaiting-sponsor', discord_user_id = $1 WHERE id = $2",
+        [user.id, deviceId],
+    );
     return json({
         outcome: "needs-sponsor",
         device_id: deviceId,

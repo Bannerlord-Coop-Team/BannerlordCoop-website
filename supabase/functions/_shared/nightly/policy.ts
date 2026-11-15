@@ -1,4 +1,4 @@
-// Nightly-access policy shared by the gateway: Discord roles, seat limits, lifetimes and fixed origins.
+// Nightly-access policy shared by the gateway: Discord roles, seat limits, lifetimes and fixed URLs.
 // Copied verbatim from nightly-gateway/src/core.ts; the values are part of the access contract.
 
 export const DISCORD_GUILD_ID = "709516043332354119";
@@ -34,12 +34,6 @@ export const DISCORD_OAUTH_SCOPES = "identify guilds.members.read";
 export const DISCORD_REDIRECT_URI = "https://bannerlordcoop.com/nightly/callback";
 export const DISCORD_USER_AGENT = "DiscordBot (https://bannerlordcoop.com, 1)";
 
-/** The gateway hosts allowed to forward installer requests; verification URIs are built on them. */
-export const FORWARDED_ORIGINS = Object.freeze([
-    "https://nightly.bannerlordcoop.com",
-    "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev",
-]);
-
 const SNOWFLAKE = /^\d{17,20}$/;
 
 /** Whether any of the given Discord role IDs grants nightly access. */
@@ -56,9 +50,4 @@ export function isEligibleNightlySponsor(member: { roles?: unknown } | null): bo
 /** Whether a value is a Discord snowflake ID string. */
 export function isDiscordSnowflake(value: unknown): value is string {
     return typeof value === "string" && SNOWFLAKE.test(value);
-}
-
-/** Whether a forwarded origin is one of the two gateway hosts. */
-export function isForwardedOrigin(value: unknown): value is string {
-    return typeof value === "string" && FORWARDED_ORIGINS.includes(value);
 }
