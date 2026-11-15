@@ -124,7 +124,7 @@ The Worker's legacy `/sponsor*` and `/oauth/callback` paths answer `301` to the 
   - `portal` → sets the cookie, then `/nightly/sponsor`
   - errors → `/nightly/error`
 - **Claim state.** The device id, username and revoked flag live in the `nightly_claim` cookie (`Path=/nightly`, 10 minutes), never in the HTML.
-- **Sponsor-portal actions.** Create-code and remove-seat are server actions posted to `/nightly/sponsor`, guarded by Next's origin check plus an explicit same-origin check. `/nightly/sponsor/logout` clears an expired session.
+- **Sponsor-portal actions.** Create-code and remove-seat are server actions posted to `/nightly/sponsor`, guarded by Next's origin check plus an explicit same-origin check. An expired session renders the portal login with an expired notice; a server action that sees one also clears the `nightly_sponsor` cookie.
 - **Worker forwarding.**
   - For a successful session it adds `verification_uri` on the allowlisted request host, or the canonical host for anything else.
   - An unreachable function returns `502 function_unreachable`; a non-JSON, empty, oversized (>16 KiB) or redirecting upstream reply returns `502 function_response_invalid`. Both are logged.

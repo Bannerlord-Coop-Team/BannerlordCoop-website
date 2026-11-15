@@ -62,7 +62,7 @@ function workerTokenHash(accessToken: string): string {
     return createHash("sha256").update(accessToken).digest("hex");
 }
 
-// ---- Policy (ported from nightly-gateway/src/core.test.ts) ----
+// ---- Access policy ----
 
 test("supporters, Testers, Staff, and Competition Winners get nightly access and share the same seat limit", () => {
     for (const role of [
