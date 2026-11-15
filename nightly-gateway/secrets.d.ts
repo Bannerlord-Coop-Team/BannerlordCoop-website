@@ -4,5 +4,4 @@
 interface Env {
     DB: import("./src/database").GatewayDatabase;
     PIN_MINT_SECRET?: string;
-    MIGRATION_MODE?: "locked";
 }

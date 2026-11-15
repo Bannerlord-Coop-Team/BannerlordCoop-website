@@ -162,22 +162,15 @@ Linux and checks that the packaged Linux scripts match their canonical sources.
    login and the Supabase PostgreSQL connection, and bind it as `HYPERDRIVE` in
    `wrangler.jsonc`. The Worker never receives a Supabase service-role key or a
    general database owner credential.
-3. The gateway database is PostgreSQL only. Since the Edge Function split,
-   every device, sponsor, and OAuth write happens in the Edge Function against
-   the same `nightly_gateway` schema, so there is no D1 binding, no
-   `DATABASE_BACKEND` selector, and no D1 rollback route: a Worker reading D1
-   would find no `download_sessions` and reject every new token with
-   `401 authorization_expired`. Rolling back means redeploying the previous
-   Worker version *and* the previous Edge Function version together (see
-   `SUPABASE_CUTOVER.md`). The SQL under `nightly-gateway/migrations/` and
-   `migrate-d1-to-postgres.mjs` are historical records of the completed D1
-   import; the live schema is owned by `supabase/migrations/`.
+3. For the PostgreSQL-only rollback rule and the retired Worker secrets to
+   delete, see [§5](../docs/nightly-backend-contract.md#5-worker) and
+   [§7](../docs/nightly-backend-contract.md#7-rollout-each-step-after-explicit-approval)
+   of the nightly backend contract. A future maintenance switch must cover both
+   the Worker and the Edge Function.
 4. Keep the `NIGHTLY_FUNCTION_URL` var in `wrangler.jsonc` pointed at the
    deployed `nightly-gateway` Edge Function. Discord OAuth, the Discord bot
    token, and the website key are Edge Function secrets; the Worker holds no
-   Discord secret. Delete the retired `DISCORD_CLIENT_SECRET`,
-   `DISCORD_BOT_TOKEN`, and `TOKEN_ENCRYPTION_KEY` Worker secrets once the
-   slimmed Worker is live.
+   Discord secret.
 5. `nightly.bannerlordcoop.com` is attached to this Worker as a custom domain
    (declared in `wrangler.jsonc` `routes`; the `bannerlordcoop.com` zone is on
    Cloudflare). The `workers.dev` host keeps serving identically until it is

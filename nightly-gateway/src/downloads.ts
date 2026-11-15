@@ -1,3 +1,4 @@
+import { firstRow } from "./database";
 import { GatewayError } from "./http";
 import { isBearerToken, nowSeconds, sha256 } from "./primitives";
 
@@ -29,21 +30,26 @@ export async function authorizeDownload(request: Request, env: Env): Promise<Dow
     if (!isBearerToken(token)) throw new GatewayError(401, "authorization_invalid");
     const tokenHash = await sha256(token);
     const now = nowSeconds();
-    const pinSession = await env.DB.prepare(`
+    const pinSession = firstRow(await env.DB.query<{
+        build_id: string;
+        session_expires_at: number;
+        pin_expires_at: number;
+    }>(`
         SELECT pin.build_id, session.expires_at AS session_expires_at, pin.expires_at AS pin_expires_at
-        FROM pin_download_sessions AS session
-        JOIN installer_pins AS pin ON pin.token_hash = session.pin_token_hash
-        WHERE session.token_hash = ?
-    `).bind(tokenHash).first<{ build_id: string; session_expires_at: number; pin_expires_at: number }>();
+        FROM nightly_gateway.pin_download_sessions AS session
+        JOIN nightly_gateway.installer_pins AS pin ON pin.token_hash = session.pin_token_hash
+        WHERE session.token_hash = $1
+    `, [tokenHash]));
     if (pinSession !== null) {
         if (pinSession.session_expires_at < now || pinSession.pin_expires_at < now) {
             throw new GatewayError(401, "authorization_expired");
         }
         return { kind: "pin", buildId: pinSession.build_id };
     }
-    const row = await env.DB.prepare(
-        "SELECT expires_at FROM download_sessions WHERE token_hash = ?",
-    ).bind(tokenHash).first<{ expires_at: number }>();
+    const row = firstRow(await env.DB.query<{ expires_at: number }>(
+        "SELECT expires_at FROM nightly_gateway.download_sessions WHERE token_hash = $1",
+        [tokenHash],
+    ));
     if (row === null || row.expires_at < now) throw new GatewayError(401, "authorization_expired");
     return { kind: "nightly" };
 }

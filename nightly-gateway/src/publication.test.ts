@@ -5,10 +5,23 @@ import test from "node:test";
 import { validateLegacyNightlyClientManifest, validateLegacyNightlyReleaseManifest, validateNightlyPublicationPointer } from "./manifest-rules";
 import { CANONICAL_GATEWAY_ORIGIN } from "./origins";
 import { NIGHTLY_POINTER_URL, NightlyPublicationReadError, readNightlyPublication } from "./publication";
+import type { GatewayDatabase } from "./database";
 import worker, { createGateway } from "./index";
 
 const origin = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const repository = "ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server";
+
+// Stands in for Postgres with one live nightly download session; manifest discovery must never write.
+function nightlySessionDatabase(): GatewayDatabase {
+    return {
+        async query<T>(sql: string) {
+            if (!/^\s*SELECT/.test(sql)) throw new Error("manifest discovery must be read-only");
+            if (!sql.includes("FROM nightly_gateway.download_sessions")) return { rows: [], rowCount: 0 };
+            return { rows: [{ expires_at: Math.floor(Date.now() / 1000) + 60 }] as T[], rowCount: 1 };
+        },
+        async transaction() { throw new Error("manifest discovery must be read-only"); },
+    };
+}
 
 function fixture() {
     const clientSha = "a".repeat(40);
@@ -88,16 +101,7 @@ test("both authenticated manifest routes select the same pointer and keep privat
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
     const env = {
-        DB: {
-            async batch() { throw new Error("manifest discovery must be read-only"); },
-            prepare(sql: string) {
-                return { bind() {
-                    return { async first() {
-                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
-                    } };
-                } };
-            },
-        },
+        DB: nightlySessionDatabase(),
         RELEASES: { get: value.getObject },
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
@@ -177,16 +181,7 @@ test("client and release routes fall back only to a validated legacy pair", asyn
     const legacyReleaseBytes = Buffer.from(JSON.stringify(legacyRelease));
     const objects: string[] = [];
     const env = {
-        DB: {
-            async batch() { throw new Error("manifest discovery must be read-only"); },
-            prepare(sql: string) {
-                return { bind() {
-                    return { async first() {
-                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
-                    } };
-                } };
-            },
-        },
+        DB: nightlySessionDatabase(),
         RELEASES: { async get(key: string) {
             objects.push(key);
             if (key === "nightly/client.json") return {
@@ -278,16 +273,7 @@ test("the client route requires the complete publication while release keeps the
         arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
     });
     const env = {
-        DB: {
-            async batch() { throw new Error("manifest discovery must be read-only"); },
-            prepare(sql: string) {
-                return { bind() {
-                    return { async first() {
-                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
-                    } };
-                } };
-            },
-        },
+        DB: nightlySessionDatabase(),
         PUBLIC_RELEASES: {
             async get() {
                 return {
@@ -356,16 +342,7 @@ test("the headerless client route returns 503 when no complete pair exists", asy
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
     const env = {
-        DB: {
-            async batch() { throw new Error("manifest discovery must be read-only"); },
-            prepare(sql: string) {
-                return { bind() {
-                    return { async first() {
-                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
-                    } };
-                } };
-            },
-        },
+        DB: nightlySessionDatabase(),
         PUBLIC_RELEASES: { async get() { return object(value.pointerBytes); } },
         RELEASES: { async get() { return null; } },
         LEGACY_R2_ORIGIN: origin,
@@ -381,16 +358,7 @@ test("the client route fails closed when the paired publication is unavailable",
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
     const env = {
-        DB: {
-            async batch() { throw new Error("manifest discovery must be read-only"); },
-            prepare(sql: string) {
-                return { bind() {
-                    return { async first() {
-                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
-                    } };
-                } };
-            },
-        },
+        DB: nightlySessionDatabase(),
         RELEASES: { async get() { return null; } },
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
@@ -415,7 +383,7 @@ test("v2 client fallback never serves a legacy client ahead of the release pair"
         return { size: data.byteLength, body: new Response(data).body!, arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) };
     };
     const env = {
-        DB: { prepare(sql: string) { return { bind() { return { async first() { return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null; } }; } }; }, async batch() { throw new Error("read-only"); } },
+        DB: nightlySessionDatabase(),
         PUBLIC_RELEASES: { async get() { return bytes(value.pointerBytes); } },
         RELEASES: { async get(key: string) { if (key === value.pointer.manifest.key) return null; if (key === "nightly/release.json") return bytes(legacyRelease); if (key === "nightly/client.json") return bytes(aheadClient); return null; } },
         LEGACY_R2_ORIGIN: origin,
@@ -435,7 +403,7 @@ test("a complete release pair remains available when the legacy client object is
     const bytes = (data: Uint8Array) => ({ size: data.byteLength, body: new Response(data).body!, arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) });
     const releaseBytes = Buffer.from(JSON.stringify(legacyRelease));
     const env = {
-        DB: { prepare(sql: string) { return { bind() { return { async first() { return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null; } }; } }; }, async batch() { throw new Error("read-only"); } },
+        DB: nightlySessionDatabase(),
         PUBLIC_RELEASES: { async get() { return null; } },
         RELEASES: { async get(key: string) { return key === "nightly/release.json" ? bytes(releaseBytes) : null; } },
         LEGACY_R2_ORIGIN: origin,
@@ -565,16 +533,7 @@ test("manifest artifact URLs follow the gateway host the installer used", async 
         client: { ...value.manifest.client, publicUrl: `${legacyGateway}/v1/artifacts/${clientKey}` },
     }));
     const env = {
-        DB: {
-            async batch() { throw new Error("manifest discovery must be read-only"); },
-            prepare(sql: string) {
-                return { bind() {
-                    return { async first() {
-                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
-                    } };
-                } };
-            },
-        },
+        DB: nightlySessionDatabase(),
         RELEASES: { async get(key: string) {
             if (key !== "nightly/client.json") return value.getObject(key);
             return {
