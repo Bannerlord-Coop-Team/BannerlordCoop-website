@@ -21,7 +21,6 @@ export type AdminActionOption = {
     label: string;
     value: string;
     updatedAt?: string;
-    releaseChannel?: "stable" | "nightly";
 };
 
 export type AdminActionField = {
@@ -74,9 +73,6 @@ export function ControlPlaneActionCard({
     const [backupReady, setBackupReady] = useState(false);
     const [formRevision, setFormRevision] = useState(0);
     const selectedServer = serverField?.options?.find((option) => option.value === selectedTargetId(serverValue));
-    const effectiveFields = fields.map((field) => field.name === "buildId" && operation === "update-server"
-        ? { ...field, options: field.options?.filter((option) => !option.releaseChannel || option.releaseChannel === selectedServer?.releaseChannel) }
-        : field);
     const needsBackup = fields.some((field) => field.kind === "backup");
     const unavailableField = fields.find((field) => (
         field.required === true
@@ -94,7 +90,7 @@ export function ControlPlaneActionCard({
         setPending(true);
         setResult(null);
         try {
-            const input = buildInput(effectiveFields, formData);
+            const input = buildInput(fields, formData);
             applyControlPlaneOperationDefaults(operation, input);
             normalizeOperationInput(operation, input);
             const requestId = crypto.randomUUID();
@@ -162,7 +158,7 @@ export function ControlPlaneActionCard({
                 }
             }} className="mt-4 flex flex-1 flex-col">
                 <div className="grid gap-3">
-                    {effectiveFields.map((field) => field.kind === "backup"
+                    {fields.map((field) => field.kind === "backup"
                         ? <ControlPlaneBackupPicker key={`${serverValue}:${formRevision}`} serverId={selectedServer?.value ?? null} onReady={setBackupReady} />
                         : <ActionField key={field.name === "buildId" ? `${field.name}:${serverValue}` : `${field.name}:${formRevision}`} field={field} />)}
                 </div>
@@ -400,10 +396,8 @@ function normalizeOperationInput(operation: string, input: Record<string, unknow
         delete input.host;
         Object.assign(input, { provider, serviceName, mode: "enroll" });
     }
-    if (operation === "update-server") {
-        if (input.buildId === "__keep__") delete input.buildId;
-        else if (input.buildId === "__latest__") input.buildId = null;
-    }
+    // Update always follows the channel: an explicit null also clears a legacy pin on a control plane before #1125.
+    if (operation === "update-server") input.buildId = null;
     if (operation === "reset-password") {
         const choice = input.choice as Record<string, unknown> | undefined;
         if (choice?.kind === "generated") delete choice.password;

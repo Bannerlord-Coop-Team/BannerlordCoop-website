@@ -153,6 +153,12 @@ it("does not classify retryable, accepted-job, local, future or pre-replay autho
     ]) expect(ownerRefusalMessage(error, t)).toBeNull();
 });
 
+it("shows the control plane's plain refusal for the retired owner version choice", async () => {
+    const t = createTranslator("en", messages).t;
+    expect(ownerRefusalMessage(await envelopeError("owner_build_selection_retired"), t)).toBe("The request was refused.");
+    expect(ownerRefusalMessage(await envelopeError("owner_build_selection_retired", true), t)).toBeNull();
+});
+
 it.each(["import-config", "import-save", "export-save"])("retains the exact %s request after a parsed same-ID operation_in_progress", async action => {
     mocks.call.mockRejectedValue(await envelopeError("operation_in_progress"));
     expect(await transfer(action)).toMatchObject({ ok: false, rejected: false, notSubmitted: false,

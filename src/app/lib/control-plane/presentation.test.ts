@@ -403,17 +403,22 @@ test("Builds refreshes GHCR discovery and displays exact release labels", async 
     assert.ok(details.includes('build.sourceRevision === "registry-observed"'));
     assert.match(source, /build.currentChannel/u);
     assert.ok(source.includes('build.registryMetadata ? "First observed" : "Published"'));
-    assert.match(source, /Follow channel \(remove version pin\)/u);
     assert.match(server, /RecordedRelease build=\{result.dashboard.installedBuild\}/u);
 });
 
-// Operations must offer the full discovery bound, not the overview's truncated 20-version lists.
-test("release selectors load the same full catalog as the Releases view", async () => {
+// GHCR is the only release source of truth (ControlPlane #1125): no administrator control may pin a build.
+test("Operations offers no build pin or version picker and Update follows the channel", async () => {
     const source = await readFile(new URL("../../admin/control-plane/page.tsx", import.meta.url), "utf8");
+    const card = await readFile(new URL("../../components/admin/ControlPlaneActionCard.tsx", import.meta.url), "utf8");
+    const server = await readFile(new URL("../../components/admin/ControlPlaneServerView.tsx", import.meta.url), "utf8");
+    assert.doesNotMatch(source, /set-build-pin|Pinned version|Version selection|__keep__|__latest__/u);
+    assert.doesNotMatch(card, /__keep__|__latest__/u);
+    assert.match(card, /if \(operation === "update-server"\) input\.buildId = null;/u);
+    assert.doesNotMatch(server, /pinnedBuildId|Pinned version/u);
     const operations = source.slice(source.indexOf('case "operations":'), source.indexOf('case "vps":'));
-    assert.match(operations, /operation: "overview", input: \{ operations: true \}/u);
-    assert.match(operations, /loadReleaseCatalog\(token, signal, identity\)/u);
-    assert.match(operations, /stableBuilds: releases.stable, nightlyBuilds: releases.nightly/u);
+    assert.doesNotMatch(operations, /loadReleaseCatalog/u);
+    assert.match(source, /operation: "update-server", title: "Update server", description: "[^"]*", fields: \[serverField, reasonField\] \}/u);
+    assert.match(source, /operation: "rollback-server", title: "Reinstall previous build", description: "Temporarily [^"]*returns to the channel's current build at its next update/u);
 });
 
 test("shows a public version without the registry's leading v", () => {

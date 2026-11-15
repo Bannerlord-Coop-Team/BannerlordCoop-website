@@ -234,16 +234,28 @@ The website itself needs only the existing public Supabase URL and publishable k
 
 ## Simplified server operations
 
-Update server includes build selection: keep the current selection, install the
-latest release and remove a pin, or install and pin a specific release. Only
-installable builds in the selected server's channel are offered. Selection and
-pinning are a single control-plane transaction. Deploy the control-plane version
-supporting optional `update-server.input.buildId` before publishing this website.
+GHCR is the only source of truth for which build a server runs: every server
+follows its release channel's current build, and no administrator control pins
+one. Update server has no version picker and always sends `buildId: null`
+("Follow channel"), so the control plane installs the channel's current build.
+Both the control plane before and after
+[ControlPlane #1125](https://github.com/Bannerlord-Coop-Team/BannerlordCoop.ControlPlane/pull/1125)
+accept it; before #1125 it also clears an existing pin, so Update follows the
+channel in either rollout order. No card calls `set-build-pin`, and the server
+detail shows no "Pinned version". #1125 refuses `set-build-pin` and an Update
+server carrying a specific `buildId` with HTTP 409 `admin_build_pin_retired`;
+the card shows the control plane's message. To fix a bad release, publish a new
+build to the channel.
 
-Reinstall previous build installs and pins the preceding channel release while
-keeping the current campaign. Restore backup instead replaces the campaign with
-an older snapshot. Selecting a server loads a bounded backup page; the list shows
-creation time, type, size, and build, with expiry in the selected backup details.
+Reinstall previous build temporarily reinstalls the preceding channel release
+while keeping the current campaign. With #1125 it pins nothing: the server
+returns to the channel's current build at its next update (maintenance window,
+Batch maintenance or Update server). Until #1125 deploys, the older control
+plane still pins the rollback, and Update server clears that pin.
+
+Restore backup instead replaces the campaign with an older snapshot. Selecting
+a server loads a bounded backup page; the list shows creation time, type, size,
+and build, with expiry in the selected backup details.
 Older pages, empty lists, request failures, and retries are supported. Changing
 servers clears the selected backup and ignores late responses from the previous
 server. In-game date is not yet recorded in the backup catalog.

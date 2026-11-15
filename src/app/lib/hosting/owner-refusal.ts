@@ -12,6 +12,8 @@ const REFUSAL_CODES = new Set([
     "release_compatibility_unknown", "release_compatibility_unsafe", "settings_unchanged",
     "first_start_required", "impersonation_read_only", "battle_size_runner_unsupported",
     "war_sails_save_mismatch", "war_sails_unsupported",
+    // ControlPlane #1125 retired owner version choice; a stale caller is shown the control plane's plain refusal.
+    "owner_build_selection_retired",
 ]);
 
 /** Returns safe owner copy only for a parsed, definitive refusal; null preserves existing recovery. */

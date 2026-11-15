@@ -19,7 +19,6 @@ export type ManagedServer = {
     releaseChannel: "stable" | "nightly";
     installedBuildId: string | null;
     desiredBuildId: string | null;
-    pinnedBuildId: string | null;
     maintenanceSlot: string;
     activeSaveId: string | null;
     connectionHostname: string | null;
@@ -381,7 +380,7 @@ export type HostingAdminRegionRequestNotification = {
 };
 
 export type OperationsData = {
-    overview: Pick<Overview, "controls" | "servers" | "jobs" | "stableBuilds" | "nightlyBuilds">;
+    overview: Pick<Overview, "controls" | "servers" | "jobs">;
     inventory: HostingAdminVpsInventory;
     vpsProviderError: string | null;
     selectedServer: ManagedServer | null;

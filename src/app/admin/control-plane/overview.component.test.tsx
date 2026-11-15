@@ -128,7 +128,6 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
     mocks.accounts.mockResolvedValue({ users: [], truncated: false });
     mocks.request.mockImplementation(async request => {
         if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
-        if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
         if (request.operation === "vps-hosts") return {
             availableHosts: [{ provider: "ovhcloud-vps", serviceName: "vps-available.vps.ovh.us", label: "OVHcloud VPS · vps-available.vps.ovh.us" }],
             hosts: [{ provider: "vpstc-vps", locationId: "nyc", countryCode: "US", region: null, availableServers: 1, totalSlots: 1 },
@@ -164,14 +163,15 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
         input: { includeLiveData: false, includeProviderInventory: "service-names" },
     }]]);
     expect(mocks.request.mock.calls.filter(([request]) => request.operation === "hosting-regions")).toEqual([[expect.objectContaining({ operation: "hosting-regions", input: {} })]]);
-    expect(mocks.request).toHaveBeenCalledTimes(4);
+    // Update server always follows the channel, so Operations reads no release catalog.
+    expect(mocks.request.mock.calls.map(([request]) => request.operation).sort()).toEqual(["hosting-regions", "overview", "vps-hosts"]);
+    expect(html).not.toMatch(/Pinned version|Version selection|set-build-pin/u);
 });
 
 it("keeps Operations usable when the stored hosting-region catalog cannot be read", async () => {
     mocks.accounts.mockResolvedValue({ users: [], truncated: false });
     mocks.request.mockImplementation(async request => {
         if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
-        if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
         if (request.operation === "vps-hosts") return { availableHosts: [], hosts: [] };
         throw new ControlPlaneAdminError("unsupported_operation", "The operation is not supported.");
     });
@@ -189,7 +189,6 @@ it("offers every stored region and the listed manual-entry providers on Add manu
     mocks.accounts.mockResolvedValue({ users: [], truncated: false });
     mocks.request.mockImplementation(async request => {
         if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
-        if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
         if (request.operation === "vps-hosts") return { availableHosts: [], hosts: [],
             manualEntryProviders: [{ provider: "hosthatch-vps", displayName: "HostHatch VPS" }] };
         if (request.operation === "hosting-regions") return { regions: hostingRegionCatalogPayload()
