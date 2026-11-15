@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { validateLegacyNightlyClientManifest, validateLegacyNightlyReleaseManifest, validateNightlyPublicationPointer } from "./core";
+import { CANONICAL_GATEWAY_ORIGIN, validateLegacyNightlyClientManifest, validateLegacyNightlyReleaseManifest, validateNightlyPublicationPointer } from "./core";
 import { NIGHTLY_POINTER_URL, NightlyPublicationReadError, readNightlyPublication } from "./publication";
-import worker from "./index";
+import worker, { createGateway } from "./index";
 
 const origin = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const repository = "ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server";
@@ -208,23 +208,22 @@ test("client and release routes fall back only to a validated legacy pair", asyn
         } },
         LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    const logs: string[] = [];
-    context.mock.method(console, "error", (line: string) => logs.push(line));
+    const logs: Array<Record<string, unknown>> = [];
+    const logged = createGateway({ fetch: () => Promise.reject(new Error("manifests must not forward")), log: (event) => logs.push(event) });
     context.mock.method(globalThis, "fetch", value.fetcher);
     const headers = {
         authorization: `Bearer ${"n".repeat(43)}`,
         "x-bannerlord-coop-nightly-version": "2",
     };
-    const client = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, { headers }), env);
+    const client = await logged.fetch(new Request(`${gateway}/v1/manifests/client`, { headers }), env);
     assert.equal(client.status, 200);
     assert.equal((await client.json() as { headSha: string }).headSha, legacy.headSha);
-    const release = await worker.fetch(new Request(`${gateway}/v1/manifests/release`, { headers }), env);
-    assert.equal(release.status, 200, logs.join("\n"));
+    const release = await logged.fetch(new Request(`${gateway}/v1/manifests/release`, { headers }), env);
+    assert.equal(release.status, 200, JSON.stringify(logs));
     assert.equal((await release.json() as { headSha: string }).headSha, legacyRelease.headSha);
-    const publicationFailure = logs.find((line) => line.includes('"event":"nightly_publication_read_failed"')
-        && line.includes('"route":"release"'));
-    assert.ok(publicationFailure);
-    assert.deepEqual(JSON.parse(publicationFailure!), {
+    const publicationFailure = logs.find((event) => event.event === "nightly_publication_read_failed"
+        && event.route === "release");
+    assert.deepEqual(publicationFailure, {
         event: "nightly_publication_read_failed",
         route: "release",
         error_code: "runtime_binding_read_failed",
@@ -233,13 +232,13 @@ test("client and release routes fall back only to a validated legacy pair", asyn
         exception_class: "Error",
         fallback: false,
     });
-    assert.ok(logs.some((line) => line.includes('"event":"nightly_legacy_client_fallback_served"')));
-    assert.ok(logs.some((line) => line.includes('"event":"nightly_legacy_release_fallback_served"')));
+    assert.ok(logs.some((event) => event.event === "nightly_legacy_client_fallback_served"));
+    assert.ok(logs.some((event) => event.event === "nightly_legacy_release_fallback_served"));
     assert.deepEqual(objects, [value.pointer.manifest.key, "nightly/release.json", "nightly/client.json", value.pointer.manifest.key, "nightly/release.json", "nightly/client.json"]);
 });
 
 test("client fallback accepts the producer's null baseSha legacy shape", async () => {
-    const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+    const gateway = CANONICAL_GATEWAY_ORIGIN;
     const legacy = {
         version: 1,
         releaseDate: "2026-11-04",
@@ -255,7 +254,7 @@ test("client fallback accepts the producer's null baseSha legacy shape", async (
             publicUrl: `${gateway}/v1/artifacts/nightly/clients/${"a".repeat(40)}/${"c".repeat(64)}/Coop.7z`,
         },
     };
-    assert.doesNotThrow(() => validateLegacyNightlyClientManifest(legacy, origin, [gateway]));
+    assert.doesNotThrow(() => validateLegacyNightlyClientManifest(legacy, origin));
 });
 
 test("the client route requires the complete publication while release keeps the legacy default", async () => {
@@ -453,15 +452,14 @@ test("accepts the production-shaped legacy release fixture and rejects missing a
     const fixture = JSON.parse(await readFile(new URL("../fixtures/legacy-release-2026-11-04.json", import.meta.url), "utf8")) as Record<string, unknown> & {
         server: { incremental: { base: Record<string, unknown>; update: Record<string, unknown> } };
     };
-    const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
-    assert.doesNotThrow(() => validateLegacyNightlyReleaseManifest(fixture, origin, [gateway]));
+    assert.doesNotThrow(() => validateLegacyNightlyReleaseManifest(fixture, origin));
     const withoutBaseKey = structuredClone(fixture);
     delete withoutBaseKey.server.incremental.base.key;
-    assert.throws(() => validateLegacyNightlyReleaseManifest(withoutBaseKey, origin, [gateway]), /invalid_legacy_nightly_release_artifact/);
+    assert.throws(() => validateLegacyNightlyReleaseManifest(withoutBaseKey, origin), /invalid_legacy_nightly_release_artifact/);
     const withoutUpdateKey = structuredClone(withoutBaseKey);
     withoutUpdateKey.server.incremental.base.key = fixture.server.incremental.base.key;
     delete withoutUpdateKey.server.incremental.update.key;
-    assert.throws(() => validateLegacyNightlyReleaseManifest(withoutUpdateKey, origin, [gateway]), /invalid_legacy_nightly_release_artifact/);
+    assert.throws(() => validateLegacyNightlyReleaseManifest(withoutUpdateKey, origin), /invalid_legacy_nightly_release_artifact/);
 });
 
 test("gateway rejects a private manifest whose bytes or image digest differ from the public pointer", async () => {

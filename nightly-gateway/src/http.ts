@@ -3,9 +3,13 @@ const JSON_HEADERS = Object.freeze({
     "cache-control": "no-store",
 });
 
+/** Receives one structured log event; the Worker writes it as a JSON line, tests collect it. */
+export type GatewayLog = (event: Record<string, unknown>) => void;
+
 // Carries the HTTP status and stable error code returned to clients.
+// The optional cause keeps the underlying failure so the top-level log can name its class.
 export class GatewayError extends Error {
-    constructor(readonly status: number, readonly code: string) { super(code); }
+    constructor(readonly status: number, readonly code: string, options?: { cause?: unknown }) { super(code, options); }
 }
 
 // Serializes one JSON body with the gateway's no-store headers.
@@ -43,6 +47,13 @@ async function collectChunks(reader: ReadableStreamDefaultReader<Uint8Array>, ma
         offset += chunk.byteLength;
     }
     return bytes;
+}
+
+// Reads a small urlencoded form body, refusing anything over 4 KiB.
+export async function readForm(request: Request): Promise<URLSearchParams> {
+    const bytes = await readBoundedBytes(request, 4096);
+    if (bytes === null) throw new GatewayError(413, "request_too_large");
+    return new URLSearchParams(decodeUtf8(bytes));
 }
 
 // Decodes bytes as strict UTF-8, throwing on malformed input instead of substituting characters.

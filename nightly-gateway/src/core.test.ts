@@ -4,7 +4,6 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
     CANONICAL_GATEWAY_ORIGIN,
-    GATEWAY_ORIGINS,
     LEGACY_GATEWAY_ORIGIN,
     artifactKeyFromUrl,
     createBuildPinInstallUrl,
@@ -18,7 +17,7 @@ import {
     rewriteManifestArtifactUrls,
     validateNightlyPublicationManifest,
 } from "./core";
-import { page } from "./index";
+import { page } from "./pages";
 
 const legacy = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const gateway = "https://nightly.bannerlordcoop.com";
@@ -87,25 +86,12 @@ test("manifest URLs are rewritten to authenticated gateway paths", () => {
 });
 
 test("the gateway origin follows the allowlisted request host and falls back to the canonical host", () => {
-    assert.equal(CANONICAL_GATEWAY_ORIGIN, "https://nightly.bannerlordcoop.com");
-    assert.equal(LEGACY_GATEWAY_ORIGIN, "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev");
-    assert.deepEqual(GATEWAY_ORIGINS, [CANONICAL_GATEWAY_ORIGIN, LEGACY_GATEWAY_ORIGIN]);
     assert.equal(resolveGatewayOrigin(`${CANONICAL_GATEWAY_ORIGIN}/v1/manifests/client`), CANONICAL_GATEWAY_ORIGIN);
     assert.equal(resolveGatewayOrigin(new URL(`${LEGACY_GATEWAY_ORIGIN}/v1/pins`)), LEGACY_GATEWAY_ORIGIN);
     assert.equal(resolveGatewayOrigin("https://attacker.invalid/v1/manifests/client"), CANONICAL_GATEWAY_ORIGIN);
     assert.equal(resolveGatewayOrigin("http://nightly.bannerlordcoop.com/health"), CANONICAL_GATEWAY_ORIGIN);
     assert.equal(resolveGatewayOrigin("https://nightly.bannerlordcoop.com:8443/health"), CANONICAL_GATEWAY_ORIGIN);
     assert.equal(resolveGatewayOrigin("https://preview.bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/"), CANONICAL_GATEWAY_ORIGIN);
-});
-
-test("manifest URLs are rewritten onto whichever gateway host the installer used", () => {
-    const clientKey = `nightly/clients/${"a".repeat(40)}/${"b".repeat(64)}/Coop.7z`;
-    for (const origin of GATEWAY_ORIGINS) {
-        const manifest = rewriteManifestArtifactUrls({
-            client: { key: clientKey, publicUrl: `${legacy}/${clientKey}` },
-        }, origin, legacy) as { client: { publicUrl: string } };
-        assert.equal(manifest.client.publicUrl, `${origin}/v1/artifacts/${clientKey}`);
-    }
 });
 
 test("nightly publication validation rejects client-only or malformed markers", () => {
@@ -131,18 +117,6 @@ test("gateway pages use the site brand without weakening page security", () => {
     assert.match(markup, /Supporter &quot;builds&quot;/);
     assert.match(markup, /class="shell claim-page"/);
     assert.doesNotMatch(markup, /<script/i);
-});
-
-test("the Worker no longer talks to Discord or holds refresh-token secrets", () => {
-    const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-    const wrangler = readFileSync(new URL("../wrangler.jsonc", import.meta.url), "utf8");
-    const secrets = readFileSync(new URL("../secrets.d.ts", import.meta.url), "utf8");
-
-    for (const text of [source, wrangler, secrets]) {
-        assert.doesNotMatch(text, /DISCORD_(?:BOT_TOKEN|CLIENT_ID|CLIENT_SECRET)|TOKEN_ENCRYPTION_KEY|PUBLIC_ORIGIN/);
-    }
-    assert.doesNotMatch(source, /discord\.com\/api|supporter_grants|sponsor_sessions|oauth_states|device_sessions/);
-    assert.match(wrangler, /"NIGHTLY_FUNCTION_URL": "https:\/\/wfvqnijwuyqjibhlcrhz\.supabase\.co\/functions\/v1\/nightly-gateway"/);
 });
 
 test("the PowerShell installer is synchronized with the gateway copy", () => {

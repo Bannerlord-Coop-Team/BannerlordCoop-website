@@ -4,6 +4,7 @@ export const CREATE_BUILD_PIN_KIND = "create-build-pin";
 export const CANONICAL_GATEWAY_ORIGIN = "https://nightly.bannerlordcoop.com";
 export const LEGACY_GATEWAY_ORIGIN = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
 export const GATEWAY_ORIGINS: readonly string[] = Object.freeze([CANONICAL_GATEWAY_ORIGIN, LEGACY_GATEWAY_ORIGIN]);
+export const PUBLIC_MANUAL_SERVER_ORIGIN = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 
 const SNOWFLAKE = /^\d{17,20}$/;
 const SESSION_TOKEN = /^[A-Za-z0-9_-]{43}$/;
@@ -14,6 +15,7 @@ const COMMIT_SHA = /^[a-f0-9]{40}$/;
 const SHA256_HEX = /^[a-f0-9]{64}$/;
 const PIN_MINT_MESSAGE = new TextEncoder().encode("bannerlordcoop-create-build-pin-v1");
 
+// Tells whether a value is a Discord snowflake id string.
 export function isDiscordSnowflake(value: unknown): value is string {
     return typeof value === "string" && SNOWFLAKE.test(value);
 }
@@ -25,6 +27,7 @@ export function resolveGatewayOrigin(requestUrl: string | URL): string {
     return GATEWAY_ORIGINS.includes(origin) ? origin : CANONICAL_GATEWAY_ORIGIN;
 }
 
+// Tells whether an R2 key sits in a downloadable release namespace with no empty or dot segments.
 export function isAllowedArtifactKey(value: unknown): value is string {
     return typeof value === "string"
         && value.length <= 1024
@@ -32,10 +35,12 @@ export function isAllowedArtifactKey(value: unknown): value is string {
         && value.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
 }
 
+// Tells whether a value has the shape of a create-build pin or download session token.
 export function isCreateBuildPinToken(value: unknown): value is string {
     return typeof value === "string" && SESSION_TOKEN.test(value);
 }
 
+// Tells whether a key is the one client archive stored for this create-build pin.
 export function isAllowedPinClientKey(value: unknown, buildId: string): value is string {
     return typeof value === "string"
         && isDiscordSnowflake(buildId)
@@ -43,6 +48,7 @@ export function isAllowedPinClientKey(value: unknown, buildId: string): value is
         && PIN_CLIENT_KEY.test(value);
 }
 
+// Tells whether a key is a manually uploaded server archive under this build's prefix.
 export function isAllowedManualServerKey(value: unknown, buildId: string): value is string {
     return typeof value === "string"
         && isDiscordSnowflake(buildId)
@@ -51,24 +57,29 @@ export function isAllowedManualServerKey(value: unknown, buildId: string): value
         && value.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
 }
 
+// Names the R2 key that holds a create-build pin's client archive.
 export function pinClientObjectKey(buildId: string): string {
     if (!isDiscordSnowflake(buildId)) throw new Error("invalid_build_id");
     return `pins/${buildId}/Coop.7z`;
 }
 
+// Builds the browser install link for a create-build pin on the given gateway origin.
 export function createBuildPinInstallUrl(origin: string, token: string): string {
     if (!isCreateBuildPinToken(token)) throw new Error("invalid_pin_token");
     return `${origin}/install?pin=${token}`;
 }
 
+// Tells whether a value is a full lowercase git commit SHA.
 export function isCreateBuildPinCommitSha(value: unknown): value is string {
     return typeof value === "string" && COMMIT_SHA.test(value);
 }
 
+// Tells whether a value is a lowercase hex SHA-256 digest.
 export function isSha256Hex(value: unknown): value is string {
     return typeof value === "string" && SHA256_HEX.test(value);
 }
 
+// Derives the deterministic pin token for one build identity from the mint secret.
 export async function createBuildPinToken(
     secret: string,
     buildId: string,
@@ -89,6 +100,7 @@ export async function createBuildPinToken(
     return base64url(new Uint8Array(await crypto.subtle.sign("HMAC", key, message)));
 }
 
+// Compares the configured and presented mint secrets without leaking timing.
 export async function mintSecretsEqual(expected: string, provided: string): Promise<boolean> {
     if (expected.length < 32 || provided.length < 32 || expected.length !== provided.length) return false;
     const key = await crypto.subtle.importKey(
@@ -115,6 +127,7 @@ export async function mintSecretsEqual(expected: string, provided: string): Prom
     return difference === 0;
 }
 
+// Extracts the artifact key from a public R2 URL, or null when the URL is off-origin or not allowlisted.
 export function artifactKeyFromUrl(value: unknown, legacyOrigin: string): string | null {
     if (typeof value !== "string") return null;
     let parsed: URL;
@@ -167,6 +180,7 @@ export function validateNightlyPublicationPointer(input: unknown): NightlyPublic
     return input as unknown as NightlyPublicationPointer;
 }
 
+// Tells whether an object has exactly the given keys and no others.
 function exactKeys(value: JsonObject, keys: string[]): boolean {
     return Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 }
@@ -223,7 +237,6 @@ export function validateNightlyPublicationManifest(input: unknown, legacyOrigin:
 export function validateLegacyNightlyClientManifest(
     input: unknown,
     legacyOrigin: string,
-    gatewayOrigins: readonly string[],
 ): JsonObject {
     if (!isRecord(input) || input.version !== 1 || typeof input.releaseDate !== "string"
         || !NIGHTLY_PUBLICATION_DATE.test(input.releaseDate)
@@ -248,7 +261,7 @@ export function validateLegacyNightlyClientManifest(
     const parsed = new URL(client.publicUrl);
     const legacyPath = `/${client.key}`;
     const gatewayPath = `/v1/artifacts/${client.key}`;
-    const onGateway = gatewayOrigins.includes(parsed.origin);
+    const onGateway = GATEWAY_ORIGINS.includes(parsed.origin);
     if (parsed.search || parsed.hash
         || (parsed.origin === legacyOrigin && parsed.pathname !== legacyPath)
         || (onGateway && parsed.pathname !== gatewayPath)
@@ -262,7 +275,6 @@ export function validateLegacyNightlyClientManifest(
 export function validateLegacyNightlyReleaseManifest(
     input: unknown,
     legacyOrigin: string,
-    gatewayOrigins: readonly string[],
 ): JsonObject {
     if (!isRecord(input) || !exactKeys(input, ["version", "releaseDate", "headSha", "builtAt", "client", "server"])
         || input.version !== 1 || typeof input.releaseDate !== "string"
@@ -275,7 +287,6 @@ export function validateLegacyNightlyReleaseManifest(
     validateLegacyReleaseArtifact(
         recordField(input, "client"),
         legacyOrigin,
-        gatewayOrigins,
         `nightly/clients/${input.headSha}/${stringField(recordField(input, "client"), "sha256", NIGHTLY_PUBLICATION_SHA256)}/Coop.7z`,
         NIGHTLY_PUBLICATION_FILE,
         undefined,
@@ -290,7 +301,6 @@ export function validateLegacyNightlyReleaseManifest(
     validateLegacyReleaseArtifact(
         serverArtifact,
         legacyOrigin,
-        gatewayOrigins,
         "nightly/BannerlordCoop-DedicatedServer-Win64.7z",
         /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/,
         8 * 1024 * 1024 * 1024,
@@ -310,7 +320,6 @@ export function validateLegacyNightlyReleaseManifest(
     validateLegacyReleaseArtifact(
         base,
         legacyOrigin,
-        gatewayOrigins,
         `windows/base/v1/${incremental.baseFingerprint}/${baseSha}/server-base.7z`,
         /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/,
         8 * 1024 * 1024 * 1024,
@@ -332,7 +341,6 @@ export function validateLegacyNightlyReleaseManifest(
     validateLegacyReleaseArtifact(
         update,
         legacyOrigin,
-        gatewayOrigins,
         updateKey,
         /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/,
         512 * 1024 * 1024,
@@ -341,10 +349,10 @@ export function validateLegacyNightlyReleaseManifest(
     return input;
 }
 
+// Checks one legacy release artifact's shape and that its URL names the key on R2 or on an allowlisted gateway host.
 function validateLegacyReleaseArtifact(
     value: JsonObject,
     legacyOrigin: string,
-    gatewayOrigins: readonly string[],
     key: string,
     filePattern: RegExp,
     maximumBytes: number | undefined,
@@ -360,7 +368,7 @@ function validateLegacyReleaseArtifact(
         throw new Error("invalid_legacy_nightly_release_artifact");
     }
     const parsed = new URL(value.publicUrl);
-    const onGateway = gatewayOrigins.includes(parsed.origin);
+    const onGateway = GATEWAY_ORIGINS.includes(parsed.origin);
     if (parsed.search || parsed.hash
         || (parsed.origin === legacyOrigin && parsed.pathname !== `/${key}`)
         || (onGateway && parsed.pathname !== `/v1/artifacts/${key}`)
@@ -370,18 +378,21 @@ function validateLegacyReleaseArtifact(
     }
 }
 
+// Reads a required nested object field or throws a publication field error.
 function recordField(value: JsonObject, field: string): JsonObject {
     const result = value[field];
     if (!isRecord(result)) throw new Error("invalid_nightly_publication_field");
     return result;
 }
 
+// Reads a required string field matching the pattern or throws a publication field error.
 function stringField(value: JsonObject, field: string, pattern: RegExp): string {
     const result = value[field];
     if (typeof result !== "string" || !pattern.test(result)) throw new Error("invalid_nightly_publication_field");
     return result;
 }
 
+// Checks one v2 publication artifact's shape, size, digest, and fixed R2 URL.
 function validateArtifact(
     value: JsonObject,
     legacyOrigin: string,
@@ -399,6 +410,7 @@ function validateArtifact(
     }
 }
 
+// Copies a manifest with every artifact URL pointed at the gateway's authenticated download path.
 export function rewriteManifestArtifactUrls(
     input: unknown,
     gatewayOrigin: string,
@@ -410,6 +422,7 @@ export function rewriteManifestArtifactUrls(
     return output;
 }
 
+// Rewrites artifact URLs in one manifest object and its nested objects, in place.
 function rewriteRecord(record: JsonObject, gatewayOrigin: string, legacyOrigin: string): void {
     for (const value of Object.values(record)) {
         if (isRecord(value)) rewriteRecord(value, gatewayOrigin, legacyOrigin);
@@ -425,16 +438,19 @@ function rewriteRecord(record: JsonObject, gatewayOrigin: string, legacyOrigin: 
     record.publicUrl = `${gatewayOrigin}/v1/artifacts/${key.split("/").map(encodeURIComponent).join("/")}`;
 }
 
+// Tells whether a value is a plain JSON object.
 function isRecord(value: unknown): value is JsonObject {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+// Encodes bytes as unpadded base64url.
 function base64url(bytes: Uint8Array): string {
     let binary = "";
     for (const byte of bytes) binary += String.fromCharCode(byte);
     return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
+// Copies bytes into an ArrayBuffer of exactly their length for WebCrypto.
 function exactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
     const copy = new Uint8Array(bytes.byteLength);
     copy.set(bytes);
