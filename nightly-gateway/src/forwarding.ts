@@ -29,7 +29,7 @@ export function deviceFunctionUrl(functionUrl: unknown, path: string): string {
 }
 
 // Relays one installer device-API call to the Edge Function and returns its status and JSON body.
-// A new device session also gets the gateway's own activation link; upstream failures and misroutes throw a 502 GatewayError.
+// A new device session also gets the gateway's own activation link; upstream failures, misroutes and redirects throw a 502 GatewayError.
 export async function forwardDeviceRequest(
     request: Request,
     target: DeviceForwardTarget,
@@ -38,7 +38,7 @@ export async function forwardDeviceRequest(
     const body = await readBoundedBytes(request, MAXIMUM_DEVICE_REQUEST_BYTES);
     if (body === null) throw new GatewayError(413, "request_too_large");
     const upstream = await callFunction(request, target.url, body, upstreamFetch);
-    assertRouted(upstream);
+    assertFunctionReply(upstream);
     const payload = await readUpstreamJson(upstream);
     return json(withVerificationUri(payload, target.path, upstream.status, target.origin), upstream.status);
 }
@@ -58,11 +58,13 @@ async function callFunction(request: Request, url: string, body: Uint8Array, ups
     }
 }
 
-// Refuses an upstream 404: the Worker forwards only known device paths, so it means NIGHTLY_FUNCTION_URL names the
-// wrong function or project, and becomes a logged 502 instead of reaching the installer.
-function assertRouted(response: Response): void {
-    if (response.status !== MISROUTED_STATUS) return;
-    throw new GatewayError(502, "function_response_invalid", { upstreamStatus: MISROUTED_STATUS });
+// Refuses an upstream 404 or redirect as a logged 502: the Worker forwards only known device paths and never follows
+// redirects, so either means NIGHTLY_FUNCTION_URL names the wrong function, project or host.
+function assertFunctionReply(response: Response): void {
+    const status = response.status;
+    const redirecting = status >= 300 && status < 400;
+    if (status !== MISROUTED_STATUS && !redirecting) return;
+    throw new GatewayError(502, "function_response_invalid", { upstreamStatus: status });
 }
 
 // Chooses the only headers the Edge Function needs: the body type and a JSON accept.
@@ -73,25 +75,17 @@ function forwardedHeaders(request: Request): Headers {
     return headers;
 }
 
-// Parses the upstream body as bounded, non-empty UTF-8 JSON; anything else is a 502 that logs the upstream status.
+// Parses the upstream body as bounded, non-empty UTF-8 JSON; a broken, oversized, empty or non-JSON body is a 502
+// that logs the upstream status, plus the failure's cause when there is one.
 async function readUpstreamJson(response: Response): Promise<unknown> {
     const upstreamStatus = response.status;
-    const bytes = await readUpstreamBytes(response);
-    if (bytes === null || bytes.byteLength === 0) throw new GatewayError(502, "function_response_invalid", { upstreamStatus });
     try {
-        return JSON.parse(decodeUtf8(bytes));
+        const bytes = await readBoundedBytes(response, MAXIMUM_DEVICE_RESPONSE_BYTES);
+        if (bytes !== null && bytes.byteLength > 0) return JSON.parse(decodeUtf8(bytes));
     } catch (cause) {
         throw new GatewayError(502, "function_response_invalid", { cause, upstreamStatus });
     }
-}
-
-// Reads the bounded upstream body; null means it was too large, and a broken stream is a 502 that keeps its cause and status.
-async function readUpstreamBytes(response: Response): Promise<Uint8Array | null> {
-    try {
-        return await readBoundedBytes(response, MAXIMUM_DEVICE_RESPONSE_BYTES);
-    } catch (cause) {
-        throw new GatewayError(502, "function_response_invalid", { cause, upstreamStatus: response.status });
-    }
+    throw new GatewayError(502, "function_response_invalid", { upstreamStatus });
 }
 
 // Adds the activation link on the installer's gateway host to a successfully created device session.

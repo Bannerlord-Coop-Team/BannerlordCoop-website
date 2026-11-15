@@ -135,6 +135,7 @@ test("an unreachable or broken Edge Function becomes a logged 502 with a named c
         { respond: () => new Response(new Uint8Array([0x7b, 0xff, 0x7d]), { status: 500 }), code: "function_response_invalid", cause: "TypeError", upstreamStatus: 500 },
         { respond: () => new Response("x".repeat(64 * 1024), { status: 200 }), code: "function_response_invalid", upstreamStatus: 200 },
         { respond: () => new Response(null, { status: 302, headers: { location: "https://example.invalid/" } }), code: "function_response_invalid", upstreamStatus: 302 },
+        { respond: () => Response.json({ error: "moved" }, { status: 307, headers: { location: "https://example.invalid/" } }), code: "function_response_invalid", upstreamStatus: 307 },
         { respond: () => new Response(erroringStream(), { status: 200 }), code: "function_response_invalid", cause: "Error", upstreamStatus: 200 },
         { respond: () => Response.json({ code: "NOT_FOUND", message: "Requested function was not found" }, { status: 404 }), code: "function_response_invalid", upstreamStatus: 404 },
         { respond: () => Response.json({ error: "not_found" }, { status: 404 }), code: "function_response_invalid", upstreamStatus: 404 },
@@ -157,17 +158,6 @@ test("an unreachable or broken Edge Function becomes a logged 502 with a named c
             ...(failure.cause === undefined ? {} : { cause: failure.cause }),
         }], `${failure.code} ${failure.upstreamStatus ?? "unreachable"}`);
     }
-});
-
-test("the logged cause names only the failure class, never its message", async () => {
-    const logger = recordingLog();
-    const secret = "Bearer sk_live_do_not_log";
-    const gateway = createGateway({ fetch: () => Promise.reject(new TypeError(secret)), log: logger.log });
-    await gateway.fetch(formRequest(CANONICAL_GATEWAY_ORIGIN, "/v1/device/token", "device_code=x"), statelessEnv());
-    assert.equal(logger.events.length, 1);
-    assert.equal(logger.events[0].cause, "TypeError");
-    assert.equal(logger.events[0].message, undefined);
-    assert.doesNotMatch(JSON.stringify(logger.events), /sk_live_do_not_log/);
 });
 
 test("a failing installer request stream is an internal error, not an oversized body", async () => {
@@ -254,13 +244,23 @@ test("routes the gateway still serves are never redirected", () => {
     assert.equal(websiteRedirectFor("POST", new URL(`${CANONICAL_GATEWAY_ORIGIN}/activate?code=AB2D-EF3H`)), null);
 });
 
-test("health still answers once the database is reachable", async () => {
-    const unused = { query() { throw new Error("unused"); }, transaction() { throw new Error("unused"); } } as unknown as GatewayDatabase;
+test("health is served behind the database: it fails when Postgres is unreachable and answers once it opens", async () => {
+    const reachable = { query() { throw new Error("unused"); }, transaction() { throw new Error("unused"); } } as unknown as GatewayDatabase;
+    let databaseOpens = 0;
     const gateway = createGateway({
         fetch: () => Promise.reject(new Error("health must not call upstream")),
-        openDatabase: async () => unused,
+        log: recordingLog().log,
+        openDatabase: async () => {
+            databaseOpens += 1;
+            if (databaseOpens === 1) throw new Error("database unreachable");
+            return reachable;
+        },
     });
-    const response = await gateway.fetch(new Request(`${LEGACY_GATEWAY_ORIGIN}/health`), statelessEnv());
-    assert.equal(response.status, 200);
-    assert.deepEqual(await response.json(), { ok: true });
+
+    const unreachable = await gateway.fetch(new Request(`${LEGACY_GATEWAY_ORIGIN}/health`), statelessEnv());
+    assert.equal(unreachable.status, 500);
+    assert.deepEqual(await unreachable.json(), { error: "internal_error" });
+
+    const healthy = await gateway.fetch(new Request(`${LEGACY_GATEWAY_ORIGIN}/health`), statelessEnv());
+    assert.deepEqual({ status: healthy.status, body: await healthy.json() }, { status: 200, body: { ok: true } });
 });
