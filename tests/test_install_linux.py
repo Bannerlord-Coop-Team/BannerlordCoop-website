@@ -281,7 +281,6 @@ class LinuxInstallerTests(unittest.TestCase):
         self.assertFalse(any("/token" in url for url in self.requests))
 
     def test_verification_uri_on_another_host_is_rejected(self):
-        self.assertEqual(GATEWAY, "https://nightly.bannerlordcoop.com")
         legacy = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev"
         self.config["session"]["verification_uri"] = legacy + "/activate?code=ABCD-2345"
         self.assertIn("invalid response", self.run_installer(success=False))

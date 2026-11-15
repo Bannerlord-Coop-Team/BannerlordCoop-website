@@ -1,30 +1,6 @@
-export const DISCORD_GUILD_ID = "709516043332354119";
-export const SUPPORTER_ROLE_IDS = Object.freeze([
-    "1532151760012050452", // Patreon supporter
-    "1532744756151455834", // Boosty supporter
-    "1533090199104524338", // Afdian supporter
-]);
-export const STAFF_ROLE_IDS = Object.freeze([
-    "730945590011232296", // Helper
-    "711610715152056331", // Mod Developer
-    "750401609045115114", // Trial Dev
-    "709516608741048390", // Administrator
-    "730631536122003548", // Community Manager
-    "730631233524072588", // Project Lead
-]);
-export const TESTER_ROLE_ID = "710222948375593010";
-export const NIGHTLY_ACCESS_ROLE_IDS = Object.freeze([
-    ...SUPPORTER_ROLE_IDS,
-    ...STAFF_ROLE_IDS,
-    TESTER_ROLE_ID,
-    "1551834978570997792", // Competition Winner; eligible but not advertised on the website.
-]);
-export const SPONSORED_ACCOUNT_LIMIT = 10;
-export const DEVICE_SESSION_SECONDS = 10 * 60;
 export const DOWNLOAD_SESSION_SECONDS = 60 * 60;
 export const CREATE_BUILD_PIN_LIFETIME_SECONDS = 24 * 60 * 60;
 export const CREATE_BUILD_PIN_KIND = "create-build-pin";
-export const DISCORD_OAUTH_SCOPES = "identify guilds.members.read";
 export const CANONICAL_GATEWAY_ORIGIN = "https://nightly.bannerlordcoop.com";
 export const LEGACY_GATEWAY_ORIGIN = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
 export const GATEWAY_ORIGINS: readonly string[] = Object.freeze([CANONICAL_GATEWAY_ORIGIN, LEGACY_GATEWAY_ORIGIN]);
@@ -38,16 +14,6 @@ const COMMIT_SHA = /^[a-f0-9]{40}$/;
 const SHA256_HEX = /^[a-f0-9]{64}$/;
 const PIN_MINT_MESSAGE = new TextEncoder().encode("bannerlordcoop-create-build-pin-v1");
 
-export function hasNightlyAccessRole(roleIds: readonly string[]): boolean {
-    return roleIds.some((roleId) => NIGHTLY_ACCESS_ROLE_IDS.includes(roleId));
-}
-
-export function isEligibleNightlySponsor(member: { roles?: unknown } | null): boolean {
-    return member !== null && Array.isArray(member.roles) && hasNightlyAccessRole(
-        member.roles.filter((roleId): roleId is string => typeof roleId === "string"),
-    );
-}
-
 export function isDiscordSnowflake(value: unknown): value is string {
     return typeof value === "string" && SNOWFLAKE.test(value);
 }
@@ -57,11 +23,6 @@ export function isDiscordSnowflake(value: unknown): value is string {
 export function resolveGatewayOrigin(requestUrl: string | URL): string {
     const origin = new URL(requestUrl).origin;
     return GATEWAY_ORIGINS.includes(origin) ? origin : CANONICAL_GATEWAY_ORIGIN;
-}
-
-// Reports whether a URL origin is one of the accepted gateway origins.
-function isGatewayOrigin(origin: string, gatewayOrigins: string | readonly string[]): boolean {
-    return typeof gatewayOrigins === "string" ? origin === gatewayOrigins : gatewayOrigins.includes(origin);
 }
 
 export function isAllowedArtifactKey(value: unknown): value is string {
@@ -126,15 +87,6 @@ export async function createBuildPinToken(
     );
     const message = new TextEncoder().encode(`create-build-pin-v1\0${buildId}\0${clientSha256}\0${serverSha256}`);
     return base64url(new Uint8Array(await crypto.subtle.sign("HMAC", key, message)));
-}
-
-export function timingSafeEqual(left: string, right: string): boolean {
-    if (left.length !== right.length) return false;
-    let difference = 0;
-    for (let index = 0; index < left.length; index += 1) {
-        difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
-    }
-    return difference === 0;
 }
 
 export async function mintSecretsEqual(expected: string, provided: string): Promise<boolean> {
@@ -271,7 +223,7 @@ export function validateNightlyPublicationManifest(input: unknown, legacyOrigin:
 export function validateLegacyNightlyClientManifest(
     input: unknown,
     legacyOrigin: string,
-    gatewayOrigins: string | readonly string[],
+    gatewayOrigins: readonly string[],
 ): JsonObject {
     if (!isRecord(input) || input.version !== 1 || typeof input.releaseDate !== "string"
         || !NIGHTLY_PUBLICATION_DATE.test(input.releaseDate)
@@ -296,7 +248,7 @@ export function validateLegacyNightlyClientManifest(
     const parsed = new URL(client.publicUrl);
     const legacyPath = `/${client.key}`;
     const gatewayPath = `/v1/artifacts/${client.key}`;
-    const onGateway = isGatewayOrigin(parsed.origin, gatewayOrigins);
+    const onGateway = gatewayOrigins.includes(parsed.origin);
     if (parsed.search || parsed.hash
         || (parsed.origin === legacyOrigin && parsed.pathname !== legacyPath)
         || (onGateway && parsed.pathname !== gatewayPath)
@@ -310,7 +262,7 @@ export function validateLegacyNightlyClientManifest(
 export function validateLegacyNightlyReleaseManifest(
     input: unknown,
     legacyOrigin: string,
-    gatewayOrigins: string | readonly string[],
+    gatewayOrigins: readonly string[],
 ): JsonObject {
     if (!isRecord(input) || !exactKeys(input, ["version", "releaseDate", "headSha", "builtAt", "client", "server"])
         || input.version !== 1 || typeof input.releaseDate !== "string"
@@ -392,7 +344,7 @@ export function validateLegacyNightlyReleaseManifest(
 function validateLegacyReleaseArtifact(
     value: JsonObject,
     legacyOrigin: string,
-    gatewayOrigins: string | readonly string[],
+    gatewayOrigins: readonly string[],
     key: string,
     filePattern: RegExp,
     maximumBytes: number | undefined,
@@ -408,7 +360,7 @@ function validateLegacyReleaseArtifact(
         throw new Error("invalid_legacy_nightly_release_artifact");
     }
     const parsed = new URL(value.publicUrl);
-    const onGateway = isGatewayOrigin(parsed.origin, gatewayOrigins);
+    const onGateway = gatewayOrigins.includes(parsed.origin);
     if (parsed.search || parsed.hash
         || (parsed.origin === legacyOrigin && parsed.pathname !== `/${key}`)
         || (onGateway && parsed.pathname !== `/v1/artifacts/${key}`)
