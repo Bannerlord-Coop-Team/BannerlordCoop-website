@@ -253,12 +253,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                                     return (
                                         <tr key={member.id} className="transition-colors hover:bg-white/2.5">
                                             <td className="px-5 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-gold/25 bg-gold/10 font-label text-xs font-bold text-gold">
+                                                <div className="flex max-w-80 items-center gap-3">
+                                                    <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gold/25 bg-gold/10 font-label text-xs font-bold text-gold">
                                                         {initials(name)}
                                                     </span>
                                                     <div className="min-w-0">
-                                                        <p className="font-medium text-foreground">{name}</p>
+                                                        <p title={name} className="truncate font-medium text-foreground">{name}</p>
                                                         <p className="mt-0.5 truncate text-xs text-foreground-muted">{member.email ?? "No email"}</p>
                                                     </div>
                                                 </div>
