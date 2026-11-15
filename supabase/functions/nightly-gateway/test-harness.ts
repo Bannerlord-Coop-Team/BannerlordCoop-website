@@ -29,7 +29,9 @@ export const TOKEN_URL = "https://discord.com/api/v10/oauth2/token";
 const MIGRATIONS = [
     "202608260004_create_nightly_gateway_schema",
     "202608260005_enforce_nightly_sponsorship_limit",
+    "20261105200000_remove_client_archive_size_limit",
     "20261115090000_nightly_gateway_retire_refresh_tokens",
+    "20261116000000_nightly_gateway_fix_pin_server_file_check",
 ];
 const TABLES = "device_sessions, supporter_grants, sponsorships, download_sessions, oauth_states, sponsor_sessions";
 

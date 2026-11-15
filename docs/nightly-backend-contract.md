@@ -99,7 +99,7 @@ Outcomes returned by `/oauth/complete`:
 
 ## 7. Rollout (each step after explicit approval)
 
-1. **Database:** apply the refresh-token migration. It is additive and safe for the running Worker.
+1. **Database:** apply the refresh-token migration and `20261116000000_nightly_gateway_fix_pin_server_file_check.sql`. Both are safe for the running Worker. The second fixes a pre-existing bug: the original `installer_pins` server-file check required a literal backslash, so production has never been able to store a create-build pin.
 2. **Edge Function:** set `NIGHTLY_WEBSITE_KEY` (the Discord secrets are already set), then deploy `nightly-gateway`.
 3. **Website:** set the same `NIGHTLY_WEBSITE_KEY` on the website Worker, then deploy the `/nightly/*` pages.
 4. **Worker:** deploy the slimmed gateway. Device login runs on Supabase from this point.
