@@ -19,6 +19,7 @@ import {
     installerRequest,
     NOW,
     PATREON_ROLE,
+    pgliteClient,
     seedDevice,
     seedDownloadSession,
     seedGrant,
@@ -154,8 +155,9 @@ test("PGlite's constraint errors read as server-reported, so their connection is
     const pg = await createGatewayDatabase();
     try {
         const releases: Array<boolean | undefined> = [];
+        const client = pgliteClient(pg);
         const database = pooledGatewayDatabase({
-            connect: async () => ({ query: (sql, values) => pg.query(sql, values), release: (destroy) => { releases.push(destroy); } }),
+            connect: async () => ({ query: (sql, values) => client.query(sql, values), release: (destroy) => { releases.push(destroy); } }),
         });
         await database.query(INSERT_GRANT, [SPONSOR, NOW]);
         await assert.rejects(database.query(INSERT_GRANT, [SPONSOR, NOW]), (error) => isUniqueViolation(error));

@@ -140,14 +140,33 @@ export function unknownMember(): Response {
     return Response.json({ message: "Unknown Member", code: 10007 }, { status: 404 });
 }
 
+/** The slice of PGlite (or a test wrapper of it) the harness drives: queries answering with PGlite's result shape. */
+export type PgliteQueries = {
+    query(sql: string, values?: unknown[]): Promise<{ rows: unknown[]; affectedRows?: number }>;
+};
+
+/** Adapts PGlite to the pg-shaped client, reporting pg's rowCount: rows read by a SELECT, rows changed otherwise. */
+export function pgliteClient(database: PgliteQueries): PostgresClient {
+    return {
+        async query(sql, values) {
+            const result = await database.query(sql, values);
+            return { rows: result.rows, rowCount: Math.max(result.affectedRows ?? 0, result.rows.length) };
+        },
+    };
+}
+
 // Lends one connection (PGlite has only one) as a pool of one: statements and transactions take turns, so a
 // transaction never interleaves with other work, and a connection that is never released stalls every later query.
 export class SingleConnectionPool implements ConnectionPool {
     /** Whether a statement or transaction holds the connection right now. */
     inUse = false;
     private turn: Promise<void> = Promise.resolve();
+    private readonly client: PostgresClient;
 
-    constructor(private readonly client: PostgresClient) {}
+    /** Wraps PGlite (or a test wrapper of it) as the one pg-shaped connection this pool lends. */
+    constructor(database: PgliteQueries) {
+        this.client = pgliteClient(database);
+    }
 
     /** Leases the connection until its statement or transaction releases it; it cannot be destroyed, only handed on. */
     async connect(): Promise<PooledConnection> {
@@ -170,8 +189,8 @@ export class SingleConnectionPool implements ConnectionPool {
 }
 
 /** The production gateway database over a single PGlite (or wrapped) connection. */
-export function singleConnectionDatabase(client: PostgresClient): GatewayDatabase {
-    return pooledGatewayDatabase(new SingleConnectionPool(client));
+export function singleConnectionDatabase(database: PgliteQueries): GatewayDatabase {
+    return pooledGatewayDatabase(new SingleConnectionPool(database));
 }
 
 /** A database whose every statement and transaction fails with `failure()`, for unexpected-failure tests. */
@@ -183,7 +202,7 @@ export function failingDatabase(failure: () => unknown): GatewayDatabase {
 }
 
 /** A handler over the shared database (or a wrapper of it) and a Discord script, plus its logs and pool. */
-export function gatewayHandler(database: PostgresClient, script: DiscordScript, clock = () => NOW * 1000) {
+export function gatewayHandler(database: PgliteQueries, script: DiscordScript, clock = () => NOW * 1000) {
     const logs: Record<string, unknown>[] = [];
     const pool = new SingleConnectionPool(database);
     const handler = createNightlyGatewayHandler({

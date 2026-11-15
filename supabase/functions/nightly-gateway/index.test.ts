@@ -508,6 +508,35 @@ test("a portal login requires guild membership and a qualifying role", async () 
     assert.equal(await count("supporter_grants"), 0);
 });
 
+test("an existing sponsor signing in again keeps their sponsor code, seats, and portal sessions", async () => {
+    await seedGrant(database, SPONSOR, "SPON-SORC-ODE2");
+    await seedSeat(database, SPONSOR, FRIEND);
+    await seedSponsorSession(database, SPONSOR);
+    const { handler } = gatewayHandler(database, discordScript({
+        user: { id: SPONSOR, username: "Sponsor" }, member: { roles: [PATREON_ROLE] }, bot: { [SPONSOR]: { roles: [PATREON_ROLE] } },
+    }));
+    const portal = await handler(websiteRequest("/oauth/complete", { code: "code", state: await seedPortalState(database) }));
+    assert.equal((await body(portal)).outcome, "portal");
+    const install = await seedDevice(database, { suffix: "S" });
+    const direct = await handler(websiteRequest("/oauth/complete", { code: "code", state: install.state }));
+    assert.deepEqual(await body(direct), { outcome: "approved" });
+    assert.equal(await count("sponsorships", "supporter_discord_user_id = $1", [SPONSOR]), 1);
+    assert.equal(await count("sponsor_sessions", "supporter_discord_user_id = $1", [SPONSOR]), 2);
+    const secondFriend = await seedDevice(database, { suffix: "F", status: "awaiting-sponsor", discordUserId: "222222222222222222" });
+    const claimed = await handler(websiteRequest("/sponsorship/claim", { device_id: secondFriend.id, sponsor_code: "SPON-SORC-ODE2" }));
+    assert.deepEqual(await body(claimed), { outcome: "sponsored-approved" });
+});
+
+test("a friend parked awaiting a sponsor can sign in again with an eligible account", async () => {
+    const { handler } = gatewayHandler(database, discordScript({ user: { id: SPONSOR, username: "Sponsor" }, member: { roles: [PATREON_ROLE] } }));
+    const parked = await seedDevice(database, { status: "awaiting-sponsor", discordUserId: FRIEND });
+    const started = await body(await handler(websiteRequest("/oauth/start", { purpose: "device", user_code: parked.userCode })));
+    const state = new URL(started.authorize_url as string).searchParams.get("state");
+    const response = await handler(websiteRequest("/oauth/complete", { code: "code", state }));
+    assert.deepEqual([response.status, await body(response)], [200, { outcome: "approved" }]);
+    assert.deepEqual(await device(parked.id), { status: "approved", discord_user_id: SPONSOR, sponsor_discord_user_id: SPONSOR, authorized_at: NOW });
+});
+
 test("invalid Discord payloads are discord_response_invalid", async () => {
     const pending = await seedDevice(database);
     const badUser = gatewayHandler(database, discordScript({ user: { id: "not-a-snowflake", username: "x" } }));

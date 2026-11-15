@@ -117,14 +117,14 @@ class DiscordHttpApi implements DiscordApi {
 
     /** Reads the signed-in user, requiring a snowflake ID. */
     async currentUser(accessToken: string): Promise<DiscordUser> {
-        const user = await this.userGet<Partial<DiscordUser> | null>("/users/@me", accessToken);
-        if (user === null || !isDiscordSnowflake(user.id)) throw new GatewayError(502, "discord_response_invalid");
+        const user = await this.userGet("/users/@me", accessToken);
+        if (!hasSnowflakeId(user)) throw new GatewayError(502, "discord_response_invalid");
         return { id: user.id, username: typeof user.username === "string" ? user.username : "" };
     }
 
     /** Reads the signed-in user's guild membership; not being in the guild is `403 discord_membership_required`. */
     async currentMember(accessToken: string): Promise<DiscordMember> {
-        return requireRoles(await this.userGet<unknown>(this.memberPath(), accessToken));
+        return requireRoles(await this.userGet(this.memberPath(), accessToken));
     }
 
     /** Reads the signed-in user's guild membership, or null when they are not in the guild. */
@@ -147,8 +147,8 @@ class DiscordHttpApi implements DiscordApi {
     }
 
     /** GETs a user-token endpoint; every failure, a 404 included, is a gateway error. */
-    private async userGet<T>(path: string, accessToken: string): Promise<T> {
-        return parseMemberReply(await this.get(path, `Bearer ${accessToken}`)) as T;
+    private async userGet(path: string, accessToken: string): Promise<unknown> {
+        return parseMemberReply(await this.get(path, `Bearer ${accessToken}`));
     }
 
     /** GETs a REST endpoint, or null when Discord answers 404; other failures are gateway errors. */
@@ -253,6 +253,11 @@ function isBearerWithRequiredScopes(value: unknown): value is BearerToken {
 function hasRequiredScopes(granted: string): boolean {
     const scopes = granted.split(" ");
     return DISCORD_OAUTH_SCOPES.split(" ").every((scope) => scopes.includes(scope));
+}
+
+/** Whether a parsed `/users/@me` body is an object whose `id` is a Discord snowflake. */
+function hasSnowflakeId(user: unknown): user is { id: string; username?: unknown } {
+    return typeof user === "object" && user !== null && isDiscordSnowflake((user as { id?: unknown }).id);
 }
 
 /** Rejects a member payload that is not an object with a roles array. */

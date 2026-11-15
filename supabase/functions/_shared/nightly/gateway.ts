@@ -19,7 +19,7 @@ type InstallerRoute = (context: GatewayContext, request: Request) => Promise<Res
 type WebsiteRoute = (context: GatewayContext, body: Record<string, unknown>) => Promise<Response>;
 
 const INSTALLER_ROUTES: Readonly<Record<string, InstallerRoute>> = Object.freeze({
-    "/v1/device/sessions": (context: GatewayContext) => createDeviceSession(context),
+    "/v1/device/sessions": createDeviceSession,
     "/v1/device/token": pollDeviceSession,
 });
 

@@ -30,9 +30,9 @@ export interface GatewayDatabase extends GatewayQueries {
     transaction<T>(work: (tx: GatewayQueries) => Promise<T>): Promise<T>;
 }
 
-/** The slice of a `pg` client or PGlite the gateway needs: positional-parameter queries. */
+/** The slice of a `pg` client the gateway needs: positional-parameter queries reporting pg's row count. */
 export interface PostgresClient {
-    query(sql: string, values?: unknown[]): Promise<{ rows: unknown[]; rowCount?: number | null; affectedRows?: number }>;
+    query(sql: string, values?: unknown[]): Promise<{ rows: unknown[]; rowCount: number | null }>;
 }
 
 /** A connection leased from a pool: queries, plus release that destroys it when told it is broken. */
@@ -116,10 +116,10 @@ class PooledGatewayDatabase implements GatewayDatabase {
     }
 }
 
-/** Runs one statement and normalizes the driver's affected-row count. */
+/** Runs one statement and reports pg's row count, which is null for statements that count no rows. */
 async function runStatement<T>(client: PostgresClient, sql: string, values: readonly unknown[]): Promise<QueryResult<T>> {
     const result = await client.query(sql, [...values]);
-    return { rows: result.rows as T[], rowCount: result.rowCount ?? result.affectedRows ?? 0 };
+    return { rows: result.rows as T[], rowCount: result.rowCount ?? 0 };
 }
 
 /**
