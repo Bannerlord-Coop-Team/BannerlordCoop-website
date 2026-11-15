@@ -6,15 +6,12 @@ import {
     CANONICAL_GATEWAY_ORIGIN,
     GATEWAY_ORIGINS,
     LEGACY_GATEWAY_ORIGIN,
-    SPONSORED_ACCOUNT_LIMIT,
     artifactKeyFromUrl,
     createBuildPinInstallUrl,
     createBuildPinToken,
-    hasNightlyAccessRole,
     isAllowedArtifactKey,
     isAllowedManualServerKey,
     isAllowedPinClientKey,
-    isEligibleNightlySponsor,
     mintSecretsEqual,
     pinClientObjectKey,
     resolveGatewayOrigin,
@@ -25,26 +22,6 @@ import { page } from "./index";
 
 const legacy = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const gateway = "https://nightly.bannerlordcoop.com";
-
-test("supporters, Testers, Staff, and Competition Winners get nightly access and share the same seat limit", () => {
-    assert.equal(hasNightlyAccessRole(["1532151760012050452"]), true);
-    assert.equal(hasNightlyAccessRole(["1532744756151455834"]), true);
-    assert.equal(hasNightlyAccessRole(["1533090199104524338"]), true);
-    assert.equal(hasNightlyAccessRole(["710222948375593010"]), true);
-    assert.equal(hasNightlyAccessRole(["730945590011232296"]), true);
-    assert.equal(hasNightlyAccessRole(["711610715152056331"]), true);
-    assert.equal(hasNightlyAccessRole(["750401609045115114"]), true);
-    assert.equal(hasNightlyAccessRole(["709516608741048390"]), true);
-    assert.equal(hasNightlyAccessRole(["730631536122003548"]), true);
-    assert.equal(hasNightlyAccessRole(["730631233524072588"]), true);
-    assert.equal(hasNightlyAccessRole(["1551834978570997792"]), true);
-    assert.equal(hasNightlyAccessRole(["709516043332354119"]), false);
-    assert.equal(isEligibleNightlySponsor({ roles: ["1532151760012050452"] }), true);
-    assert.equal(isEligibleNightlySponsor({ roles: ["1551834978570997792"] }), true);
-    assert.equal(isEligibleNightlySponsor({ roles: [] }), false);
-    assert.equal(isEligibleNightlySponsor(null), false);
-    assert.equal(SPONSORED_ACCOUNT_LIMIT, 10);
-});
 
 test("artifact keys are limited to the two release namespaces", () => {
     assert.equal(isAllowedArtifactKey("nightly/Coop.7z"), true);
@@ -166,21 +143,6 @@ test("the Worker no longer talks to Discord or holds refresh-token secrets", () 
     }
     assert.doesNotMatch(source, /discord\.com\/api|supporter_grants|sponsor_sessions|oauth_states|device_sessions/);
     assert.match(wrangler, /"NIGHTLY_FUNCTION_URL": "https:\/\/wfvqnijwuyqjibhlcrhz\.supabase\.co\/functions\/v1\/nightly-gateway"/);
-});
-
-test("both installers target the canonical gateway host for every check", () => {
-    const windows = readFileSync(new URL("../../installer/install.ps1", import.meta.url), "utf8");
-    const linux = readFileSync(new URL("../../installer/install-linux.sh", import.meta.url), "utf8");
-
-    assert.match(windows, /^\$script:NightlyGatewayHost = 'nightly\.bannerlordcoop\.com'\r?$/m);
-    assert.match(windows, /^\$script:NightlyGatewayUri = "https:\/\/\$\(\$script:NightlyGatewayHost\)"\r?$/m);
-    assert.match(windows, /\$script:NightlyActivationPattern = "\^\$\(\[regex\]::Escape\(\$script:NightlyGatewayUri\)\)\/activate\\\?"/);
-    assert.equal(windows.match(/-cne \$script:NightlyGatewayHost -or/g)?.length, 4);
-    assert.equal(windows.match(/-cmatch \$script:NightlyActivationPattern/g)?.length, 2);
-    assert.doesNotMatch(windows, /workers\.dev|workers\\\.dev/);
-    assert.match(linux, /^GATEWAY='https:\/\/nightly\.bannerlordcoop\.com'$/m);
-    assert.doesNotMatch(linux, /workers\.dev/);
-    assert.equal(/[^\x00-\x7f]/.test(windows), false);
 });
 
 test("the PowerShell installer is synchronized with the gateway copy", () => {

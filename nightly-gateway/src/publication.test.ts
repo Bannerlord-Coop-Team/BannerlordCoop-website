@@ -255,7 +255,7 @@ test("client fallback accepts the producer's null baseSha legacy shape", async (
             publicUrl: `${gateway}/v1/artifacts/nightly/clients/${"a".repeat(40)}/${"c".repeat(64)}/Coop.7z`,
         },
     };
-    assert.doesNotThrow(() => validateLegacyNightlyClientManifest(legacy, origin, gateway));
+    assert.doesNotThrow(() => validateLegacyNightlyClientManifest(legacy, origin, [gateway]));
 });
 
 test("the client route requires the complete publication while release keeps the legacy default", async () => {
@@ -454,14 +454,14 @@ test("accepts the production-shaped legacy release fixture and rejects missing a
         server: { incremental: { base: Record<string, unknown>; update: Record<string, unknown> } };
     };
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
-    assert.doesNotThrow(() => validateLegacyNightlyReleaseManifest(fixture, origin, gateway));
+    assert.doesNotThrow(() => validateLegacyNightlyReleaseManifest(fixture, origin, [gateway]));
     const withoutBaseKey = structuredClone(fixture);
     delete withoutBaseKey.server.incremental.base.key;
-    assert.throws(() => validateLegacyNightlyReleaseManifest(withoutBaseKey, origin, gateway), /invalid_legacy_nightly_release_artifact/);
+    assert.throws(() => validateLegacyNightlyReleaseManifest(withoutBaseKey, origin, [gateway]), /invalid_legacy_nightly_release_artifact/);
     const withoutUpdateKey = structuredClone(withoutBaseKey);
     withoutUpdateKey.server.incremental.base.key = fixture.server.incremental.base.key;
     delete withoutUpdateKey.server.incremental.update.key;
-    assert.throws(() => validateLegacyNightlyReleaseManifest(withoutUpdateKey, origin, gateway), /invalid_legacy_nightly_release_artifact/);
+    assert.throws(() => validateLegacyNightlyReleaseManifest(withoutUpdateKey, origin, [gateway]), /invalid_legacy_nightly_release_artifact/);
 });
 
 test("gateway rejects a private manifest whose bytes or image digest differ from the public pointer", async () => {

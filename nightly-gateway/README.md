@@ -13,9 +13,11 @@ Worker's old `/`, `/activate`, `/sponsor*`, `/oauth/callback`, and
 The Worker answers on `https://nightly.bannerlordcoop.com` (canonical) and
 `https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev` (legacy).
 Every URL it hands back (manifest artifact URLs, pin install links, the pin
-launcher, and the `x-nightly-forwarded-origin` header the Edge Function builds
-`verification_uri` from) uses the host the request arrived on. Any other host
-is treated as the canonical one.
+launcher, and the `verification_uri` it adds to a created device session) uses
+the host the request arrived on. Any other host is treated as the canonical one.
+When the Edge Function cannot be reached or answers with something other than
+bounded JSON, the Worker logs the path and returns `502 function_unreachable` or
+`502 function_response_invalid`.
 
 The installer script is intentionally public. It carries no Discord, R2, or
 shared download secret. Every install or update starts a new device session,

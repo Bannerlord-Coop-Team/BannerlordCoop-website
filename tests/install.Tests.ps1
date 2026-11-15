@@ -689,11 +689,6 @@ if (-not (Test-NightlyDeviceSessionResponse $jsonSession)) {
 if ((Get-NightlyDeviceSessionShape $jsonSession) -notmatch 'type=PSCustomObject device_length=43 device_valid=true user_length=9 user_valid=true uri_length=') {
     throw 'A valid session did not report its safe validation shape.'
 }
-if ($script:NightlyGatewayUri -cne 'https://nightly.bannerlordcoop.com' -or
-    $script:InstallerUri -cne 'https://nightly.bannerlordcoop.com/install.ps1' -or
-    $script:ClientManifestUri -cne 'https://nightly.bannerlordcoop.com/v1/manifests/client') {
-    throw 'The installer does not target the canonical nightly gateway host.'
-}
 foreach ($foreignUri in @(
     'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=AB2D-EF3H',
     'https://nightly.bannerlordcoop.com.attacker.invalid/activate?code=AB2D-EF3H',

@@ -1,13 +1,12 @@
-export const FORWARDED_ORIGIN_HEADER = "x-nightly-forwarded-origin";
-export const FORWARDED_DEVICE_PATHS: readonly string[] = Object.freeze(["/v1/device/sessions", "/v1/device/token"]);
+import { GatewayError, decodeUtf8, json, readBoundedBytes } from "./http";
+
+export const DEVICE_SESSIONS_PATH = "/v1/device/sessions";
+export const FORWARDED_DEVICE_PATHS: readonly string[] = Object.freeze([DEVICE_SESSIONS_PATH, "/v1/device/token"]);
 
 const MAXIMUM_DEVICE_REQUEST_BYTES = 4 * 1024;
 const MAXIMUM_DEVICE_RESPONSE_BYTES = 16 * 1024;
 const DEVICE_FORWARD_TIMEOUT_MS = 10_000;
-const JSON_HEADERS = Object.freeze({
-    "content-type": "application/json; charset=utf-8",
-    "cache-control": "no-store",
-});
+const USER_CODE = /^[A-Z2-9]{4}-[A-Z2-9]{4}$/;
 
 /** The outbound HTTP call the forwarder depends on; production passes the Workers global fetch. */
 export type UpstreamFetch = (url: string, init: RequestInit) => Promise<Response>;
@@ -33,89 +32,61 @@ export function deviceFunctionUrl(functionUrl: unknown, path: string): string {
     return `${parsed.origin}${parsed.pathname.replace(/\/+$/, "")}${path}`;
 }
 
-// Relays one installer device-API call to the Edge Function and returns its status and JSON body unchanged.
-// A bounded request body is passed through; network failures and unreadable upstream bodies become 502.
+// Relays one installer device-API call to the Edge Function and returns its status and JSON body.
+// A new device session also gets the gateway's own activation link; upstream failures throw a 502 GatewayError.
 export async function forwardDeviceRequest(
     request: Request,
     target: DeviceForwardTarget,
     upstreamFetch: UpstreamFetch,
 ): Promise<Response> {
     const body = await readBoundedBytes(request, MAXIMUM_DEVICE_REQUEST_BYTES);
-    if (body === null) return jsonResponse({ error: "request_too_large" }, 413);
-    let upstream: Response;
+    if (body === null) throw new GatewayError(413, "request_too_large");
+    const upstream = await callFunction(request, target.url, body, upstreamFetch);
+    const payload = await readUpstreamJson(upstream);
+    const path = new URL(request.url).pathname;
+    return json(withVerificationUri(payload, path, upstream.status, target.origin), upstream.status);
+}
+
+// Sends the bounded body to the Edge Function with only the headers it needs; any network failure or timeout is a 502.
+async function callFunction(request: Request, url: string, body: Uint8Array, upstreamFetch: UpstreamFetch): Promise<Response> {
     try {
-        upstream = await upstreamFetch(target.url, {
+        return await upstreamFetch(url, {
             method: request.method,
-            headers: forwardedHeaders(request, target.origin),
+            headers: forwardedHeaders(request),
             body,
             redirect: "manual",
             signal: AbortSignal.timeout(DEVICE_FORWARD_TIMEOUT_MS),
         });
     } catch {
-        return jsonResponse({ error: "internal_error" }, 502);
+        throw new GatewayError(502, "function_unreachable");
     }
-    const payload = await readUpstreamJson(upstream);
-    if (payload === null) return jsonResponse({ error: "internal_error" }, 502);
-    return new Response(payload, { status: upstream.status, headers: JSON_HEADERS });
 }
 
-// Chooses the only headers the Edge Function needs: the body type, JSON accept, and the installer's gateway origin.
-function forwardedHeaders(request: Request, origin: string): Headers {
-    const headers = new Headers({ accept: "application/json", [FORWARDED_ORIGIN_HEADER]: origin });
+// Chooses the only headers the Edge Function needs: the body type and a JSON accept.
+function forwardedHeaders(request: Request): Headers {
+    const headers = new Headers({ accept: "application/json" });
     const contentType = request.headers.get("content-type");
     if (contentType !== null) headers.set("content-type", contentType);
     return headers;
 }
 
-// Returns the upstream body when it is bounded, readable JSON; null tells the caller to answer 502.
-async function readUpstreamJson(response: Response): Promise<string | null> {
-    const bytes = await readBoundedBytes(response, MAXIMUM_DEVICE_RESPONSE_BYTES);
-    if (bytes === null || bytes.byteLength === 0) return null;
+// Parses the upstream body as bounded, non-empty UTF-8 JSON; anything else is a 502.
+async function readUpstreamJson(response: Response): Promise<unknown> {
+    const bytes = await readBoundedBytes(response, MAXIMUM_DEVICE_RESPONSE_BYTES).catch(() => null);
+    if (bytes === null || bytes.byteLength === 0) throw new GatewayError(502, "function_response_invalid");
     try {
-        const text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes);
-        JSON.parse(text);
-        return text;
+        return JSON.parse(decodeUtf8(bytes));
     } catch {
-        return null;
+        throw new GatewayError(502, "function_response_invalid");
     }
 }
 
-// Reads a message body up to a byte limit; null means the body was too large or the stream failed.
-async function readBoundedBytes(message: Request | Response, maximum: number): Promise<Uint8Array | null> {
-    const declared = Number(message.headers.get("content-length") ?? 0);
-    if (!Number.isSafeInteger(declared) || declared < 0 || declared > maximum) return null;
-    if (message.body === null) return new Uint8Array(0);
-    try {
-        return await collectChunks(message.body.getReader(), maximum);
-    } catch {
-        return null;
-    }
-}
-
-// Drains a byte stream into one buffer, cancelling and returning null once it passes the limit.
-async function collectChunks(reader: ReadableStreamDefaultReader<Uint8Array>, maximum: number): Promise<Uint8Array | null> {
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        total += value.byteLength;
-        if (total > maximum) {
-            await reader.cancel();
-            return null;
-        }
-        chunks.push(value);
-    }
-    const bytes = new Uint8Array(total);
-    let offset = 0;
-    for (const chunk of chunks) {
-        bytes.set(chunk, offset);
-        offset += chunk.byteLength;
-    }
-    return bytes;
-}
-
-// Serializes a JSON error body with the gateway's no-store headers.
-function jsonResponse(value: unknown, status: number): Response {
-    return new Response(`${JSON.stringify(value)}\n`, { status, headers: JSON_HEADERS });
+// Adds the activation link on the installer's gateway host to a successfully created device session.
+// Every other response is returned unchanged.
+function withVerificationUri(payload: unknown, path: string, status: number, origin: string): unknown {
+    if (path !== DEVICE_SESSIONS_PATH || status !== 201) return payload;
+    if (typeof payload !== "object" || payload === null || Array.isArray(payload)) return payload;
+    const userCode = (payload as Record<string, unknown>).user_code;
+    if (typeof userCode !== "string" || !USER_CODE.test(userCode)) return payload;
+    return { ...payload, verification_uri: `${origin}/activate?code=${encodeURIComponent(userCode)}` };
 }

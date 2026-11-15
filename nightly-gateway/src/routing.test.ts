@@ -1,18 +1,37 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { CANONICAL_GATEWAY_ORIGIN, LEGACY_GATEWAY_ORIGIN } from "./core";
-import { FORWARDED_ORIGIN_HEADER, deviceFunctionUrl, type UpstreamFetch } from "./forwarding";
+import { deviceFunctionUrl, type UpstreamFetch } from "./forwarding";
 import { createGateway } from "./index";
 import { websiteRedirectFor } from "./redirects";
 
 const FUNCTION_URL = "https://wfvqnijwuyqjibhlcrhz.supabase.co/functions/v1/nightly-gateway";
 const LEGACY_R2 = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
+const RETIRED_FORWARDED_ORIGIN_HEADER = "x-nightly-forwarded-origin";
+const SESSION = Object.freeze({ device_code: "d".repeat(43), user_code: "AB2D-EF3H", expires_in: 600, interval: 3 });
 
 type UpstreamCall = { url: string; init: RequestInit; body: string };
 
 // Env without DB or Hyperdrive: these routes must answer without opening a database connection.
 function statelessEnv(functionUrl = FUNCTION_URL): Env {
     return { LEGACY_R2_ORIGIN: LEGACY_R2, NIGHTLY_FUNCTION_URL: functionUrl } as unknown as Env;
+}
+
+// A body stream that fails on its first read, standing in for a dropped connection.
+function erroringStream(): ReadableStream<Uint8Array> {
+    return new ReadableStream({ pull(controller) { controller.error(new Error("connection reset")); } });
+}
+
+// Runs one call while capturing console.error lines, so tests can check what the Worker logged.
+async function captureErrors<T>(run: () => Promise<T>): Promise<{ result: T; logs: string[] }> {
+    const logs: string[] = [];
+    const original = console.error;
+    console.error = (line: unknown) => { logs.push(String(line)); };
+    try {
+        return { result: await run(), logs };
+    } finally {
+        console.error = original;
+    }
 }
 
 // Records each upstream call and answers with the given response factory.
@@ -28,6 +47,7 @@ function recordingFetch(respond: () => Response | Promise<Response>): { fetch: U
     };
 }
 
+// Builds an installer-style urlencoded POST that also carries a cookie the forwarder must drop.
 function formRequest(origin: string, path: string, body: string): Request {
     return new Request(`${origin}${path}`, {
         method: "POST",
@@ -36,21 +56,14 @@ function formRequest(origin: string, path: string, body: string): Request {
     });
 }
 
-test("device session creation is forwarded to the Edge Function with the installer's gateway origin", async () => {
-    const session = {
-        device_code: "d".repeat(43),
-        user_code: "AB2D-EF3H",
-        verification_uri: `${CANONICAL_GATEWAY_ORIGIN}/activate?code=AB2D-EF3H`,
-        expires_in: 600,
-        interval: 3,
-    };
-    const upstream = recordingFetch(() => Response.json(session, { status: 201 }));
+test("device session creation is forwarded and the gateway adds its own activation link", async () => {
+    const upstream = recordingFetch(() => Response.json(SESSION, { status: 201 }));
     const gateway = createGateway({ fetch: upstream.fetch });
 
     const response = await gateway.fetch(formRequest(CANONICAL_GATEWAY_ORIGIN, "/v1/device/sessions", "client=installer"), statelessEnv());
 
     assert.equal(response.status, 201);
-    assert.deepEqual(await response.json(), session);
+    assert.deepEqual(await response.json(), { ...SESSION, verification_uri: `${CANONICAL_GATEWAY_ORIGIN}/activate?code=AB2D-EF3H` });
     assert.equal(response.headers.get("cache-control"), "no-store");
     assert.equal(response.headers.get("content-type"), "application/json; charset=utf-8");
     assert.equal(upstream.calls.length, 1);
@@ -60,12 +73,42 @@ test("device session creation is forwarded to the Edge Function with the install
     assert.equal(call.init.redirect, "manual");
     assert.equal(call.body, "client=installer");
     const headers = new Headers(call.init.headers);
-    assert.equal(headers.get(FORWARDED_ORIGIN_HEADER), CANONICAL_GATEWAY_ORIGIN);
+    assert.equal(headers.get(RETIRED_FORWARDED_ORIGIN_HEADER), null);
     assert.equal(headers.get("content-type"), "application/x-www-form-urlencoded");
     assert.equal(headers.get("cookie"), null);
 });
 
-test("device token polling keeps the legacy host as the forwarded origin and passes every status through", async () => {
+test("the activation link follows the allowlisted request host and replaces any upstream link", async () => {
+    const cases = [
+        { origin: CANONICAL_GATEWAY_ORIGIN, expected: CANONICAL_GATEWAY_ORIGIN },
+        { origin: LEGACY_GATEWAY_ORIGIN, expected: LEGACY_GATEWAY_ORIGIN },
+        { origin: "https://gateway.attacker.invalid", expected: CANONICAL_GATEWAY_ORIGIN },
+    ];
+    for (const entry of cases) {
+        const stale = { ...SESSION, verification_uri: "https://attacker.invalid/activate?code=AB2D-EF3H" };
+        const gateway = createGateway({ fetch: recordingFetch(() => Response.json(stale, { status: 201 })).fetch });
+        const response = await gateway.fetch(formRequest(entry.origin, "/v1/device/sessions", "client=installer"), statelessEnv());
+        const body = await response.json() as { verification_uri: string };
+        assert.equal(body.verification_uri, `${entry.expected}/activate?code=AB2D-EF3H`, entry.origin);
+    }
+});
+
+test("session responses without a created, valid user code are passed through untouched", async () => {
+    const outcomes = [
+        { status: 200, body: SESSION },
+        { status: 201, body: { ...SESSION, user_code: "not-a-code" } },
+        { status: 201, body: [SESSION] },
+        { status: 400, body: { error: "invalid_request" } },
+    ];
+    for (const outcome of outcomes) {
+        const gateway = createGateway({ fetch: recordingFetch(() => Response.json(outcome.body, { status: outcome.status })).fetch });
+        const response = await gateway.fetch(formRequest(CANONICAL_GATEWAY_ORIGIN, "/v1/device/sessions", "client=installer"), statelessEnv());
+        assert.equal(response.status, outcome.status);
+        assert.deepEqual(await response.json(), outcome.body);
+    }
+});
+
+test("device token polling passes every status through without an activation link", async () => {
     const outcomes = [
         { status: 200, body: { access_token: "a".repeat(43), token_type: "Bearer", expires_in: 3600 } },
         { status: 428, body: { error: "authorization_pending" } },
@@ -84,33 +127,48 @@ test("device token polling keeps the legacy host as the forwarded origin and pas
         assert.deepEqual(await response.json(), outcome.body);
         assert.equal(response.headers.get("cache-control"), "no-store");
         assert.equal(upstream.calls[0].url, `${FUNCTION_URL}/v1/device/token`);
-        assert.equal(new Headers(upstream.calls[0].init.headers).get(FORWARDED_ORIGIN_HEADER), LEGACY_GATEWAY_ORIGIN);
+        assert.equal(new Headers(upstream.calls[0].init.headers).get(RETIRED_FORWARDED_ORIGIN_HEADER), null);
     }
 });
 
-test("device requests on an unknown host forward the canonical gateway origin", async () => {
-    const upstream = recordingFetch(() => Response.json({ error: "invalid_request" }, { status: 400 }));
-    const gateway = createGateway({ fetch: upstream.fetch });
-    const response = await gateway.fetch(formRequest("https://gateway.attacker.invalid", "/v1/device/sessions", "client=installer"), statelessEnv());
-    assert.equal(response.status, 400);
-    assert.equal(new Headers(upstream.calls[0].init.headers).get(FORWARDED_ORIGIN_HEADER), CANONICAL_GATEWAY_ORIGIN);
-});
-
-test("an unreachable or broken Edge Function becomes 502 internal_error", async () => {
-    const failures: Array<() => Response | Promise<Response>> = [
-        () => Promise.reject(new TypeError("fetch failed")),
-        () => new Response("<html>Bad gateway</html>", { status: 502, headers: { "content-type": "text/html" } }),
-        () => new Response(null, { status: 200 }),
-        () => new Response("x".repeat(64 * 1024), { status: 200 }),
-        () => new Response(null, { status: 302, headers: { location: "https://example.invalid/" } }),
+test("an unreachable or broken Edge Function becomes a logged 502 with a named code", async () => {
+    const failures: Array<{ respond: () => Response | Promise<Response>; code: string }> = [
+        { respond: () => Promise.reject(new TypeError("fetch failed")), code: "function_unreachable" },
+        { respond: () => Promise.reject(new DOMException("timed out", "TimeoutError")), code: "function_unreachable" },
+        { respond: () => new Response("<html>Bad gateway</html>", { status: 502, headers: { "content-type": "text/html" } }), code: "function_response_invalid" },
+        { respond: () => new Response(null, { status: 200 }), code: "function_response_invalid" },
+        { respond: () => new Response("x".repeat(64 * 1024), { status: 200 }), code: "function_response_invalid" },
+        { respond: () => new Response(null, { status: 302, headers: { location: "https://example.invalid/" } }), code: "function_response_invalid" },
+        { respond: () => new Response(erroringStream(), { status: 200 }), code: "function_response_invalid" },
     ];
     for (const failure of failures) {
-        const gateway = createGateway({ fetch: recordingFetch(failure).fetch });
-        const response = await gateway.fetch(formRequest(CANONICAL_GATEWAY_ORIGIN, "/v1/device/sessions", "client=installer"), statelessEnv());
+        const gateway = createGateway({ fetch: recordingFetch(failure.respond).fetch });
+        const { result: response, logs } = await captureErrors(() => gateway.fetch(
+            formRequest(CANONICAL_GATEWAY_ORIGIN, "/v1/device/sessions", "client=installer"),
+            statelessEnv(),
+        ));
         assert.equal(response.status, 502);
-        assert.deepEqual(await response.json(), { error: "internal_error" });
+        assert.deepEqual(await response.json(), { error: failure.code });
         assert.equal(response.headers.get("cache-control"), "no-store");
+        assert.deepEqual(logs.map((line) => JSON.parse(line)), [
+            { event: "nightly_gateway_request_failed", path: "/v1/device/sessions", error: failure.code },
+        ]);
     }
+});
+
+test("a failing installer request stream is an internal error, not an oversized body", async () => {
+    const upstream = recordingFetch(() => Response.json({}));
+    const gateway = createGateway({ fetch: upstream.fetch });
+    const request = new Request(`${CANONICAL_GATEWAY_ORIGIN}/v1/device/token`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: erroringStream(),
+        duplex: "half",
+    } as RequestInit);
+    const { result: response } = await captureErrors(() => gateway.fetch(request, statelessEnv()));
+    assert.equal(response.status, 500);
+    assert.deepEqual(await response.json(), { error: "internal_error" });
+    assert.equal(upstream.calls.length, 0);
 });
 
 test("oversized device request bodies are refused before anything is forwarded", async () => {
