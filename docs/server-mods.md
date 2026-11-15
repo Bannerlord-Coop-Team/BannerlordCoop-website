@@ -6,9 +6,14 @@ for `missing-assembly`). Deploy this website compatibility change before the
 control plane adds the field. It keeps the latest failed Start's diagnosis visible
 after Stop, until a newer Start replaces it, only while the game is stopped or
 failed. Immediate failures, polled status and returning owners receive localized
-repair guidance: upload the dependency (Bannerlord.Harmony with its bin folder
-and `0Harmony.dll` for Harmony), upload a complete/compatible mod, or disable the
-affected mod in Mods. Unknown diagnoses use generic copy; raw logs are never shown.
+repair guidance: a missing assembly names the mod and assembly and asks the owner
+to disable it and dependent mods before starting again. It does not assume the
+owner should upload a DLL or that a UI-named assembly cannot load on a dedicated
+server. Missing server-provided Harmony retains its hosting-problem explanation;
+uploading Bannerlord.Harmony again will not fix it. Unknown diagnoses use generic
+copy; raw logs are never shown. The response keys and three closed reason values
+are unchanged, so this copy change accepts the current control plane as well as
+the fatal-attribution fix.
 
 The managed server page's **Mods** tab lists, orders, enables, uploads and deletes
 custom Bannerlord modules through the control plane's custom-mods API. The
