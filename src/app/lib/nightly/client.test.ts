@@ -128,9 +128,10 @@ test("a rejected website key is logged so it does not pass for an expired sessio
     assert.deepEqual(entries, [{ event: "nightly_function_failed", path: "/sponsor/portal", status: 401, code: "unauthorized" }]);
 });
 
-test("only a 401 authorization_* is a session rejection; a rejected website key or another status is not", () => {
+test("only a 401 with a contract session-rejection code is a session rejection; other 401s or statuses are not", () => {
     assert.equal(isSessionRejection({ ok: false, status: 401, code: "authorization_expired" }), true);
     assert.equal(isSessionRejection({ ok: false, status: 401, code: "authorization_required" }), true);
+    assert.equal(isSessionRejection({ ok: false, status: 401, code: "authorization_foo" }), false);
     assert.equal(isSessionRejection({ ok: false, status: 401, code: "unauthorized" }), false);
     assert.equal(isSessionRejection({ ok: false, status: 401, code: "http_401" }), false);
     assert.equal(isSessionRejection({ ok: false, status: 403, code: "authorization_expired" }), false);

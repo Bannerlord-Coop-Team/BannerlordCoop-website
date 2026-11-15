@@ -54,7 +54,8 @@ const CLIENT_ERROR_STATUS = 400;
 const UNAUTHORIZED_STATUS = 401;
 const NOT_FOUND_STATUS = 404;
 const SERVER_ERROR_STATUS = 500;
-const SESSION_REJECTION_PREFIX = "authorization_";
+/** The contract table's 401 codes that reject the user's session; signing in again clears them. */
+const SESSION_REJECTION_CODES: ReadonlySet<string> = new Set(["authorization_required", "authorization_expired"]);
 const DISCORD_AUTHORIZE_ORIGIN = "https://discord.com";
 const DISCORD_AUTHORIZE_PATHS = new Set(["/oauth2/authorize", "/api/oauth2/authorize", "/api/v10/oauth2/authorize"]);
 
@@ -100,7 +101,8 @@ async function callFunction<T>(transport: Transport, path: string, body: unknown
     }
     const read = await readJson(response);
     if (!response.ok) {
-        const rejected = failure(response.status, errorCode(read.readable ? read.body : undefined, response.status));
+        const errorBody = read.readable ? read.body : undefined;
+        const rejected = failure(response.status, errorCode(errorBody, response.status));
         if (isOperatorFailure(rejected)) reportFailed(log, path, rejected.status, rejected.code);
         return rejected;
     }
@@ -154,11 +156,11 @@ function parseBoundedJson(text: string): unknown {
 }
 
 /**
- * Whether the Edge Function rejected the user's session or authorization (a 401 `authorization_*`), as opposed to a 401
+ * Whether the Edge Function rejected the user's session (a 401 with a contract session-rejection code), as opposed to a 401
  * that rejects the website key itself, which signing in again cannot fix.
  */
 export function isSessionRejection(rejected: NightlyFailure): boolean {
-    return rejected.status === UNAUTHORIZED_STATUS && rejected.code.startsWith(SESSION_REJECTION_PREFIX);
+    return rejected.status === UNAUTHORIZED_STATUS && SESSION_REJECTION_CODES.has(rejected.code);
 }
 
 /**
