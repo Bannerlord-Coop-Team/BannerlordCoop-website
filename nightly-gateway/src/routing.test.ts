@@ -178,7 +178,7 @@ test("a failing installer request stream is an internal error, not an oversized 
     assert.equal(response.status, 500);
     assert.deepEqual(await response.json(), { error: "internal_error" });
     assert.equal(upstream.calls.length, 0);
-    assert.deepEqual(logger.events, [{ event: "nightly_gateway_request_failed", path: "/v1/device/token", error: "internal_error" }]);
+    assert.deepEqual(logger.events, [{ event: "nightly_gateway_request_failed", path: "/v1/device/token", error: "internal_error", cause: "Error" }]);
 });
 
 test("oversized device request bodies are refused before anything is forwarded", async () => {

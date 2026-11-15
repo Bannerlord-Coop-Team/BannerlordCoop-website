@@ -60,15 +60,13 @@ test("the website client drives device sign-in, a sponsor claim and the sponsor 
     if (needsSponsor.outcome !== "needs-sponsor") return;
     assert.deepEqual(needsSponsor, {
         outcome: "needs-sponsor",
-        device_id: needsSponsor.device_id,
-        username: "Sponsored Friend",
-        previous_sponsor_revoked: false,
+        claim: { deviceId: needsSponsor.claim.deviceId, username: "Sponsored Friend", previousSponsorRevoked: false },
     });
 
-    assert.deepEqual(await client.claimSponsorship(needsSponsor.device_id, "NOPE-NOPE-NOPE"), {
+    assert.deepEqual(await client.claimSponsorship(needsSponsor.claim.deviceId, "NOPE-NOPE-NOPE"), {
         ok: false, status: 403, code: "invalid_sponsor_code",
     });
-    assert.deepEqual(await client.claimSponsorship(needsSponsor.device_id, SPONSOR_CODE), { ok: true, value: null });
+    assert.deepEqual(await client.claimSponsorship(needsSponsor.claim.deviceId, SPONSOR_CODE), { ok: true, value: null });
 
     script.user = { id: SPONSOR, username: "Sponsor" };
     script.member = { roles: [PATREON_ROLE] };

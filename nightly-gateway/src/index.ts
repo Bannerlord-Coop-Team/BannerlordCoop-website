@@ -49,13 +49,19 @@ export default createGateway({ fetch: (url, init) => fetch(url, init), log: cons
 
 // Logs a failed request with its stable code and, when known, the class of the underlying cause (never its message).
 function logRequestFailure(log: GatewayLog, request: Request, error: unknown): void {
-    const cause = error instanceof GatewayError && error.cause instanceof Error ? error.cause.name : undefined;
+    const cause = failureCauseName(error);
     log({
         event: "nightly_gateway_request_failed",
         path: new URL(request.url).pathname,
         error: error instanceof GatewayError ? error.code : "internal_error",
         ...(cause === undefined ? {} : { cause }),
     });
+}
+
+// Names the class behind a failure: a GatewayError's cause, or the unexpected error itself.
+function failureCauseName(error: unknown): string | undefined {
+    if (error instanceof GatewayError) return error.cause instanceof Error ? error.cause.name : undefined;
+    return error instanceof Error ? error.name : typeof error;
 }
 
 // Routes one request: maintenance lock first, then routes that need no database, then R2 and Postgres routes.
