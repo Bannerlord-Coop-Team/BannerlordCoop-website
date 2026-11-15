@@ -5,6 +5,7 @@ import {
     CREATE_BUILD_PIN_KIND,
     createBuildPinToken,
 } from "./pin-rules";
+import type { GatewayDatabase } from "./database";
 import worker from "./index";
 import { serveCreateBuildPinLauncher, serveCreateBuildPinPage } from "./pins";
 
@@ -64,95 +65,92 @@ function pinEnvironment(): {
     const sessions: PinSession[] = [];
     const nightlySessions: NightlySession[] = [];
     const objects = new Map<string, Uint8Array>();
-    const database = {
-        prepare(sql: string) {
-            const statement = {
-                args: [] as unknown[],
-                bind(...args: unknown[]) {
-                    statement.args = args;
-                    return statement;
-                },
-                async first<T>() {
-                    if (sql.includes("FROM installer_pins WHERE build_id = ?")) {
-                        return (pins.find((pin) => pin.build_id === statement.args[0]) ?? null) as T;
-                    }
-                    if (sql.includes("FROM installer_pins WHERE token_hash = ?")) {
-                        return (pins.find((pin) => pin.token_hash === statement.args[0]) ?? null) as T;
-                    }
-                    if (sql.includes("FROM pin_download_sessions") && sql.includes("JOIN installer_pins")) {
-                        const session = sessions.find((entry) => entry.token_hash === statement.args[0]);
-                        if (session === undefined) return null as T;
-                        const pin = pins.find((entry) => entry.token_hash === session.pin_token_hash);
-                        if (pin === undefined) return null as T;
-                        return {
-                            build_id: pin.build_id,
-                            session_expires_at: session.expires_at,
-                            pin_expires_at: pin.expires_at,
-                        } as T;
-                    }
-                    if (sql.includes("FROM download_sessions WHERE token_hash")) {
-                        return (nightlySessions.find((entry) => entry.token_hash === statement.args[0]) ?? null) as T;
-                    }
-                    throw new Error(`Unexpected test query: ${sql}`);
-                },
-                async run() {
-                    if (sql.includes("INSERT INTO installer_pins")) {
-                        const [
-                            tokenHash, buildId, clientSha, serverSha, clientFileName, clientBytes,
-                            clientSha256, serverFileName, serverKey, serverPublicUrl, serverBytes,
-                            serverSha256, createdAt, expiresAt,
-                        ] = statement.args;
-                        pins.push({
-                            token_hash: String(tokenHash),
-                            build_id: String(buildId),
-                            client_sha: String(clientSha),
-                            server_sha: String(serverSha),
-                            client_file_name: String(clientFileName),
-                            client_bytes: Number(clientBytes),
-                            client_sha256: String(clientSha256),
-                            server_file_name: String(serverFileName),
-                            server_key: String(serverKey),
-                            server_public_url: String(serverPublicUrl),
-                            server_bytes: Number(serverBytes),
-                            server_sha256: String(serverSha256),
-                            created_at: Number(createdAt),
-                            expires_at: Number(expiresAt),
-                            consumed_at: null,
-                        });
-                        return { success: true, meta: { changes: 1 } };
-                    }
-                    if (sql.includes("UPDATE installer_pins SET consumed_at")) {
-                        const [consumedAt, tokenHash, now] = statement.args;
-                        const pin = pins.find((entry) =>
-                            entry.token_hash === tokenHash
-                            && entry.consumed_at === null
-                            && entry.expires_at > Number(now));
-                        if (pin === undefined) return { success: true, meta: { changes: 0 } };
-                        pin.consumed_at = Number(consumedAt);
-                        return { success: true, meta: { changes: 1 } };
-                    }
-                    if (sql.includes("INSERT INTO pin_download_sessions")) {
-                        const [sessionHash, createdAt, expiresAt, pinHash, consumedAt] = statement.args;
-                        const pin = pins.find((entry) =>
-                            entry.token_hash === pinHash && entry.consumed_at === Number(consumedAt));
-                        if (pin === undefined) return { success: true, meta: { changes: 0 } };
-                        sessions.push({
-                            token_hash: String(sessionHash),
-                            pin_token_hash: String(pinHash),
-                            created_at: Number(createdAt),
-                            expires_at: Number(expiresAt),
-                        });
-                        return { success: true, meta: { changes: 1 } };
-                    }
-                    throw new Error(`Unexpected test mutation: ${sql}`);
-                },
+    // Answers the gateway's lookups from the in-memory pin, pin-session, and nightly-session rows.
+    const select = (sql: string, values: readonly unknown[]): unknown => {
+        if (sql.includes("FROM nightly_gateway.installer_pins WHERE build_id = $1")) {
+            return pins.find((pin) => pin.build_id === values[0]);
+        }
+        if (sql.includes("FROM nightly_gateway.installer_pins WHERE token_hash = $1")) {
+            return pins.find((pin) => pin.token_hash === values[0]);
+        }
+        if (sql.includes("FROM nightly_gateway.pin_download_sessions") && sql.includes("JOIN nightly_gateway.installer_pins")) {
+            const session = sessions.find((entry) => entry.token_hash === values[0]);
+            if (session === undefined) return undefined;
+            const pin = pins.find((entry) => entry.token_hash === session.pin_token_hash);
+            if (pin === undefined) return undefined;
+            return {
+                build_id: pin.build_id,
+                session_expires_at: session.expires_at,
+                pin_expires_at: pin.expires_at,
             };
-            return statement;
+        }
+        if (sql.includes("FROM nightly_gateway.download_sessions WHERE token_hash = $1")) {
+            return nightlySessions.find((entry) => entry.token_hash === values[0]);
+        }
+        throw new Error(`Unexpected test query: ${sql}`);
+    };
+    // Applies the gateway's writes to the in-memory rows and reports how many rows changed.
+    const mutate = (sql: string, values: readonly unknown[]): number => {
+        if (sql.includes("INSERT INTO nightly_gateway.installer_pins")) {
+            const [
+                tokenHash, buildId, clientSha, serverSha, clientFileName, clientBytes,
+                clientSha256, serverFileName, serverKey, serverPublicUrl, serverBytes,
+                serverSha256, createdAt, expiresAt,
+            ] = values;
+            pins.push({
+                token_hash: String(tokenHash),
+                build_id: String(buildId),
+                client_sha: String(clientSha),
+                server_sha: String(serverSha),
+                client_file_name: String(clientFileName),
+                client_bytes: Number(clientBytes),
+                client_sha256: String(clientSha256),
+                server_file_name: String(serverFileName),
+                server_key: String(serverKey),
+                server_public_url: String(serverPublicUrl),
+                server_bytes: Number(serverBytes),
+                server_sha256: String(serverSha256),
+                created_at: Number(createdAt),
+                expires_at: Number(expiresAt),
+                consumed_at: null,
+            });
+            return 1;
+        }
+        if (sql.includes("UPDATE nightly_gateway.installer_pins SET consumed_at")) {
+            const [consumedAt, tokenHash, now] = values;
+            const pin = pins.find((entry) =>
+                entry.token_hash === tokenHash
+                && entry.consumed_at === null
+                && entry.expires_at > Number(now));
+            if (pin === undefined) return 0;
+            pin.consumed_at = Number(consumedAt);
+            return 1;
+        }
+        if (sql.includes("INSERT INTO nightly_gateway.pin_download_sessions")) {
+            const [sessionHash, createdAt, expiresAt, pinHash, consumedAt] = values;
+            const pin = pins.find((entry) =>
+                entry.token_hash === pinHash && entry.consumed_at === Number(consumedAt));
+            if (pin === undefined) return 0;
+            sessions.push({
+                token_hash: String(sessionHash),
+                pin_token_hash: String(pinHash),
+                created_at: Number(createdAt),
+                expires_at: Number(expiresAt),
+            });
+            return 1;
+        }
+        throw new Error(`Unexpected test mutation: ${sql}`);
+    };
+    const database: GatewayDatabase = {
+        async query<T>(sql: string, values: readonly unknown[] = []) {
+            if (/^\s*SELECT/.test(sql)) {
+                const row = select(sql, values);
+                return { rows: (row === undefined ? [] : [row]) as T[], rowCount: row === undefined ? 0 : 1 };
+            }
+            return { rows: [], rowCount: mutate(sql, values) };
         },
-        async batch(entries: Array<{ run(): Promise<{ success: boolean; meta?: { changes: number } }> }>) {
-            const results = [];
-            for (const entry of entries) results.push(await entry.run());
-            return results;
+        async transaction(work) {
+            return work(database);
         },
     };
     return {
@@ -359,18 +357,6 @@ test("pin mint rejects a missing or wrong shared secret", async () => {
     });
     assert.equal(unavailable.status, 503);
     assert.deepEqual(await unavailable.json(), { error: "pin_mint_unavailable" });
-});
-
-test("migration mode fails closed before any gateway state can change", async () => {
-    const { env } = pinEnvironment();
-    const locked = { ...env, MIGRATION_MODE: "locked" as const };
-    const health = await fetchGateway(new Request(`${gateway}/health`), locked);
-    assert.equal(health.status, 503);
-    assert.deepEqual(await health.json(), { ok: false, maintenance: true });
-
-    const create = await fetchGateway(new Request(`${gateway}/v1/device/sessions`, { method: "POST" }), locked);
-    assert.equal(create.status, 503);
-    assert.deepEqual(await create.json(), { error: "migration_in_progress" });
 });
 
 test("create-build pins keep install links, manifests, and launchers on the allowlisted host that was used", async () => {

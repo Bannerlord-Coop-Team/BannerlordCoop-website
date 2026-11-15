@@ -1,18 +1,6 @@
-// R2 artifact-key and identifier rules shared by the manifest, pin, and artifact modules.
+// R2 artifact-key rules shared by the manifest and artifact modules.
 
-const SNOWFLAKE = /^\d{17,20}$/;
 const OBJECT_KEY = /^(?:(?:nightly|release)\/[A-Za-z0-9][A-Za-z0-9._/-]{0,1022}|windows\/base\/v1\/[a-f0-9]{64}\/[a-f0-9]{64}\/server-base\.7z)$/;
-const SHA256_HEX = /^[a-f0-9]{64}$/;
-
-// Tells whether a value is a Discord snowflake id string.
-export function isDiscordSnowflake(value: unknown): value is string {
-    return typeof value === "string" && SNOWFLAKE.test(value);
-}
-
-// Tells whether a value is a lowercase hex SHA-256 digest.
-export function isSha256Hex(value: unknown): value is string {
-    return typeof value === "string" && SHA256_HEX.test(value);
-}
 
 // Tells whether an R2 key sits in a downloadable release namespace with no empty or dot segments.
 export function isAllowedArtifactKey(value: unknown): value is string {

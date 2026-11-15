@@ -253,7 +253,7 @@ test("routes the gateway still serves are never redirected", () => {
 
 test("health still answers once the database is reachable", async () => {
     const gateway = createGateway({ fetch: () => Promise.reject(new Error("health must not call upstream")) });
-    const env = { ...statelessEnv(), DB: { prepare() { throw new Error("unused"); }, batch() { throw new Error("unused"); } } } as unknown as Env;
+    const env = { ...statelessEnv(), DB: { query() { throw new Error("unused"); }, transaction() { throw new Error("unused"); } } } as unknown as Env;
     const response = await gateway.fetch(new Request(`${LEGACY_GATEWAY_ORIGIN}/health`), env);
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { ok: true });

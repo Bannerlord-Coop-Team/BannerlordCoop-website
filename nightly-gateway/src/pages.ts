@@ -19,9 +19,6 @@ export function errorPage(message: string): string {
 
 // Maps a gateway error code to the message shown on the HTML error page.
 export function gatewayErrorMessage(code: string): string {
-    if (code === "migration_in_progress") {
-        return "Nightly access is briefly paused while account data is moved. Try again in a few minutes.";
-    }
     if (code === "already_used") {
         return "That create-build installer link was already used. Ask staff for a new /create-build link.";
     }

@@ -1,13 +1,6 @@
 import { Client, types } from "pg";
 
-const GATEWAY_SCHEMA = "nightly_gateway";
 const QUERY_TIMEOUT_MS = 5_000;
-// The only gateway tables the Worker still reads or writes; device, sponsor, and OAuth state moved to the Edge Function.
-const TABLE_NAMES = Object.freeze([
-    "download_sessions",
-    "installer_pins",
-    "pin_download_sessions",
-]);
 
 // Parses Postgres BIGINT columns as numbers, refusing values JavaScript cannot hold exactly.
 types.setTypeParser(types.builtins.INT8, (value) => {
@@ -16,24 +9,25 @@ types.setTypeParser(types.builtins.INT8, (value) => {
     return parsed;
 });
 
-/** The outcome of one write statement: success and the number of rows it changed. */
-export type GatewayRunResult = {
-    success: boolean;
-    meta: { changes: number };
+/** The outcome of one statement: the rows it returned and the number of rows it read or changed. */
+export type GatewayQueryResult<T> = {
+    rows: T[];
+    rowCount: number;
 };
 
-/** One parameterized query the gateway binds and then reads or runs. */
-export interface GatewayPreparedStatement {
-    bind(...values: unknown[]): GatewayPreparedStatement;
-    first<T>(): Promise<T | null>;
-    all<T>(): Promise<{ results: T[] }>;
-    run(): Promise<GatewayRunResult>;
+/** Runs one parameterized Postgres statement ($n placeholders, schema-qualified tables). */
+export interface GatewayQuery {
+    query<T = Record<string, unknown>>(sql: string, values?: readonly unknown[]): Promise<GatewayQueryResult<T>>;
 }
 
-/** The D1-shaped statement surface the gateway modules depend on, served by Postgres in production and fakes in tests. */
-export interface GatewayDatabase {
-    prepare(sql: string): GatewayPreparedStatement;
-    batch(statements: GatewayPreparedStatement[]): Promise<GatewayRunResult[]>;
+/** The request's Postgres access the gateway modules depend on, served by pg in production and fakes in tests. */
+export interface GatewayDatabase extends GatewayQuery {
+    transaction<T>(work: (database: GatewayQuery) => Promise<T>): Promise<T>;
+}
+
+// Returns a lookup's single row, or null when the statement matched nothing.
+export function firstRow<T>(result: GatewayQueryResult<T>): T | null {
+    return result.rows[0] ?? null;
 }
 
 type HyperdriveBinding = { connectionString: string };
@@ -61,102 +55,42 @@ export async function databaseForRequest(env: DatabaseEnvironment): Promise<Gate
     return new PostgresGatewayDatabase(client);
 }
 
-// Tells whether a binding exposes the prepare and batch calls the gateway needs.
+// Tells whether a binding exposes the query and transaction calls the gateway needs.
 function isGatewayDatabase(value: unknown): value is GatewayDatabase {
     return typeof value === "object" && value !== null
-        && typeof (value as GatewayDatabase).prepare === "function"
-        && typeof (value as GatewayDatabase).batch === "function";
+        && typeof (value as GatewayDatabase).query === "function"
+        && typeof (value as GatewayDatabase).transaction === "function";
 }
 
-// Adapts one request-scoped Postgres client to the D1-shaped GatewayDatabase, running batches in a transaction.
+// Runs the gateway's statements on one request-scoped pg Client, wrapping transactions in BEGIN/COMMIT.
 class PostgresGatewayDatabase implements GatewayDatabase {
     constructor(private readonly client: Client) {}
 
-    // Starts a statement bound to this client.
-    prepare(sql: string): GatewayPreparedStatement {
-        return new PostgresPreparedStatement(this.client, sql);
+    // Runs one parameterized statement and returns its rows and affected-row count.
+    async query<T = Record<string, unknown>>(sql: string, values: readonly unknown[] = []): Promise<GatewayQueryResult<T>> {
+        const result = await this.client.query<T & Record<string, unknown>>(sql, [...values]);
+        return { rows: result.rows, rowCount: result.rowCount ?? 0 };
     }
 
-    // Runs up to 16 of this client's statements in one transaction, rolling back on the first failure.
-    async batch(statements: GatewayPreparedStatement[]): Promise<GatewayRunResult[]> {
-        if (statements.length === 0 || statements.length > 16
-            || statements.some((statement) => !(statement instanceof PostgresPreparedStatement)
-                || statement.client !== this.client)) {
-            throw new Error("gateway_database_batch_invalid");
-        }
+    // Runs the work in one transaction, committing its result or rolling back on the first failure.
+    async transaction<T>(work: (database: GatewayQuery) => Promise<T>): Promise<T> {
         await this.client.query("BEGIN");
         try {
-            const results: GatewayRunResult[] = [];
-            for (const statement of statements) results.push(await statement.run());
+            const result = await work(this);
             await this.client.query("COMMIT");
-            return results;
+            return result;
         } catch (error) {
-            try {
-                await this.client.query("ROLLBACK");
-            } catch {
-                // Preserve the original query error; the request-scoped connection is discarded.
-            }
+            await this.rollbackQuietly();
             throw error;
         }
     }
-}
 
-// Holds one D1-style SQL statement and its bound values until it runs on Postgres.
-class PostgresPreparedStatement implements GatewayPreparedStatement {
-    readonly client: Client;
-    private values: unknown[] = [];
-
-    constructor(client: Client, private readonly sourceSql: string) {
-        this.client = client;
+    // Rolls back the open transaction, keeping the caller's original error; the connection is discarded anyway.
+    private async rollbackQuietly(): Promise<void> {
+        try {
+            await this.client.query("ROLLBACK");
+        } catch {
+            // The request-scoped connection is discarded, so a failed rollback changes nothing.
+        }
     }
-
-    // Replaces the statement's bound values.
-    bind(...values: unknown[]): GatewayPreparedStatement {
-        this.values = values;
-        return this;
-    }
-
-    // Returns the first result row, or null when there is none.
-    async first<T>(): Promise<T | null> {
-        const result = await this.execute<T>();
-        return result.rows[0] ?? null;
-    }
-
-    // Returns every result row.
-    async all<T>(): Promise<{ results: T[] }> {
-        const result = await this.execute<T>();
-        return { results: result.rows };
-    }
-
-    // Runs the statement and reports how many rows it changed.
-    async run(): Promise<GatewayRunResult> {
-        const result = await this.execute();
-        return { success: true, meta: { changes: result.rowCount ?? 0 } };
-    }
-
-    // Translates the D1 SQL to Postgres and runs it with the bound values.
-    private execute<T = Record<string, unknown>>() {
-        const sql = postgresSql(this.sourceSql, this.values.length);
-        return this.client.query<T & Record<string, unknown>>(sql, this.values);
-    }
-}
-
-// Translates D1-style SQL to Postgres: schema-qualified gateway tables and $n parameters.
-// Throws when the SQL is empty or oversized or its placeholders do not match the value count.
-export function postgresSql(sourceSql: string, valueCount: number): string {
-    if (typeof sourceSql !== "string" || sourceSql.length === 0 || sourceSql.length > 16_384
-        || !Number.isSafeInteger(valueCount) || valueCount < 0 || valueCount > 32) {
-        throw new Error("gateway_database_query_invalid");
-    }
-    let sql = sourceSql;
-    for (const tableName of TABLE_NAMES) {
-        sql = sql.replace(
-            new RegExp(`(?<![A-Za-z0-9_.])${tableName}(?![A-Za-z0-9_])`, "g"),
-            `"${GATEWAY_SCHEMA}"."${tableName}"`,
-        );
-    }
-    let parameter = 0;
-    sql = sql.replace(/\?/g, () => `$${++parameter}`);
-    if (parameter !== valueCount) throw new Error("gateway_database_parameter_mismatch");
-    return sql;
 }

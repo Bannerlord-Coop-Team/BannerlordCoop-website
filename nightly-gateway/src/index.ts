@@ -81,20 +81,10 @@ function safeMessage(error: Error): { message?: string } {
     return { message };
 }
 
-// Routes one request: maintenance lock first, then the stateless redirect and device-forwarding routes,
-// then the R2 and Postgres routes.
+// Routes one request: the stateless redirect and device-forwarding routes first, then the R2 and Postgres routes.
 async function route(request: Request, env: Env, upstreamFetch: UpstreamFetch, log: GatewayLog): Promise<Response> {
     assertConfiguration(env);
     const url = new URL(request.url);
-    if (env.MIGRATION_MODE !== undefined && env.MIGRATION_MODE !== "locked") {
-        throw new Error("gateway_migration_mode_invalid");
-    }
-    if (env.MIGRATION_MODE === "locked") {
-        if (request.method === "GET" && url.pathname === "/health") {
-            return json({ ok: false, maintenance: true }, 503);
-        }
-        throw new GatewayError(503, "migration_in_progress");
-    }
     const redirect = websiteRedirectFor(request.method, url);
     if (redirect !== null) return redirectResponse(redirect.location, redirect.status);
     if (request.method === "POST" && FORWARDED_DEVICE_PATHS.includes(url.pathname)) {

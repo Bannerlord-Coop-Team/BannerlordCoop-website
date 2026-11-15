@@ -1,7 +1,6 @@
-import { isDiscordSnowflake, isSha256Hex } from "./artifact-keys";
 import { base64url, exactArrayBuffer, isBearerToken } from "./primitives";
 
-// Create-build pin rules: lifetimes, R2 keys, install links, deterministic tokens, and the mint-secret check.
+// Create-build pin rules: identifiers, lifetimes, R2 keys, install links, deterministic tokens, and the mint-secret check.
 
 export const DOWNLOAD_SESSION_SECONDS = 60 * 60;
 export const CREATE_BUILD_PIN_LIFETIME_SECONDS = 24 * 60 * 60;
@@ -10,7 +9,19 @@ export const CREATE_BUILD_PIN_KIND = "create-build-pin";
 const PIN_CLIENT_KEY = /^pins\/\d{17,20}\/Coop\.7z$/;
 const MANUAL_SERVER_KEY = /^manual\/\d{17,20}\/[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/;
 const COMMIT_SHA = /^[a-f0-9]{40}$/;
+const SNOWFLAKE = /^\d{17,20}$/;
+const SHA256_HEX = /^[a-f0-9]{64}$/;
 const PIN_MINT_MESSAGE = new TextEncoder().encode("bannerlordcoop-create-build-pin-v1");
+
+// Tells whether a value is a Discord snowflake id string, the form of a create-build id.
+export function isDiscordSnowflake(value: unknown): value is string {
+    return typeof value === "string" && SNOWFLAKE.test(value);
+}
+
+// Tells whether a value is a lowercase hex SHA-256 digest.
+export function isSha256Hex(value: unknown): value is string {
+    return typeof value === "string" && SHA256_HEX.test(value);
+}
 
 // Tells whether a key is the one client archive stored for this create-build pin.
 export function isAllowedPinClientKey(value: unknown, buildId: string): value is string {

@@ -1,4 +1,4 @@
-import { isDiscordSnowflake, isSha256Hex } from "./artifact-keys";
+import { firstRow } from "./database";
 import { PUBLIC_MANUAL_SERVER_ORIGIN, resolveGatewayOrigin } from "./origins";
 import {
     CREATE_BUILD_PIN_KIND,
@@ -8,6 +8,8 @@ import {
     createBuildPinToken,
     isAllowedManualServerKey,
     isCreateBuildPinCommitSha,
+    isDiscordSnowflake,
+    isSha256Hex,
     mintSecretsEqual,
     pinClientObjectKey,
 } from "./pin-rules";
@@ -95,14 +97,15 @@ export async function mintCreateBuildPin(request: Request, env: Env): Promise<Re
     const tokenHash = await sha256(token);
     const now = nowSeconds();
     const expiresAt = Math.floor(Date.parse(parsed.expiresAt) / 1000);
-    const existing = await env.DB.prepare(
-        "SELECT token_hash, client_sha256, server_sha256, expires_at FROM installer_pins WHERE build_id = ?",
-    ).bind(parsed.buildId).first<{
+    const existing = firstRow(await env.DB.query<{
         token_hash: string;
         client_sha256: string;
         server_sha256: string;
         expires_at: number;
-    }>();
+    }>(
+        "SELECT token_hash, client_sha256, server_sha256, expires_at FROM nightly_gateway.installer_pins WHERE build_id = $1",
+        [parsed.buildId],
+    ));
     if (existing !== null) {
         if (existing.token_hash !== tokenHash
             || existing.client_sha256 !== parsed.client.sha256
@@ -110,14 +113,14 @@ export async function mintCreateBuildPin(request: Request, env: Env): Promise<Re
             throw new GatewayError(409, "pin_identity_conflict");
         }
     } else {
-        const inserted = await env.DB.prepare(`
-            INSERT INTO installer_pins (
+        await env.DB.query(`
+            INSERT INTO nightly_gateway.installer_pins (
                 token_hash, build_id, client_sha, server_sha,
                 client_file_name, client_bytes, client_sha256,
                 server_file_name, server_key, server_public_url, server_bytes, server_sha256,
                 created_at, expires_at, consumed_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
-        `).bind(
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NULL)
+        `, [
             tokenHash,
             parsed.buildId,
             parsed.clientSha,
@@ -132,8 +135,7 @@ export async function mintCreateBuildPin(request: Request, env: Env): Promise<Re
             parsed.server.sha256,
             now,
             expiresAt,
-        ).run();
-        if (!inserted.success) throw new GatewayError(500, "internal_error");
+        ]);
     }
     await env.RELEASES.put(pinClientObjectKey(parsed.buildId), clientBytes, {
         httpMetadata: { contentType: "application/x-7z-compressed" },
@@ -153,41 +155,42 @@ export async function redeemCreateBuildPin(request: Request, env: Env): Promise<
     if (!isBearerToken(pin)) throw new GatewayError(400, "invalid_request");
     const now = nowSeconds();
     const pinHash = await sha256(pin);
-    const row = await env.DB.prepare(
-        "SELECT build_id, expires_at, consumed_at FROM installer_pins WHERE token_hash = ?",
-    ).bind(pinHash).first<{ build_id: string; expires_at: number; consumed_at: number | null }>();
+    const row = firstRow(await env.DB.query<{ build_id: string; expires_at: number; consumed_at: number | null }>(
+        "SELECT build_id, expires_at, consumed_at FROM nightly_gateway.installer_pins WHERE token_hash = $1",
+        [pinHash],
+    ));
     if (row === null) throw new GatewayError(400, "invalid_request");
     if (row.expires_at < now) throw new GatewayError(400, "expired_token");
     if (row.consumed_at !== null) throw new GatewayError(409, "already_used");
     const object = await env.RELEASES.get(pinClientObjectKey(row.build_id));
     if (object === null) throw new GatewayError(409, "pin_incomplete");
     const accessToken = randomToken(32);
-    const result = await env.DB.batch([
-        env.DB.prepare(`
-            UPDATE installer_pins SET consumed_at = ?
-            WHERE token_hash = ? AND consumed_at IS NULL AND expires_at > ?
-        `).bind(now, pinHash, now),
-        env.DB.prepare(`
-            INSERT INTO pin_download_sessions (token_hash, pin_token_hash, created_at, expires_at)
-            SELECT ?, token_hash, ?, ?
-            FROM installer_pins WHERE token_hash = ? AND consumed_at = ?
-        `).bind(await sha256(accessToken), now, now + DOWNLOAD_SESSION_SECONDS, pinHash, now),
-    ]);
-    if (!result.every((entry) => entry.success && entry.meta.changes === 1)) {
-        throw new GatewayError(409, "already_used");
-    }
+    const sessionHash = await sha256(accessToken);
+    const redeemed = await env.DB.transaction(async (database) => {
+        const consumed = await database.query(`
+            UPDATE nightly_gateway.installer_pins SET consumed_at = $1
+            WHERE token_hash = $2 AND consumed_at IS NULL AND expires_at > $3
+        `, [now, pinHash, now]);
+        const session = await database.query(`
+            INSERT INTO nightly_gateway.pin_download_sessions (token_hash, pin_token_hash, created_at, expires_at)
+            SELECT $1, token_hash, $2, $3
+            FROM nightly_gateway.installer_pins WHERE token_hash = $4 AND consumed_at = $5
+        `, [sessionHash, now, now + DOWNLOAD_SESSION_SECONDS, pinHash, now]);
+        return consumed.rowCount === 1 && session.rowCount === 1;
+    });
+    if (!redeemed) throw new GatewayError(409, "already_used");
     return json({ access_token: accessToken, token_type: "Bearer", expires_in: DOWNLOAD_SESSION_SECONDS });
 }
 
 // Describes the pinned client/server pair, pointing the client download at the gateway host the installer used.
 export async function servePinManifest(request: Request, env: Env): Promise<Response> {
     const session = await requirePinDownloadSession(request, env);
-    const pin = await env.DB.prepare(`
+    const pin = firstRow(await env.DB.query<InstallerPinRow>(`
         SELECT build_id, client_sha, server_sha, client_file_name, client_bytes, client_sha256,
                server_file_name, server_key, server_public_url, server_bytes, server_sha256,
                created_at, expires_at
-        FROM installer_pins WHERE build_id = ?
-    `).bind(session.buildId).first<InstallerPinRow>();
+        FROM nightly_gateway.installer_pins WHERE build_id = $1
+    `, [session.buildId]));
     if (pin === null) throw new GatewayError(404, "manifest_unavailable");
     const clientKey = pinClientObjectKey(pin.build_id);
     const builtAt = new Date(pin.created_at * 1000).toISOString();
@@ -256,14 +259,15 @@ type VisibleCreateBuildPin = {
 async function loadVisibleCreateBuildPin(url: URL, env: Env): Promise<string | VisibleCreateBuildPin> {
     const token = url.searchParams.get("pin");
     if (!isBearerToken(token)) return "That create-build installer link is invalid.";
-    const row = await env.DB.prepare(
-        "SELECT client_sha, server_sha, expires_at, consumed_at FROM installer_pins WHERE token_hash = ?",
-    ).bind(await sha256(token)).first<{
+    const row = firstRow(await env.DB.query<{
         client_sha: string;
         server_sha: string;
         expires_at: number;
         consumed_at: number | null;
-    }>();
+    }>(
+        "SELECT client_sha, server_sha, expires_at, consumed_at FROM nightly_gateway.installer_pins WHERE token_hash = $1",
+        [await sha256(token)],
+    ));
     if (row === null) return "That create-build installer link is invalid.";
     if (row.consumed_at !== null) return "That create-build installer link was already used.";
     if (row.expires_at < nowSeconds()) return "That create-build installer link has expired.";
