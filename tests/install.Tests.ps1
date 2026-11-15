@@ -522,6 +522,24 @@ $statusPending = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 
 if ($statusPending.Action -cne 'Continue') {
     throw 'An HTTP 428 token poll did not continue waiting for Discord.'
 }
+$outage = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 503 'migration_in_progress')
+if ($outage.Action -cne 'Retry' -or $outage.Message -notmatch 'HTTP 503' -or $outage.Message -notmatch 'error=migration_in_progress') {
+    throw 'A 503 token poll did not retry with its status and gateway error code.'
+}
+$discordUpstream = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 502 'discord_membership_required')
+if ($discordUpstream.Action -cne 'Fail' -or $discordUpstream.Message -notmatch 'HTTP 502; error=discord_membership_required') {
+    throw 'A named Discord upstream failure retried instead of failing fast with its details.'
+}
+$networkRecord = $null
+try { throw [Net.WebException]::new('The underlying connection was closed: An unexpected error occurred on a send.') } catch { $networkRecord = $_ }
+$network = Get-NightlyTokenPollDecision -ErrorRecord $networkRecord
+if ($network.Action -cne 'Retry' -or $network.Message -notmatch 'WebException: The underlying connection was closed') {
+    throw 'A token poll with no HTTP response did not retry with the network error text.'
+}
+$notFound = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 404)
+if ($notFound.Action -cne 'Fail' -or $notFound.Message -notmatch '^The Discord verification check failed\. Details: HTTP 404') {
+    throw 'An unexpected 404 token poll did not fail with its details.'
+}
 $invalid = Get-NightlyTokenPollDecision -Response ([pscustomobject]@{ token_type = 'Basic'; access_token = 'nope' })
 if ($invalid.Action -cne 'Fail' -or $invalid.Message -cne 'The nightly authorization token is invalid. Details: response=invalid; bearer=false; token_length=4') {
     throw 'A malformed success body did not keep the invalid-token message.'
@@ -834,6 +852,49 @@ if ($usedMessage -notmatch 'already used') {
     throw 'An already-used token poll still surfaced as an invalid token.'
 }
 
+$script:TokenPolls = 0
+function Invoke-RestMethod {
+    param($Method, $Uri, $ContentType, $Body)
+    if ([string]$Uri -match '/v1/device/sessions$') {
+        return [pscustomobject]@{
+            device_code = 'f' * 43
+            user_code = 'Q3W8-N5TR'
+            verification_uri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=Q3W8-N5TR'
+            expires_in = 600
+            interval = 0
+        }
+    }
+    $script:TokenPolls += 1
+    if ($script:TokenPolls -eq 1) { throw (New-GatewayWebError 503 'internal_error').Exception }
+    return [pscustomobject]@{ token_type = 'Bearer'; access_token = 'r' * 43; expires_in = 3600 }
+}
+$retryOutput = (& { $script:RetriedToken = Get-NightlyAccessToken } 6>&1 | Out-String)
+if ($script:TokenPolls -ne 2 -or $script:RetriedToken -cne ('r' * 43)) {
+    throw 'A transient 503 token poll did not retry until Discord verification succeeded.'
+}
+if ($retryOutput -notmatch 'Verification check failed, retrying\. Details: HTTP 503') {
+    throw 'A retried token poll did not print its failure details.'
+}
+
+function Invoke-RestMethod {
+    param($Method, $Uri, $ContentType, $Body)
+    if ([string]$Uri -match '/v1/device/sessions$') {
+        return [pscustomobject]@{
+            device_code = 'g' * 43
+            user_code = 'H6J2-K9LM'
+            verification_uri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=H6J2-K9LM'
+            expires_in = 600
+            interval = 0
+        }
+    }
+    throw (New-GatewayWebError 404).Exception
+}
+$unexpectedMessage = $null
+try { Get-NightlyAccessToken | Out-Null } catch { $unexpectedMessage = $_.Exception.Message }
+if ($unexpectedMessage -notmatch '^The Discord verification check failed\. Details: HTTP 404' -or $unexpectedMessage -match 'ScriptHalted') {
+    throw 'An unexpected token poll failure was not reported with its details.'
+}
+
 $script:NightlyObservedProcessNames = @('goodbyedpi')
 function Invoke-RestMethod {
     param($Method, $Uri, $ContentType, $Body)
@@ -936,6 +997,16 @@ $pinAccepted = Get-CreateBuildPinRedeemDecision -Response ([pscustomobject]@{
 })
 if ($pinAccepted.Action -cne 'Accept' -or $pinAccepted.Token -cne ('p' * 43)) {
     throw 'A valid create-build pin session was not accepted.'
+}
+function Invoke-RestMethod {
+    param($Method, $Uri, $ContentType, $Body)
+    throw (New-GatewayWebError 503 'internal_error').Exception
+}
+$pinOutageMessage = $null
+try { Get-CreateBuildPinAccessToken -Pin ('P' * 43) | Out-Null } catch { $pinOutageMessage = $_.Exception.Message }
+if ($pinOutageMessage -notmatch '^The create-build installer link could not be redeemed\. Details: HTTP 503' -or
+    $pinOutageMessage -match 'ScriptHalted') {
+    throw 'An unexpected create-build pin failure was not reported with its details.'
 }
 $pinUsed = Get-CreateBuildPinRedeemDecision -Response ([pscustomobject]@{ error = 'already_used' })
 if ($pinUsed.Action -cne 'Fail' -or $pinUsed.Message -notmatch 'already used') {
