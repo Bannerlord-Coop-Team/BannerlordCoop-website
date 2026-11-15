@@ -62,12 +62,20 @@ function logRequestFailure(log: GatewayLog, request: Request, error: unknown): v
 // Yields its class and, when safe, its snake_case code; a GatewayError without an Error cause yields nothing.
 function describeFailureCause(error: unknown): { cause?: string; message?: string } {
     const cause = error instanceof GatewayError ? error.cause : error;
-    if (!(cause instanceof Error)) return error instanceof GatewayError ? {} : { cause: typeof error };
-    const message = safeErrorCode(cause);
-    return message === undefined ? { cause: cause.name } : { cause: cause.name, message };
+    if (cause instanceof Error) return { cause: cause.name, ...safeMessage(cause) };
+    if (error instanceof GatewayError) return {};
+    return { cause: typeof error };
 }
 
-// Routes one request: maintenance lock first, then routes that need no database, then R2 and Postgres routes.
+// Carries an error's message for the log only when it is a bare snake_case code.
+function safeMessage(error: Error): { message?: string } {
+    const message = safeErrorCode(error);
+    if (message === undefined) return {};
+    return { message };
+}
+
+// Routes one request: maintenance lock first, then the stateless redirect and device-forwarding routes,
+// then the R2 and Postgres routes.
 async function route(request: Request, env: Env, upstreamFetch: UpstreamFetch, log: GatewayLog): Promise<Response> {
     assertConfiguration(env);
     const url = new URL(request.url);
@@ -80,28 +88,17 @@ async function route(request: Request, env: Env, upstreamFetch: UpstreamFetch, l
         }
         throw new GatewayError(503, "migration_in_progress");
     }
-    const stateless = routeWithoutDatabase(request, url, env, upstreamFetch);
-    if (stateless !== null) return stateless;
+    const redirect = websiteRedirectFor(request.method, url);
+    if (redirect !== null) return redirectResponse(redirect.location, redirect.status);
+    if (request.method === "POST" && FORWARDED_DEVICE_PATHS.includes(url.pathname)) {
+        return forwardDeviceRequest(request, {
+            path: url.pathname,
+            url: deviceFunctionUrl(env.NIGHTLY_FUNCTION_URL, url.pathname),
+            origin: resolveGatewayOrigin(url),
+        }, upstreamFetch);
+    }
     const database = await databaseForRequest(env);
     return routeWithDatabase(request, url, { ...env, DB: database }, upstreamFetch, log);
-}
-
-// Answers the website redirects and the device-API forwarding, which never touch Postgres or R2.
-function routeWithoutDatabase(
-    request: Request,
-    url: URL,
-    env: Env,
-    upstreamFetch: UpstreamFetch,
-): Promise<Response> | null {
-    const redirect = websiteRedirectFor(request.method, url);
-    if (redirect !== null) return Promise.resolve(redirectResponse(redirect.location, redirect.status));
-    const path = url.pathname;
-    if (request.method !== "POST" || !FORWARDED_DEVICE_PATHS.includes(path)) return null;
-    return forwardDeviceRequest(request, {
-        path,
-        url: deviceFunctionUrl(env.NIGHTLY_FUNCTION_URL, path),
-        origin: resolveGatewayOrigin(url),
-    }, upstreamFetch);
 }
 
 // Serves the pin, manifest, artifact, and health routes that read download state from Postgres.

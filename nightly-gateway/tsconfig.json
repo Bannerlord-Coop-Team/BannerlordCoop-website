@@ -13,7 +13,7 @@
     "worker-configuration.d.ts",
     "secrets.d.ts",
     "src/index.ts",
-    "src/core.ts",
+    "src/artifact-keys.ts",
     "src/origins.ts",
     "src/pin-rules.ts",
     "src/manifest-rules.ts",

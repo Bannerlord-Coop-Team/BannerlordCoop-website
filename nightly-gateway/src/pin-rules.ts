@@ -1,4 +1,4 @@
-import { isDiscordSnowflake, isSha256Hex } from "./core";
+import { isDiscordSnowflake, isSha256Hex } from "./artifact-keys";
 import { base64url, exactArrayBuffer, isBearerToken } from "./primitives";
 
 // Create-build pin rules: lifetimes, R2 keys, install links, deterministic tokens, and the mint-secret check.
