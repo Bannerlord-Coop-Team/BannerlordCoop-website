@@ -10,9 +10,12 @@ export const NIGHTLY_ERROR_CONTEXTS: readonly NightlyErrorContext[] = [
     "activate", "callback", "claim", "sponsor-login", "sponsor-code", "sponsor-remove",
 ];
 
-const ROLES = "Staff, Tester, Patreon, Boosty, or Afdian";
+/** The Discord roles that qualify for nightly access, as every nightly page spells them. */
+export const QUALIFYING_ROLES_TEXT = "Staff, Tester, Patreon, Boosty, or Afdian";
+/** Sponsored-account seats per eligible member; pages with portal data render its `limit` instead. */
+export const SPONSOR_SEAT_LIMIT = 10;
 export const GENERIC_ERROR_MESSAGE = "Access could not be verified. Run the installer again or ask in the Bannerlord Co-op Discord.";
-export const ROLE_REQUIRED_MESSAGE = `A ${ROLES} role is required.`;
+export const ROLE_REQUIRED_MESSAGE = `A ${QUALIFYING_ROLES_TEXT} role is required.`;
 export const INSTALLER_AUTHORIZATION_EXPIRED_MESSAGE = "That installer authorization has expired.";
 
 // Copy comes from the retired Worker pages (nightly-gateway/src/index.ts) so users see the same wording.
@@ -29,9 +32,9 @@ const CONTEXT_MESSAGES: Record<NightlyErrorContext, Readonly<Record<string, stri
     claim: {
         expired: INSTALLER_AUTHORIZATION_EXPIRED_MESSAGE,
         invalid_sponsor_code: "That sponsor code is not valid.",
-        supporter_role_required: `That sponsor no longer has a qualifying ${ROLES} role.`,
+        supporter_role_required: `That sponsor no longer has a qualifying ${QUALIFYING_ROLES_TEXT} role.`,
         already_sponsored: "This Discord account already has sponsored access.",
-        seats_full: "That eligible member has already used all 10 sponsored-account seats.",
+        seats_full: `That eligible member has already used all ${SPONSOR_SEAT_LIMIT} sponsored-account seats.`,
     },
     "sponsor-login": {},
     "sponsor-code": {

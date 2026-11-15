@@ -1,6 +1,5 @@
 import type { NextConfig } from "next";
-
-const GATEWAY_ORIGIN = "https://nightly.bannerlordcoop.com";
+import { NIGHTLY_GATEWAY_ORIGIN } from "./src/app/lib/nightly/links";
 
 const nextConfig: NextConfig = {
     turbopack: {root: process.cwd()},
@@ -10,22 +9,22 @@ const nextConfig: NextConfig = {
         return [
             {
                 source: "/server/install.ps1",
-                destination: `${GATEWAY_ORIGIN}/install.ps1`,
+                destination: `${NIGHTLY_GATEWAY_ORIGIN}/install.ps1`,
                 permanent: true,
             },
             {
                 source: "/server/install.cmd",
-                destination: `${GATEWAY_ORIGIN}/install.cmd`,
+                destination: `${NIGHTLY_GATEWAY_ORIGIN}/install.cmd`,
                 permanent: true,
             },
             {
                 source: "/server/install.sh",
-                destination: `${GATEWAY_ORIGIN}/install.sh`,
+                destination: `${NIGHTLY_GATEWAY_ORIGIN}/install.sh`,
                 permanent: true,
             },
             {
                 source: "/server/install-linux.sh",
-                destination: `${GATEWAY_ORIGIN}/install-linux.sh`,
+                destination: `${NIGHTLY_GATEWAY_ORIGIN}/install-linux.sh`,
                 permanent: true,
             },
             // Retired external-console links carry no managed identity, so they return to discovery.

@@ -104,7 +104,10 @@ test("OAuth outcomes decode exactly the four contract shapes", () => {
     );
     assert.equal(decodeOAuthOutcome({ outcome: "needs-sponsor", device_id: "x", username: "friend" })?.outcome, "needs-sponsor");
     assert.deepEqual(decodeOAuthOutcome({ outcome: "portal", session: SESSION, expires_in: 86400 }), { outcome: "portal", session: SESSION, expires_in: 86400 });
-    for (const bad of [null, [], { outcome: "unknown" }, { outcome: "portal", session: "short" }, { outcome: "needs-sponsor", device_id: "bad id!", username: "x" }, { outcome: "needs-sponsor", device_id: "d", username: "" }]) {
+    assert.deepEqual(decodeOAuthOutcome({ outcome: "portal", session: SESSION, expires_in: 3600.9 }), { outcome: "portal", session: SESSION, expires_in: 3600 });
+    const portalExpiring = (expiresIn: unknown) => ({ outcome: "portal", session: SESSION, ...(expiresIn === undefined ? {} : { expires_in: expiresIn }) });
+    const badPortals = [undefined, null, "86400", 0, -5, 0.5, Number.NaN, Number.POSITIVE_INFINITY, 1e300].map(portalExpiring);
+    for (const bad of [null, [], { outcome: "unknown" }, { outcome: "portal", session: "short", expires_in: 86400 }, ...badPortals, { outcome: "needs-sponsor", device_id: "bad id!", username: "x" }, { outcome: "needs-sponsor", device_id: "d", username: "" }, { outcome: "needs-sponsor", device_id: "d", username: "x".repeat(101) }]) {
         assert.equal(decodeOAuthOutcome(bad), undefined, JSON.stringify(bad));
     }
 });

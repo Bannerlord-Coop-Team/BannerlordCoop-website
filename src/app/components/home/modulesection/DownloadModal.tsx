@@ -9,7 +9,7 @@ const downloadSources = [
     {
         name: "download.installer.name",
         description: "download.installer.description",
-        href: "https://nightly.bannerlordcoop.com/",
+        href: "/nightly",
         recommended: true,
         supporterOnly: true,
     },

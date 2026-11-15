@@ -1,9 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { NightlyClient, NightlyFailure } from "./client";
-import { loadPortalView, submitClaim, submitCreateCode, submitRemoveSeat } from "./flows";
+import { sameOriginRequest, sameOriginSubmission, servedHost } from "../auth/same-origin";
+import {
+    claimActionResult,
+    createCodeActionResult,
+    loadPortalView,
+    removeSeatActionResult,
+    submitClaim,
+    submitCreateCode,
+    submitRemoveSeat,
+} from "./flows";
 import { GENERIC_ERROR_MESSAGE, nightlyErrorMessage, nightlyErrorView, parseErrorContext, ROLE_REQUIRED_MESSAGE } from "./messages";
-import { isSameOriginSubmission } from "./same-origin";
 
 const SESSION = "s".repeat(43);
 const CLAIM = { deviceId: "device-1", username: "friend", previousSponsorRevoked: false };
@@ -107,7 +115,10 @@ test("error messages use the gateway's wording per step and never echo the code"
 });
 
 test("same-origin submissions require matching Fetch Metadata or Origin", () => {
-    const check = (values: Record<string, string>) => isSameOriginSubmission(new Headers(values));
+    const check = (values: Record<string, string>) => {
+        const headers = new Headers(values);
+        return sameOriginSubmission(headers, servedHost(headers));
+    };
     assert.equal(check({ "sec-fetch-site": "same-origin", origin: "https://bannerlordcoop.com", host: "bannerlordcoop.com" }), true);
     assert.equal(check({ origin: "https://bannerlordcoop.com", host: "bannerlordcoop.com" }), true);
     assert.equal(check({ "sec-fetch-site": "same-origin", host: "bannerlordcoop.com" }), true);
@@ -117,4 +128,57 @@ test("same-origin submissions require matching Fetch Metadata or Origin", () => 
     assert.equal(check({ origin: "https://evil.example", host: "bannerlordcoop.com" }), false);
     assert.equal(check({ origin: "null", host: "bannerlordcoop.com" }), false);
     assert.equal(check({ host: "bannerlordcoop.com" }), false);
+    assert.equal(check({ "sec-fetch-site": "none", host: "bannerlordcoop.com" }), false);
+    assert.equal(check({ "sec-fetch-site": "same-origin", origin: "https://bannerlordcoop.com" }), false);
+});
+
+test("route-handler requests keep accepting direct navigations and Origin-less requests", () => {
+    const check = (values: Record<string, string>) => sameOriginRequest(new Request("https://bannerlordcoop.com/api/x", { headers: values }));
+    assert.equal(check({}), true);
+    assert.equal(check({ "sec-fetch-site": "none" }), true);
+    assert.equal(check({ "sec-fetch-site": "same-origin", origin: "https://bannerlordcoop.com" }), true);
+    assert.equal(check({ origin: "http://bannerlordcoop.com" }), false);
+    assert.equal(check({ "sec-fetch-site": "cross-site" }), false);
+});
+
+test("claim action refuses a cross-origin post without calling the Edge Function", async () => {
+    const result = await claimActionResult(stubClient({}), { sameOrigin: false, claim: CLAIM }, "AAAA-BBBB-CCCC");
+    assert.deepEqual(result, { state: { error: GENERIC_ERROR_MESSAGE } });
+});
+
+test("claim action clears the claim cookie and redirects after a successful claim, and re-renders errors", async () => {
+    const approve = stubClient({ claimSponsorship: async () => ({ ok: true, value: null }) });
+    assert.deepEqual(await claimActionResult(approve, { sameOrigin: true, claim: CLAIM }, "AAAA-BBBB-CCCC"), {
+        clearCookie: "nightly_claim", redirectTo: "/nightly/approved?via=sponsor",
+    });
+    const full = stubClient({ claimSponsorship: async () => fail(409, "seats_full") });
+    assert.deepEqual(await claimActionResult(full, { sameOrigin: true, claim: CLAIM }, "AAAA-BBBB-CCCC"), {
+        state: { error: nightlyErrorMessage("claim", "seats_full") },
+    });
+});
+
+test("sponsor actions refuse cross-origin posts without calling the Edge Function", async () => {
+    const request = { sameOrigin: false, session: SESSION };
+    assert.deepEqual(await createCodeActionResult(stubClient({}), request), { state: { code: null, error: GENERIC_ERROR_MESSAGE } });
+    assert.deepEqual(await removeSeatActionResult(stubClient({}), request, "123456789012345678"), { state: { error: GENERIC_ERROR_MESSAGE } });
+});
+
+test("an expired sponsor session clears the sponsor cookie and returns to the expired login prompt", async () => {
+    const expired = { clearCookie: "nightly_sponsor", redirectTo: "/nightly/sponsor?session=expired" };
+    const rejected = stubClient({ createSponsorCode: async () => fail(401, "authorization_expired"), removeSponsoredAccount: async () => fail(401, "authorization_expired") });
+    assert.deepEqual(await createCodeActionResult(rejected, { sameOrigin: true, session: SESSION }), expired);
+    assert.deepEqual(await removeSeatActionResult(rejected, { sameOrigin: true, session: SESSION }, "123456789012345678"), expired);
+    assert.deepEqual(await createCodeActionResult(stubClient({}), { sameOrigin: true, session: null }), expired);
+});
+
+test("sponsor actions return the new code, reload after a removal and re-render errors", async () => {
+    const client = stubClient({
+        createSponsorCode: async () => ({ ok: true, value: "AB2C-DEF3-GH45" }),
+        removeSponsoredAccount: async () => ({ ok: true, value: null }),
+    });
+    const request = { sameOrigin: true, session: SESSION };
+    assert.deepEqual(await createCodeActionResult(client, request), { state: { code: "AB2C-DEF3-GH45", error: null } });
+    assert.deepEqual(await removeSeatActionResult(client, request, "123456789012345678"), { clearCookie: null, redirectTo: "/nightly/sponsor" });
+    const invalid = nightlyErrorMessage("sponsor-remove", "invalid_request");
+    assert.deepEqual(await removeSeatActionResult(client, request, "bad"), { state: { error: invalid } });
 });

@@ -1,11 +1,13 @@
 "use client";
 
 import { LoadingButton } from "@/app/components/ui/LoadingButton";
+import type { ClaimFormState } from "@/app/lib/nightly/flows";
+import { QUALIFYING_ROLES_TEXT } from "@/app/lib/nightly/messages";
 import { useActionState } from "react";
 import { alertClass, primaryButtonClass } from "./styles";
 
-/** Result of a claim submission; a successful claim redirects, so only errors come back. */
-export type ClaimFormState = { error: string | null };
+// A successful claim redirects, so only errors come back to the form.
+export type { ClaimFormState };
 
 export type ClaimFormAction = (state: ClaimFormState, form: FormData) => Promise<ClaimFormState>;
 
@@ -36,7 +38,7 @@ export function SponsorClaimForm({ action }: { action: ClaimFormAction }) {
             </div>
             {state.error !== null && <p role="alert" className={alertClass}>{state.error}</p>}
             <p id="sponsor-help" className="mt-3 text-xs leading-5 text-foreground-dim">
-                Your friend must have a qualifying Staff, Tester, Patreon, Boosty, or Afdian role and an open seat. Access is
+                Your friend must have a qualifying {QUALIFYING_ROLES_TEXT} role and an open seat. Access is
                 checked again on every install and update.
             </p>
         </form>
