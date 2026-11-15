@@ -108,3 +108,29 @@ The Worker's legacy `/sponsor*` and `/oauth/callback` paths answer `301` to the 
 5. **Installers:** move them to `nightly.bannerlordcoop.com`. The launcher fetches the latest script, so this rolls out immediately.
 6. **Other repos:** Coop CI and Control Plane origin PRs.
 7. **Later:** retire the `workers.dev` host and the old Discord app.
+
+## Implementation notes (resolved during the build)
+
+- **Edge Function routing.** It accepts both `/nightly-gateway/<route>` and `/functions/v1/nightly-gateway/<route>`. Unknown routes and wrong methods return `404 not_found`.
+- **Website-key failures.** A missing or wrong `x-nightly-website-key` returns `401 unauthorized`.
+- **Sponsor sessions.** A missing or malformed session returns `401 authorization_required`, an expired one `401 authorization_expired`. The website treats any 401 as "sign in again".
+- **Portal login without a qualifying role** returns `403 supporter_role_required`. The website shows the gateway's role-required copy.
+- **`/oauth/complete` validates state first.** An unknown, expired or replayed state returns `400 expired` without calling Discord.
+- **Concurrent token polls.** A duplicate token issue from simultaneous polls maps to `409 already_used`.
+- **Refresh tokens.** Migration `20261115090000_nightly_gateway_retire_refresh_tokens.sql` makes the refresh-token columns nullable, adds a both-or-neither check, and clears the existing values. New grants store NULL. The current Worker's upsert still succeeds against the migrated schema; this is tested.
+- **Callback.** `/nightly/callback` is a route handler. It calls `/oauth/complete` exactly once and then redirects:
+  - `approved` → `/nightly/approved`
+  - `needs-sponsor` → `/nightly/claim`
+  - `portal` → sets the cookie, then `/nightly/sponsor`
+  - errors → `/nightly/error`
+- **Claim state.** The device id, username and revoked flag live in the `nightly_claim` cookie (`Path=/nightly`, 10 minutes), never in the HTML.
+- **Sponsor-portal actions.** Create-code and remove-seat are server actions posted to `/nightly/sponsor`, guarded by Next's origin check plus an explicit same-origin check. `/nightly/sponsor/logout` clears an expired session.
+- **Worker forwarding.**
+  - It sends the allowlisted request origin, or the canonical host for anything else.
+  - A non-JSON, empty, oversized (>16 KiB) or redirecting upstream reply returns `502 internal_error`.
+  - A request body over 4 KiB returns `413 request_too_large` and is not forwarded.
+  - The upstream timeout is 10 s.
+- **Worker redirects.** `/` and `/activate` redirect only for GET/HEAD. The other legacy paths answer `301` for any method. Only `/activate` and `/oauth/callback` keep their query strings.
+- **Legacy (v1) manifests.** Their checks accept either gateway host, and URLs are rewritten to the host the installer used.
+- **Code sharing.** The Worker keeps its own role lists in `nightly-gateway/src/core.ts`, and the Edge Function has its own in `_shared/nightly/policy.ts`. Unifying them is left for later.
+- **Custom domain.** `nightly.bannerlordcoop.com` is attached to the Worker as a custom domain and declared in `nightly-gateway/wrangler.jsonc` `routes`.

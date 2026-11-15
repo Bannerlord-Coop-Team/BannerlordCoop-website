@@ -170,8 +170,10 @@ Linux and checks that the packaged Linux scripts match their canonical sources.
    Discord secret. Delete the retired `DISCORD_CLIENT_SECRET`,
    `DISCORD_BOT_TOKEN`, and `TOKEN_ENCRYPTION_KEY` Worker secrets once the
    slimmed Worker is live.
-5. Attach `nightly.bannerlordcoop.com` to this Worker as a custom domain. The
-   `workers.dev` host keeps serving identically until it is retired.
+5. `nightly.bannerlordcoop.com` is attached to this Worker as a custom domain
+   (declared in `wrangler.jsonc` `routes`; the `bannerlordcoop.com` zone is on
+   Cloudflare). The `workers.dev` host keeps serving identically until it is
+   retired.
 6. Optionally set `PIN_MINT_SECRET` with `wrangler secret put` to the same
    value as Bot_UP's `NIGHTLY_GATEWAY_PIN_SECRET` (at least 32 characters).
    Nightly Discord OAuth and `/v1/manifests/client` keep working when this
