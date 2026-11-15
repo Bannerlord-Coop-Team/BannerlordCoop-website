@@ -15,12 +15,9 @@ The Worker answers on `https://nightly.bannerlordcoop.com` (canonical) and
 Every URL it hands back (manifest artifact URLs, pin install links, the pin
 launcher, and the `verification_uri` it adds to a created device session) uses
 the host the request arrived on. Any other host is treated as the canonical one.
-When the Edge Function cannot be reached or answers with something other than
-bounded JSON, the Worker returns `502 function_unreachable` or
-`502 function_response_invalid` with only `{"error": ...}` in the body. The
-`nightly_gateway_request_failed` log line carries the path, the cause class, and
-for `function_response_invalid` the Edge reply's `upstream_status` (for example
-`504` from a platform timeout page).
+How forwarding failures are answered and logged is specified in
+[§1](../docs/nightly-backend-contract.md#1-installer-facing-api-worker-host) of
+the nightly backend contract.
 
 The installer script is intentionally public. It carries no Discord, R2, or
 shared download secret. Every install or update starts a new device session,
@@ -165,8 +162,8 @@ Linux and checks that the packaged Linux scripts match their canonical sources.
 3. For the PostgreSQL-only rollback rule and the retired Worker secrets to
    delete, see [§5](../docs/nightly-backend-contract.md#5-worker) and
    [§7](../docs/nightly-backend-contract.md#7-rollout-each-step-after-explicit-approval)
-   of the nightly backend contract. A future maintenance switch must cover both
-   the Worker and the Edge Function.
+   of the nightly backend contract. For maintenance, see
+   [SUPABASE_CUTOVER.md](SUPABASE_CUTOVER.md#maintenance).
 4. Keep the `NIGHTLY_FUNCTION_URL` var in `wrangler.jsonc` pointed at the
    deployed `nightly-gateway` Edge Function. Discord OAuth, the Discord bot
    token, and the website key are Edge Function secrets; the Worker holds no
