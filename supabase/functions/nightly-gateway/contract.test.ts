@@ -106,14 +106,14 @@ test("the website client drives device sign-in, a sponsor claim and the sponsor 
     const portal = value(await client.completeOAuth("sponsor-code", stateOf(portalAuthorize)));
     assert.equal(portal.outcome, "portal");
     if (portal.outcome !== "portal") return;
-    assert.equal(portal.expires_in, 86_400);
+    assert.equal(portal.expiresIn, 86_400);
 
     assert.deepEqual(value(await client.sponsorPortal(portal.session)), {
         seats: [{ discordUserId: FRIEND, createdAt: new Date(NOW * 1000) }],
     });
-    const rotated = value(await client.createSponsorCode(portal.session));
-    assert.match(rotated, /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/);
-    assert.notEqual(rotated, SPONSOR_CODE);
+    const newCode = value(await client.createSponsorCode(portal.session));
+    assert.match(newCode, /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/);
+    assert.notEqual(newCode, SPONSOR_CODE);
 
     assert.deepEqual(await client.removeSponsoredAccount(portal.session, FRIEND), { ok: true, value: null });
     assert.deepEqual(value(await client.sponsorPortal(portal.session)), { seats: [] });

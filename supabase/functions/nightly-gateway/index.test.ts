@@ -695,7 +695,7 @@ test("the portal is 403 for a sponsor who lost the role, and their session ends"
     assert.deepEqual([again.status, await body(again)], [401, { error: "authorization_expired" }]);
 });
 
-test("a rotated sponsor code is shown once, stored hashed, and redeemable", async () => {
+test("a created sponsor code is shown once, stored hashed, and redeemable", async () => {
     await seedGrant(database, SPONSOR, "OLDC-ODEA-AAAA");
     const session = await seedSponsorSession(database, SPONSOR);
     const { handler } = gatewayHandler(database, discordScript({ bot: { [SPONSOR]: { roles: [PATREON_ROLE] } } }));
