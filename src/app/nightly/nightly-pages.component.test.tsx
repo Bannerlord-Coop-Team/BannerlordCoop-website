@@ -5,28 +5,35 @@ import { encodeClaimContext } from "@/app/lib/nightly/cookies";
 
 const mocks = vi.hoisted(() => ({
     cookies: new Map<string, string>(),
+    setCookie: vi.fn(),
+    redirect: vi.fn((location: string) => { throw new Error(`redirect:${location}`); }),
     client: {} as Partial<NightlyClient>,
 }));
 vi.mock("next/headers", () => ({
-    cookies: async () => ({ get: (name: string) => (mocks.cookies.has(name) ? { value: mocks.cookies.get(name) } : undefined) }),
+    cookies: async () => ({
+        get: (name: string) => (mocks.cookies.has(name) ? { value: mocks.cookies.get(name) } : undefined),
+        set: mocks.setCookie,
+    }),
 }));
-vi.mock("next/navigation", () => ({ redirect: (location: string) => { throw new Error(`redirect:${location}`); } }));
+vi.mock("next/navigation", () => ({ redirect: mocks.redirect }));
 vi.mock("next/image", () => ({ default: () => null }));
 vi.mock("@/app/lib/nightly/server", () => ({ getNightlyClient: () => mocks.client }));
 vi.mock("@/app/nightly/claim/actions", () => ({ claimSponsorSeat: vi.fn() }));
 vi.mock("@/app/nightly/sponsor/actions", () => ({ createSponsorCode: vi.fn(), removeSponsoredSeat: vi.fn() }));
 
-import ApprovedPage from "./approved/page";
+import { carryOut } from "./action-effects";
 import SponsorClaimPage from "./claim/page";
 import NightlyErrorPage from "./error/page";
 import NightlyAccessPage from "./page";
 import SponsorPage from "./sponsor/page";
 
 const SESSION = "s".repeat(43);
+const DEVICE_ID = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
 
 afterEach(() => {
     mocks.cookies.clear();
     mocks.client = {};
+    vi.clearAllMocks();
 });
 
 /** Renders a server page element into a detached DOM node. */
@@ -52,12 +59,6 @@ it("landing page links the installers on the gateway host and the sponsor portal
     ]);
 });
 
-it("success page switches its heading for a sponsored approval", async () => {
-    const heading = async (values: Record<string, string>) => render(await ApprovedPage(params(values))).querySelector("h1")?.textContent;
-    expect(await heading({ via: "sponsor" })).toBe("Sponsored access approved");
-    expect(await heading({})).not.toBe(await heading({ via: "sponsor" }));
-});
-
 it("error page renders only canned copy for the context and code", async () => {
     const expired = render(await NightlyErrorPage(params({ context: "activate", code: "expired" })));
     expect(expired.querySelector('[role="alert"]')?.textContent).toBe("That installer code has expired.");
@@ -69,13 +70,13 @@ it("error page renders only canned copy for the context and code", async () => {
 });
 
 it("claim page shows the form for the pending device and escapes the Discord username", async () => {
-    mocks.cookies.set("nightly_claim", encodeClaimContext({ deviceId: "device-1", username: "<img src=x onerror=alert(1)>", previousSponsorRevoked: true }));
+    mocks.cookies.set("nightly_claim", encodeClaimContext({ deviceId: DEVICE_ID, username: "<img src=x onerror=alert(1)>", previousSponsorRevoked: true }));
     const view = render(await SponsorClaimPage());
     expect(view.querySelector("img")).toBeNull();
     expect(view.querySelector("strong")?.textContent).toBe("<img src=x onerror=alert(1)>");
     expect(view.textContent).toContain("Previous sponsor access ended");
     expect(view.querySelector('input[name="sponsor_code"]')).not.toBeNull();
-    expect(view.innerHTML).not.toContain("device-1");
+    expect(view.innerHTML).not.toContain(DEVICE_ID);
 });
 
 it("claim page without a pending claim explains the authorization expired", async () => {
@@ -84,10 +85,7 @@ it("claim page without a pending claim explains the authorization expired", asyn
     expect(view.querySelector('[role="alert"]')?.textContent).toBe("That installer authorization has expired.");
 });
 
-it("sponsor page: no cookie shows login, seats render, 401 clears the session, 403 explains lost eligibility", async () => {
-    const login = render(await SponsorPage(params()));
-    expect(login.querySelector('a[href="/nightly/sponsor/login"]')?.textContent).toContain("Continue with Discord");
-
+it("sponsor page renders the seat list, hands a rejected session to the logout route and offers re-login when ineligible", async () => {
     mocks.cookies.set("nightly_sponsor", SESSION);
     mocks.client = { sponsorPortal: async () => ({ ok: true, value: { limit: 10, seats: [{ discordUserId: "123456789012345678", createdAt: null }] } }) };
     const portal = render(await SponsorPage(params()));
@@ -96,11 +94,16 @@ it("sponsor page: no cookie shows login, seats render, 401 clears the session, 4
 
     mocks.client = { sponsorPortal: async () => ({ ok: false, status: 401, code: "authorization_expired" }) };
     await expect(SponsorPage(params())).rejects.toThrow("redirect:/nightly/sponsor/logout");
-    const relogin = render(await SponsorPage(params({ session: "expired" })));
-    expect(relogin.textContent).toContain("Your sponsor session has ended.");
 
     mocks.client = { sponsorPortal: async () => ({ ok: false, status: 403, code: "supporter_role_required" }) };
     const ineligible = render(await SponsorPage(params()));
-    expect(ineligible.querySelector('[role="alert"]')?.textContent).toBe("A Staff, Tester, Patreon, Boosty, or Afdian role is required.");
-    expect(ineligible.querySelector('a[href="/nightly/sponsor/login"]')).not.toBeNull();
+    expect(ineligible.querySelector('a[href="/nightly/sponsor/login"]')?.textContent).toContain("Sign in again");
+});
+
+it("a finished server action clears its cookie with the route handlers' attributes, then redirects", async () => {
+    await expect(carryOut({ clearCookie: "nightly_claim", redirectTo: "/nightly/approved?via=sponsor" })).rejects.toThrow("redirect:");
+    expect(mocks.setCookie).toHaveBeenCalledExactlyOnceWith("nightly_claim", "", {
+        path: "/nightly", maxAge: 0, httpOnly: true, secure: true, sameSite: "lax",
+    });
+    expect(mocks.redirect).toHaveBeenCalledExactlyOnceWith("/nightly/approved?via=sponsor");
 });

@@ -1,5 +1,6 @@
 import type { SponsorPortalData, SponsorSeat } from "@/app/lib/nightly/client";
-import { QUALIFYING_ROLES_TEXT, SPONSOR_SEAT_LIMIT } from "@/app/lib/nightly/messages";
+import { QUALIFYING_ROLES_TEXT } from "@/app/lib/nightly/messages";
+import { SPONSORED_ACCOUNT_LIMIT } from "../../../../supabase/functions/_shared/nightly/formats";
 import { CreateSponsorCodeForm, RemoveSeatForm, type CreateCodeAction, type RemoveSeatAction } from "./SponsorPortalForms";
 import { headingClass, ledeClass, primaryButtonClass } from "./styles";
 
@@ -84,7 +85,7 @@ export function SponsorLogin({ expired }: { expired: boolean }) {
                 </p>
             )}
             <p className={ledeClass}>
-                Members with a qualifying {QUALIFYING_ROLES_TEXT} role can each share nightly access with up to {SPONSOR_SEAT_LIMIT} Discord
+                Members with a qualifying {QUALIFYING_ROLES_TEXT} role can each share nightly access with up to {SPONSORED_ACCOUNT_LIMIT} Discord
                 accounts.
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-4">

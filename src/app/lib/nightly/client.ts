@@ -1,14 +1,13 @@
-import type { NightlyConfig } from "./config";
 import {
     DEVICE_ID_PATTERN,
     DISCORD_SNOWFLAKE_PATTERN,
-    ERROR_CODE_PATTERN,
-    isValidUsername,
-    SESSION_TOKEN_PATTERN,
     SPONSOR_CODE_PATTERN,
-} from "./formats";
-
-export { DISCORD_SNOWFLAKE_PATTERN, SESSION_TOKEN_PATTERN } from "./formats";
+    WEBSITE_KEY_HEADER,
+} from "../../../../supabase/functions/_shared/nightly/formats";
+import type { NightlyConfig } from "./config";
+import type { ClaimContext } from "./cookies";
+import { reportFailed, reportInvalidResponse, reportUnreachable, type NightlyLogger } from "./diagnostics";
+import { ERROR_CODE_PATTERN, isValidUsername, SESSION_TOKEN_PATTERN } from "./formats";
 
 /** A failed Edge Function call: HTTP status (0 when no response arrived) and a sanitized error code. */
 export type NightlyFailure = { ok: false; status: number; code: string };
@@ -17,7 +16,7 @@ export type NightlyResult<T> = { ok: true; value: T } | NightlyFailure;
 export type OAuthOutcome =
     | { outcome: "approved" }
     | { outcome: "sponsored-approved" }
-    | { outcome: "needs-sponsor"; device_id: string; username: string; previous_sponsor_revoked: boolean }
+    | { outcome: "needs-sponsor"; claim: ClaimContext }
     | { outcome: "portal"; session: string; expires_in: number };
 
 export type SponsorSeat = { discordUserId: string; createdAt: Date | null };
@@ -35,18 +34,29 @@ export type NightlyClient = {
     removeSponsoredAccount(session: string, discordUserId: string): Promise<NightlyResult<null>>;
 };
 
-export const NIGHTLY_WEBSITE_KEY_HEADER = "x-nightly-website-key";
 const MAXIMUM_RESPONSE_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MILLISECONDS = 15_000;
+const SERVER_ERROR_STATUS = 500;
 const DISCORD_AUTHORIZE_ORIGIN = "https://discord.com";
 const DISCORD_AUTHORIZE_PATHS = new Set(["/oauth2/authorize", "/api/oauth2/authorize", "/api/v10/oauth2/authorize"]);
 
 /** Decodes a success body; undefined marks a body that does not match the contract. */
 type Decoder<T> = (body: unknown) => T | undefined;
+/** The injected dependencies one call runs against. */
+type Transport = { config: NightlyConfig; fetcher: NightlyFetch; log: NightlyLogger };
+/** A response body: parsed JSON (undefined when empty, oversized or malformed), or unreadable when the stream failed. */
+type BodyRead = { readable: true; body: unknown } | { readable: false };
 
-/** Builds the typed Edge Function client; fetch and config are injected so tests never touch the network. */
-export function createNightlyClient(config: NightlyConfig | null, fetcher: NightlyFetch): NightlyClient {
-    const call = <T>(path: string, body: unknown, decode: Decoder<T>) => callFunction(config, fetcher, path, body, decode);
+/** Builds the typed Edge Function client; fetch, config and logging are injected so tests never touch the network. */
+export function createNightlyClient(
+    config: NightlyConfig | null,
+    fetcher: NightlyFetch,
+    log: NightlyLogger = ignoreLog,
+): NightlyClient {
+    const call = <T>(path: string, body: unknown, decode: Decoder<T>): Promise<NightlyResult<T>> => {
+        if (config === null) return Promise.resolve(failure(0, "not_configured"));
+        return callFunction({ config, fetcher, log }, path, body, decode);
+    };
     return {
         startDeviceOAuth: (userCode) => call("/oauth/start", { purpose: "device", user_code: userCode }, decodeAuthorizeUrl),
         startSponsorOAuth: () => call("/oauth/start", { purpose: "sponsor-portal" }, decodeAuthorizeUrl),
@@ -60,47 +70,59 @@ export function createNightlyClient(config: NightlyConfig | null, fetcher: Night
     };
 }
 
-/** Sends one authenticated JSON POST and turns the reply into a result without ever exposing the raw body. */
-async function callFunction<T>(
-    config: NightlyConfig | null,
-    fetcher: NightlyFetch,
-    path: string,
-    body: unknown,
-    decode: Decoder<T>,
-): Promise<NightlyResult<T>> {
-    if (config === null) return failure(0, "not_configured");
+/** Sends one call and turns the reply into a result, logging each failure once and never exposing the raw body. */
+async function callFunction<T>(transport: Transport, path: string, body: unknown, decode: Decoder<T>): Promise<NightlyResult<T>> {
+    const { log } = transport;
     let response: Response;
     try {
-        response = await fetcher(`${config.functionUrl}${path}`, {
-            method: "POST",
-            headers: {
-                accept: "application/json",
-                "content-type": "application/json",
-                [NIGHTLY_WEBSITE_KEY_HEADER]: config.websiteKey,
-            },
-            body: JSON.stringify(body),
-            cache: "no-store",
-            redirect: "manual",
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MILLISECONDS),
-        });
-    } catch {
+        response = await post(transport, path, body);
+    } catch (error) {
+        reportUnreachable(log, path, error);
         return failure(0, "unavailable");
     }
-    const parsed = await readJson(response);
-    if (!response.ok) return failure(response.status, errorCode(parsed, response.status));
-    const value = decode(parsed);
-    if (value === undefined) return failure(response.status, "invalid_response");
+    const read = await readJson(response);
+    if (!response.ok) {
+        const code = errorCode(read.readable ? read.body : undefined, response.status);
+        if (response.status >= SERVER_ERROR_STATUS) reportFailed(log, path, response.status, code);
+        return failure(response.status, code);
+    }
+    const value = read.readable ? decode(read.body) : undefined;
+    if (value === undefined) {
+        reportInvalidResponse(log, path);
+        return failure(response.status, "invalid_response");
+    }
     return { ok: true, value };
 }
 
-/** Parses a bounded JSON body; empty, oversized or malformed bodies read as undefined. */
-async function readJson(response: Response): Promise<unknown> {
+/** Sends the authenticated JSON POST to one contract route. */
+function post({ config, fetcher }: Transport, path: string, body: unknown): Promise<Response> {
+    return fetcher(`${config.functionUrl}${path}`, {
+        method: "POST",
+        headers: {
+            accept: "application/json",
+            "content-type": "application/json",
+            [WEBSITE_KEY_HEADER]: config.websiteKey,
+        },
+        body: JSON.stringify(body),
+        cache: "no-store",
+        redirect: "manual",
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MILLISECONDS),
+    });
+}
+
+/** Reads a response body; a stream that fails is reported as unreadable rather than read as empty. */
+async function readJson(response: Response): Promise<BodyRead> {
     let text: string;
     try {
         text = await response.text();
     } catch {
-        return undefined;
+        return { readable: false };
     }
+    return { readable: true, body: parseBoundedJson(text) };
+}
+
+/** Parses JSON text; empty, oversized or malformed text reads as undefined. */
+function parseBoundedJson(text: string): unknown {
     if (text.length === 0 || text.length > MAXIMUM_RESPONSE_BYTES) return undefined;
     try {
         return JSON.parse(text);
@@ -108,6 +130,9 @@ async function readJson(response: Response): Promise<unknown> {
         return undefined;
     }
 }
+
+/** The default logger: drops every entry. */
+function ignoreLog(): void {}
 
 /** Extracts the contract's `{error}` code, falling back to a status-derived code for anything unexpected. */
 function errorCode(body: unknown, status: number): string {
@@ -158,16 +183,12 @@ function decodePortalOutcome(body: Record<string, unknown>): OAuthOutcome | unde
     return { outcome: "portal", session: body.session, expires_in: expiresIn };
 }
 
-/** Validates a needs-sponsor outcome, bounding the identifiers carried to the claim form. */
+/** Validates a needs-sponsor outcome into the claim context the claim cookie carries to the claim form. */
 function decodeNeedsSponsor(body: Record<string, unknown>): OAuthOutcome | undefined {
     if (typeof body.device_id !== "string" || !DEVICE_ID_PATTERN.test(body.device_id)) return undefined;
     if (!isValidUsername(body.username)) return undefined;
-    return {
-        outcome: "needs-sponsor",
-        device_id: body.device_id,
-        username: body.username,
-        previous_sponsor_revoked: body.previous_sponsor_revoked === true,
-    };
+    const previousSponsorRevoked = body.previous_sponsor_revoked === true;
+    return { outcome: "needs-sponsor", claim: { deviceId: body.device_id, username: body.username, previousSponsorRevoked } };
 }
 
 /** Validates the claim success body. */
@@ -187,15 +208,10 @@ export function decodePortal(body: unknown): SponsorPortalData | undefined {
     return { seats, limit: body.limit };
 }
 
-/** Reads a seat timestamp given as Unix seconds or an ISO string. */
+/** Reads a seat timestamp sent as Unix seconds; anything else, or an out-of-range value, reads as unknown. */
 function seatDate(value: unknown): Date | null {
-    if (typeof value === "number") return validDate(new Date(value * 1000));
-    if (typeof value === "string") return validDate(new Date(value));
-    return null;
-}
-
-/** Returns the date, or null when it does not hold a real point in time. */
-function validDate(date: Date): Date | null {
+    if (typeof value !== "number") return null;
+    const date = new Date(value * 1000);
     if (Number.isNaN(date.getTime())) return null;
     return date;
 }

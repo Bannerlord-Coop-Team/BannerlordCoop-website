@@ -7,15 +7,16 @@ import {
     createCodeActionResult,
     loadPortalView,
     removeSeatActionResult,
-    submitClaim,
-    submitCreateCode,
-    submitRemoveSeat,
 } from "./flows";
 import { GENERIC_ERROR_MESSAGE, nightlyErrorMessage, nightlyErrorView, parseErrorContext, ROLE_REQUIRED_MESSAGE } from "./messages";
 
 const SESSION = "s".repeat(43);
 const CLAIM = { deviceId: "device-1", username: "friend", previousSponsorRevoked: false };
 const PORTAL = { seats: [{ discordUserId: "123456789012345678", createdAt: null }], limit: 10 };
+const CLAIM_REQUEST = { sameOrigin: true, claim: CLAIM };
+const SPONSOR_REQUEST = { sameOrigin: true, session: SESSION };
+const APPROVED = { clearCookie: "nightly_claim", redirectTo: "/nightly/approved?via=sponsor" };
+const EXPIRED = { clearCookie: "nightly_sponsor", redirectTo: "/nightly/sponsor?session=expired" };
 
 /** Builds a client stub whose methods fail loudly unless a test overrides them. */
 function stubClient(overrides: Partial<NightlyClient>): NightlyClient {
@@ -51,7 +52,7 @@ test("portal view: no session shows login, success shows seats, 401 clears once,
 test("claim sends the cookie's device and the normalized code, and maps every contract error", async () => {
     const calls: string[][] = [];
     const approve = stubClient({ claimSponsorship: async (device, code) => { calls.push([device, code]); return { ok: true, value: null }; } });
-    assert.deepEqual(await submitClaim(approve, CLAIM, "  ab2c-def3-gh45 "), { kind: "approved" });
+    assert.deepEqual(await claimActionResult(approve, CLAIM_REQUEST, "  ab2c-def3-gh45 "), APPROVED);
     assert.deepEqual(calls, [["device-1", "AB2C-DEF3-GH45"]]);
 
     const expected: Array<[number, string, string]> = [
@@ -64,38 +65,43 @@ test("claim sends the cookie's device and the normalized code, and maps every co
     ];
     for (const [status, code, message] of expected) {
         const client = stubClient({ claimSponsorship: async () => fail(status, code) });
-        assert.deepEqual(await submitClaim(client, CLAIM, "AAAA-BBBB-CCCC"), { kind: "error", message }, code);
+        assert.deepEqual(await claimActionResult(client, CLAIM_REQUEST, "AAAA-BBBB-CCCC"), { state: { error: message } }, code);
     }
 });
 
 test("claim rejects a missing claim cookie or an unusable code before calling the Edge Function", async () => {
     const client = stubClient({});
-    assert.deepEqual(await submitClaim(client, null, "AAAA-BBBB-CCCC"), { kind: "error", message: "That installer authorization has expired." });
+    const missing = await claimActionResult(client, { sameOrigin: true, claim: null }, "AAAA-BBBB-CCCC");
+    assert.deepEqual(missing, { state: { error: "That installer authorization has expired." } });
     for (const code of [null, "", "   ", "x".repeat(129)]) {
-        assert.deepEqual(await submitClaim(client, CLAIM, code), { kind: "error", message: "That sponsor code is not valid." });
+        assert.deepEqual(await claimActionResult(client, CLAIM_REQUEST, code), { state: { error: "That sponsor code is not valid." } });
     }
 });
 
-test("create code returns the code once, expires on 401 and maps other errors", async () => {
-    assert.deepEqual(await submitCreateCode(stubClient({}), null), { kind: "session-expired" });
+test("create code returns the code once, expires on 401 or a missing session and maps other errors", async () => {
+    assert.deepEqual(await createCodeActionResult(stubClient({}), { sameOrigin: true, session: null }), EXPIRED);
     const created = stubClient({ createSponsorCode: async () => ({ ok: true, value: "AB2C-DEF3-GH45" }) });
-    assert.deepEqual(await submitCreateCode(created, SESSION), { kind: "code", code: "AB2C-DEF3-GH45" });
-    assert.deepEqual(await submitCreateCode(stubClient({ createSponsorCode: async () => fail(401, "authorization_expired") }), SESSION), { kind: "session-expired" });
-    assert.deepEqual(await submitCreateCode(stubClient({ createSponsorCode: async () => fail(500, "internal_error") }), SESSION), { kind: "error", message: GENERIC_ERROR_MESSAGE });
+    assert.deepEqual(await createCodeActionResult(created, SPONSOR_REQUEST), { state: { code: "AB2C-DEF3-GH45", error: null } });
+    const expired = stubClient({ createSponsorCode: async () => fail(401, "authorization_expired") });
+    assert.deepEqual(await createCodeActionResult(expired, SPONSOR_REQUEST), EXPIRED);
+    const down = stubClient({ createSponsorCode: async () => fail(500, "internal_error") });
+    assert.deepEqual(await createCodeActionResult(down, SPONSOR_REQUEST), { state: { code: null, error: GENERIC_ERROR_MESSAGE } });
 });
 
-test("remove seat validates the Discord id, expires on 401 and maps 400", async () => {
+test("remove seat validates the Discord id, reloads on success, expires on 401 or a missing session and maps 400", async () => {
     const calls: string[][] = [];
     const removed = stubClient({ removeSponsoredAccount: async (session, id) => { calls.push([session, id]); return { ok: true, value: null }; } });
-    assert.deepEqual(await submitRemoveSeat(removed, SESSION, "123456789012345678"), { kind: "removed" });
+    assert.deepEqual(await removeSeatActionResult(removed, SPONSOR_REQUEST, "123456789012345678"), { clearCookie: null, redirectTo: "/nightly/sponsor" });
     assert.deepEqual(calls, [[SESSION, "123456789012345678"]]);
-    assert.deepEqual(await submitRemoveSeat(stubClient({}), null, "123456789012345678"), { kind: "session-expired" });
-    const invalid = nightlyErrorMessage("sponsor-remove", "invalid_request");
+    assert.deepEqual(await removeSeatActionResult(stubClient({}), { sameOrigin: true, session: null }, "123456789012345678"), EXPIRED);
+    const invalid = { state: { error: nightlyErrorMessage("sponsor-remove", "invalid_request") } };
     for (const bad of [null, "", "abc", "1234", "123456789012345678<"]) {
-        assert.deepEqual(await submitRemoveSeat(stubClient({}), SESSION, bad), { kind: "error", message: invalid });
+        assert.deepEqual(await removeSeatActionResult(stubClient({}), SPONSOR_REQUEST, bad), invalid);
     }
-    assert.deepEqual(await submitRemoveSeat(stubClient({ removeSponsoredAccount: async () => fail(401, "authorization_expired") }), SESSION, "123456789012345678"), { kind: "session-expired" });
-    assert.deepEqual(await submitRemoveSeat(stubClient({ removeSponsoredAccount: async () => fail(400, "http_400") }), SESSION, "123456789012345678"), { kind: "error", message: invalid });
+    const expired = stubClient({ removeSponsoredAccount: async () => fail(401, "authorization_expired") });
+    assert.deepEqual(await removeSeatActionResult(expired, SPONSOR_REQUEST, "123456789012345678"), EXPIRED);
+    const rejected = stubClient({ removeSponsoredAccount: async () => fail(400, "http_400") });
+    assert.deepEqual(await removeSeatActionResult(rejected, SPONSOR_REQUEST, "123456789012345678"), invalid);
 });
 
 test("error messages use the gateway's wording per step and never echo the code", () => {
@@ -103,8 +109,7 @@ test("error messages use the gateway's wording per step and never echo the code"
     assert.equal(nightlyErrorMessage("activate", "expired"), "That installer code has expired.");
     assert.equal(nightlyErrorMessage("callback", "invalid_request"), "Discord sign-in could not be verified.");
     assert.equal(nightlyErrorMessage("callback", "expired"), "That installer authorization has expired.");
-    assert.equal(nightlyErrorMessage("callback", "migration_in_progress"), "Nightly access is briefly paused while account data is moved. Try again in a few minutes.");
-    for (const code of ["discord_membership_required", "unavailable", "not_configured", "constructor", "__proto__", "<b>x</b>"]) {
+    for (const code of ["discord_membership_required", "migration_in_progress", "unavailable", "not_configured", "constructor", "__proto__", "<b>x</b>"]) {
         assert.equal(nightlyErrorMessage("callback", code), GENERIC_ERROR_MESSAGE, code);
     }
     assert.deepEqual(nightlyErrorView("callback", "supporter_role_required"), { message: ROLE_REQUIRED_MESSAGE, help: "sponsor-code" });
@@ -146,39 +151,8 @@ test("claim action refuses a cross-origin post without calling the Edge Function
     assert.deepEqual(result, { state: { error: GENERIC_ERROR_MESSAGE } });
 });
 
-test("claim action clears the claim cookie and redirects after a successful claim, and re-renders errors", async () => {
-    const approve = stubClient({ claimSponsorship: async () => ({ ok: true, value: null }) });
-    assert.deepEqual(await claimActionResult(approve, { sameOrigin: true, claim: CLAIM }, "AAAA-BBBB-CCCC"), {
-        clearCookie: "nightly_claim", redirectTo: "/nightly/approved?via=sponsor",
-    });
-    const full = stubClient({ claimSponsorship: async () => fail(409, "seats_full") });
-    assert.deepEqual(await claimActionResult(full, { sameOrigin: true, claim: CLAIM }, "AAAA-BBBB-CCCC"), {
-        state: { error: nightlyErrorMessage("claim", "seats_full") },
-    });
-});
-
 test("sponsor actions refuse cross-origin posts without calling the Edge Function", async () => {
     const request = { sameOrigin: false, session: SESSION };
     assert.deepEqual(await createCodeActionResult(stubClient({}), request), { state: { code: null, error: GENERIC_ERROR_MESSAGE } });
     assert.deepEqual(await removeSeatActionResult(stubClient({}), request, "123456789012345678"), { state: { error: GENERIC_ERROR_MESSAGE } });
-});
-
-test("an expired sponsor session clears the sponsor cookie and returns to the expired login prompt", async () => {
-    const expired = { clearCookie: "nightly_sponsor", redirectTo: "/nightly/sponsor?session=expired" };
-    const rejected = stubClient({ createSponsorCode: async () => fail(401, "authorization_expired"), removeSponsoredAccount: async () => fail(401, "authorization_expired") });
-    assert.deepEqual(await createCodeActionResult(rejected, { sameOrigin: true, session: SESSION }), expired);
-    assert.deepEqual(await removeSeatActionResult(rejected, { sameOrigin: true, session: SESSION }, "123456789012345678"), expired);
-    assert.deepEqual(await createCodeActionResult(stubClient({}), { sameOrigin: true, session: null }), expired);
-});
-
-test("sponsor actions return the new code, reload after a removal and re-render errors", async () => {
-    const client = stubClient({
-        createSponsorCode: async () => ({ ok: true, value: "AB2C-DEF3-GH45" }),
-        removeSponsoredAccount: async () => ({ ok: true, value: null }),
-    });
-    const request = { sameOrigin: true, session: SESSION };
-    assert.deepEqual(await createCodeActionResult(client, request), { state: { code: "AB2C-DEF3-GH45", error: null } });
-    assert.deepEqual(await removeSeatActionResult(client, request, "123456789012345678"), { clearCookie: null, redirectTo: "/nightly/sponsor" });
-    const invalid = nightlyErrorMessage("sponsor-remove", "invalid_request");
-    assert.deepEqual(await removeSeatActionResult(client, request, "bad"), { state: { error: invalid } });
 });

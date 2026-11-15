@@ -1,29 +1,24 @@
-import type { NightlyFetch } from "./client";
-
-/** A structured log sink; entries never carry secret values. */
-export type NightlyLogger = (entry: Record<string, string>) => void;
+/** A structured log sink; entries name routes, statuses and codes, never bodies or secret values. */
+export type NightlyLogger = (entry: Readonly<Record<string, string | number>>) => void;
 
 /** Logs that the Edge Function settings are missing or invalid, naming no values. */
 export function reportConfigInvalid(log: NightlyLogger): void {
     log({ event: "nightly_config_invalid" });
 }
 
-/** Wraps a fetcher so a network error or timeout is logged with the route path and error name, then rethrown. */
-export function loggingFetch(fetcher: NightlyFetch, functionUrl: string, log: NightlyLogger): NightlyFetch {
-    return async (input, init) => {
-        try {
-            return await fetcher(input, init);
-        } catch (error) {
-            log({ event: "nightly_function_unreachable", path: routePath(input, functionUrl), error: errorName(error) });
-            throw error;
-        }
-    };
+/** Logs a call that got no response (network error or timeout) with the error's class name only. */
+export function reportUnreachable(log: NightlyLogger, path: string, error: unknown): void {
+    log({ event: "nightly_function_unreachable", path, error: errorName(error) });
 }
 
-/** The contract route of a call URL, without the function URL's project host. */
-function routePath(input: string, functionUrl: string): string {
-    if (!input.startsWith(functionUrl)) return "unknown";
-    return input.slice(functionUrl.length);
+/** Logs a server-side failure status with its sanitized error code. */
+export function reportFailed(log: NightlyLogger, path: string, status: number, code: string): void {
+    log({ event: "nightly_function_failed", path, status, code });
+}
+
+/** Logs a success reply whose body could not be read or does not match the contract. */
+export function reportInvalidResponse(log: NightlyLogger, path: string): void {
+    log({ event: "nightly_function_invalid_response", path });
 }
 
 /** The error's class name only; messages can echo URLs or upstream text. */

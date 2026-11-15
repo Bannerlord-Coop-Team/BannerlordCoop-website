@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createNightlyClient, decodeOAuthOutcome, decodePortal, type NightlyFetch } from "./client";
 import { readNightlyConfig } from "./config";
+import type { NightlyLogger } from "./diagnostics";
 
 const config = { functionUrl: "https://project.supabase.co/functions/v1/nightly-gateway", websiteKey: "website-key-value" };
 const SESSION = "A".repeat(43);
+const DEVICE_ID = "7c9e6679-7425-40de-944b-e07fc1f90ae7";
 
 type Captured = { url: string; init: RequestInit };
 
@@ -76,6 +78,48 @@ test("network failures, missing configuration and contract-breaking success bodi
     assert.deepEqual(await createNightlyClient(config, fetch).createSponsorCode(SESSION), { ok: false, status: 200, code: "invalid_response" });
 });
 
+/** Builds a logger that records every entry it is given. */
+function recordingLogger(): { log: NightlyLogger; entries: Array<Readonly<Record<string, string | number>>> } {
+    const entries: Array<Readonly<Record<string, string | number>>> = [];
+    return { log: (entry) => entries.push(entry), entries };
+}
+
+test("each failed call is logged once with its route, never with bodies or secrets", async () => {
+    const unreachable = recordingLogger();
+    const timingOut: NightlyFetch = async () => { throw new DOMException(`timed out ${config.websiteKey}`, "TimeoutError"); };
+    assert.deepEqual(await createNightlyClient(config, timingOut, unreachable.log).sponsorPortal(SESSION), { ok: false, status: 0, code: "unavailable" });
+    assert.deepEqual(unreachable.entries, [{ event: "nightly_function_unreachable", path: "/sponsor/portal", error: "TimeoutError" }]);
+
+    const failed = recordingLogger();
+    const serverError = fakeFetch(503, { error: "discord_unavailable", detail: SESSION });
+    assert.deepEqual(await createNightlyClient(config, serverError.fetch, failed.log).createSponsorCode(SESSION), { ok: false, status: 503, code: "discord_unavailable" });
+    assert.deepEqual(failed.entries, [{ event: "nightly_function_failed", path: "/sponsor/code", status: 503, code: "discord_unavailable" }]);
+
+    const invalid = recordingLogger();
+    const breaking = fakeFetch(200, { code: "not-a-sponsor-code" });
+    assert.deepEqual(await createNightlyClient(config, breaking.fetch, invalid.log).createSponsorCode(SESSION), { ok: false, status: 200, code: "invalid_response" });
+    assert.deepEqual(invalid.entries, [{ event: "nightly_function_invalid_response", path: "/sponsor/code" }]);
+
+    const logged = JSON.stringify([unreachable.entries, failed.entries, invalid.entries]);
+    assert.ok(!logged.includes(config.websiteKey) && !logged.includes(SESSION), logged);
+});
+
+test("a success reply whose body cannot be read is an invalid response, not an empty success", async () => {
+    const { log, entries } = recordingLogger();
+    const brokenStream = new ReadableStream({ start: (controller) => controller.error(new TypeError("stream reset")) });
+    const breaking: NightlyFetch = async () => new Response(brokenStream, { status: 200 });
+    const result = await createNightlyClient(config, breaking, log).removeSponsoredAccount(SESSION, "123456789012345678");
+    assert.deepEqual(result, { ok: false, status: 200, code: "invalid_response" });
+    assert.deepEqual(entries, [{ event: "nightly_function_invalid_response", path: "/sponsor/remove" }]);
+});
+
+test("client errors are not logged: they are expected outcomes the pages explain", async () => {
+    const { log, entries } = recordingLogger();
+    const expired = fakeFetch(401, { error: "authorization_expired" });
+    await createNightlyClient(config, expired.fetch, log).sponsorPortal(SESSION);
+    assert.deepEqual(entries, []);
+});
+
 test("authorize URLs must point at Discord's OAuth authorize endpoint", async () => {
     const good = "https://discord.com/oauth2/authorize?client_id=1&state=abc";
     const ok = await createNightlyClient(config, fakeFetch(200, { authorize_url: good }).fetch).startDeviceOAuth("ABCD-EF23");
@@ -99,20 +143,23 @@ test("OAuth outcomes decode exactly the four contract shapes", () => {
     assert.deepEqual(decodeOAuthOutcome({ outcome: "approved" }), { outcome: "approved" });
     assert.deepEqual(decodeOAuthOutcome({ outcome: "sponsored-approved", extra: 1 }), { outcome: "sponsored-approved" });
     assert.deepEqual(
-        decodeOAuthOutcome({ outcome: "needs-sponsor", device_id: "7c9e6679-7425-40de-944b-e07fc1f90ae7", username: "friend", previous_sponsor_revoked: true }),
-        { outcome: "needs-sponsor", device_id: "7c9e6679-7425-40de-944b-e07fc1f90ae7", username: "friend", previous_sponsor_revoked: true },
+        decodeOAuthOutcome({ outcome: "needs-sponsor", device_id: DEVICE_ID, username: "friend", previous_sponsor_revoked: true }),
+        { outcome: "needs-sponsor", claim: { deviceId: DEVICE_ID, username: "friend", previousSponsorRevoked: true } },
     );
-    assert.equal(decodeOAuthOutcome({ outcome: "needs-sponsor", device_id: "x", username: "friend" })?.outcome, "needs-sponsor");
+    assert.deepEqual(
+        decodeOAuthOutcome({ outcome: "needs-sponsor", device_id: DEVICE_ID, username: "friend" }),
+        { outcome: "needs-sponsor", claim: { deviceId: DEVICE_ID, username: "friend", previousSponsorRevoked: false } },
+    );
     assert.deepEqual(decodeOAuthOutcome({ outcome: "portal", session: SESSION, expires_in: 86400 }), { outcome: "portal", session: SESSION, expires_in: 86400 });
     assert.deepEqual(decodeOAuthOutcome({ outcome: "portal", session: SESSION, expires_in: 3600.9 }), { outcome: "portal", session: SESSION, expires_in: 3600 });
     const portalExpiring = (expiresIn: unknown) => ({ outcome: "portal", session: SESSION, ...(expiresIn === undefined ? {} : { expires_in: expiresIn }) });
     const badPortals = [undefined, null, "86400", 0, -5, 0.5, Number.NaN, Number.POSITIVE_INFINITY, 1e300].map(portalExpiring);
-    for (const bad of [null, [], { outcome: "unknown" }, { outcome: "portal", session: "short", expires_in: 86400 }, ...badPortals, { outcome: "needs-sponsor", device_id: "bad id!", username: "x" }, { outcome: "needs-sponsor", device_id: "d", username: "" }, { outcome: "needs-sponsor", device_id: "d", username: "x".repeat(101) }]) {
+    for (const bad of [null, [], { outcome: "unknown" }, { outcome: "portal", session: "short", expires_in: 86400 }, ...badPortals, { outcome: "needs-sponsor", device_id: "bad id!", username: "x" }, { outcome: "needs-sponsor", device_id: "device-1", username: "x" }, { outcome: "needs-sponsor", device_id: DEVICE_ID.toUpperCase(), username: "x" }, { outcome: "needs-sponsor", device_id: DEVICE_ID, username: "" }, { outcome: "needs-sponsor", device_id: DEVICE_ID, username: "x".repeat(101) }]) {
         assert.equal(decodeOAuthOutcome(bad), undefined, JSON.stringify(bad));
     }
 });
 
-test("portal seats keep valid snowflakes, accept second or ISO timestamps and drop malformed rows", () => {
+test("portal seats keep valid snowflakes, read epoch-second timestamps and drop malformed rows", () => {
     const portal = decodePortal({
         limit: 10,
         seats: [
@@ -127,7 +174,7 @@ test("portal seats keep valid snowflakes, accept second or ISO timestamps and dr
         limit: 10,
         seats: [
             { discordUserId: "123456789012345678", createdAt: new Date(1_700_000_000_000) },
-            { discordUserId: "223456789012345678", createdAt: new Date("2026-11-01T10:00:00Z") },
+            { discordUserId: "223456789012345678", createdAt: null },
             { discordUserId: "323456789012345678", createdAt: null },
         ],
     });

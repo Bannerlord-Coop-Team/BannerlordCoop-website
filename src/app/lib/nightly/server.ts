@@ -1,8 +1,9 @@
 import "server-only";
 import { createNightlyClient, type NightlyClient, type NightlyFetch } from "./client";
 import { readNightlyConfig } from "./config";
-import { loggingFetch, reportConfigInvalid, type NightlyLogger } from "./diagnostics";
+import { reportConfigInvalid, type NightlyLogger } from "./diagnostics";
 
+// Wrapped rather than passed bare: Workers throw "Illegal invocation" when fetch is called with a foreign `this`.
 const globalFetch: NightlyFetch = (input, init) => fetch(input, init);
 const logError: NightlyLogger = (entry) => console.error(entry);
 
@@ -13,9 +14,6 @@ export function getNightlyClient(): NightlyClient {
         NIGHTLY_WEBSITE_KEY: process.env.NIGHTLY_WEBSITE_KEY,
         NODE_ENV: process.env.NODE_ENV,
     });
-    if (config === null) {
-        reportConfigInvalid(logError);
-        return createNightlyClient(null, globalFetch);
-    }
-    return createNightlyClient(config, loggingFetch(globalFetch, config.functionUrl, logError));
+    if (config === null) reportConfigInvalid(logError);
+    return createNightlyClient(config, globalFetch, logError);
 }
