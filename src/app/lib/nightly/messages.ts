@@ -1,16 +1,18 @@
 import { SPONSORED_ACCOUNT_LIMIT } from "../../../../supabase/functions/_shared/nightly/policy";
 
-/** Where an Edge Function error surfaced; the same code can need different wording per step. */
-export type NightlyErrorContext = "activate" | "callback" | "claim" | "sponsor-login" | "sponsor-code" | "sponsor-remove";
+/** Every step an Edge Function error can surface in; the same code can need different wording per step. */
+export const NIGHTLY_ERROR_CONTEXTS = [
+    "activate", "callback", "claim", "sponsor-login", "sponsor-code", "sponsor-remove",
+] as const;
+
+/** Where an Edge Function error surfaced. */
+export type NightlyErrorContext = (typeof NIGHTLY_ERROR_CONTEXTS)[number];
 
 /** Optional help panel shown under an error message. */
 export type NightlyErrorHelp = "sponsor-code" | null;
 
+/** The canned message and optional help panel the error page renders. */
 export type NightlyErrorView = { message: string; help: NightlyErrorHelp };
-
-export const NIGHTLY_ERROR_CONTEXTS: readonly NightlyErrorContext[] = [
-    "activate", "callback", "claim", "sponsor-login", "sponsor-code", "sponsor-remove",
-];
 
 /** The Discord roles that qualify for nightly access, as every nightly page spells them. */
 export const QUALIFYING_ROLES_TEXT = "Staff, Tester, Patreon, Boosty, or Afdian";
@@ -18,7 +20,7 @@ export const GENERIC_ERROR_MESSAGE = "Access could not be verified. Run the inst
 export const ROLE_REQUIRED_MESSAGE = `A ${QUALIFYING_ROLES_TEXT} role is required.`;
 export const INSTALLER_AUTHORIZATION_EXPIRED_MESSAGE = "That installer authorization has expired.";
 
-// Copy comes from the retired Worker pages (nightly-gateway/src/index.ts) so users see the same wording.
+// Copy was carried over from the former Worker pages so users see the same wording.
 const CONTEXT_MESSAGES: Record<NightlyErrorContext, Readonly<Record<string, string>>> = {
     activate: {
         invalid_code: "That installer code is invalid.",
@@ -42,7 +44,6 @@ const CONTEXT_MESSAGES: Record<NightlyErrorContext, Readonly<Record<string, stri
     },
     "sponsor-remove": {
         invalid_request: "That sponsored account could not be removed. Reload the page and try again.",
-        http_400: "That sponsored account could not be removed. Reload the page and try again.",
         supporter_role_required: ROLE_REQUIRED_MESSAGE,
     },
 };
@@ -58,8 +59,14 @@ export function nightlyErrorView(context: NightlyErrorContext, code: string): Ni
     return { message: nightlyErrorMessage(context, code), help };
 }
 
-/** Narrows untrusted query input to a known error context. */
-export function parseErrorContext(value: string | undefined): NightlyErrorContext | null {
+/** Resolves the error page's view from its query; an unknown context or a repeated code gets the generic message. */
+export function nightlyErrorViewFor(context: NightlyErrorContext | null, code: string | string[] | undefined): NightlyErrorView {
+    if (context === null) return { message: GENERIC_ERROR_MESSAGE, help: null };
+    return nightlyErrorView(context, typeof code === "string" ? code : "");
+}
+
+/** Narrows an untrusted query value (repeated or missing values included) to a known error context. */
+export function parseErrorContext(value: string | string[] | undefined): NightlyErrorContext | null {
     return NIGHTLY_ERROR_CONTEXTS.find((context) => context === value) ?? null;
 }
 

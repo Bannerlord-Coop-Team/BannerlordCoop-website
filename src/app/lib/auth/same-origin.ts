@@ -1,6 +1,7 @@
 /**
  * How much proof of origin a request must carry. `request` (route handlers) also accepts direct navigations
- * (`Sec-Fetch-Site: none`) and Origin-less requests; `submission` (server-action form posts) accepts neither.
+ * (`Sec-Fetch-Site: none`) and Origin-less requests; `submission` (server-action form posts) refuses direct
+ * navigations and needs `Sec-Fetch-Site: same-origin` or an Origin on the served host.
  */
 type OriginStrictness = "request" | "submission";
 
@@ -29,6 +30,7 @@ function fromThisSite(headers: Headers, isServedOrigin: (origin: string) => bool
     const siteAllowed = site === null || site === "same-origin" || (lenient && site === "none");
     if (!siteAllowed) return false;
     const origin = headers.get("origin");
+    // Without an Origin, a route-handler request passes, and a submission passes only on Fetch Metadata `same-origin`.
     if (origin === null) return lenient || site === "same-origin";
     return isServedOrigin(origin);
 }

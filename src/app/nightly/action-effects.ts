@@ -11,9 +11,11 @@ export async function submittedFromThisSite(): Promise<boolean> {
     return sameOriginSubmission(requestHeaders, servedHost(requestHeaders));
 }
 
-/** Carries out a flow's decision: returns the form state, or clears the named cookie and redirects. */
+/** Carries out a flow's decision: returns the form state, or sets the plan's cookies and redirects. */
 export async function carryOut<State>(result: ActionResult<State>): Promise<State> {
     if ("state" in result) return result.state;
-    if (result.clearCookie !== null) (await cookies()).set(result.clearCookie, "", nightlyCookieOptions(0));
-    redirect(result.redirectTo);
+    const plan = result.redirect;
+    const jar = await cookies();
+    for (const cookie of plan.cookies) jar.set(cookie.name, cookie.value, nightlyCookieOptions(cookie.maxAge));
+    redirect(plan.location);
 }

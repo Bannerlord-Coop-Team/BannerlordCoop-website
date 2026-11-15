@@ -1,6 +1,6 @@
 import {
     DEVICE_ID_PATTERN,
-    DISCORD_SNOWFLAKE_PATTERN,
+    isDiscordSnowflake,
     SPONSOR_CODE_PATTERN,
     WEBSITE_KEY_HEADER,
 } from "../../../../supabase/functions/_shared/nightly/formats";
@@ -37,6 +37,8 @@ export type NightlyClient = {
 const MAXIMUM_RESPONSE_BYTES = 64 * 1024;
 const REQUEST_TIMEOUT_MILLISECONDS = 15_000;
 const SERVER_ERROR_STATUS = 500;
+const UNAUTHORIZED_STATUS = 401;
+const SESSION_REJECTION_PREFIX = "authorization_";
 const DISCORD_AUTHORIZE_ORIGIN = "https://discord.com";
 const DISCORD_AUTHORIZE_PATHS = new Set(["/oauth2/authorize", "/api/oauth2/authorize", "/api/v10/oauth2/authorize"]);
 
@@ -83,7 +85,7 @@ async function callFunction<T>(transport: Transport, path: string, body: unknown
     const read = await readJson(response);
     if (!response.ok) {
         const code = errorCode(read.readable ? read.body : undefined, response.status);
-        if (response.status >= SERVER_ERROR_STATUS) reportFailed(log, path, response.status, code);
+        if (isOperatorFailure(response.status, code)) reportFailed(log, path, response.status, code);
         return failure(response.status, code);
     }
     const value = read.readable ? decode(read.body) : undefined;
@@ -129,6 +131,15 @@ function parseBoundedJson(text: string): unknown {
     } catch {
         return undefined;
     }
+}
+
+/**
+ * Whether a failure needs an operator: a server error, or a 401 that rejects the website key itself (such as
+ * `unauthorized`) rather than a user's session (`authorization_*`), which the pages explain instead.
+ */
+function isOperatorFailure(status: number, code: string): boolean {
+    if (status >= SERVER_ERROR_STATUS) return true;
+    return status === UNAUTHORIZED_STATUS && !code.startsWith(SESSION_REJECTION_PREFIX);
 }
 
 /** The default logger: drops every entry. */
@@ -200,8 +211,7 @@ function decodeSponsoredApproval(body: unknown): null | undefined {
 export function decodePortal(body: unknown): SponsorPortalData | undefined {
     if (!isRecord(body) || !Array.isArray(body.seats)) return undefined;
     const seats = body.seats.flatMap((seat): SponsorSeat[] => {
-        if (!isRecord(seat) || typeof seat.discord_user_id !== "string") return [];
-        if (!DISCORD_SNOWFLAKE_PATTERN.test(seat.discord_user_id)) return [];
+        if (!isRecord(seat) || !isDiscordSnowflake(seat.discord_user_id)) return [];
         return [{ discordUserId: seat.discord_user_id, createdAt: seatDate(seat.created_at) }];
     });
     return { seats };

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { NightlyClient, NightlyResult, OAuthOutcome } from "./client";
 import { decodeClaimContext, encodeClaimContext, readSponsorSession } from "./cookies";
-import { planActivate, planCallback, planOutcome, planSponsorLogin, planSponsorLogout, redirectResponse } from "./routes";
+import { planActivate, planCallback, planOutcome, planSponsorLogin, redirectResponse } from "./routes";
 
 const SESSION = "s".repeat(43);
 const STATE = "t".repeat(43);
@@ -80,13 +80,6 @@ test("each OAuth outcome maps to its page and cookies, and the sponsor cookie li
     assert.equal(cookie!.maxAge, 600);
     assert.match(cookie!.value, /^[A-Za-z0-9_-]+$/u);
     assert.deepEqual(decodeClaimContext(cookie!.value), claim);
-});
-
-test("logout expires the sponsor cookie and marks the login prompt as expired", () => {
-    assert.deepEqual(planSponsorLogout(), {
-        location: "/nightly/sponsor?session=expired",
-        cookies: [{ name: "nightly_sponsor", value: "", maxAge: 0 }],
-    });
 });
 
 test("redirect responses are no-store 302s on the request origin that set every cookie with the nightly attributes", () => {

@@ -120,6 +120,14 @@ test("client errors are not logged: they are expected outcomes the pages explain
     assert.deepEqual(entries, []);
 });
 
+test("a rejected website key is logged so it does not pass for an expired session", async () => {
+    const { log, entries } = recordingLogger();
+    const rejected = fakeFetch(401, { error: "unauthorized" });
+    const result = await createNightlyClient(config, rejected.fetch, log).sponsorPortal(SESSION);
+    assert.deepEqual(result, { ok: false, status: 401, code: "unauthorized" });
+    assert.deepEqual(entries, [{ event: "nightly_function_failed", path: "/sponsor/portal", status: 401, code: "unauthorized" }]);
+});
+
 test("authorize URLs must point at Discord's OAuth authorize endpoint", async () => {
     const good = "https://discord.com/oauth2/authorize?client_id=1&state=abc";
     const ok = await createNightlyClient(config, fakeFetch(200, { authorize_url: good }).fetch).startDeviceOAuth("ABCD-EF23");
