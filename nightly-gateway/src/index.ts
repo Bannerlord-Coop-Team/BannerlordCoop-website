@@ -871,7 +871,21 @@ async function serveManifest(request: Request, env: Env, clientOnly: boolean): P
             fallback: clientOnly,
         }));
         try {
-            validated = await readLegacyNightlyManifest(env, clientOnly);
+            if (clientOnly) {
+                const release = validateLegacyNightlyReleaseManifest(
+                    await readLegacyJson(env, "nightly/release.json", 128 * 1024),
+                    env.LEGACY_R2_ORIGIN,
+                    env.PUBLIC_ORIGIN,
+                );
+                validated = projectLegacyReleaseClient(
+                    release,
+                    await tryReadLegacyNightlyClientManifest(env),
+                    env.LEGACY_R2_ORIGIN,
+                    env.PUBLIC_ORIGIN,
+                );
+            } else {
+                validated = await readLegacyNightlyManifest(env, false);
+            }
             if (clientOnly) {
                 console.error(JSON.stringify({
                     event: "nightly_legacy_client_fallback_served",
@@ -916,13 +930,17 @@ async function readHeaderlessNightlyClientManifest(env: Env): Promise<JsonObject
         return projectPublicationClientAsLegacy(publication, env.LEGACY_R2_ORIGIN, env.PUBLIC_ORIGIN);
     }
 
-    const legacyClient = await readLegacyNightlyClientManifest(env);
     const legacyRelease = validateLegacyNightlyReleaseManifest(
         await readLegacyJson(env, "nightly/release.json", 128 * 1024),
         env.LEGACY_R2_ORIGIN,
         env.PUBLIC_ORIGIN,
     );
-    return projectLegacyReleaseClient(legacyRelease, legacyClient, env.LEGACY_R2_ORIGIN, env.PUBLIC_ORIGIN);
+    return projectLegacyReleaseClient(
+        legacyRelease,
+        await tryReadLegacyNightlyClientManifest(env),
+        env.LEGACY_R2_ORIGIN,
+        env.PUBLIC_ORIGIN,
+    );
 }
 
 async function tryReadLegacyNightlyClientManifest(env: Env): Promise<JsonObject | null> {
@@ -960,7 +978,7 @@ function projectPublicationClientAsLegacy(
 
 function projectLegacyReleaseClient(
     release: JsonObject,
-    metadata: JsonObject,
+    metadata: JsonObject | null,
     legacyOrigin: string,
     gatewayOrigin: string,
 ): JsonObject {
@@ -969,8 +987,8 @@ function projectLegacyReleaseClient(
         releaseDate: release.releaseDate,
         headSha: release.headSha,
         baseSha: null,
-        workflowRunId: metadata.workflowRunId,
-        builtAt: metadata.builtAt,
+        ...(metadata?.headSha === release.headSha ? { workflowRunId: metadata.workflowRunId } : {}),
+        builtAt: metadata?.headSha === release.headSha ? metadata.builtAt : release.builtAt,
         client: release.client,
     }, legacyOrigin, gatewayOrigin);
 }

@@ -239,7 +239,7 @@ test("client and release routes fall back only to a validated legacy pair", asyn
     });
     assert.ok(logs.some((line) => line.includes('"event":"nightly_legacy_client_fallback_served"')));
     assert.ok(logs.some((line) => line.includes('"event":"nightly_legacy_release_fallback_served"')));
-    assert.deepEqual(objects, [value.pointer.manifest.key, "nightly/client.json", value.pointer.manifest.key, "nightly/release.json", "nightly/client.json"]);
+    assert.deepEqual(objects, [value.pointer.manifest.key, "nightly/release.json", "nightly/client.json", value.pointer.manifest.key, "nightly/release.json", "nightly/client.json"]);
 });
 
 test("client fallback accepts the producer's null baseSha legacy shape", async () => {
@@ -410,6 +410,55 @@ test("the client route fails closed when the paired publication is unavailable",
         headers: { authorization: `Bearer ${"n".repeat(43)}` },
     }), env);
     assert.equal(response.status, 503);
+});
+
+test("v2 client fallback never serves a legacy client ahead of the release pair", async (context) => {
+    const value = fixture();
+    const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+    const legacyRelease = JSON.parse(await readFile(new URL("../fixtures/legacy-release-2026-11-04.json", import.meta.url), "utf8")) as Record<string, unknown>;
+    const aheadClient = {
+        version: 1, releaseDate: "2026-11-14", headSha: "d".repeat(40), baseSha: null,
+        workflowRunId: 99999999999, builtAt: "2026-11-15T00:00:00Z",
+        client: { ...(legacyRelease.client as Record<string, unknown>), sha256: "e".repeat(64), key: `nightly/clients/${"d".repeat(40)}/${"e".repeat(64)}/Coop.7z` },
+    };
+    const bytes = (value: unknown) => {
+        const data = Buffer.from(JSON.stringify(value));
+        return { size: data.byteLength, body: new Response(data).body!, arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) };
+    };
+    const env = {
+        DB: { prepare(sql: string) { return { bind() { return { async first() { return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null; } }; } }; }, async batch() { throw new Error("read-only"); } },
+        PUBLIC_RELEASES: { async get() { return bytes(value.pointerBytes); } },
+        RELEASES: { async get(key: string) { if (key === value.pointer.manifest.key) return null; if (key === "nightly/release.json") return bytes(legacyRelease); if (key === "nightly/client.json") return bytes(aheadClient); return null; } },
+        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
+        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32), DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+    } as unknown as Env;
+    context.mock.method(globalThis, "fetch", value.fetcher);
+    const response = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, {
+        headers: { authorization: `Bearer ${"n".repeat(43)}`, "x-bannerlord-coop-nightly-version": "2" },
+    }), env);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json() as { headSha: string }).headSha, legacyRelease.headSha);
+});
+
+test("a complete release pair remains available when the legacy client object is missing", async (context) => {
+    const value = fixture();
+    const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+    const legacyRelease = JSON.parse(await readFile(new URL("../fixtures/legacy-release-2026-11-04.json", import.meta.url), "utf8")) as Record<string, unknown>;
+    const bytes = (data: Uint8Array) => ({ size: data.byteLength, body: new Response(data).body!, arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) });
+    const releaseBytes = Buffer.from(JSON.stringify(legacyRelease));
+    const env = {
+        DB: { prepare(sql: string) { return { bind() { return { async first() { return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null; } }; } }; }, async batch() { throw new Error("read-only"); } },
+        PUBLIC_RELEASES: { async get() { return null; } },
+        RELEASES: { async get(key: string) { return key === "nightly/release.json" ? bytes(releaseBytes) : null; } },
+        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
+        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32), DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+    } as unknown as Env;
+    context.mock.method(globalThis, "fetch", value.fetcher);
+    const response = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, {
+        headers: { authorization: `Bearer ${"n".repeat(43)}` },
+    }), env);
+    assert.equal(response.status, 200);
+    assert.equal((await response.json() as { headSha: string }).headSha, legacyRelease.headSha);
 });
 
 test("accepts the production-shaped legacy release fixture and rejects missing artifact keys", async () => {
