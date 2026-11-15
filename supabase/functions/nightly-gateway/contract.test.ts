@@ -25,6 +25,9 @@ import {
 // in-process to the real Edge handler over PGlite with the gateway migrations, so both sides of each contract are
 // checked together.
 
+// Discards the client's failure logs; these tests assert the decoded results instead.
+const noLog = (): void => {};
+
 const FUNCTION_URL = "https://wfvqnijwuyqjibhlcrhz.supabase.co/functions/v1/nightly-gateway";
 /**
  * The Worker's entry module. It is imported at run time from a non-literal specifier so the website's `tsc` never
@@ -80,6 +83,7 @@ test("the website client drives device sign-in, a sponsor claim and the sponsor 
     const client = createNightlyClient(
         { functionUrl: FUNCTION_URL, websiteKey: WEBSITE_KEY },
         (url, init) => handler(new Request(url, init)),
+        noLog,
     );
     const created = await body(await handler(installerRequest("/v1/device/sessions", "client=installer")));
 
@@ -125,6 +129,7 @@ test("the website client decodes a wrong website key as the gateway's 401", asyn
     const client = createNightlyClient(
         { functionUrl: FUNCTION_URL, websiteKey: "x".repeat(48) },
         (url, init) => handler(new Request(url, init)),
+        noLog,
     );
     assert.deepEqual(await client.startSponsorOAuth(), { ok: false, status: 401, code: "unauthorized" });
 });
