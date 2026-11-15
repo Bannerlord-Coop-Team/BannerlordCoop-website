@@ -12,21 +12,6 @@
   "include": [
     "worker-configuration.d.ts",
     "secrets.d.ts",
-    "src/index.ts",
-    "src/artifact-keys.ts",
-    "src/origins.ts",
-    "src/pin-rules.ts",
-    "src/manifest-rules.ts",
-    "src/database.ts",
-    "src/forwarding.ts",
-    "src/redirects.ts",
-    "src/publication.ts",
-    "src/http.ts",
-    "src/pins.ts",
-    "src/pages.ts",
-    "src/manifests.ts",
-    "src/artifacts.ts",
-    "src/downloads.ts",
-    "src/primitives.ts"
+    "src/index.ts"
   ]
 }
