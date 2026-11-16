@@ -13,7 +13,8 @@ import {
 } from "@/app/components/servers/ManagedServerPollingProvider";
 import { cancelManagedServerStart, operateManagedServer, readManagedServerStartStatus, setManagedServerPassword } from "@/app/servers/managed-server-actions";
 import { ServerUpdateProgress } from "./ServerUpdateProgress";
-import { useServerUpdateProgress } from "./use-server-update-progress";
+import { useServerUpdateProgress, type UpdateProgressError } from "./use-server-update-progress";
+import { readServerBuildStatus } from "@/app/servers/server-build-actions";
 import { useRouter } from "next/navigation";
 import type { ManagedStartStatus } from "@/app/lib/hosting/my-servers-server";
 import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
@@ -49,6 +50,11 @@ const LABELLED_STATES = new Set(["running", "stopped", "starting", "stopping", "
 const RESTART_WATCH_MILLISECONDS = 5 * 60_000;
 /** An unconfirmed request is checked for at least this long before the observed state is reported. */
 const VERIFY_WINDOW_MILLISECONDS = 20_000;
+/** The owner-facing text for each reason update progress cannot be shown. */
+const ERROR_KEYS: Record<UpdateProgressError, string> = {
+    unavailable: "serverUpdate.progressIsUnavailableTheUpdateMayStillBeRunning",
+    paused: "serverUpdate.progressChecksPausedRefreshToCheckAgain",
+};
 
 type StartProgressStatus = Pick<ManagedStartStatus, "action" | "state" | "phase" | "progress" | "modLoadFailure" | "stoppedRetrying" | "failureCode" | "queue">;
 
@@ -174,12 +180,12 @@ export function ManagedServerControls({
     // A move to another machine owns the server until it finishes; an announced one leaves the controls usable.
     const moving = isMoveInProgress(useManagedServerMove());
     const canOperate = accessRole === "owner" || accessRole === "manager";
-    const { job: updateJob, error: updateProgressError, follow: followUpdate } = useServerUpdateProgress(serverId, canOperate, expectedUpdatedAt);
+    const { job: updateJob, error: updateError, busy: updateBusy, followJob } = useServerUpdateProgress(
+        serverId, canOperate, expectedUpdatedAt, readServerBuildStatus, () => router.refresh());
     const displayedState = startStatus?.state === "succeeded" && expectedUpdatedAt === startRevision ? "running" : operationState;
     const stateIsTransitional = TRANSITIONAL_STATES.has(displayedState);
     const trackingStop = stopRevision !== null;
     const trackingRestart = restart !== null && !restartSettled(restart);
-    const updateBusy = updateJob !== null && ["queued", "running", "retry-wait"].includes(updateJob.state);
     const stopCheckPaused = trackingStop && timedOutSession?.serverId === serverId
         && timedOutSession.statusSource === "server" && timedOutSession.initialUpdatedAt === stopRevision;
     const verifyTimedOut = verifyRevision !== null && timedOutSession?.serverId === serverId
@@ -504,7 +510,7 @@ export function ManagedServerControls({
                 }
                 if (operation === "update-now" && result.ok && result.updateJobId) {
                     setMessage("");
-                    followUpdate(result.updateJobId);
+                    followJob(result.updateJobId);
                 }
             } catch {
                 if (operation === "restart-game") updateRestart(null);
@@ -529,7 +535,7 @@ export function ManagedServerControls({
     // With a Maintenance card, Update now reports beside its own button instead of in the console.
     const updateMessageInSlot = updateSlot !== undefined && lastOperation === "update-now" && updateJob === null;
     const updateProgressCard = updateJob !== null ? <ServerUpdateProgress job={updateJob} /> : null;
-    const statusArea = showStart || updateJob !== null || restart !== null || progressPaused || stopCheckPaused || (message && !updateMessageInSlot && updateJob === null) ? (
+    const statusArea = showStart || updateJob !== null || updateError !== null || restart !== null || progressPaused || stopCheckPaused || (message && !updateMessageInSlot && updateJob === null) ? (
         <div className="flex w-full flex-col items-start gap-2">
             {showStart && <StartProgress key={`${serverId}:${startProgressIdentity}`} status={displayedStartStatus} paused={progressPaused} />}
             {startJobId !== null && startStatus?.queue?.canCancel && <button type="button"
@@ -538,7 +544,7 @@ export function ManagedServerControls({
                 {t(cancellingStart ? "controls.cancellingStart" : "controls.cancelStart")}
             </button>}
             {updateProgressCard}
-            {updateProgressError && <p role="status" className="max-w-xl text-sm leading-6 text-foreground-muted">{updateProgressError}</p>}
+            {updateError !== null && <p role="status" className="max-w-xl text-sm leading-6 text-foreground-muted">{t(ERROR_KEYS[updateError])}</p>}
             {restart !== null && <RestartProgressCard progress={restart} />}
             {progressPaused && <div className="max-w-xl text-sm leading-6 text-foreground-muted">
                 <p>{t("controls.automaticProgressUpdatesArePausedReadinessHasNotBeenConfirmed")}</p>
