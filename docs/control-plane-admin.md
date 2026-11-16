@@ -49,8 +49,8 @@ identifiers remain shortened in the props; failure acknowledgement keeps the exa
 job ID and current `updatedAt`. Reads, pagination, viewer validation and mutation
 requests retain the same paths and freshness requirements.
 
-Releases and release choices in Operations request one `release-catalog` result
-with separate Stable/Nightly pages, rather than authenticate two `builds` reads.
+The Releases view requests one `release-catalog` result with separate
+Stable/Nightly pages, rather than authenticate two `builds` reads.
 Both pages use one freshly verified and mapped registry observation, retaining
 independent null cursors, current-first ordering and limit100 per channel. GHCR
 discovery has a global100-version bound; aliases mark matching versions without
@@ -74,8 +74,8 @@ mutations retain their existing Edge contract.
 Operations requests Overview with `input: { operations: true }` for its current
 global controls, 100 server choices and 100 job choices, retaining cursors and
 the `updatedAt` values used by mutations. It omits the unused health snapshot and
-fleet summary, while full release choices, fresh provider service names and an
-optional selected-server dashboard keep their existing reads. The page still
+fleet summary, while fresh provider service names and an optional
+selected-server dashboard keep their existing reads. The page still
 requires fresh protected administrator/session authority before rendering data.
 Deploy [ControlPlane #280](https://github.com/Bannerlord-Coop-Team/BannerlordCoop.ControlPlane/pull/280) before the website change; an
 older backend rejects the request without a fallback. Earlier website versions
