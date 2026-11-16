@@ -310,6 +310,35 @@ it("picks up an update started elsewhere when the page revision changes and refr
     } finally { await act(async () => root.unmount()); }
 });
 
+it.each(["succeeded", "failed"] as const)("hides a %s update this page never followed and does not refresh", async state => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    vi.useFakeTimers();
+    router.refresh.mockClear();
+    const serverId = "22222222-2222-4222-8222-222222222222";
+    buildStatus.mockReset().mockResolvedValue({ serverId, job: {
+        jobId: "55555555-5555-4555-8555-555555555555", state, initiatedBy: "automatic", ownerSelected: false, phase: state === "failed" ? "failed" : "done",
+        steps: [
+            { id: "queued", state: "done" }, { id: "stopping", state: "done" }, { id: "backup", state: "done" },
+            { id: "installing", state: state === "failed" ? "failed" : "done" }, { id: "starting", state: state === "failed" ? "pending" : "done" },
+            { id: "verifying", state: state === "failed" ? "pending" : "done" },
+        ], completedSteps: state === "failed" ? 3 : 6, totalSteps: 6, targetVersion: "0.1.11", previousVersion: "0.1.10",
+        progress: "Earlier update", backup: null, rolledBack: state === "failed", failureCode: state === "failed" ? "agent_game_health_failed" : null,
+        failureMessage: state === "failed" ? "The game did not start on the new version." : null, nextStep: null, attemptCount: 1, maximumAttempts: 3,
+        nextRetryAt: null, createdAt: "2026-09-20T12:00:00.000Z", updatedAt: "2026-09-20T12:05:00.000Z", completedAt: "2026-09-20T12:05:00.000Z",
+    } });
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls serverId={serverId} displayName="Campaign"
+            accessRole="owner" operationState="running" observedGameState="running" expectedUpdatedAt="2026-09-20T12:05:00.000Z" /></TestLocalization>));
+        await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+        expect(buildStatus).toHaveBeenCalled();
+        expect(container.querySelector('[role="progressbar"]')).toBeNull();
+        expect(container.textContent).not.toContain("did not finish");
+        expect(router.refresh).not.toHaveBeenCalled();
+    } finally { await act(async () => root.unmount()); }
+});
+
 it.each(["stable", "nightly"] as const)("refreshes the update revision only while the displayed channel is unchanged: %s", async channel => {
     const serverId = "22222222-2222-4222-8222-222222222222";
     const expectedUpdatedAt = "2026-09-20T12:00:00.000Z";

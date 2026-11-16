@@ -12,9 +12,8 @@ import {
     type ManagedConsoleSignal,
 } from "@/app/components/servers/ManagedServerPollingProvider";
 import { cancelManagedServerStart, operateManagedServer, readManagedServerStartStatus, setManagedServerPassword } from "@/app/servers/managed-server-actions";
-import { readServerBuildStatus } from "@/app/servers/server-build-actions";
 import { ServerUpdateProgress } from "./ServerUpdateProgress";
-import type { BuildChangeJob } from "../../../../supabase/functions/_shared/server-build-contract";
+import { useServerUpdateProgress } from "./use-server-update-progress";
 import { useRouter } from "next/navigation";
 import type { ManagedStartStatus } from "@/app/lib/hosting/my-servers-server";
 import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
@@ -144,11 +143,6 @@ export function ManagedServerControls({
     const [isPending, startTransition] = useTransition();
     const [pendingOperation, setPendingOperation] = useState<Operation | null>(null);
     const [message, setMessage] = useState("");
-    const [updateJob, setUpdateJob] = useState<BuildChangeJob | null>(null);
-    const [updateProgressError, setUpdateProgressError] = useState("");
-    const updateFollowed = useRef(false);
-    const refreshedUpdate = useRef<string | null>(null);
-    const [updatePollRun, setUpdatePollRun] = useState(0);
     const [lastOperation, setLastOperation] = useState<Operation | null>(null);
     const [startRevision, setStartRevision] = useState(expectedUpdatedAt);
     const [startJobId, setStartJobId] = useState<string | null>(() => ["owner", "manager"].includes(accessRole) && runtimeInsight?.start && ["queued", "running", "retry-wait"].includes(runtimeInsight.start.state) ? runtimeInsight.start.jobId : null);
@@ -180,6 +174,7 @@ export function ManagedServerControls({
     // A move to another machine owns the server until it finishes; an announced one leaves the controls usable.
     const moving = isMoveInProgress(useManagedServerMove());
     const canOperate = accessRole === "owner" || accessRole === "manager";
+    const { job: updateJob, error: updateProgressError, follow: followUpdate } = useServerUpdateProgress(serverId, canOperate, expectedUpdatedAt);
     const displayedState = startStatus?.state === "succeeded" && expectedUpdatedAt === startRevision ? "running" : operationState;
     const stateIsTransitional = TRANSITIONAL_STATES.has(displayedState);
     const trackingStop = stopRevision !== null;
@@ -307,41 +302,6 @@ export function ManagedServerControls({
         void poll();
         return () => { cancelled = true; clearTimeout(timeout); };
     }, [serverId, startJobId, pollRun, router, canOperate, t]);
-
-    useEffect(() => {
-        if (!canOperate) return;
-        let cancelled = false;
-        let timeout: ReturnType<typeof setTimeout>;
-        const deadline = Date.now() + 15 * 60_000;
-        // Reattaches to an in-flight update after a reload or a page refresh, including one started elsewhere;
-        // terminal history is shown only after this page followed it.
-        async function pollUpdate() {
-            const status = await Promise.resolve(readServerBuildStatus(serverId)).catch(() => null);
-            if (cancelled) return;
-            const job = status?.job ?? null;
-            if (job !== null && (["queued", "running", "retry-wait"].includes(job.state) || updateFollowed.current)) {
-                updateFollowed.current = true;
-                setUpdateJob(job);
-                setUpdateProgressError("");
-            } else if (updateFollowed.current && status === null) {
-                setUpdateProgressError(t("serverUpdate.progressIsUnavailableTheUpdateMayStillBeRunning"));
-            } else if (job === null && !updateFollowed.current) {
-                return;
-            }
-            if (job !== null && ["succeeded", "failed", "cancelled"].includes(job.state)) {
-                // A followed update changed the server, so the page re-renders once when it ends.
-                if (updateFollowed.current && refreshedUpdate.current !== job.jobId) { refreshedUpdate.current = job.jobId; router.refresh(); }
-                return;
-            }
-            if (Date.now() >= deadline) {
-                setUpdateProgressError(t("serverUpdate.progressChecksPausedRefreshToCheckAgain"));
-                return;
-            }
-            timeout = setTimeout(pollUpdate, 3_000);
-        }
-        void pollUpdate();
-        return () => { cancelled = true; clearTimeout(timeout); };
-    }, [serverId, canOperate, expectedUpdatedAt, updatePollRun, router, t]);
 
     /** Keeps the restart ref and rendered progress in step. */
     function updateRestart(next: RestartProgress | null) {
@@ -544,9 +504,7 @@ export function ManagedServerControls({
                 }
                 if (operation === "update-now" && result.ok && result.updateJobId) {
                     setMessage("");
-                    updateFollowed.current = true;
-                    setUpdateProgressError("");
-                    setUpdatePollRun(value => value + 1);
+                    followUpdate(result.updateJobId);
                 }
             } catch {
                 if (operation === "restart-game") updateRestart(null);

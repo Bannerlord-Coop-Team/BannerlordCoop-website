@@ -26,13 +26,16 @@ version listing or selection.
 
 Update progress appears in the server's **Console**, in the lifecycle controls'
 status area, for owners and managers (`ServerUpdateProgress`, rendered by
-`ManagedServerControls`). It is the only poller of this read on the server page.
+`ManagedServerControls` from the `useServerUpdateProgress` hook). It is the only
+poller of this read on the server page.
 It reads the status when the page loads and again whenever a page refresh
 brings a new server revision, so it follows any running update whoever started
 it: the owner's Update now, a maintenance-window update or hosting support.
 While an update runs it polls every 3 seconds for up to 15 minutes, and
-refreshes the page once when a followed update ends. Older outcomes are not
-replayed after a reload.
+refreshes the page once when a followed update ends; that finished update stays
+on screen after the refresh. An update the page never saw running is not shown
+once it has finished, so older outcomes are not replayed after a reload. Each
+read's outcome is decided by the pure `nextUpdatePollStep`.
 
 The step list uses icons as well as colour, the bar is a `progressbar` with step
 text, and status and failures are announced through live regions.
