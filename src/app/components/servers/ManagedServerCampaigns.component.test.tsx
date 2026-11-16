@@ -26,6 +26,10 @@ let container: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
     vi.useFakeTimers(); vi.resetAllMocks();
+    if (!globalThis.localStorage) {
+        const values = new Map<string, string>();
+        vi.stubGlobal("localStorage", { clear: () => values.clear(), getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) });
+    }
     localStorage.clear();
     mocks.deletionStatus.mockResolvedValue({ ok: false, message: "Deletion status unavailable." });
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
@@ -35,7 +39,7 @@ beforeEach(() => {
     mocks.resetStatus.mockResolvedValue({ ok: true, status: { serverId, jobId: freshId, state: "queued", errorCode: null, instruction: null }, message: "Preparing your fresh campaign. This takes about a minute…" });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.restoreAllMocks(); vi.useRealTimers(); });
+afterEach(async () => { if (root) await act(async () => root.unmount()); container?.remove(); vi.clearAllTimers(); vi.restoreAllMocks(); vi.useRealTimers(); });
 async function render(status: OwnerFileStatus | null = stopped, canDelete = false) {
     await act(async () => root.render(<TestLocalization><ManagedServerCampaigns userId="owner" serverId={serverId} status={status} canDelete={canDelete} /></TestLocalization>));
     await act(async () => vi.advanceTimersByTimeAsync(0));
@@ -508,3 +512,4 @@ it("adopts a newer cross-tab receipt instead of repeatedly recovering an overwri
     expect(mocks.deleteSave).toHaveBeenCalledTimes(1);
     expect(JSON.parse(localStorage.getItem(deletionKey)!).input.requestId).toBe(defaultId);
 });
+

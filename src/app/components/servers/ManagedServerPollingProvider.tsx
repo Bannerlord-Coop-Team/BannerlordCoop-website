@@ -18,7 +18,7 @@ const POLL_DEADLINE_MILLISECONDS = 15 * 60_000;
 const UNATTACHED_BACKUP_DEADLINE_MILLISECONDS = 2 * 60_000;
 /** The owner just acted, so the opening refresh waits at most this long for the status fingerprint. */
 const OPENING_FINGERPRINT_WAIT_MILLISECONDS = 1_500;
-const INITIALIZING_SERVER_STATES = new Set(["provisioning", "configuring"]);
+const INITIALIZING_SERVER_STATES = new Set(["provisioning", "configuring", "moving", "starting", "stopping"]);
 
 type PollingSession = {
     /** Distinguishes sessions begun in the same millisecond; attaching a job keeps it. */
@@ -79,12 +79,21 @@ const ManagedServerSavesContext = createContext<ManagedServerSaves | null>(null)
 /** Undefined outside the console toolbar; null until the toolbar's status row has mounted. */
 export const ManagedServerStatusSlotContext = createContext<HTMLElement | null | undefined>(undefined);
 
-/** Spaces status refreshes further apart as an operation runs longer: every 4 s, then 8 s, then 15 s. */
+/** Polling is deliberately quiet: one visible tab checks at most every fifteen seconds. */
 export function managedServerPollDelay(elapsedMilliseconds: number) {
     if (elapsedMilliseconds < 60_000) return 4_000;
     if (elapsedMilliseconds < 3 * 60_000) return 8_000;
     return 15_000;
 }
+export function managedServerEffectivePollDelay(elapsedMilliseconds: number, failures = 0) {
+    return Math.min(5 * 60_000, Math.max(15_000, managedServerPollDelay(elapsedMilliseconds)) * 2 ** failures);
+}
+
+const TERMINAL_OPERATION_STATES = new Set(["stopped", "awaiting-save", "succeeded", "failed", "cancelled", "deleted"]);
+export function isTerminalManagedServerOperationState(state: unknown) {
+    return typeof state === "string" && TERMINAL_OPERATION_STATES.has(state);
+}
+const MAXIMUM_POLL_FAILURES = 4;
 
 /** Creates the in-memory channel that carries live console phases to lifecycle progress. */
 export function createManagedConsoleSignals(): ManagedConsoleSignals {
@@ -119,7 +128,7 @@ export function createManagedConsoleSignals(): ManagedConsoleSignals {
 }
 
 /** Reads a compact status fingerprint; polling re-renders the page only when it changes. */
-export type ManagedServerStatusReader = (serverId: string) => Promise<{ ok: true; fingerprint: string } | { ok: false }>;
+export type ManagedServerStatusReader = (serverId: string) => Promise<{ ok: true; fingerprint: string } | { ok: false; retryable?: boolean }>;
 
 /** Shares status polling and live console phases between the managed server's panels. */
 export function ManagedServerPollingProvider({ children, readStatus, initialServer }: {
@@ -133,6 +142,7 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
     const [consoleSignals] = useState(createManagedConsoleSignals);
     const [savesInFlight, setSavesInFlight] = useState<ReadonlyMap<string, number>>(() => new Map());
     const sessionSequence = useRef(0);
+    const haltedServers = useRef(new Set<string>());
     const pollingBaseline = useRef<{
         sequence: number; fingerprint: string | null; opened: boolean;
         read: Promise<Awaited<ReturnType<ManagedServerStatusReader>> | null> | null;
@@ -205,6 +215,7 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
         let refreshWhenVisible = false;
         let cancelled = false;
         let checking: Promise<void> | null = null;
+        let failures = 0;
 
         // Full page renders are expensive on the edge runtime, so unchanged status skips them.
         // The fingerprint is read before refreshing, so a change after it is caught next time.
@@ -219,10 +230,36 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
                     new Promise<null>((resolve) => { timeout = window.setTimeout(() => resolve(null), waitMilliseconds); }),
                 ]).finally(() => window.clearTimeout(timeout));
                 if (cancelled) return;
-                if (result?.ok && result.fingerprint === polled.fingerprint) return;
-                polled.fingerprint = result?.ok ? result.fingerprint : null;
+                if (result?.ok) {
+                    failures = 0;
+                    // The fingerprint is JSON owned by the status action; operationState is its second item.
+                    try {
+                        const operationState = JSON.parse(result.fingerprint)[1];
+                        if (isTerminalManagedServerOperationState(operationState)) {
+                            router.refresh();
+                            setSession((current) => current?.sequence === sequence ? null : current);
+                            return;
+                        }
+                    } catch { /* malformed evidence is handled as a failed read below */ }
+                    if (result.fingerprint === polled.fingerprint) return;
+                    polled.fingerprint = result.fingerprint;
+                } else if (result?.retryable) {
+                    failures += 1;
+                    if (failures >= MAXIMUM_POLL_FAILURES) {
+                        setTimedOutSession(session);
+                        setSession((current) => current?.sequence === sequence ? null : current);
+                        return;
+                    }
+                } else {
+                    router.refresh();
+                    haltedServers.current.add(serverId);
+                    setTimedOutSession(session);
+                    setSession((current) => current?.sequence === sequence ? null : current);
+                    return;
+                }
             }
             router.refresh();
+                            haltedServers.current.add(serverId);
         }
 
         // One check at a time: a tab shown just before a scheduled tick shares that tick's read.
@@ -232,7 +269,12 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
         }
 
         function schedule() {
-            if (!cancelled) timer = window.setTimeout(tick, managedServerPollDelay(Date.now() - startedAt));
+            if (!cancelled) {
+                const base = managedServerEffectivePollDelay(Date.now() - startedAt);
+                const backoff = failures === 0 ? base : Math.min(5 * 60_000, base * 2 ** failures);
+                const jitter = backoff * (0.9 + Math.random() * 0.2);
+                timer = window.setTimeout(tick, jitter);
+            }
         }
 
         // Checks on a widening schedule; a hidden tab defers its check until it is shown again.
@@ -250,17 +292,31 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
         }
 
         // The session's first refresh also records the baseline, so an unchanged first tick skips its render.
-        if (polled.opened) schedule();
-        else void check(OPENING_FINGERPRINT_WAIT_MILLISECONDS).then(() => {
+        const open = () => void check(OPENING_FINGERPRINT_WAIT_MILLISECONDS).then(() => {
             if (cancelled) return;
             polled.opened = true;
             schedule();
         });
+        if (polled.opened) schedule();
+        else if (document.visibilityState === "visible") open();
         const deadline = window.setTimeout(() => {
             setTimedOutSession(session);
             setSession((current) => current?.deadline === session.deadline ? null : current);
         }, Math.max(0, session.deadline - Date.now()));
         document.addEventListener("visibilitychange", refreshOnReturn);
+        if (!polled.opened) {
+            const openOnReturn = () => {
+                if (document.visibilityState === "visible" && !polled.opened) open();
+            };
+            document.addEventListener("visibilitychange", openOnReturn);
+            return () => {
+                cancelled = true;
+                window.clearTimeout(timer);
+                window.clearTimeout(deadline);
+                document.removeEventListener("visibilitychange", refreshOnReturn);
+                document.removeEventListener("visibilitychange", openOnReturn);
+            };
+        }
         return () => {
             cancelled = true;
             window.clearTimeout(timer);
@@ -283,7 +339,7 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
         const trackingInitialState = session?.serverId === initialServer.serverId
             && session.statusSource === "initialization";
         let timer: ReturnType<typeof setTimeout> | undefined;
-        if (initializing && !trackingInitialState) {
+        if (initializing && !trackingInitialState && !haltedServers.current.has(initialServer.serverId)) {
             timer = setTimeout(() => beginPolling(initialServer.serverId, initialServer.updatedAt, undefined, "initialization"), 0);
         } else if (!initializing && trackingInitialState) {
             timer = setTimeout(() => endPolling(initialServer.serverId), 0);
