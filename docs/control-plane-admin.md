@@ -238,20 +238,16 @@ GHCR is the only source of truth for which build a server runs: every server
 follows its release channel's current build, and no administrator control pins
 one. Update server has no version picker and always sends `buildId: null`
 ("Follow channel"), so the control plane installs the channel's current build.
-Both the control plane before and after
-[ControlPlane #1125](https://github.com/Bannerlord-Coop-Team/BannerlordCoop.ControlPlane/pull/1125)
-accept it; before #1125 it also clears an existing pin, so Update follows the
-channel in either rollout order. No card calls `set-build-pin`, and the server
-detail shows no "Pinned version". #1125 refuses `set-build-pin` and an Update
-server carrying a specific `buildId` with HTTP 409 `admin_build_pin_retired`;
-the card shows the control plane's message. To fix a bad release, publish a new
-build to the channel.
+No card calls `set-build-pin`, and the server detail's update policy reads
+"Follow Public channel" or "Follow Nightly channel". The control plane refuses `set-build-pin` and an
+Update server carrying a specific `buildId` with HTTP 409
+`admin_build_pin_retired`; the card shows the control plane's message. To fix a
+bad release, publish a new build to the channel.
 
 Reinstall previous build temporarily reinstalls the preceding channel release
-while keeping the current campaign. With #1125 it pins nothing: the server
-returns to the channel's current build at its next update (maintenance window,
-Batch maintenance or Update server). Until #1125 deploys, the older control
-plane still pins the rollback, and Update server clears that pin.
+while keeping the current campaign. It pins nothing: the server returns to the
+channel's current build at its next update (maintenance window, Batch
+maintenance or Update server).
 
 Restore backup instead replaces the campaign with an older snapshot. Selecting
 a server loads a bounded backup page; the list shows creation time, type, size,
@@ -278,6 +274,16 @@ administrator operations to `supabase:<user UUID>`, derived from the independent
 verified session. Customer ownership and owner/manager Discord identities are
 unchanged. Deploy the control-plane principal migration and adapter before the
 Edge Function change; the old adapter will reject accounts without Discord.
+
+### Rollout
+
+These controls pair with
+[ControlPlane #1125](https://github.com/Bannerlord-Coop-Team/BannerlordCoop.ControlPlane/pull/1125),
+and either may deploy first. Update server sends `buildId: null` rather than
+omitting it because a control plane before #1125 keeps an existing pin when the
+field is omitted but clears it on null, so Update follows the channel in either
+order. Until #1125 deploys, the older control plane still pins a Reinstall
+previous build, and Update server clears that pin.
 
 ## Latest game log download
 

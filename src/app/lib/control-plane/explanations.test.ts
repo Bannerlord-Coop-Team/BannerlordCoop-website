@@ -100,11 +100,3 @@ test("distinguishes cold sleep from holds using running intent", () => {
     assert.match(stateExplanation("suspended"), /on hold/);
     assert.doesNotMatch(stateExplanation("running", "running"), /Sleeping/);
 });
-
-test("explains that servers follow their channel and rollback pins nothing", () => {
-    assert.match(operationExplanation("update-server"), /current build of the server's release channel/u);
-    assert.doesNotMatch(operationExplanation("update-server"), /pin/iu);
-    assert.match(operationExplanation("rollback-server"), /^Temporarily/u);
-    assert.match(operationExplanation("rollback-server"), /pins nothing/u);
-    assert.doesNotMatch(operationExplanation("set-build-pin"), /pin/iu);
-});

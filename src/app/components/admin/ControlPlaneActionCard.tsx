@@ -160,7 +160,7 @@ export function ControlPlaneActionCard({
                 <div className="grid gap-3">
                     {fields.map((field) => field.kind === "backup"
                         ? <ControlPlaneBackupPicker key={`${serverValue}:${formRevision}`} serverId={selectedServer?.value ?? null} onReady={setBackupReady} />
-                        : <ActionField key={field.name === "buildId" ? `${field.name}:${serverValue}` : `${field.name}:${formRevision}`} field={field} />)}
+                        : <ActionField key={`${field.name}:${formRevision}`} field={field} />)}
                 </div>
                 {blockedReason !== null && <p className="mt-3 text-xs leading-5 text-amber-300">{blockedReason}</p>}
                 <div className="mt-auto pt-4">
@@ -396,8 +396,6 @@ function normalizeOperationInput(operation: string, input: Record<string, unknow
         delete input.host;
         Object.assign(input, { provider, serviceName, mode: "enroll" });
     }
-    // Update always follows the channel: an explicit null also clears a legacy pin on a control plane before #1125.
-    if (operation === "update-server") input.buildId = null;
     if (operation === "reset-password") {
         const choice = input.choice as Record<string, unknown> | undefined;
         if (choice?.kind === "generated") delete choice.password;

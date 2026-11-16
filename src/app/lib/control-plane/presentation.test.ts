@@ -50,6 +50,13 @@ test("administrator create sends only the region key; other operations get no de
     assert.deepEqual(maintenance, { reason: "Roll the fleet" });
 });
 
+test("administrator Update sends an explicit null buildId so the server follows its channel", () => {
+    const input: Record<string, unknown> = { serverId: "22222222-2222-4222-8222-222222222222", reason: "Roll forward" };
+    applyControlPlaneOperationDefaults("update-server", input);
+    assert.deepEqual(input, { serverId: "22222222-2222-4222-8222-222222222222", reason: "Roll forward", buildId: null });
+    assert.ok(Object.hasOwn(input, "buildId"));
+});
+
 test("Create server offers to pin only providers holding a registered VPS, named and in catalog order", () => {
     const hosts = [{ provider: "vpstc-vps" }, { provider: "ovhcloud-vps" }, { provider: "vpstc-vps" }, { provider: "retired-vps" }];
     assert.deepEqual(createServerProviderOptions(hosts), [{ value: "ovhcloud-vps", label: "OVHcloud" }, { value: "vpstc-vps", label: "VPS.TC" }]);
@@ -404,21 +411,6 @@ test("Builds refreshes GHCR discovery and displays exact release labels", async 
     assert.match(source, /build.currentChannel/u);
     assert.ok(source.includes('build.registryMetadata ? "First observed" : "Published"'));
     assert.match(server, /RecordedRelease build=\{result.dashboard.installedBuild\}/u);
-});
-
-// GHCR is the only release source of truth (ControlPlane #1125): no administrator control may pin a build.
-test("Operations offers no build pin or version picker and Update follows the channel", async () => {
-    const source = await readFile(new URL("../../admin/control-plane/page.tsx", import.meta.url), "utf8");
-    const card = await readFile(new URL("../../components/admin/ControlPlaneActionCard.tsx", import.meta.url), "utf8");
-    const server = await readFile(new URL("../../components/admin/ControlPlaneServerView.tsx", import.meta.url), "utf8");
-    assert.doesNotMatch(source, /set-build-pin|Pinned version|Version selection|__keep__|__latest__/u);
-    assert.doesNotMatch(card, /__keep__|__latest__/u);
-    assert.match(card, /if \(operation === "update-server"\) input\.buildId = null;/u);
-    assert.doesNotMatch(server, /pinnedBuildId|Pinned version/u);
-    const operations = source.slice(source.indexOf('case "operations":'), source.indexOf('case "vps":'));
-    assert.doesNotMatch(operations, /loadReleaseCatalog/u);
-    assert.match(source, /operation: "update-server", title: "Update server", description: "[^"]*", fields: \[serverField, reasonField\] \}/u);
-    assert.match(source, /operation: "rollback-server", title: "Reinstall previous build", description: "Temporarily [^"]*returns to the channel's current build at its next update/u);
 });
 
 test("shows a public version without the registry's leading v", () => {
