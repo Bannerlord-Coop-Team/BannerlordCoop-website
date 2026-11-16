@@ -2,7 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import type { BuildStepState, BuildUpdateJob } from "../../../../supabase/functions/_shared/server-build-contract";
-import { ServerUpdateProgress, ServerUpdateStatus } from "./ServerUpdateProgress";
+import { ServerUpdateProgress, ServerUpdateProgressStatus } from "./ServerUpdateProgress";
 import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 import { finishedUpdateJob, updateJob, updateSteps } from "./ServerUpdateProgress.test-utils";
 
@@ -87,7 +87,7 @@ it.each([
     ["unavailable", "Progress is unavailable. The update may still be running."],
     ["paused", "Progress checks paused. Refresh the page to check again."],
 ] as const)("explains why %s update progress cannot be shown as a polite status", async (error, expected) => {
-    await act(async () => root.render(<TestLocalization><ServerUpdateStatus job={null} error={error} /></TestLocalization>));
+    await act(async () => root.render(<TestLocalization><ServerUpdateProgressStatus job={null} error={error} /></TestLocalization>));
     const status = container.querySelector('[role="status"]')!;
     expect(status.textContent).toBe(expected);
     expect(status.getAttribute("aria-live")).toBe("polite");

@@ -71,8 +71,13 @@ export function ServerUpdateProgress({ job }: { job: BuildUpdateJob }) {
     </section>;
 }
 
+/** Tells whether there is update progress or a reason it cannot be shown, so the Console knows to open its status area. */
+export function hasUpdateStatus(job: BuildUpdateJob | null, error: UpdateProgressError | null): boolean {
+    return job !== null || error !== null;
+}
+
 /** Shows the followed update's progress and/or why its progress cannot be shown, rendering whichever exists. */
-export function ServerUpdateStatus({ job, error }: { job: BuildUpdateJob | null; error: UpdateProgressError | null }) {
+export function ServerUpdateProgressStatus({ job, error }: { job: BuildUpdateJob | null; error: UpdateProgressError | null }) {
     return <>
         {job !== null && <ServerUpdateProgress job={job} />}
         {error !== null && <ServerUpdateProgressError error={error} />}

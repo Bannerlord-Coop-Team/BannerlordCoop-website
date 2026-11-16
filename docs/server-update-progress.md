@@ -26,9 +26,10 @@ version listing or selection.
 
 Update progress appears in the server's **Console**, in the lifecycle controls'
 status area, for owners and managers. `ManagedServerControls` renders
-`ServerUpdateStatus` from the `useServerUpdateProgress` hook; it shows the
-`ServerUpdateProgress` card and any progress error. The hook is the only
-poller of this read on the server page.
+`ServerUpdateProgressStatus` from the `useServerUpdateProgress` hook; it shows
+the `ServerUpdateProgress` card and any progress error, and `hasUpdateStatus`
+tells the Console when there is either to show. The hook is the only poller of
+this read on the server page.
 It reads the status when the page loads and again whenever a page refresh
 brings a new server revision, so it follows any running update whoever started
 it: the owner's Update now, a maintenance-window update or hosting support.
