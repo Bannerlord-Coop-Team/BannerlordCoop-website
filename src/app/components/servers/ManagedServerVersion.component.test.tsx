@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { BuildChangeJob, BuildOptions, BuildStatus } from "../../../../supabase/functions/_shared/server-build-contract";
 import { ManagedServerVersion } from "./ManagedServerVersion";
-import { TestLocalization, refreshedMessages, serverTestMessages } from "./ManagedServerLocalization.test-utils";
+import { refreshedMessages, serverTestMessages } from "./ManagedServerLocalization.test-utils";
 import { LocalizationProvider } from "@/app/lib/localization/client";
 
 const { actions, router } = vi.hoisted(() => ({
@@ -43,8 +43,12 @@ const buttons = () => [...container.querySelectorAll("button")];
 const button = (name: string) => buttons().find(candidate => candidate.textContent?.includes(name));
 const radio = (value: string) => container.querySelector<HTMLInputElement>(`input[type=radio][value="${value}"]`)!;
 
-async function render(props: Partial<{ canEdit: boolean; expectedUpdatedAt: string }> = {}) {
-    await act(async () => root.render(<TestLocalization><ManagedServerVersion serverId={serverId} expectedUpdatedAt={props.expectedUpdatedAt ?? updatedAt} canEdit={props.canEdit ?? true} /></TestLocalization>));
+/** Renders the version panel inside the server page's localization, optionally with refreshed messages. */
+async function render(props: Partial<{ canEdit: boolean; expectedUpdatedAt: string; messages: typeof serverTestMessages }> = {}) {
+    await act(async () => root.render(
+        <LocalizationProvider locale="en" messages={props.messages ?? serverTestMessages}>
+            <ManagedServerVersion serverId={serverId} expectedUpdatedAt={props.expectedUpdatedAt ?? updatedAt} canEdit={props.canEdit ?? true} />
+        </LocalizationProvider>));
 }
 const choose = (value: string) => act(async () => { radio(value).click(); });
 
@@ -251,12 +255,12 @@ it("keeps one request identity for a retry and releases it after a definitive re
 });
 
 it("does not read build status again when a refresh re-delivers changed messages", async () => {
-    // The provider is rendered directly every time, so each re-render updates the same tree instead of remounting it.
-    await act(async () => root.render(<LocalizationProvider locale="en" messages={serverTestMessages}><ManagedServerVersion serverId={serverId} expectedUpdatedAt={updatedAt} canEdit /></LocalizationProvider>));
+    // Each render() updates the same tree, so a refresh delivers new messages without remounting the panel.
+    await render();
     const reads = actions.status.mock.calls.length;
     expect(reads).toBe(1);
     for (let refresh = 0; refresh < 3; refresh++) {
-        await act(async () => root.render(<LocalizationProvider locale="en" messages={refreshedMessages(refresh)}><ManagedServerVersion serverId={serverId} expectedUpdatedAt={updatedAt} canEdit /></LocalizationProvider>));
+        await render({ messages: refreshedMessages(refresh) });
         await act(async () => vi.advanceTimersByTimeAsync(5_000));
     }
     expect(actions.status).toHaveBeenCalledTimes(reads);

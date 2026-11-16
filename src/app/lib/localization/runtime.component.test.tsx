@@ -8,7 +8,7 @@ import { createTranslator } from "./translator";
 import { LocalizationProvider, useLocalization, useTranslations } from "./client";
 import { assertDictionaryParity } from "./integrity";
 import { localeDefinitions, getEnabledLocales, resolveLocale } from "./registry";
-import { locales, namespaces, localeCookie, localeCookieOptions, type Dictionary, type Messages, type Translator } from "./types";
+import { locales, namespaces, localeCookie, localeCookieOptions, type Dictionary, type Translator } from "./types";
 import common from "./dictionaries/en/common.json";
 
 const request = vi.hoisted(() => ({ value: undefined as string | undefined, set: vi.fn() }));
@@ -50,8 +50,9 @@ function mountCheatsProbe() {
         return null;
     }
     const root = createRoot(document.createElement("div"));
-    const render = (cheats: Dictionary, parentMessages: Messages = { common }) => act(async () => root.render(
-        <LocalizationProvider locale="en" messages={parentMessages}>
+    // Like the root layout on every refresh, each render re-sends common and a new enabledLocales array.
+    const render = (cheats: Dictionary) => act(async () => root.render(
+        <LocalizationProvider locale="en" messages={{ common: { ...common } }} enabledLocales={[{ locale: "en", name: "English" }]}>
             <LocalizationProvider locale="en" messages={{ cheats }}><TranslatorProbe /></LocalizationProvider>
         </LocalizationProvider>));
     return { seen, render, unmount: () => act(async () => root.unmount()) };
@@ -132,8 +133,8 @@ describe("localization runtime", () => {
         const probe = mountCheatsProbe();
         try {
             await probe.render(cheatsMessages());
-            // A fresh parent payload re-composes the context; the cheats translator must survive it.
-            await probe.render(cheatsMessages(), { common: { ...common } });
+            // The new enabledLocales array re-composes both contexts and their bindings; the cheats translator must survive it.
+            await probe.render(cheatsMessages());
             expect(new Set(probe.seen).size).toBe(1);
         } finally { await probe.unmount(); }
     });
