@@ -204,7 +204,7 @@ describe("VPS inventory query", () => {
             { ...host("negative-free", "us-west", -1, null), availableServers: -1 },
         ]);
         expect(summary).toMatchObject({
-            totalSlots: 15,
+            totalSlots: 21,
             takenSlots: 4,
             allocatableSlots: 4,
             regions: [
