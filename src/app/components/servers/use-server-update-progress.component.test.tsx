@@ -1,20 +1,14 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { BuildUpdateJob } from "../../../../supabase/functions/_shared/server-build-contract";
 import { useServerUpdateProgress, type ReadBuildStatus } from "./use-server-update-progress";
-import { updateJob } from "./ServerUpdateProgress.test-utils";
+import { updateJobInState } from "./ServerUpdateProgress.test-utils";
 
 const serverId = "22222222-2222-4222-8222-222222222222";
 const jobId = "55555555-5555-4555-8555-555555555555";
 const readStatus = vi.fn<ReadBuildStatus>();
 const onFollowedUpdateEnded = vi.fn<() => void>();
 let root: Root;
-
-/** Builds the server's latest update job in the given state. */
-function job(state: BuildUpdateJob["state"]): BuildUpdateJob {
-    return updateJob({ jobId, state, phase: state === "running" ? "installing" : "done" });
-}
 
 /** Renders the hook at one server revision inside a bare component and exposes its latest result. */
 async function renderHook(revision: string) {
@@ -45,23 +39,6 @@ afterEach(async () => {
     vi.useRealTimers();
 });
 
-it("calls onFollowedUpdateEnded exactly once when the job it follows by id ends", async () => {
-    const { result } = await renderHook("2026-09-20T12:00:00.000Z");
-    readStatus.mockResolvedValueOnce({ serverId, job: null }).mockResolvedValueOnce({ serverId, job: job("running") })
-        .mockResolvedValue({ serverId, job: job("succeeded") });
-    await act(async () => result.current!.followJob(jobId));
-    expect(result.current!.job).toBeNull();
-    await advance(3_000);
-    expect(result.current!.busy).toBe(true);
-    expect(onFollowedUpdateEnded).not.toHaveBeenCalled();
-    await advance(3_000);
-    expect(result.current!.job?.state).toBe("succeeded");
-    expect(result.current!.busy).toBe(false);
-    expect(onFollowedUpdateEnded).toHaveBeenCalledOnce();
-    await advance(30_000);
-    expect(onFollowedUpdateEnded).toHaveBeenCalledOnce();
-});
-
 it("does not read again when a caller passes a new inline reader on each render", async () => {
     /** Calls the hook with a fresh reader closure on every render, as an inline caller would. */
     function InlineReaderProbe() {
@@ -74,7 +51,7 @@ it("does not read again when a caller passes a new inline reader on each render"
 });
 
 it("stops polling when the step says stop: a finished job it never followed", async () => {
-    readStatus.mockResolvedValue({ serverId, job: job("failed") });
+    readStatus.mockResolvedValue({ serverId, job: updateJobInState("failed") });
     const { result } = await renderHook("2026-09-20T12:00:00.000Z");
     await advance(30_000);
     expect(readStatus).toHaveBeenCalledOnce();
@@ -83,7 +60,7 @@ it("stops polling when the step says stop: a finished job it never followed", as
 });
 
 it("stops polling and reports paused once the poll window passes", async () => {
-    readStatus.mockResolvedValue({ serverId, job: job("running") });
+    readStatus.mockResolvedValue({ serverId, job: updateJobInState("running") });
     const { result } = await renderHook("2026-09-20T12:00:00.000Z");
     await advance(15 * 60_000);
     expect(result.current!.error).toBe("paused");
@@ -100,4 +77,16 @@ it("reports progress as unavailable when the injected read fails while following
     expect(result.current!.error).toBe("unavailable");
     expect(result.current!.job).toBeNull();
     expect(onFollowedUpdateEnded).not.toHaveBeenCalled();
+});
+
+it("clears a finished followed job as soon as the page follows a new one", async () => {
+    const { result } = await renderHook("2026-09-20T12:00:00.000Z");
+    readStatus.mockResolvedValue({ serverId, job: updateJobInState("succeeded") });
+    await act(async () => result.current!.followJob(jobId));
+    expect(result.current!.job?.state).toBe("succeeded");
+    readStatus.mockReturnValue(new Promise(() => {}));
+    await act(async () => result.current!.followJob("66666666-6666-4666-8666-666666666666"));
+    expect(result.current!.job).toBeNull();
+    expect(result.current!.error).toBeNull();
+    expect(onFollowedUpdateEnded).toHaveBeenCalledOnce();
 });

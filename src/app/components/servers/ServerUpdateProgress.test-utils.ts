@@ -17,3 +17,20 @@ export function updateJob(overrides: Partial<BuildUpdateJob> = {}): BuildUpdateJ
         ...overrides,
     };
 }
+
+/** Builds the default update job finished successfully with the given fields replaced: every step done and all of them counted. */
+export function finishedUpdateJob(overrides: Partial<BuildUpdateJob> = {}): BuildUpdateJob {
+    const job = updateJob({ state: "succeeded", phase: "done", completedAt: "2026-09-20T12:05:00.000Z", ...overrides });
+    return { ...job, steps: job.steps.map(step => ({ ...step, state: "done" })), completedSteps: job.totalSteps };
+}
+
+/** The phase a job in each state reports, so a fixture's state and phase always agree. */
+const PHASE_BY_STATE: Record<BuildUpdateJob["state"], BuildUpdateJob["phase"]> = {
+    queued: "queued", running: "installing", "retry-wait": "retry-wait", succeeded: "done", failed: "failed", cancelled: "cancelled",
+};
+
+/** Builds the default update job in the given state with its matching phase; a succeeded job is a finished one. */
+export function updateJobInState(state: BuildUpdateJob["state"], overrides: Partial<BuildUpdateJob> = {}): BuildUpdateJob {
+    if (state === "succeeded") return finishedUpdateJob(overrides);
+    return updateJob({ state, phase: PHASE_BY_STATE[state], ...overrides });
+}
