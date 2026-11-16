@@ -1,14 +1,14 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import type { BuildChangeJob } from "../../../../supabase/functions/_shared/server-build-contract";
+import type { BuildUpdateJob } from "../../../../supabase/functions/_shared/server-build-contract";
 import { ServerUpdateProgress } from "./ServerUpdateProgress";
 import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 
 const jobId = "33333333-3333-4333-8333-333333333333";
 const updatedAt = "2026-10-30T12:00:00.000Z";
 const stepNames = ["queued", "stopping", "backup", "installing", "starting", "verifying"] as const;
-const job = (states: BuildChangeJob["steps"][number]["state"][], extra: Partial<BuildChangeJob> = {}): BuildChangeJob => ({
+const job = (states: BuildUpdateJob["steps"][number]["state"][], extra: Partial<BuildUpdateJob> = {}): BuildUpdateJob => ({
     jobId, state: "running", initiatedBy: "automatic", ownerSelected: false, phase: "backup",
     steps: stepNames.map((id, index) => ({ id, state: states[index] ?? "pending" })),
     completedSteps: states.filter(state => state === "done").length, totalSteps: 6, targetVersion: "0.1.11", previousVersion: "0.1.10",
@@ -20,7 +20,7 @@ let container: HTMLDivElement;
 let root: Root;
 
 // Renders one update job's progress inside the test localization.
-async function render(value: BuildChangeJob) {
+async function render(value: BuildUpdateJob) {
     await act(async () => root.render(<TestLocalization><ServerUpdateProgress job={value} /></TestLocalization>));
 }
 

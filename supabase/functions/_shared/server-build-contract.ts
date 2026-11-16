@@ -22,7 +22,7 @@ export type BuildStepId = (typeof BUILD_STEP_IDS)[number];
 export type BuildStepState = (typeof BUILD_STEP_STATES)[number];
 export type BuildPhase = (typeof BUILD_PHASES)[number];
 
-export type BuildChangeJob = {
+export type BuildUpdateJob = {
     jobId: string;
     state: (typeof JOB_STATES)[number];
     initiatedBy: "owner" | "administrator" | "automatic";
@@ -47,7 +47,7 @@ export type BuildChangeJob = {
     updatedAt: string;
     completedAt: string | null;
 };
-export type BuildStatus = { serverId: string; job: BuildChangeJob | null };
+export type BuildStatus = { serverId: string; job: BuildUpdateJob | null };
 
 const invalid = (what: string) => new Error(`Invalid ${what}`);
 const isId = (value: unknown): value is string => typeof value === "string" && REQUEST_ID.test(value);

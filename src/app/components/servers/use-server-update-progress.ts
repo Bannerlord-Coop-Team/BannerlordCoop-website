@@ -4,9 +4,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "@/app/lib/localization/client";
 import { readServerBuildStatus } from "@/app/servers/server-build-actions";
-import type { BuildChangeJob, BuildStatus } from "../../../../supabase/functions/_shared/server-build-contract";
+import type { BuildUpdateJob, BuildStatus } from "../../../../supabase/functions/_shared/server-build-contract";
 
-const ACTIVE_STATES: readonly BuildChangeJob["state"][] = ["queued", "running", "retry-wait"];
+const ACTIVE_STATES: readonly BuildUpdateJob["state"][] = ["queued", "running", "retry-wait"];
 const POLL_MILLISECONDS = 3_000;
 const POLL_WINDOW_MILLISECONDS = 15 * 60_000;
 
@@ -21,7 +21,7 @@ export type UpdateFollow =
 
 /** The effect applies this result as-is: the job to show, the error to show, and what to do next. */
 export type UpdatePollStep = {
-    show: { kind: "job"; job: BuildChangeJob } | { kind: "hidden" } | { kind: "unchanged" };
+    show: { kind: "job"; job: BuildUpdateJob } | { kind: "hidden" } | { kind: "unchanged" };
     error: "unavailable" | "paused" | null;
     refresh: boolean;
     poll: "continue" | "stop";
@@ -46,7 +46,7 @@ export function nextUpdatePollStep({ status, follow, now, deadline }: UpdatePoll
 }
 
 /** Handles a read while nothing is being followed: only the settled job stays visible; other finished jobs are hidden. */
-function settledOrIdleStep(job: BuildChangeJob | null, follow: UpdateFollow): UpdatePollStep {
+function settledOrIdleStep(job: BuildUpdateJob | null, follow: UpdateFollow): UpdatePollStep {
     if (job === null) return { show: { kind: "unchanged" }, error: null, refresh: false, poll: "stop", follow };
     if (follow.kind === "settled" && job.jobId === follow.jobId) return { show: { kind: "job", job }, error: null, refresh: false, poll: "stop", follow };
     return { show: { kind: "hidden" }, error: null, refresh: false, poll: "stop", follow: { kind: "idle" } };
@@ -62,7 +62,7 @@ function withinDeadline(step: UpdatePollStep, now: number, deadline: number): Up
 export function useServerUpdateProgress(serverId: string, enabled: boolean, expectedUpdatedAt: string) {
     const { t } = useTranslations("managed-server");
     const router = useRouter();
-    const [job, setJob] = useState<BuildChangeJob | null>(null);
+    const [job, setJob] = useState<BuildUpdateJob | null>(null);
     const [error, setError] = useState<UpdatePollStep["error"]>(null);
     const [pollRun, setPollRun] = useState(0);
     // A ref, not state: the poll loop reads and advances it between reads without restarting itself.

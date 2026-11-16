@@ -4,10 +4,10 @@ import { useTranslations } from "@/app/lib/localization/client";
 
 import { useId } from "react";
 import { Check, CircleAlert, LoaderCircle, Minus } from "lucide-react";
-import type { BuildChangeJob, BuildStepId, BuildStepState } from "../../../../supabase/functions/_shared/server-build-contract";
+import type { BuildUpdateJob, BuildStepId, BuildStepState } from "../../../../supabase/functions/_shared/server-build-contract";
 
 /** Shows the ordered steps of one update with a progress bar, live status, the restore point and any failure. */
-export function ServerUpdateProgress({ job }: { job: BuildChangeJob }) {
+export function ServerUpdateProgress({ job }: { job: BuildUpdateJob }) {
     const { t } = useTranslations("managed-server");
     const headingId = useId();
     const version = job.targetVersion;

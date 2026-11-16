@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { BuildChangeJob, BuildStatus } from "../../../../supabase/functions/_shared/server-build-contract";
+import type { BuildUpdateJob, BuildStatus } from "../../../../supabase/functions/_shared/server-build-contract";
 import { nextUpdatePollStep, type UpdateFollow } from "./use-server-update-progress";
 
 const serverId = "22222222-2222-4222-8222-222222222222";
@@ -10,7 +10,7 @@ const deadline = 2_000;
 const idle: UpdateFollow = { kind: "idle" };
 
 // Builds a status read carrying one update job in the given state.
-function status(state: BuildChangeJob["state"], id = jobId): BuildStatus {
+function status(state: BuildUpdateJob["state"], id = jobId): BuildStatus {
     return { serverId, job: {
         jobId: id, state, initiatedBy: "automatic", ownerSelected: false, phase: state === "running" ? "installing" : "done",
         steps: [], completedSteps: 3, totalSteps: 6, targetVersion: "0.1.11", previousVersion: "0.1.10", progress: "Installing the update",
