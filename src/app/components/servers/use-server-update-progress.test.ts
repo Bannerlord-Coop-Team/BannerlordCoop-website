@@ -70,14 +70,17 @@ for (const [latest, read] of [
     });
 }
 
-test("reports progress as unavailable when a read fails while following", () => {
-    assert.deepEqual(nextUpdatePollStep({ status: null, follow: { kind: "following", jobId }, now, deadline }), {
-        show: { kind: "unchanged" }, error: "unavailable", refresh: false, poll: "continue", follow: { kind: "following", jobId },
+for (const follow of [idle, { kind: "settled", jobId }] as const) {
+    test(`keeps polling quietly when a read fails while ${follow.kind}`, () => {
+        // The failed read may have hidden an update started elsewhere, so a later read must still be able to pick it up.
+        assert.deepEqual(nextUpdatePollStep({ status: null, follow, now, deadline }), {
+            show: { kind: "unchanged" }, error: null, refresh: false, poll: "continue", follow,
+        });
     });
-});
+}
 
-test("stops quietly when a read fails and nothing is followed", () => {
-    assert.deepEqual(nextUpdatePollStep({ status: null, follow: idle, now, deadline }), {
+test("ends an idle poll at the deadline without an error when its read fails", () => {
+    assert.deepEqual(nextUpdatePollStep({ status: null, follow: idle, now: deadline, deadline }), {
         show: { kind: "unchanged" }, error: null, refresh: false, poll: "stop", follow: idle,
     });
 });

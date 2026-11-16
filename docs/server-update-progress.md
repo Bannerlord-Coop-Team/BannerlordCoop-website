@@ -35,8 +35,12 @@ it: the owner's Update now, a maintenance-window update or hosting support.
 While an update runs it polls every 3 seconds for up to 15 minutes, and
 refreshes the page once when a followed update ends; that finished update stays
 on screen after the refresh. An update the page never saw running is not shown
-once it has finished, so older outcomes are not replayed after a reload. Each
-read's outcome is decided by the pure `nextUpdatePollStep`.
+once it has finished, so older outcomes are not replayed after a reload. A
+failed read while following an update shows that progress is unavailable and
+keeps polling; at the end of the window it shows that checks are paused. A
+failed read while nothing is followed keeps polling quietly so a running update
+is still picked up, and that loop ends without a message at the end of the
+window. Each read's outcome is decided by the pure `nextUpdatePollStep`.
 
 The step list uses icons as well as colour, the bar is a `progressbar` with step
 text, and status and failures are announced through live regions.

@@ -70,6 +70,20 @@ it("stops polling and reports paused once the poll window passes", async () => {
     expect(result.current!.job?.state).toBe("running");
 });
 
+it("keeps polling quietly after a failed read while idle and ends at the deadline without an error", async () => {
+    readStatus.mockRejectedValue(new Error("network"));
+    const { result } = await renderHook();
+    await advance(6_000);
+    expect(readStatus.mock.calls.length).toBeGreaterThan(1);
+    expect(result.current!.error).toBeNull();
+    await advance(15 * 60_000);
+    const reads = readStatus.mock.calls.length;
+    await advance(60_000);
+    expect(readStatus).toHaveBeenCalledTimes(reads);
+    expect(result.current!.error).toBeNull();
+    expect(result.current!.job).toBeNull();
+});
+
 it("reports progress as unavailable when the injected read fails while following", async () => {
     const { result } = await renderHook();
     readStatus.mockRejectedValue(new Error("network"));

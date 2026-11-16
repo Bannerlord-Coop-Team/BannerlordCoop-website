@@ -52,19 +52,23 @@ export const INITIAL_UPDATE_PROGRESS_STATE: UpdateProgressState = { follow: { ki
 /** Reads one server's update status; rejects or resolves null when the read fails. */
 export type ReadBuildStatus = (serverId: string) => Promise<BuildStatus | null>;
 
-/** Decides one poll's outcome, then pauses a poll that would continue once its window has passed, keeping what it shows. */
+/**
+ * Decides one poll's outcome, then ends a poll that would continue once its window has passed, keeping what it shows.
+ * Only a followed update reports the end as paused; a loop with nothing followed ends quietly.
+ */
 export function nextUpdatePollStep({ status, follow, now, deadline }: UpdatePollInput): UpdatePollStep {
     const step = decidePollStep(status, follow);
-    if (step.poll === "continue" && now >= deadline) return { ...step, error: "paused", poll: "stop" };
-    return step;
+    if (step.poll === "stop" || now < deadline) return step;
+    if (step.follow.kind !== "following") return { ...step, poll: "stop" };
+    return { ...step, error: "paused", poll: "stop" };
 }
 
 /** Decides one poll's outcome from the latest status read (null when the read failed) and the follow state alone. */
 function decidePollStep(status: BuildStatus | null, follow: UpdateFollow): UpdatePollStep {
-    const job = status?.job ?? null;
+    if (status === null) return failedReadStep(follow);
+    const job = status.job;
     if (job !== null && isActiveJob(job)) return followActiveStep(job);
     if (follow.kind !== "following") return settledOrIdleStep(job, follow);
-    if (status === null) return waitStep(follow, "unavailable");
     // The followed job is not visible yet, or an older finished job is still the latest: keep waiting.
     if (job === null || job.jobId !== follow.jobId) return waitStep(follow, null);
     return settleFollowedStep(job);
@@ -73,6 +77,15 @@ function decidePollStep(status: BuildStatus | null, follow: UpdateFollow): Updat
 /** Tells whether a job is still in flight: queued, running or waiting to retry. */
 function isActiveJob(job: BuildUpdateJob): boolean {
     return ACTIVE_UPDATE_JOB_STATES.includes(job.state);
+}
+
+/**
+ * Polls again after a failed read: reports it while following, and stays quiet otherwise so an update started
+ * elsewhere is still picked up by a later read.
+ */
+function failedReadStep(follow: UpdateFollow): UpdatePollStep {
+    if (follow.kind !== "following") return waitStep(follow, null);
+    return waitStep(follow, "unavailable");
 }
 
 /** Shows and follows an in-progress job, the server's current update, and polls again. */
