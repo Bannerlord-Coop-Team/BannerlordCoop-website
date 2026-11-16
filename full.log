@@ -1,0 +1,1438 @@
+
+ RUN  v3.2.7 C:/Users/Andrew/.t3/worktrees/BannerlordCoop-website/portal-poll-backoff
+
+(node:48424) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/app/components/servers/ManagedServerCampaigns.component.test.tsx (34 tests | 34 failed) 20ms
+   × lists campaigns with the selection marked and only offers switching while the server is stopped 9ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × explains why campaign controls are disabled while the server is running 1ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × keeps New campaign disabled on a server that never started because its first Start creates the campaign 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × selects an imported campaign with a durable request bound to the listed server revision 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × starts a new campaign only after confirmation, replays the same request on retry, and reads its terminal result 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × shows the retained native reset refusal without another Reset or a changed campaign 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × accepts succeeded status even when the new default keeps the same save ID 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × bounds legacy status polling and does not turn a pending supported job into success from a changed selection 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × ignores a late reset status after the page account changes 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × releases the pending view after its deadline even if a status read never returns 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × keeps today's campaign list and exact Classic reset request when the control plane sends no War Sails fields 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × labels each campaign Classic or War Sails and shows nothing for an unknown label 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × notes that selecting a campaign in the other mode changes War Sails, only when both modes are known 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × offers the War Sails mode for a new campaign only when the build can run it and sends warSails only when chosen 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × shows load failures without hiding the controls and refuses changes before status is known 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × deletes only an inactive imported campaign after exact-name confirmation 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × reattaches after refresh and shows queued, running, retry-wait and a terminal failure without another mutation 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × recovers a lost reply using the exact persisted request across a refresh 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × keeps an unavailable status pending and discards late responses after switching identity 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × does not block campaign controls or new deletion after a previously confirmed terminal job is pruned 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × keeps corrupted storage fail closed for deletion without blocking refresh or selection 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × recovers a corrupt receipt only after confirmation and a fresh list, then completes an explicitly chosen deletion 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × resolves an unknown receipt as deleted only when its save is absent from a fresh authorized list 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × removes the retry offer when a second recovery confirms the campaign is gone 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × clears an earlier retry candidate when beginning a new deletion 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × offers a fresh UUID only for an owner-confirmed retry after checking that the unknown save still exists 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × checks campaigns on the first recovery click after an accepted deletion in this tab 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × restores the accepted receipt when a fresh retry is definitively refused 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × preserves a newer deletion receipt when an older request receives a suspended refusal 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × adopts a valid receipt saved before recovery begins (corrupt) 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × adopts a valid receipt saved before recovery begins (old target absent) 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × keeps an unknown receipt when fresh access is denied and never resubmits automatically 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × clears a definite pre-admission refusal so another campaign request can be sent 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × adopts a newer cross-tab receipt instead of repeatedly recovering an overwritten request 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+(node:32988) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/app/components/servers/ManagedServerMoveStatus.component.test.tsx (36 tests | 36 failed) 13ms
+   × counts down to an announced move each second without announcing every second 7ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × writes longer and passed countdowns in whole units 1ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × renders the announced time in UTC and no countdown on the server, so hydration matches 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × explains a move waiting for the server's current task 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × shows a page opened mid-move with the steps done, the current step and the time elapsed 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × marks no step as done or current while a move has not reported its step 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × explains that a failed move is putting the server back on its original machine 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × reports a failed move where the server stayed on its original machine: true 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × reports a failed move where the server stayed on its original machine: false 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × reports a failed move where the server stayed on its original machine: null 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × shows the new address once the move finishes, reveals it in the header and copies it 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × reveals the header address only once the header has the new one, and only once per move 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × reveals the header address on a page opened after the move, unless that move was dismissed 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × keeps copy feedback with the move whose address was copied when the page changes server 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × copy feedback from more than one click > ignores an earlier server's copy that settles after a copy on the next server 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × copy feedback from more than one click > reports the latest of two clicks when the earlier one fails after it 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × copy feedback from more than one click > drops a failed copy once another move is shown, so it does not come back 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × tells players the new address will appear once assigned when the move reports none 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × dismisses a finished move for this browser along with this move's completion notice only 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × leaves a completion notice that was written before the move completed 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × leaves a completion notice that names another address 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × dismisses this move's completion notice once when it only arrives after the card was dismissed 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × keeps a dismissal on this page even when the notice cannot be dismissed 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × renders nothing without a move or outside a managed server page 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × waits longer between reads the further away a move is 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × follows each state's read cadence as a move approaches and runs 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × refreshes the page once for each change it shows, not for a new step or an unchanged read 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × keeps the last status and backs off while reads fail 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × reads only while the page is visible and catches up as soon as it is shown 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × reads as soon as the page is shown again, even before the next read was due 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × reads again right after a read that was under way while the page was hidden 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × shows the status a refreshed page renders at once and confirms it with a read 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × does not refresh back and forth when a refreshed page renders an older status 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × keeps the move shown when a refreshed page renders none, and checks with a read 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × refreshes again, at most three times per move, while the header lacks the moved address 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × stops reading once the page closes 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+(node:16572) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:40420) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20932) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:44092) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:41928) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/app/components/admin/VpsInventoryBrowser.component.test.tsx (9 tests | 9 failed) 7ms
+   × VPS region cards > outlines a full region in red and a region with one slot left in yellow 4ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × VPS inventory filters > pages registered hosts and stores the chosen page size 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × VPS inventory filters > restores a stored page size on the next visit 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × VPS inventory filters > ignores a stored page size outside 10, 25, 50, and 100 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × VPS inventory filters > lists stored regions for hosts that have no legacy region 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × VPS inventory filters > filters by several regions, owner email, and empty slots 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × VPS inventory filters > returns to the first page when a filter changes 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × VPS inventory filters > says when every host is filtered out and keeps the empty fleet message separate 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+   × VPS inventory query > matches a slot owner by account id or legacy Discord id 0ms
+     → Cannot read properties of undefined (reading 'clear')
+     → Cannot read properties of undefined (reading 'unmount')
+(node:49280) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/app/components/admin/VpsView.component.test.tsx (23 tests) 792ms
+ ✓ src/app/components/admin/PlacementView.component.test.tsx (12 tests) 817ms
+(node:7148) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/app/components/admin/SlotSizingView.component.test.tsx (16 tests) 1111ms
+ ✓ src/app/lib/localization/runtime.component.test.tsx (10 tests) 823ms
+   ✓ enabled dictionary integrity > requires exact namespaces, keys, and tokens for every activated locale  772ms
+ ✓ src/app/components/servers/ServerModsPanel.component.test.tsx (46 tests) 2048ms
+(node:16600) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:16640) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ src/app/components/servers/ManagedServerBackups.component.test.tsx (74 tests | 3 failed) 2393ms
+   ✓ renders the CP #611 backup envelope for refused with zero browser console errors 80ms
+   ✓ renders the CP #611 backup envelope for unknown with zero browser console errors 41ms
+   ✓ renders the CP #611 backup envelope for success with zero browser console errors 26ms
+   ✓ ManagedServerBackups action reconciliation > retains the exact lost restore through auth-outage and successful replay 24ms
+   ✓ ManagedServerBackups action reconciliation > retains the exact lost restore through signed-out and successful replay 48ms
+   ✓ ManagedServerBackups action reconciliation > retains the exact lost restore through missing-token and successful replay 29ms
+   ✓ ManagedServerBackups action reconciliation > retains the exact lost restore through busy and successful replay 43ms
+   ✓ ManagedServerBackups action reconciliation > retains the exact lost restore through rate_limited and successful replay 28ms
+   ✓ ManagedServerBackups action reconciliation > retains the exact lost restore through unauthenticated and successful replay 31ms
+   ✓ ManagedServerBackups action reconciliation > retains the exact lost restore through identity_unavailable and successful replay 32ms
+   ✓ ManagedServerBackups action reconciliation > retains the exact lost restore through access_denied and successful replay 34ms
+   ✓ ManagedServerBackups action reconciliation > retains the exact lost restore through server_not_found and successful replay 22ms
+   ✓ ManagedServerBackups action reconciliation > retains the exact lost restore through request_conflict and successful replay 27ms
+   ✓ ManagedServerBackups action reconciliation > clears an intent on a post-replay state rejection 14ms
+   ✓ ManagedServerBackups action reconciliation > retains an uncertain create request through capacity rejection and replay 33ms
+   ✓ ManagedServerBackups bounded polling > resumes a backup job after the deadline and observes completion 70ms
+   ✓ ManagedServerBackups bounded polling > resumes a restore job after the deadline and observes completion 103ms
+   ✓ does not misdescribe an expired available row as a build mismatch 12ms
+   ✓ does not misdescribe an expired restored row as a build mismatch 53ms
+   ✓ does not misdescribe an expired failed row as a build mismatch 9ms
+   ✓ does not expose backup mutations to support access 21ms
+   ✓ does not expose backup mutations to admin access 16ms
+   ✓ ManagedServerBackups session recovery > replays the exact lost restore after polling causes a redirect to the directory and recovery 31ms
+   ✓ ManagedServerBackups session recovery > replays the exact lost restore after polling causes a inventory loss within the workspace and recovery 56ms
+   ✓ ManagedServerBackups session recovery > gates mutations before rehydration 9ms
+   ✓ ManagedServerBackups session recovery > isolates retained intents on a same-mount account change 67ms
+   ✓ ManagedServerBackups session recovery > isolates retained intents on a same-mount server change 62ms
+   ✓ ManagedServerBackups session recovery > does not use cached intent as authority during support 26ms
+   ✓ ManagedServerBackups session recovery > does not use cached intent as authority during admin 26ms
+   ✓ ManagedServerBackups session recovery > does not use cached intent as authority during load-error 23ms
+   × ManagedServerBackups session recovery > fails closed when storage getItem throws 21ms
+     → expected 'Backups and restoreLast backup: Sep 1…' to contain 'recovery storage is unavailable or in…'
+   × ManagedServerBackups session recovery > fails closed when storage setItem throws 16ms
+     → expected 'Backups and restoreLast backup: Sep 1…' to contain 'recovery storage is unavailable or in…'
+   × ManagedServerBackups session recovery > fails closed when storage removeItem throws 15ms
+     → expected 'Backups and restoreLast backup: Sep 1…' to contain 'recovery storage is unavailable or in…'
+   ✓ ManagedServerBackups session recovery > retains a rehydrated intent through an intermediate access rejection 63ms
+   ✓ ManagedServerBackups session recovery > clears session storage only after a definite rejection 22ms
+   ✓ ManagedServerBackups session recovery > fails closed without deleting malformed stored data 6ms
+   ✓ ManagedServerBackups stale authenticated page recovery > retains A's restore through B authentication on unchanged A props, conflict, and A recovery 55ms
+   ✓ ManagedServerBackups stale authenticated page recovery > does not treat caller page identity undefined as authority 1ms
+   ✓ ManagedServerBackups stale authenticated page recovery > does not treat caller page identity "" as authority 4ms
+   ✓ ManagedServerBackups stale authenticated page recovery > does not treat caller page identity "user-b" as authority 1ms
+   ✓ ManagedServerBackups stale authenticated page recovery > does not treat caller page identity {"id":"user"} as authority 1ms
+   ✓ explains build_mismatch beside the disabled restore and in its tooltip 85ms
+   ✓ explains installed_build_unknown beside the disabled restore and in its tooltip 8ms
+   ✓ explains backup_build_unknown beside the disabled restore and in its tooltip 11ms
+   ✓ explains restore_in_progress beside the disabled restore and in its tooltip 9ms
+   ✓ ManagedServerBackups owner experience > confirms the brief interruption before backing up a running server, but not a stopped one 20ms
+   ✓ ManagedServerBackups owner experience > explains that a running server is temporarily stopped while its backup runs 17ms
+   ✓ ManagedServerBackups owner experience > does not announce an earlier job's outcome on load, but reports jobs watched on this page 22ms
+   ✓ ManagedServerBackups owner experience > keeps request feedback beside Create backup instead of below the history 24ms
+   ✓ ManagedServerBackups owner experience > shows a restore result inside the row that requested it 64ms
+   ✓ ManagedServerBackups owner experience > does not show the unconfirmed-outcome notice while a request is merely in flight 12ms
+   ✓ ManagedServerBackups owner experience > explains a genuinely unconfirmed backup in plain language and retries the same request 45ms
+   ✓ ManagedServerBackups owner experience > collapses expired backups behind a toggle and keeps the current history visible 24ms
+   ✓ ManagedServerBackups owner experience > renders UTC on the server, then the viewer's local time with a zone label after hydration 45ms
+   ✓ re-reads backup history that failed to load, a bounded number of times, instead of asking for a refresh 59ms
+   ✓ ManagedServerBackups recent autosaves > lists the current save and both earlier autosaves above the retained backups 27ms
+   ✓ ManagedServerBackups recent autosaves > renders absolute times on the server and adds relative ages only after hydration 25ms
+   ✓ ManagedServerBackups recent autosaves > disables loading while the server is running and says why 26ms
+   ✓ ManagedServerBackups recent autosaves > disables loading while the server is stopping and says why 13ms
+   ✓ ManagedServerBackups recent autosaves > disables loading while the server is still observed running and says why 12ms
+   ✓ ManagedServerBackups recent autosaves > explains the required recovery step for a drifted stopped game desired running 15ms
+   ✓ ManagedServerBackups recent autosaves > explains the required recovery step for a drifted stopped game desired stopped 16ms
+   ✓ ManagedServerBackups recent autosaves > confirms with the autosave time and submits the exact campaign, generation and generation check 38ms
+   ✓ ManagedServerBackups recent autosaves > reloads the autosaves and explains a load the server refused because its autosaves changed 47ms
+   ✓ ManagedServerBackups recent autosaves > reloads the autosaves once when it sees the server stop, so the list includes the shutdown autosave 29ms
+   ✓ ManagedServerBackups recent autosaves > does not reload a page that opened with the server already stopped 15ms
+   ✓ ManagedServerBackups recent autosaves > reports a precondition failure beside the autosave and forgets the request 28ms
+   ✓ ManagedServerBackups recent autosaves > retains an unconfirmed autosave restore and blocks other restores until the same request is reconciled 93ms
+   ✓ ManagedServerBackups recent autosaves > shows the empty state when the server has only the current save 8ms
+   ✓ ManagedServerBackups recent autosaves > shows the empty state when the server has nothing yet 39ms
+   ✓ ManagedServerBackups recent autosaves > keeps retained backups usable when the autosaves could not be read 69ms
+   ✓ ManagedServerBackups recent autosaves > omits the section when no campaign autosaves were provided 10ms
+   ✓ ManagedServerBackups recent autosaves > lists autosaves without a load control for support access 5ms
+   ✓ ManagedServerBackups recent autosaves > lists autosaves without a load control for admin access 131ms
+ ❯ src/app/components/servers/ServerOnboarding.component.test.tsx (42 tests | 1 failed) 1994ms
+   ✓ ServerOnboarding real component and server-action recovery > explains that region capacity does not guarantee release availability 95ms
+   ✓ ServerOnboarding real component and server-action recovery > offers only backend-authorized unused allocation and fails safely for unknown or unavailable summary 19ms
+   ✓ ServerOnboarding real component and server-action recovery > groups regions into accessible continent tabs and disables coming-soon continents 37ms
+   ✓ ServerOnboarding real component and server-action recovery > explains the release cadence when a release option is hovered or focused 19ms
+   ✓ ServerOnboarding real component and server-action recovery > offers only stored-catalog regions the website knows, in stored order, and disables emptied continents 66ms
+   ✓ ServerOnboarding real component and server-action recovery > offers Discard for a retained intent in a removed region only after a retry fails transiently 10ms
+   ✓ ServerOnboarding real component and server-action recovery > clears a retained intent in a removed region when the control plane rejects the key 9ms
+   ✓ ServerOnboarding real component and server-action recovery > offers no discard for a retained intent the stored catalog still offers 9ms
+   ✓ ServerOnboarding real component and server-action recovery > shows visible pending feedback while refreshing availability 49ms
+   ✓ ServerOnboarding real component and server-action recovery > retains Nightly selection across an uncertain response and exact retry 45ms
+   ✓ ServerOnboarding real component and server-action recovery > validates normalized name, submits once, reports assigned not running and refreshes real inventory 112ms
+   ✓ ServerOnboarding real component and server-action recovery > requests a full region without a name and shows the saved request on reload 46ms
+   ✓ ServerOnboarding real component and server-action recovery > requires explicit confirmation before replacing another pending region request 81ms
+   ✓ ServerOnboarding real component and server-action recovery > confirms before replacing a pending request for a region the website no longer offers 40ms
+   ✓ ServerOnboarding real component and server-action recovery > allows creation after capacity returns even with an older region request 41ms
+   ✓ ServerOnboarding real component and server-action recovery > retains uncertain create through reload, consumed entitlement and request_conflict, then exact replay 27ms
+   ✓ ServerOnboarding real component and server-action recovery > retains uncertain create through reload, consumed entitlement and rate_limited, then exact replay 26ms
+   ✓ ServerOnboarding real component and server-action recovery > retains uncertain create through reload, consumed entitlement and server_not_found, then exact replay 37ms
+   ✓ ServerOnboarding real component and server-action recovery > retains uncertain create through reload, consumed entitlement and invalid_response, then exact replay 36ms
+   ✓ ServerOnboarding real component and server-action recovery > recovers an uncertain region request with its original UUID and account 55ms
+   ✓ ServerOnboarding real component and server-action recovery > terminal capacity_unavailable releases intent but requires a fresh snapshot before choosing again 40ms
+   ✓ ServerOnboarding real component and server-action recovery > terminal capacity_available releases intent but requires a fresh snapshot before choosing again 24ms
+   ✓ ServerOnboarding real component and server-action recovery > terminal quota_exhausted releases intent but requires a fresh snapshot before choosing again 24ms
+   ✓ ServerOnboarding real component and server-action recovery > closing pending dialog via Escape restores fallback focus without cancelling or resubmitting 26ms
+   ✓ ServerOnboarding real component and server-action recovery > closing pending dialog via Close restores fallback focus without cancelling or resubmitting 27ms
+   ✓ ServerOnboarding real component and server-action recovery > closing uncertain dialog via Escape restores fallback focus and preserves exact retry 91ms
+   ✓ ServerOnboarding real component and server-action recovery > closing uncertain dialog via Close restores fallback focus and preserves exact retry 106ms
+   ✓ ServerOnboarding real component and server-action recovery > uses fallback when a connected enabled trigger does not accept focus 17ms
+   ✓ ServerOnboarding real component and server-action recovery > native dialog cancels via Escape, restores focus and wraps tab edges 71ms
+   × ServerOnboarding real component and server-action recovery > fails closed on inaccessible or corrupt storage before any mutation 63ms
+     → expected 'Your granted server quotaYou have a s…' to contain 'Setup is blocked'
+   ✓ ServerOnboarding real component and server-action recovery > session completion authority (StrictMode=false) > ignores obsolete capacity_unavailable across A-B-A and preserves same-UUID replay after another remount 47ms
+   ✓ ServerOnboarding real component and server-action recovery > session completion authority (StrictMode=false) > ignores obsolete success across A-B-A and preserves same-UUID replay after another remount 32ms
+   ✓ ServerOnboarding real component and server-action recovery > session completion authority (StrictMode=false) > ignores obsolete uncertain across A-B-A and preserves same-UUID replay after another remount 30ms
+   ✓ ServerOnboarding real component and server-action recovery > session completion authority (StrictMode=false) > allows the current session's terminal completion to release its intent 30ms
+   ✓ ServerOnboarding real component and server-action recovery > session completion authority (StrictMode=true) > ignores obsolete capacity_unavailable across A-B-A and preserves same-UUID replay after another remount 48ms
+   ✓ ServerOnboarding real component and server-action recovery > session completion authority (StrictMode=true) > ignores obsolete success across A-B-A and preserves same-UUID replay after another remount  315ms
+   ✓ ServerOnboarding real component and server-action recovery > session completion authority (StrictMode=true) > ignores obsolete uncertain across A-B-A and preserves same-UUID replay after another remount 39ms
+   ✓ ServerOnboarding real component and server-action recovery > session completion authority (StrictMode=true) > allows the current session's terminal completion to release its intent 21ms
+   ✓ ServerOnboarding real component and server-action recovery > current completion still compare-clears only its exact retained intent 17ms
+   ✓ ServerOnboarding real component and server-action recovery > late response from previous account cannot clear newer retained intent 25ms
+   ✓ membership prompts never replace a retained exact-UUID mutation, and associated inventory is not allocation 8ms
+   ✓ localizes region/release presentation, validation and reordered receipts without changing submitted values 30ms
+ ❯ src/app/components/servers/ManagedServerTransfers.component.test.tsx (50 tests | 1 failed) 3042ms
+   ✓ explains why campaign save import is disabled while the server is running 121ms
+   ✓ allows current-save export while running, but requires stopped import and owner config permission 45ms
+   ✓ retains uncertain request identity across retries and page remounts 175ms
+   ✓ settles a suspended refusal and never erases a newer transfer receipt 77ms
+   ✓ retains a same-ID transfer reported still in progress, including after remount 95ms
+   ✓ keeps one pending dispatch and bounds polling after network loss 36ms
+   ✓ keeps checking an accepted queued transfer past one minute and follows its automatic retry 81ms
+   ✓ bounds confirmed-job polling and resumes checking the same accepted request 91ms
+   ✓ retains acceptance when a later check cannot find the request 41ms
+   ✓ shows the safe storage-unavailable failure and explains how to start a new request 35ms
+   ✓ shows the safe save-rejected failure and explains how to start a new request 40ms
+   ✓ shows the safe stop-required failure and explains how to start a new request 52ms
+   ✓ shows the safe server-changed failure and explains how to start a new request 57ms
+   ✓ shows descriptive pre-job rejection undefined with a support reference and clears the finished intent 35ms
+   ✓ shows descriptive pre-job rejection storage-unavailable with a support reference and clears the finished intent 55ms
+   ✓ shows descriptive pre-job rejection save-rejected with a support reference and clears the finished intent 58ms
+   ✓ shows descriptive pre-job rejection campaign-limit with a support reference and clears the finished intent 40ms
+   ✓ shows descriptive pre-job rejection stop-required with a support reference and clears the finished intent 54ms
+   ✓ shows descriptive pre-job rejection server-changed with a support reference and clears the finished intent 43ms
+   ✓ shows descriptive pre-job rejection invalid-companion with a support reference and clears the finished intent 35ms
+   ✓ shows descriptive pre-job rejection save-too-large with a support reference and clears the finished intent 42ms
+   ✓ shows descriptive pre-job rejection server-unavailable with a support reference and clears the finished intent 40ms
+   ✓ shows a rejection reason immediately after submission 26ms
+   ✓ clears a definitively rejected stale request so refreshed inputs can be used 29ms
+   × does not dispatch when pending intent cannot be persisted, or recover a different account's request 37ms
+     → expected "spy" to not be called at all, but actually been called 1 times
+
+Received: 
+
+  1st spy call:
+
+    Array [
+      FormData {},
+      "owner",
+    ]
+
+
+Number of calls: 1
+
+   ✓ reviews native configuration changes and rejects unsupported fields before any submission 100ms
+   ✓ rejects malformed stored fingerprints and cross-server identity 2ms
+   ✓ guides individual imports, catches choosing the wrong file, and previews only the selected settings 95ms
+   ✓ recovers the original config choice for a pending mod import 38ms
+   ✓ recovers the original config choice for a pending server import 72ms
+   ✓ recovers the original config choice for a pending combined import 66ms
+   ✓ recovers the original config choice for a pending undefined import 37ms
+   ✓ requires another review if current server settings change before confirmation 105ms
+   ✓ rejects invisible campaign names and allows corrected input after a local submission failure and refresh 216ms
+   ✓ retains an earlier uncertain request if its retry fails before submission 49ms
+   ✓ downloads two correctly named native JSON files in one ZIP that each import independently 49ms
+   ✓ keeps config export failures retryable without downloading a file 43ms
+   ✓ edits the live configuration in the form by default while file transfers stay available 112ms
+   ✓ refreshes a stale page and retries a save export once with the current server state 37ms
+   ✓ never exports a different campaign than the one shown when the active save changed 62ms
+   ✓ retries a stale export only once, then explains that the server is still changing 39ms
+   ✓ does not replace a retained export request with new inputs after a stale rejection 31ms
+   ✓ keeps save feedback in the campaign card and explains why other transfers are paused 98ms
+   ✓ reports configuration export results directly under the configuration buttons 143ms
+   ✓ clears the ready-to-download message together with a dismissed export 45ms
+   ✓ shows download progress and names the export after the server and day 52ms
+   ✓ derives safe export filenames without changing the server's extension 1ms
+   ✓ says once that configuration changes apply the next time the server starts 71ms
+   ✓ offers only export during a subscription hold when rescue is true 24ms
+   ✓ offers only export during a subscription hold when rescue is false 14ms
+ ✓ src/app/components/admin/PlacementMeasuredOverlap.component.test.tsx (27 tests) 2970ms
+stdout | src/app/cheats/localization.component.test.tsx > projects only browser catalog fields for en without changing published commands
+Cheats en: 426 commands; compact JSON 239494 -> 166424 bytes (73070 removed)
+(node:45152) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ ❯ src/app/components/servers/ManagedServerStop.component.test.tsx (27 tests | 8 failed) 832ms
+   × automatically confirms Stop after accepted without resending it 52ms
+     → expected "spy" to be called 2 times, but got 1 times
+   ✓ automatically confirms Stop after unknown without resending it 21ms
+   × automatically confirms Stop after lost-response without resending it 12ms
+     → expected "spy" to be called 2 times, but got 1 times
+   ✓ keeps checking a stopped drifted game until CP verifies readiness and unlocks Start 255ms
+   ✓ settles a crash-loop Stop in stopped without waiting for Start cooldown 138ms
+   ✓ settles a crash-loop Stop in drifted without waiting for Start cooldown 32ms
+   ✓ does not enter the long Stop poll when another operation already owns the server 13ms
+   ✓ shows immediate feedback while Stop is being sent 64ms
+   ✓ requires a newer stopped observation and keeps checking for fifteen minutes before offering Check now 14ms
+   ✓ keeps a definitive rejection visible without polling or retrying 9ms
+   ✓ asks the owner to retry Stop after a save without checking status, and keeps Stop usable 10ms
+   ✓ disables Stop and Restart only while a save of this server is in flight 8ms
+   ✓ stops refreshing when the controls unmount 10ms
+   × automatically follows provisioning until initialization settles, then preserves normal lifecycle polling 7ms
+     → expected "spy" to be called 2 times, but got 1 times
+   × automatically follows configuring until initialization settles, then preserves normal lifecycle polling 8ms
+     → expected "spy" to be called 4 times, but got 3 times
+   ✓ spaces refreshes from 4 s to 8 s to 15 s as an operation runs longer 1ms
+   × keeps a backup session, and the controls busy, until the operation settles or fifteen minutes pass 4ms
+     → expected "spy" to be called 16 times, but got 5 times
+   ✓ ends a session as soon as its owner reports that the operation settled 7ms
+   × re-renders the page only when the compact server status changes 7ms
+     → expected "spy" to be called 6 times, but got 3 times
+   ✓ opens a polling session within 1.5 s when the status read is slow 5ms
+   × shares a slow opening status read with the next check instead of starting another 13ms
+     → expected "spy" to be called 2 times, but got 1 times
+   × keeps the polling baseline when a backup request's job attaches 6ms
+     → expected "spy" to be called 2 times, but got 1 times
+   ✓ still opens with a refresh when a job attaches during the opening status read 5ms
+   ✓ shares one status read when a shown tab's catch-up and a scheduled check overlap 53ms
+   ✓ releases the controls after two minutes when a backup request's job never appears 27ms
+   ✓ follows an attached backup job for the full fifteen minutes 10ms
+   ✓ defers refreshes while the tab is hidden and catches up when it is shown 4ms
+ ✓ src/app/login/login.component.test.tsx (13 tests) 604ms
+ ✓ src/app/components/servers/ManagedServerConfigEditor.component.test.tsx (15 tests) 958ms
+stdout | src/app/cheats/localization.component.test.tsx > projects only browser catalog fields for zh-CN without changing published commands
+Cheats zh-CN: 426 commands; compact JSON 287169 -> 214099 bytes (73070 removed)
+
+(node:8668) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/app/components/servers/ServerManagementWorkspace.component.test.tsx (21 tests) 1168ms
+   ✓ renders the wireframe console with all unconnected features disabled  433ms
+ ✓ src/app/account/account-ux.component.test.tsx (28 tests) 844ms
+ ✓ src/app/lib/hosting/server-mods-browser-fallback.component.test.tsx (4 tests) 4060ms
+   ✓ uploads a small folder through the production browser catalog when IndexedDB is absent  2037ms
+   ✓ uploads a small folder through the production browser catalog when IndexedDB.open throws  2021ms
+ ✓ src/app/account/localization.component.test.tsx (38 tests) 852ms
+ ✓ src/app/components/servers/ManagedServerRuntimeControls.component.test.tsx (14 tests) 3246ms
+   ✓ sends campaign speed and save as console commands and marks the chosen speed  484ms
+   ✓ shows only CPU and memory percentages of the server's own allocation and keeps reading them  332ms
+   ✓ explains a runner that cannot save yet, and a save it never confirms  317ms
+   ✓ disables Stop and Restart while the Save button's save runs and re-enables them with its result  386ms
+ ✓ src/app/components/servers/ManagedServerRestart.component.test.tsx (20 tests) 1366ms
+   ✓ follows Restart through live game phases without locking Stop and Restart after command success  536ms
+   ✓ follows the restarted run on the same stream, as the live runner reports it  318ms
+ ✓ src/app/components/servers/ManagedServerConsole.component.test.tsx (35 tests) 912ms
+ ✓ src/app/servers/wireframe/ServerWireframe.component.test.tsx (13 tests) 1984ms
+   ✓ demo lifecycle confirms interruptions and keeps controls and status in sync  611ms
+(node:33928) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:39228) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/app/lib/hosting/server-mod-archive.component.test.tsx (7 tests) 469ms
+(node:17908) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+   ✓ stores large entries that would exceed the compression ratio and refuses an aggregate bomb  392ms
+ ❯ src/app/cheats/localization.component.test.tsx (16 tests | 16 failed) 2387ms
+   × projects only browser catalog fields for en without changing published commands 350ms
+     → Cannot read properties of undefined (reading 'clear')
+   × projects only browser catalog fields for zh-CN without changing published commands 216ms
+     → Cannot read properties of undefined (reading 'clear')
+   × keeps missing-translation summary and argument fallbacks in en client props 40ms
+     → Cannot read properties of undefined (reading 'clear')
+   × keeps missing-translation summary and argument fallbacks in zh-CN client props 99ms
+     → Cannot read properties of undefined (reading 'clear')
+   × resolves every Chinese share-link alias to the Chinese content and metadata 7ms
+     → Cannot read properties of undefined (reading 'clear')
+   × ignores the retired cheats cookie, disabled/invalid global choices, and invalid overrides 3ms
+     → Cannot read properties of undefined (reading 'clear')
+   × uses activated dictionaries for cookie and explicit links with no page-code changes 20ms
+     → Cannot read properties of undefined (reading 'clear')
+   × keeps copied English command links English under a Russian cookie 136ms
+     → Cannot read properties of undefined (reading 'clear')
+   × keeps copied English search links English under a Russian cookie 93ms
+     → Cannot read properties of undefined (reading 'clear')
+   × makes English canonical and alternate metadata explicit under a Russian cookie 2ms
+     → Cannot read properties of undefined (reading 'clear')
+   × scopes Chinese content while chrome follows the cookie and hydrates without preference writes 1ms
+     → Cannot read properties of undefined (reading 'setItem')
+     → Cannot read properties of undefined (reading 'clear')
+   × preserves English search compatibility, translated argument search, and immutable copied syntax 448ms
+     → Cannot read properties of undefined (reading 'clear')
+   × shared selector clears the override without directory URL writes restoring it or losing filters/hash 381ms
+     → Cannot read properties of undefined (reading 'clear')
+   × preserves command history and treats unknown category filters as escaped user content 178ms
+     → Cannot read properties of undefined (reading 'clear')
+   × keeps documentation code examples tied to published immutable commands in both locales 409ms
+     → Cannot read properties of undefined (reading 'clear')
+   × keeps dictionaries and server-only loaders outside client modules and removes old preference APIs 3ms
+     → Cannot read properties of undefined (reading 'clear')
+(node:32752) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > backup: renders a parsed 409 suspension and settles only the refused request
+Managed server backup operation failed { code: 'server_suspended' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > backup: shows another known admission refusal
+Managed server backup operation failed { code: 'operation_unavailable' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > backup: keeps retryable suspension failures on the existing recovery path
+Managed server backup operation failed { code: 'server_suspended' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > backup: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Managed server backup operation failed { code: 'operation_failed' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > backup: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Managed server backup operation failed { code: 'invalid_response' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > backup: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Managed server backup operation failed { code: 'invalid_response' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > backup: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Managed server backup operation failed { code: 'operation_failed' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > restore-backup: renders a parsed 409 suspension and settles only the refused request
+Managed server backup operation failed { code: 'server_suspended' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > restore-backup: shows another known admission refusal
+Managed server backup operation failed { code: 'operation_unavailable' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > restore-backup: keeps retryable suspension failures on the existing recovery path
+Managed server backup operation failed { code: 'server_suspended' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > restore-backup: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Managed server backup operation failed { code: 'operation_failed' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > restore-backup: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Managed server backup operation failed { code: 'invalid_response' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > restore-backup: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Managed server backup operation failed { code: 'invalid_response' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > restore-backup: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Managed server backup operation failed { code: 'operation_failed' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > restore-autosave: renders a parsed 409 suspension and settles only the refused request
+Managed server backup operation failed { code: 'server_suspended' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > restore-autosave: shows another known admission refusal
+Managed server backup operation failed { code: 'operation_unavailable' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > restore-autosave: keeps retryable suspension failures on the existing recovery path
+Managed server backup operation failed { code: 'server_suspended' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > restore-autosave: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Managed server backup operation failed { code: 'operation_failed' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > restore-autosave: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Managed server backup operation failed { code: 'invalid_response' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > restore-autosave: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Managed server backup operation failed { code: 'invalid_response' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > restore-autosave: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Managed server backup operation failed { code: 'operation_failed' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > visibility: keeps retryable suspension failures on the existing recovery path
+Server visibility update failed { code: 'server_suspended' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > visibility: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Server visibility update failed { code: 'visibility_update_failed' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > visibility: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Server visibility update failed { code: 'invalid_response' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > visibility: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Server visibility update failed { code: 'invalid_response' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > visibility: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Server visibility update failed { code: 'visibility_update_failed' }
+
+stderr | src/app/lib/supabase/server.component.test.tsx > overlaps actual SDK HTTP calls even while the user endpoint is stalled
+Using the user object as returned from supabase.auth.getSession() or from some supabase.auth.onAuthStateChange() events could be insecure! This value comes directly from the storage medium (usually cookies on the server) and may not be authentic. Use supabase.auth.getUser() instead which authenticates the data by contacting the Supabase Auth server.
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > dismiss-notice: keeps retryable suspension failures on the existing recovery path
+Server notice dismissal failed { code: 'server_suspended' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > dismiss-notice: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Server notice dismissal failed { code: 'notice_dismissal_failed' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > dismiss-notice: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Server notice dismissal failed { code: 'invalid_response' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > dismiss-notice: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Server notice dismissal failed { code: 'invalid_response' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > dismiss-notice: preserves the exact existing unknown response for network, timeout, unenveloped 5xx and malformed body
+Server notice dismissal failed { code: 'notice_dismissal_failed' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > preserves existing German copy and action flags for backup / safe_stop_required
+Managed server backup operation failed { code: 'safe_stop_required' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > preserves existing German copy and action flags for backup / safe_stop_required
+Managed server backup operation failed { code: 'safe_stop_required' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > preserves existing German copy and action flags for backup / operation_in_progress
+Managed server backup operation failed { code: 'operation_in_progress' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > preserves existing German copy and action flags for backup / operation_in_progress
+Managed server backup operation failed { code: 'operation_in_progress' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > preserves existing German copy and action flags for backup / backup_build_mismatch
+Managed server backup operation failed { code: 'backup_build_mismatch' }
+
+stderr | src/app/servers/owner-refusal-actions.component.test.tsx > preserves existing German copy and action flags for backup / backup_build_mismatch
+Managed server backup operation failed { code: 'backup_build_mismatch' }
+
+ ✓ src/app/servers/owner-refusal-actions.component.test.tsx (139 tests) 900ms
+ ✓ src/app/lib/supabase/server.component.test.tsx (11 tests) 442ms
+ ✓ src/app/servers/managed-server-save-actions.component.test.tsx (25 tests) 133ms
+ ✓ src/app/components/servers/ManagedServerControls.component.test.tsx (81 tests) 1111ms
+(node:33512) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/app/components/admin/PlacementExecutorPanel.component.test.tsx (25 tests) 690ms
+ ✓ src/app/servers/[serverId]/page-files.component.test.tsx (9 tests) 906ms
+   ✓ shows actual managed save/config for managed owner and permits only owner save exports  478ms
+(node:46964) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/app/components/admin/ManualVpsOnboardingCard.component.test.tsx (10 tests) 639ms
+ ✓ src/app/components/servers/ManagedServerFiles.component.test.tsx (4 tests) 231ms
+ ✓ src/app/components/admin/RelocateView.component.test.tsx (7 tests) 139ms
+stderr | src/app/admin/control-plane/overview.component.test.tsx > consumes early read failures and preserves the ordinary error UI after authentication
+Control plane admin view failed to load Error: endpoint unavailable
+    at C:\Users\Andrew\.t3\worktrees\BannerlordCoop-website\portal-poll-backoff\src\app\admin\control-plane\overview.component.test.tsx:278:37
+    at file:///C:/Users/Andrew/.t3/worktrees/BannerlordCoop-website/portal-poll-backoff/node_modules/@vitest/runner/dist/chunk-hooks.js:155:11
+    at file:///C:/Users/Andrew/.t3/worktrees/BannerlordCoop-website/portal-poll-backoff/node_modules/@vitest/runner/dist/chunk-hooks.js:752:26
+    at file:///C:/Users/Andrew/.t3/worktrees/BannerlordCoop-website/portal-poll-backoff/node_modules/@vitest/runner/dist/chunk-hooks.js:1897:20
+    at new Promise (<anonymous>)
+    at runWithTimeout (file:///C:/Users/Andrew/.t3/worktrees/BannerlordCoop-website/portal-poll-backoff/node_modules/@vitest/runner/dist/chunk-hooks.js:1863:10)
+ ✓ src/app/cheats/HostingOffer.component.test.tsx (4 tests) 243ms
+    at runTest (file:///C:/Users/Andrew/.t3/worktrees/BannerlordCoop-website/portal-poll-backoff/node_modules/@vitest/runner/dist/chunk-hooks.js:1574:12)
+    at runSuite (file:///C:/Users/Andrew/.t3/worktrees/BannerlordCoop-website/portal-poll-backoff/node_modules/@vitest/runner/dist/chunk-hooks.js:1729:8)
+    at runFiles (file:///C:/Users/Andrew/.t3/worktrees/BannerlordCoop-website/portal-poll-backoff/node_modules/@vitest/runner/dist/chunk-hooks.js:1787:3)
+    at startTests (file:///C:/Users/Andrew/.t3/worktrees/BannerlordCoop-website/portal-poll-backoff/node_modules/@vitest/runner/dist/chunk-hooks.js:1820:3)
+
+ ✓ src/app/components/servers/ServerSettingsPanel.component.test.tsx (21 tests) 960ms
+(node:48668) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/app/admin/control-plane/overview.component.test.tsx (33 tests) 414ms
+ ✓ src/app/components/servers/ServerOnboarding.keyboard.component.test.tsx (3 tests) 386ms
+ ✓ src/app/components/servers/ManagedServerLocalization.component.test.tsx (46 tests) 307ms
+ ✓ src/app/components/admin/FleetCapacityView.component.test.tsx (32 tests) 6978ms
+   ✓ reads fleet capacity once when it opens and says what it measured  376ms
+   ✓ says which VPSs lack host metrics, with a header note, even when the fleet has enough demand data  390ms
+   ✓ marks VPSs with room for fewer servers than slots apart from those with headroom, not by colour alone  441ms
+   ✓ draws a week of steal and busy hours per VPS, hatching hours without data  478ms
+   ✓ explains a failed read and retries it: ControlPlaneAdminError: Too many requests.  499ms
+   ✓ keeps what it showed when a refresh fails, and rejects a malformed read  396ms
+   ✓ shows a control plane's typical fit: what each VPS can run at once against its co-online servers, with burst headroom as information  389ms
+ ✓ src/app/components/servers/ManagedServerVersion.component.test.tsx (11 tests) 468ms
+ ✓ src/app/components/servers/direct-refusal-render.component.test.tsx (4 tests) 139ms
+ ✓ src/app/components/servers/ManagedServerDelete.component.test.tsx (12 tests) 387ms
+ ✓ src/app/servers/[serverId]/page.component.test.tsx (68 tests) 2048ms
+   ✓ keeps managed backup load failures distinct from missing onboarding  515ms
+   ✓ retries a unavailable backup history read only when it was not rate limited  515ms
+   ✓ handles a backup status read that fails briefly inside the shared reader  513ms
+ ✓ src/app/components/admin/VpsSlotDecommission.component.test.tsx (14 tests) 221ms
+ ✓ src/app/components/home/home-localization.component.test.tsx (5 tests) 408ms
+(node:48040) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/app/components/servers/ManagedServerNoticeBanner.component.test.tsx (23 tests) 163ms
+ ✓ src/app/not-found.component.test.tsx (5 tests) 124ms
+ ✓ src/app/components/home/roadmap/Roadmap.component.test.tsx (4 tests) 312ms
+ ✓ src/app/components/admin/VpsHostInventory.component.test.tsx (22 tests) 383ms
+ ✓ src/app/admin/login-return.component.test.tsx (4 tests) 277ms
+ ✓ src/app/components/home/media/VideoCarousel.component.test.tsx (3 tests) 60ms
+ ✓ src/app/components/admin/NoticesView.component.test.tsx (5 tests) 426ms
+ ✓ src/app/components/admin/JobFailuresAcknowledgeButton.component.test.tsx (4 tests) 98ms
+ ✓ src/app/changelog/page.component.test.tsx (8 tests) 136ms
+ ✓ src/app/components/admin/ControlPlaneActionCard.component.test.tsx (10 tests) 252ms
+ ✓ src/app/components/servers/CopyJoinButton.component.test.tsx (5 tests) 46ms
+ ✓ src/app/components/admin/MetricHint.component.test.tsx (25 tests) 297ms
+ ✓ src/app/components/admin/ControlPlaneProgress.component.test.tsx (18 tests) 268ms
+ ✓ src/app/components/admin/VpsSlotCapacityRaise.component.test.tsx (6 tests) 82ms
+ ✓ src/app/servers/onboarding-page.component.test.tsx (31 tests) 436ms
+ ✓ src/app/hosting/page.component.test.tsx (5 tests) 117ms
+ ✓ src/app/servers/managed-server-config-actions.component.test.tsx (10 tests) 68ms
+ ✓ src/app/components/layout/LocaleSelector.component.test.tsx (5 tests) 230ms
+ ✓ src/app/components/servers/ServerVisibilitySetting.component.test.tsx (11 tests) 303ms
+ ✓ src/app/components/admin/RunnerOnboardingStatus.component.test.tsx (8 tests) 70ms
+ ✓ src/app/components/servers/AllServersDirectory.component.test.tsx (2 tests) 76ms
+ ✓ src/app/components/servers/MembershipNextStep.component.test.tsx (4 tests) 48ms
+ ✓ src/app/support/page.component.test.tsx (4 tests) 67ms
+ ❯ src/app/components/servers/ManagedServerCommands.component.test.tsx (30 tests | 2 failed) 8849ms
+   ✓ offers only coop cheats, inserts without sending, and sends without a confirmation popup  1210ms
+   ✓ ghost-completes one dot-delimited segment per Tab without sending or inserting arguments  405ms
+   ✓ leaves Tab navigation alone without a name completion: unknown 222ms
+   ✓ leaves Tab navigation alone without a name completion: coop.unknown 177ms
+   ✓ leaves Tab navigation alone without a name completion: coop.help 217ms
+   ✓ leaves Tab navigation alone without a name completion: coop.help argument  379ms
+   ✓ hides the ghost when editing or selecting within the draft (2, 2) 207ms
+   ✓ hides the ghost when editing or selecting within the draft (0, 4) 288ms
+   ✓ preserves Shift+Tab navigation even when a ghost is visible  309ms
+   ✓ submits a typed command through the native form used by Enter 205ms
+   ✓ places only the input and Send below live output in the same card while idle 139ms
+   ✓ reports a late rejected failure under the input without locking or replacing the next draft  481ms
+   ✓ reports a late uncertain failure under the input without locking or replacing the next draft  411ms
+   ✓ reports a late network failure under the input without locking or replacing the next draft  303ms
+   ✓ preserves a rejected command without refreshing the page or its console stream 217ms
+   ✓ keeps a newer draft when an earlier command is rejected 252ms
+   ✓ confirms a delivered command briefly under the input 274ms
+   ✓ allows multiple pending submissions and preserves the new draft when responses arrive  453ms
+   ✓ fetches and shows a result the live stream never rendered  404ms
+   ✓ does not fetch a result the live stream already showed  344ms
+   ✓ explains a non-coop command directly under the input and points to the command browser 221ms
+   ✓ explains a malformed coop command under the input 248ms
+   ✓ keeps lifecycle progress in its own row below the toolbar, hidden while empty 234ms
+   ✓ disables commands for a read-only or non-running server: { accessRole: 'support' } 163ms
+   ✓ disables commands for a read-only or non-running server: { operationState: 'stopped' } 186ms
+   ✓ disables commands for a read-only or non-running server: { observedGameState: 'unknown' } 181ms
+   × recalls sent commands with Up and Down like a terminal, restoring the unsent draft 7ms
+     → Cannot read properties of undefined (reading 'clear')
+   × keeps history per account and server across reloads, and editing a recalled command starts a new draft 2ms
+     → Cannot read properties of undefined (reading 'clear')
+   ✓ disables Stop and Restart while a typed save runs, until its stored result arrives  454ms
+   ✓ re-enables Stop and Restart when a typed save is refused 252ms
+ ✓ src/app/account/boosty-connection.component.test.tsx (2 tests) 52ms
+ ✓ src/app/components/layout/CommunityDropdown.component.test.tsx (1 test) 41ms
+ ✓ src/app/components/layout/ProfileDropdown.component.test.tsx (2 tests) 56ms
+ ✓ src/app/components/home/modulesection/DownloadModal.component.test.tsx (1 test) 50ms
+ ✓ src/app/components/admin/OutOfAdmissionBanner.component.test.tsx (5 tests) 53ms
+ ✓ src/app/components/servers/DownloadServerLogButton.component.test.tsx (2 tests) 44ms
+ ✓ src/app/lib/hosting/war-sails.component.test.tsx (13 tests) 43ms
+ ✓ src/app/auth/callback/route.component.test.tsx (23 tests) 37ms
+ ✓ src/app/changelog/ReleaseNotes.component.test.tsx (5 tests) 31ms
+ ✓ src/app/account/DisconnectAccount.component.test.tsx (3 tests) 76ms
+ ✓ src/app/components/servers/server-mods-messages.component.test.tsx (37 tests) 32ms
+ ✓ src/app/account/AccountStatusSync.component.test.tsx (4 tests) 33ms
+ ✓ src/app/servers/onboarding-actions.component.test.tsx (27 tests) 20ms
+ ✓ src/app/account/account-link.component.test.tsx (25 tests) 48ms
+ ✓ src/app/components/admin/RefreshReleaseCatalog.component.test.tsx (1 test) 23ms
+ ✓ src/app/admin/impersonation.component.test.tsx (15 tests) 39ms
+ ✓ src/app/lib/control-plane/slot-decommission.component.test.tsx (116 tests) 18ms
+ ✓ src/app/servers/managed-server-file-actions.component.test.tsx (8 tests) 14ms
+ ✓ src/app/account/account-viewer.component.test.tsx (5 tests) 35ms
+ ✓ src/app/lib/control-plane/fleet-capacity.component.test.tsx (191 tests) 34ms
+ ✓ src/app/components/layout/Navbar.component.test.tsx (6 tests) 16ms
+ ✓ src/app/lib/control-plane/slot-sizing.component.test.tsx (162 tests) 18ms
+ ✓ src/app/servers/server-settings-actions.component.test.tsx (9 tests) 13ms
+ ✓ src/app/lib/control-plane/placement-measured-overlap.component.test.tsx (72 tests) 8ms
+ ✓ src/app/lib/hosting/server-files.component.test.tsx (6 tests) 12ms
+ ✓ src/app/admin/member-pagination.component.test.tsx (5 tests) 10ms
+ ✓ src/app/servers/managed-server-console-actions.component.test.tsx (19 tests) 10ms
+ ✓ src/app/lib/supabase/client.component.test.tsx (3 tests) 11ms
+ ✓ src/app/servers/server-manager-actions.component.test.tsx (6 tests) 10ms
+ ✓ src/app/lib/hosting/limitless-contract.component.test.tsx (2 tests) 11ms
+ ✓ src/app/lib/homepage-media.component.test.tsx (6 tests) 10ms
+stderr | src/app/servers/server-notice-actions.component.test.tsx > hides a notice the server no longer has, and asks for a retry on other failures
+Server notice dismissal failed { code: 'server_api_unavailable' }
+ ✓ src/app/servers/server-notice-actions.component.test.tsx (4 tests) 8ms
+
+stderr | src/app/servers/server-notice-actions.component.test.tsx > hides a notice the server no longer has, and asks for a retry on other failures
+Server notice dismissal failed { code: 'notice_dismissal_failed' }
+
+stderr | src/app/servers/server-visibility-actions.component.test.tsx > explains a conflict as a changed server, never as an ownership problem, when the retry cannot apply
+Server visibility retry failed { code: 'request_conflict' }
+ ✓ src/app/servers/server-visibility-actions.component.test.tsx (6 tests) 9ms
+
+stderr | src/app/servers/server-visibility-actions.component.test.tsx > keeps the ownership message for authorization failures and does not retry them
+Server visibility update failed { code: 'server_not_found' }
+
+stderr | src/app/servers/server-visibility-actions.component.test.tsx > stops recovery when the single-server read reports revoked access
+Server visibility retry failed { code: 'server_not_found' }
+
+ ✓ src/app/servers/server-deletion-actions.component.test.tsx (5 tests) 7ms
+ ✓ src/app/components/ui/loading.component.test.tsx (6 tests) 9ms
+ ✓ src/app/servers/server-release-actions.component.test.tsx (4 tests) 7ms
+stderr | src/app/servers/managed-server-backup-actions.component.test.tsx > retains the request after a second stale rejection without looping
+Managed server backup operation failed { code: 'stale_interaction' }
+
+stderr | src/app/servers/managed-server-backup-actions.component.test.tsx > does not automatically retry Network lost
+Managed server backup operation failed { code: 'operation_failed' }
+
+stderr | src/app/servers/managed-server-backup-actions.component.test.tsx > does not automatically retry Timeout
+Managed server backup operation failed { code: 'operation_timeout' }
+
+stderr | src/app/servers/managed-server-backup-actions.component.test.tsx > does not automatically retry Busy
+Managed server backup operation failed { code: 'busy' }
+
+stderr | src/app/servers/managed-server-backup-actions.component.test.tsx > retains request when fresh state is unavailable and never dispatches again
+Managed server backup operation failed { code: 'operation_failed' }
+
+ ✓ src/app/servers/managed-server-backup-actions.component.test.tsx (7 tests) 7ms
+ ✓ src/app/components/admin/ServerResourceUsage.component.test.tsx (4 tests) 7ms
+ ✓ src/app/components/servers/SubscriptionHoldNotice.component.test.tsx (3 tests) 6ms
+ ✓ src/app/servers/managed-server-campaign-actions.component.test.tsx (6 tests) 6ms
+(node:46392) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/app/lib/control-plane/placement-live-moves.component.test.tsx (10 tests) 6ms
+ ✓ src/app/components/admin/cold-sleep.component.test.tsx (3 tests) 6ms
+ ✓ src/app/servers/server-build-actions.component.test.tsx (15 tests) 8ms
+ ✓ src/app/admin/member-role.component.test.tsx (3 tests | 1 skipped) 6ms
+(node:41264) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/app/lib/control-plane/slot-capacity.component.test.tsx (19 tests) 5ms
+ ✓ src/app/lib/network-stats.component.test.tsx (7 tests) 11ms
+ ✓ src/app/servers/managed-server-move-actions.component.test.tsx (4 tests) 5ms
+ ✓ src/app/account/page.component.test.tsx (2 tests) 3ms
+ ✓ src/app/cheats/translation.component.test.tsx (2 tests) 3ms
+ ✓ src/app/lib/supabase/users.component.test.tsx (2 tests) 5ms
+ ✓ src/app/lib/hosting/my-servers-presentation.component.test.tsx (3 tests) 6ms
+ ✓ src/app/lib/control-plane/vps-inventory-query.component.test.tsx (1 test) 2ms
+ ✓ src/app/components/servers/console-history.component.test.tsx (3 tests) 3ms
+ ✓ src/app/lib/auth/account-display.component.test.tsx (3 tests) 2ms
+ ✓ src/middleware.component.test.tsx (11 tests) 36ms
+ ✓ src/app/lib/hosting/server-managers.component.test.tsx (3 tests) 65ms
+stderr | src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx > mounted polling provider > does not read while hidden
+The current testing environment is not configured to support act(...)
+
+stderr | src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx > mounted polling provider > does not read while hidden
+The current testing environment is not configured to support act(...)
+
+stderr | src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx > mounted polling provider > stops after a 404/non-retryable read
+The current testing environment is not configured to support act(...)
+
+stderr | src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx > mounted polling provider > stops after a 404/non-retryable read
+The current testing environment is not configured to support act(...)
+
+stderr | src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx > mounted polling provider > stops after a 404/non-retryable read
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx > mounted polling provider > stops on a terminal fingerprint
+The current testing environment is not configured to support act(...)
+
+stderr | src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx > mounted polling provider > stops on a terminal fingerprint
+The current testing environment is not configured to support act(...)
+
+stderr | src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx > mounted polling provider > stops on a terminal fingerprint
+The current testing environment is not configured to support act(...)
+
+stderr | src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx > mounted polling provider > stops on a terminal fingerprint
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx > mounted polling provider > stops on a terminal fingerprint
+The current testing environment is not configured to support act(...)
+
+stderr | src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx > mounted polling provider > stops on a terminal fingerprint
+The current testing environment is not configured to support act(...)
+The current testing environment is not configured to support act(...)
+
+stderr | src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx > mounted polling provider > stops on a terminal fingerprint
+The current testing environment is not configured to support act(...)
+
+stderr | src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx > mounted polling provider > backs off retryable 5xx reads
+The current testing environment is not configured to support act(...)
+ ❯ src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx (6 tests | 1 failed) 34ms
+
+stderr | src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx > mounted polling provider > backs off retryable 5xx reads
+The current testing environment is not configured to support act(...)
+
+   ✓ managed server polling policy > keeps the base interval at or above fifteen seconds and backs off 1ms
+   ✓ managed server polling policy > recognizes terminal server states 0ms
+   ✓ mounted polling provider > does not read while hidden 16ms
+   ✓ mounted polling provider > stops after a 404/non-retryable read 3ms
+   × mounted polling provider > stops on a terminal fingerprint 8ms
+     → expected 3 to be 2 // Object.is equality
+   ✓ mounted polling provider > backs off retryable 5xx reads 4ms
+ ✓ src/app/servers/direct-refusal-compatibility.component.test.tsx (20 tests) 38ms
+ ✓ src/app/lib/control-plane/server-read.component.test.tsx (28 tests) 624ms
+   ✓ runs every direct read in native workerd and rejects all redirects without forwarding credentials  453ms
+ ✓ src/app/lib/hosting/my-servers-server.component.test.tsx (178 tests) 621ms
+   ✓ uses the closed owner read in native workerd with fresh pages and no redirected credentials  513ms
+ ✓ src/app/home-streaming.component.test.tsx (2 tests) 59ms
+ ✓ src/app/lib/control-plane/release-observations.component.test.tsx (6 tests) 1783ms
+   ✓ gives only the website service role append-only access to first observation timestamps  1776ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 111 ⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/app/cheats/localization.component.test.tsx > projects only browser catalog fields for en without changing published commands
+ FAIL  src/app/cheats/localization.component.test.tsx > projects only browser catalog fields for zh-CN without changing published commands
+ FAIL  src/app/cheats/localization.component.test.tsx > keeps missing-translation summary and argument fallbacks in en client props
+ FAIL  src/app/cheats/localization.component.test.tsx > keeps missing-translation summary and argument fallbacks in zh-CN client props
+ FAIL  src/app/cheats/localization.component.test.tsx > resolves every Chinese share-link alias to the Chinese content and metadata
+ FAIL  src/app/cheats/localization.component.test.tsx > ignores the retired cheats cookie, disabled/invalid global choices, and invalid overrides
+ FAIL  src/app/cheats/localization.component.test.tsx > uses activated dictionaries for cookie and explicit links with no page-code changes
+TypeError: Cannot read properties of undefined (reading 'clear')
+ ❯ src/app/cheats/localization.component.test.tsx:41:25
+     39|     vi.clearAllMocks();
+     40|     window.history.replaceState(null, "", "/");
+     41|     window.localStorage.clear();
+       |                         ^
+     42| });
+     43| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/191]⎯
+
+ FAIL  src/app/cheats/localization.component.test.tsx > keeps copied English command links English under a Russian cookie
+ FAIL  src/app/cheats/localization.component.test.tsx > keeps copied English search links English under a Russian cookie
+ FAIL  src/app/cheats/localization.component.test.tsx > makes English canonical and alternate metadata explicit under a Russian cookie
+ FAIL  src/app/cheats/localization.component.test.tsx > scopes Chinese content while chrome follows the cookie and hydrates without preference writes
+ FAIL  src/app/cheats/localization.component.test.tsx > preserves English search compatibility, translated argument search, and immutable copied syntax
+ FAIL  src/app/cheats/localization.component.test.tsx > shared selector clears the override without directory URL writes restoring it or losing filters/hash
+ FAIL  src/app/cheats/localization.component.test.tsx > preserves command history and treats unknown category filters as escaped user content
+ FAIL  src/app/cheats/localization.component.test.tsx > keeps documentation code examples tied to published immutable commands in both locales
+ FAIL  src/app/cheats/localization.component.test.tsx > keeps dictionaries and server-only loaders outside client modules and removes old preference APIs
+TypeError: Cannot read properties of undefined (reading 'clear')
+ ❯ src/app/cheats/localization.component.test.tsx:41:25
+     39|     vi.clearAllMocks();
+     40|     window.history.replaceState(null, "", "/");
+     41|     window.localStorage.clear();
+       |                         ^
+     42| });
+     43| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/191]⎯
+
+ FAIL  src/app/cheats/localization.component.test.tsx > scopes Chinese content while chrome follows the cookie and hydrates without preference writes
+TypeError: Cannot read properties of undefined (reading 'setItem')
+ ❯ src/app/cheats/localization.component.test.tsx:201:25
+    199| it("scopes Chinese content while chrome follows the cookie and hydrate…
+    200|     window.history.replaceState(null, "", "/cheats?lang=cn&cheat=coop.…
+    201|     window.localStorage.setItem("bannerlordcoop.cheats.lang", "en");
+       |                         ^
+    202|     const storageWrite = vi.spyOn(Storage.prototype, "setItem");
+    203|     const cookieWrite = vi.spyOn(document, "cookie", "set");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/191]⎯
+
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS region cards > outlines a full region in red and a region with one slot left in yellow
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS inventory filters > pages registered hosts and stores the chosen page size
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS inventory filters > restores a stored page size on the next visit
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS inventory filters > ignores a stored page size outside 10, 25, 50, and 100
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS inventory filters > lists stored regions for hosts that have no legacy region
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS inventory filters > filters by several regions, owner email, and empty slots
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS inventory filters > returns to the first page when a filter changes
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS inventory filters > says when every host is filtered out and keeps the empty fleet message separate
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS inventory query > matches a slot owner by account id or legacy Discord id
+TypeError: Cannot read properties of undefined (reading 'clear')
+ ❯ src/app/components/admin/VpsInventoryBrowser.component.test.tsx:37:18
+     35| 
+     36| beforeEach(() => {
+     37|     localStorage.clear();
+       |                  ^
+     38|     setRememberedVpsPageSize(10);
+     39|     localStorage.clear();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/191]⎯
+
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS region cards > outlines a full region in red and a region with one slot left in yellow
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS inventory filters > pages registered hosts and stores the chosen page size
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS inventory filters > restores a stored page size on the next visit
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS inventory filters > ignores a stored page size outside 10, 25, 50, and 100
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS inventory filters > lists stored regions for hosts that have no legacy region
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS inventory filters > filters by several regions, owner email, and empty slots
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS inventory filters > returns to the first page when a filter changes
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS inventory filters > says when every host is filtered out and keeps the empty fleet message separate
+ FAIL  src/app/components/admin/VpsInventoryBrowser.component.test.tsx > VPS inventory query > matches a slot owner by account id or legacy Discord id
+TypeError: Cannot read properties of undefined (reading 'unmount')
+ ❯ src/app/components/admin/VpsInventoryBrowser.component.test.tsx:47:32
+     45| 
+     46| afterEach(async () => {
+     47|     await act(async () => root.unmount());
+       |                                ^
+     48|     container.remove();
+     49|     localStorage.clear();
+ ❯ Proxy.process.env.NODE_ENV.exports.act node_modules/react/cjs/react.development.js:814:22
+ ❯ src/app/components/admin/VpsInventoryBrowser.component.test.tsx:47:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerBackups.component.test.tsx > ManagedServerBackups session recovery > fails closed when storage getItem throws
+ FAIL  src/app/components/servers/ManagedServerBackups.component.test.tsx > ManagedServerBackups session recovery > fails closed when storage setItem throws
+ FAIL  src/app/components/servers/ManagedServerBackups.component.test.tsx > ManagedServerBackups session recovery > fails closed when storage removeItem throws
+AssertionError: expected 'Backups and restoreLast backup: Sep 1…' to contain 'recovery storage is unavailable or in…'
+
+Expected: "recovery storage is unavailable or invalid"
+Received: "Backups and restoreLast backup: Sep 1, 2026, 9:45 AM CDTCreate backupRetained save backupsManualAvailableSep 1, 2026, 9:45 AM CDT · 1.0 KB · Retained until Sep 30, 2026, 9:45 AM CDTRestore save "
+
+ ❯ src/app/components/servers/ManagedServerBackups.component.test.tsx:357:39
+    355|             await click("Restore save");
+    356|         }
+    357|         expect(container.textContent).toContain("recovery storage is u…
+       |                                       ^
+    358|         expect(button("Create backup").disabled).toBe(true);
+    359|         expect(button("Restore save").disabled).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > lists campaigns with the selection marked and only offers switching while the server is stopped
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > explains why campaign controls are disabled while the server is running
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > keeps New campaign disabled on a server that never started because its first Start creates the campaign
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > selects an imported campaign with a durable request bound to the listed server revision
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > starts a new campaign only after confirmation, replays the same request on retry, and reads its terminal result
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > shows the retained native reset refusal without another Reset or a changed campaign
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > accepts succeeded status even when the new default keeps the same save ID
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > bounds legacy status polling and does not turn a pending supported job into success from a changed selection
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > ignores a late reset status after the page account changes
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > releases the pending view after its deadline even if a status read never returns
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > keeps today's campaign list and exact Classic reset request when the control plane sends no War Sails fields
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > labels each campaign Classic or War Sails and shows nothing for an unknown label
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > notes that selecting a campaign in the other mode changes War Sails, only when both modes are known
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > offers the War Sails mode for a new campaign only when the build can run it and sends warSails only when chosen
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > shows load failures without hiding the controls and refuses changes before status is known
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > deletes only an inactive imported campaign after exact-name confirmation
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > reattaches after refresh and shows queued, running, retry-wait and a terminal failure without another mutation
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > recovers a lost reply using the exact persisted request across a refresh
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > keeps an unavailable status pending and discards late responses after switching identity
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > does not block campaign controls or new deletion after a previously confirmed terminal job is pruned
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > keeps corrupted storage fail closed for deletion without blocking refresh or selection
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > recovers a corrupt receipt only after confirmation and a fresh list, then completes an explicitly chosen deletion
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > resolves an unknown receipt as deleted only when its save is absent from a fresh authorized list
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > removes the retry offer when a second recovery confirms the campaign is gone
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > clears an earlier retry candidate when beginning a new deletion
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > offers a fresh UUID only for an owner-confirmed retry after checking that the unknown save still exists
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > checks campaigns on the first recovery click after an accepted deletion in this tab
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > restores the accepted receipt when a fresh retry is definitively refused
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > preserves a newer deletion receipt when an older request receives a suspended refusal
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > adopts a valid receipt saved before recovery begins (corrupt)
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > adopts a valid receipt saved before recovery begins (old target absent)
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > keeps an unknown receipt when fresh access is denied and never resubmits automatically
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > clears a definite pre-admission refusal so another campaign request can be sent
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > adopts a newer cross-tab receipt instead of repeatedly recovering an overwritten request
+TypeError: Cannot read properties of undefined (reading 'clear')
+ ❯ src/app/components/servers/ManagedServerCampaigns.component.test.tsx:29:18
+     27| beforeEach(() => {
+     28|     vi.useFakeTimers(); vi.resetAllMocks();
+     29|     localStorage.clear();
+       |                  ^
+     30|     mocks.deletionStatus.mockResolvedValue({ ok: false, message: "Dele…
+     31|     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > lists campaigns with the selection marked and only offers switching while the server is stopped
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > explains why campaign controls are disabled while the server is running
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > keeps New campaign disabled on a server that never started because its first Start creates the campaign
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > selects an imported campaign with a durable request bound to the listed server revision
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > starts a new campaign only after confirmation, replays the same request on retry, and reads its terminal result
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > shows the retained native reset refusal without another Reset or a changed campaign
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > accepts succeeded status even when the new default keeps the same save ID
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > bounds legacy status polling and does not turn a pending supported job into success from a changed selection
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > ignores a late reset status after the page account changes
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > releases the pending view after its deadline even if a status read never returns
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > keeps today's campaign list and exact Classic reset request when the control plane sends no War Sails fields
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > labels each campaign Classic or War Sails and shows nothing for an unknown label
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > notes that selecting a campaign in the other mode changes War Sails, only when both modes are known
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > offers the War Sails mode for a new campaign only when the build can run it and sends warSails only when chosen
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > shows load failures without hiding the controls and refuses changes before status is known
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > deletes only an inactive imported campaign after exact-name confirmation
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > reattaches after refresh and shows queued, running, retry-wait and a terminal failure without another mutation
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > recovers a lost reply using the exact persisted request across a refresh
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > keeps an unavailable status pending and discards late responses after switching identity
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > does not block campaign controls or new deletion after a previously confirmed terminal job is pruned
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > keeps corrupted storage fail closed for deletion without blocking refresh or selection
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > recovers a corrupt receipt only after confirmation and a fresh list, then completes an explicitly chosen deletion
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > resolves an unknown receipt as deleted only when its save is absent from a fresh authorized list
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > removes the retry offer when a second recovery confirms the campaign is gone
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > clears an earlier retry candidate when beginning a new deletion
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > offers a fresh UUID only for an owner-confirmed retry after checking that the unknown save still exists
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > checks campaigns on the first recovery click after an accepted deletion in this tab
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > restores the accepted receipt when a fresh retry is definitively refused
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > preserves a newer deletion receipt when an older request receives a suspended refusal
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > adopts a valid receipt saved before recovery begins (corrupt)
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > adopts a valid receipt saved before recovery begins (old target absent)
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > keeps an unknown receipt when fresh access is denied and never resubmits automatically
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > clears a definite pre-admission refusal so another campaign request can be sent
+ FAIL  src/app/components/servers/ManagedServerCampaigns.component.test.tsx > adopts a newer cross-tab receipt instead of repeatedly recovering an overwritten request
+TypeError: Cannot read properties of undefined (reading 'unmount')
+ ❯ src/app/components/servers/ManagedServerCampaigns.component.test.tsx:38:52
+     36|     container = document.createElement("div"); document.body.append(co…
+     37| });
+     38| afterEach(async () => { await act(async () => root.unmount()); contain…
+       |                                                    ^
+     39| async function render(status: OwnerFileStatus | null = stopped, canDel…
+     40|     await act(async () => root.render(<TestLocalization><ManagedServer…
+ ❯ Proxy.process.env.NODE_ENV.exports.act node_modules/react/cjs/react.development.js:814:22
+ ❯ src/app/components/servers/ManagedServerCampaigns.component.test.tsx:38:31
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerCommands.component.test.tsx > recalls sent commands with Up and Down like a terminal, restoring the unsent draft
+TypeError: Cannot read properties of undefined (reading 'clear')
+ ❯ src/app/components/servers/ManagedServerCommands.component.test.tsx:342:25
+    340| 
+    341| it("recalls sent commands with Up and Down like a terminal, restoring …
+    342|     window.localStorage.clear();
+       |                         ^
+    343|     await mount();
+    344|     await act(async () => vi.advanceTimersByTimeAsync(0));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerCommands.component.test.tsx > keeps history per account and server across reloads, and editing a recalled command starts a new draft
+TypeError: Cannot read properties of undefined (reading 'clear')
+ ❯ src/app/components/servers/ManagedServerCommands.component.test.tsx:366:25
+    364| 
+    365| it("keeps history per account and server across reloads, and editing a…
+    366|     window.localStorage.clear();
+       |                         ^
+    367|     await mount();
+    368|     await act(async () => vi.advanceTimersByTimeAsync(0));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > counts down to an announced move each second without announcing every second
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > writes longer and passed countdowns in whole units
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > renders the announced time in UTC and no countdown on the server, so hydration matches
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > explains a move waiting for the server's current task
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > shows a page opened mid-move with the steps done, the current step and the time elapsed
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > marks no step as done or current while a move has not reported its step
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > explains that a failed move is putting the server back on its original machine
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > reports a failed move where the server stayed on its original machine: true
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > reports a failed move where the server stayed on its original machine: false
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > reports a failed move where the server stayed on its original machine: null
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > shows the new address once the move finishes, reveals it in the header and copies it
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > reveals the header address only once the header has the new one, and only once per move
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > reveals the header address on a page opened after the move, unless that move was dismissed
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > keeps copy feedback with the move whose address was copied when the page changes server
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > tells players the new address will appear once assigned when the move reports none
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > dismisses a finished move for this browser along with this move's completion notice only
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > leaves a completion notice that was written before the move completed
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > leaves a completion notice that names another address
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > dismisses this move's completion notice once when it only arrives after the card was dismissed
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > keeps a dismissal on this page even when the notice cannot be dismissed
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > renders nothing without a move or outside a managed server page
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > waits longer between reads the further away a move is
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > follows each state's read cadence as a move approaches and runs
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > refreshes the page once for each change it shows, not for a new step or an unchanged read
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > keeps the last status and backs off while reads fail
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > reads only while the page is visible and catches up as soon as it is shown
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > reads as soon as the page is shown again, even before the next read was due
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > reads again right after a read that was under way while the page was hidden
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > shows the status a refreshed page renders at once and confirms it with a read
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > does not refresh back and forth when a refreshed page renders an older status
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > keeps the move shown when a refreshed page renders none, and checks with a read
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > refreshes again, at most three times per move, while the header lacks the moved address
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > stops reading once the page closes
+TypeError: Cannot read properties of undefined (reading 'clear')
+ ❯ src/app/components/servers/ManagedServerMoveStatus.component.test.tsx:49:18
+     47|     visibility = "visible";
+     48|     Object.defineProperty(document, "visibilityState", { configurable:…
+     49|     localStorage.clear();
+       |                  ^
+     50|     mocks.read.mockResolvedValue({ ok: false });
+     51|     mocks.dismiss.mockResolvedValue({ ok: true });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > counts down to an announced move each second without announcing every second
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > writes longer and passed countdowns in whole units
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > renders the announced time in UTC and no countdown on the server, so hydration matches
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > explains a move waiting for the server's current task
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > shows a page opened mid-move with the steps done, the current step and the time elapsed
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > marks no step as done or current while a move has not reported its step
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > explains that a failed move is putting the server back on its original machine
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > reports a failed move where the server stayed on its original machine: true
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > reports a failed move where the server stayed on its original machine: false
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > reports a failed move where the server stayed on its original machine: null
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > shows the new address once the move finishes, reveals it in the header and copies it
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > reveals the header address only once the header has the new one, and only once per move
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > reveals the header address on a page opened after the move, unless that move was dismissed
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > keeps copy feedback with the move whose address was copied when the page changes server
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > tells players the new address will appear once assigned when the move reports none
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > dismisses a finished move for this browser along with this move's completion notice only
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > leaves a completion notice that was written before the move completed
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > leaves a completion notice that names another address
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > dismisses this move's completion notice once when it only arrives after the card was dismissed
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > keeps a dismissal on this page even when the notice cannot be dismissed
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > renders nothing without a move or outside a managed server page
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > waits longer between reads the further away a move is
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > follows each state's read cadence as a move approaches and runs
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > refreshes the page once for each change it shows, not for a new step or an unchanged read
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > keeps the last status and backs off while reads fail
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > reads only while the page is visible and catches up as soon as it is shown
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > reads as soon as the page is shown again, even before the next read was due
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > reads again right after a read that was under way while the page was hidden
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > shows the status a refreshed page renders at once and confirms it with a read
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > does not refresh back and forth when a refreshed page renders an older status
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > keeps the move shown when a refreshed page renders none, and checks with a read
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > refreshes again, at most three times per move, while the header lacks the moved address
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > stops reading once the page closes
+TypeError: Cannot read properties of undefined (reading 'unmount')
+ ❯ src/app/components/servers/ManagedServerMoveStatus.component.test.tsx:58:32
+     56| 
+     57| afterEach(async () => {
+     58|     await act(async () => root.unmount());
+       |                                ^
+     59|     container.remove();
+     60|     Reflect.deleteProperty(document, "visibilityState");
+ ❯ Proxy.process.env.NODE_ENV.exports.act node_modules/react/cjs/react.development.js:814:22
+ ❯ src/app/components/servers/ManagedServerMoveStatus.component.test.tsx:58:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > copy feedback from more than one click > ignores an earlier server's copy that settles after a copy on the next server
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > copy feedback from more than one click > reports the latest of two clicks when the earlier one fails after it
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > copy feedback from more than one click > drops a failed copy once another move is shown, so it does not come back
+TypeError: Cannot read properties of undefined (reading 'clear')
+ ❯ src/app/components/servers/ManagedServerMoveStatus.component.test.tsx:49:18
+     47|     visibility = "visible";
+     48|     Object.defineProperty(document, "visibilityState", { configurable:…
+     49|     localStorage.clear();
+       |                  ^
+     50|     mocks.read.mockResolvedValue({ ok: false });
+     51|     mocks.dismiss.mockResolvedValue({ ok: true });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > copy feedback from more than one click > ignores an earlier server's copy that settles after a copy on the next server
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > copy feedback from more than one click > reports the latest of two clicks when the earlier one fails after it
+ FAIL  src/app/components/servers/ManagedServerMoveStatus.component.test.tsx > copy feedback from more than one click > drops a failed copy once another move is shown, so it does not come back
+TypeError: Cannot read properties of undefined (reading 'unmount')
+ ❯ src/app/components/servers/ManagedServerMoveStatus.component.test.tsx:58:32
+     56| 
+     57| afterEach(async () => {
+     58|     await act(async () => root.unmount());
+       |                                ^
+     59|     container.remove();
+     60|     Reflect.deleteProperty(document, "visibilityState");
+ ❯ Proxy.process.env.NODE_ENV.exports.act node_modules/react/cjs/react.development.js:814:22
+ ❯ src/app/components/servers/ManagedServerMoveStatus.component.test.tsx:58:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx > mounted polling provider > stops on a terminal fingerprint
+AssertionError: expected 3 to be 2 // Object.is equality
+
+- Expected
++ Received
+
+- 2
++ 3
+
+ ❯ src/app/components/servers/ManagedServerPollingProvider.polling.component.test.tsx:50:40
+     48|         const root = mount(read); await act(async () => vi.advanceTime…
+     49|         await act(async () => vi.advanceTimersByTimeAsync(60_000)); co…
+     50|         expect(read.mock.calls.length).toBe(count); root.unmount();
+       |                                        ^
+     51|     });
+     52|     it("backs off retryable 5xx reads", async () => {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerStop.component.test.tsx > automatically confirms Stop after accepted without resending it
+ FAIL  src/app/components/servers/ManagedServerStop.component.test.tsx > automatically confirms Stop after lost-response without resending it
+AssertionError: expected "spy" to be called 2 times, but got 1 times
+ ❯ src/app/components/servers/ManagedServerStop.component.test.tsx:45:28
+     43|     expect(router.refresh).toHaveBeenCalledOnce();
+     44|     await act(async () => vi.advanceTimersByTimeAsync(15_000));
+     45|     expect(router.refresh).toHaveBeenCalledTimes(2);
+       |                            ^
+     46|     await render({ operationState: "stopping", expectedUpdatedAt: "202…
+     47|     expect(container.textContent).not.toContain("Server stopped.");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerStop.component.test.tsx > automatically follows provisioning until initialization settles, then preserves normal lifecycle polling
+AssertionError: expected "spy" to be called 2 times, but got 1 times
+ ❯ src/app/components/servers/ManagedServerStop.component.test.tsx:255:28
+    253|     expect(polling.session).toMatchObject({ serverId: server.serverId,…
+    254|     await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    255|     expect(router.refresh).toHaveBeenCalledTimes(2);
+       |                            ^
+    256|     await renderWithProbe(undefined, "stopped");
+    257|     await act(async () => vi.advanceTimersByTimeAsync(0));
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerStop.component.test.tsx > automatically follows configuring until initialization settles, then preserves normal lifecycle polling
+AssertionError: expected "spy" to be called 4 times, but got 3 times
+ ❯ src/app/components/servers/ManagedServerStop.component.test.tsx:265:28
+    263|     await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    264|     expect(polling.session).toMatchObject({ statusSource: "server" });
+    265|     expect(router.refresh).toHaveBeenCalledTimes(refreshes + 2);
+       |                            ^
+    266| });
+    267| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerStop.component.test.tsx > keeps a backup session, and the controls busy, until the operation settles or fifteen minutes pass
+AssertionError: expected "spy" to be called 16 times, but got 5 times
+ ❯ src/app/components/servers/ManagedServerStop.component.test.tsx:277:28
+    275|     expect(router.refresh).toHaveBeenCalledTimes(1);
+    276|     await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    277|     expect(router.refresh).toHaveBeenCalledTimes(16);
+       |                            ^
+    278|     await act(async () => vi.advanceTimersByTimeAsync(120_000));
+    279|     expect(router.refresh).toHaveBeenCalledTimes(31);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerStop.component.test.tsx > re-renders the page only when the compact server status changes
+AssertionError: expected "spy" to be called 6 times, but got 3 times
+ ❯ src/app/components/servers/ManagedServerStop.component.test.tsx:316:24
+    314|     expect(router.refresh).toHaveBeenCalledTimes(1);
+    315|     await act(async () => vi.advanceTimersByTimeAsync(16_000));
+    316|     expect(readStatus).toHaveBeenCalledTimes(6);
+       |                        ^
+    317|     expect(router.refresh).toHaveBeenCalledTimes(1);
+    318|     readStatus.mockResolvedValue({ ok: true, fingerprint: "stopping" }…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[20/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerStop.component.test.tsx > shares a slow opening status read with the next check instead of starting another
+AssertionError: expected "spy" to be called 2 times, but got 1 times
+ ❯ src/app/components/servers/ManagedServerStop.component.test.tsx:349:28
+    347|     expect(readStatus).toHaveBeenCalledOnce();
+    348|     await act(async () => release({ ok: true, fingerprint: "running" }…
+    349|     expect(router.refresh).toHaveBeenCalledTimes(2);
+       |                            ^
+    350|     await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    351|     expect(readStatus).toHaveBeenCalledTimes(2);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[21/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerStop.component.test.tsx > keeps the polling baseline when a backup request's job attaches
+AssertionError: expected "spy" to be called 2 times, but got 1 times
+ ❯ src/app/components/servers/ManagedServerStop.component.test.tsx:363:24
+    361|     expect(router.refresh).toHaveBeenCalledOnce();
+    362|     await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    363|     expect(readStatus).toHaveBeenCalledTimes(2);
+       |                        ^
+    364|     expect(router.refresh).toHaveBeenCalledOnce();
+    365| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[22/191]⎯
+
+ FAIL  src/app/components/servers/ManagedServerTransfers.component.test.tsx > does not dispatch when pending intent cannot be persisted, or recover a different account's request
+AssertionError: expected "spy" to not be called at all, but actually been called 1 times
+
+Received: 
+
+  1st spy call:
+
+    Array [
+      FormData {},
+      "owner",
+    ]
+
+
+Number of calls: 1
+
+ ❯ src/app/components/servers/ManagedServerTransfers.component.test.tsx:196:58
+    194|     await render();
+    195|     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { …
+    196|     await click("Export save"); expect(mocks.submit).not.toHaveBeenCal…
+       |                                                          ^
+    197|     expect(container.textContent).toContain("paused");
+    198|     vi.restoreAllMocks();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[23/191]⎯
+
+ FAIL  src/app/components/servers/ServerOnboarding.component.test.tsx > ServerOnboarding real component and server-action recovery > fails closed on inaccessible or corrupt storage before any mutation
+AssertionError: expected 'Your granted server quotaYou have a s…' to contain 'Setup is blocked'
+
+Expected: "Setup is blocked"
+Received: "Your granted server quotaYou have a server availableGive your campaign a name and choose where it lives.1 unusedSet up server Your next campaignSet up your serverChoose an available region to create a stopped server using one server allowance. If your preferred region is full, you can request it without using your allowance.Server details1Server nameServer name3–48 characters. Letters or numbers at both ends. Spaces and supported punctuation inside. Whitespace is normalized.2ReleasePublic Release Released to Steam every 1–4 weeks.Nightly Release Released every night to supporters and testers. Your server will be updated during your maintenance window to an experimental version that we release daily. Check here in Discord for how to use the installer. You must link your Discord to your Patreon first so that you get the Patreon role in Discord to see the channel.Release availability is checked when you create a server. Nightly Release may be temporarily paused even when a region has capacity.3Server regionServer regionNorth AmericaEuropeSouth AmericaComing soonAsiaOceaniaUS-WestAvailableUS-EastAvailableA pending server creation (My Campaign) in US-West needs confirmation.Closing or refreshing does not cancel a submitted request. Retry uses the exact saved request, even if your quota or capacity changed.Retry pending requestSign in with the account that submitted this request, then retry the pending request.CloseRefresh availabilityCreate server"
+
+ ❯ src/app/components/servers/ServerOnboarding.component.test.tsx:317:173
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[24/191]⎯
+
+
+ Test Files  10 failed | 122 passed (132)
+      Tests  111 failed | 2492 passed | 1 skipped (2604)
+   Start at  18:12:55
+   Duration  21.84s (transform 40.57s, setup 0ms, collect 102.28s, tests 71.35s, environment 216.49s, prepare 23.90s)
+

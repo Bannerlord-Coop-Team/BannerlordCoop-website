@@ -1,17 +1,19 @@
 "use client";
 
 import { ArrowRightLeft, CalendarClock, Check, CircleCheck, Copy, Info, LoaderCircle, TriangleAlert, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useContext, useEffect, useEffectEvent, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { MyServerMove, MyServerNotice } from "@/app/lib/control-plane/types";
 import { isMoveInProgress, SERVER_MOVE_STEPS } from "@/app/lib/hosting/server-move";
 import { useTranslations } from "@/app/lib/localization/client";
 import type { Translator } from "@/app/lib/localization/types";
+import { readManagedServerMoveStatus } from "@/app/servers/managed-server-move-actions";
 import { dismissManagedServerNotice } from "@/app/servers/server-notice-actions";
 import { isCurrentMoveCompletion, ManagedServerMoveContext } from "./managed-server-move-context";
 import { useRevealServerAddress, useServerAddress } from "./ServerManagementWorkspace";
 import { useViewerTimeZone, ZONED_DATE_TIME_FORMAT } from "./viewer-time-zone";
 
-/** Legacy delay helper retained for callers that render move timing independently. */
+/** Without a move to follow, a page checks once a minute; an announced move every 30 s. */
 const IDLE_POLL_MILLISECONDS = 60_000;
 const SCHEDULED_POLL_MILLISECONDS = 30_000;
 /** Moves that are starting or under way, and the last two minutes before one, are followed every 5 s. */
@@ -59,19 +61,51 @@ export function ManagedServerMoveProvider({ serverId, initialMove, headerAddress
     headerAddress?: string | null;
     children: ReactNode;
 }) {
+    const router = useRouter();
     // The move shown and the server it was shown for: another server's page starts again from its own status.
     const [shown, setShown] = useState({ serverId, move: initialMove });
     if (shown.serverId !== serverId) setShown({ serverId, move: initialMove });
     const move = shown.serverId === serverId ? shown.move : initialMove;
     const latest = useRef(initialMove);
+    const failures = useRef(0);
     const readNow = useRef<(() => void) | null>(null);
     // The status shown before one was adopted from a refreshed page, until the next read confirms or undoes it.
     const beforeAdoption = useRef<string | null>(null);
+    const addressRefreshes = useRef(new Map<string, number>());
 
     // Reads for another server start over from that server's rendered status, without the last server's history.
     const startTracking = useEffectEvent(() => {
         latest.current = initialMove;
+        failures.current = 0;
         beforeAdoption.current = null;
+        addressRefreshes.current = new Map();
+    });
+
+    // Applies one read: a failure keeps the status already shown and backs off.
+    const applyRead = useEffectEvent((result: Awaited<ReturnType<typeof readManagedServerMoveStatus>>) => {
+        if (!result.ok) {
+            failures.current += 1;
+            return;
+        }
+        failures.current = 0;
+        const key = serverMoveRefreshKey(result.move);
+        const restored = key === beforeAdoption.current;
+        beforeAdoption.current = null;
+        const changed = key !== serverMoveRefreshKey(latest.current);
+        latest.current = result.move;
+        setShown({ serverId, move: result.move });
+        // A read that undoes an adopted status only restores what this page showed, so it does not refresh again.
+        if (changed && !restored) {
+            router.refresh();
+            return;
+        }
+        const moved = result.move;
+        if (moved?.state !== "moved" || moved.address === null || moved.completedAt === null || headerAddress === moved.address) return;
+        // The page's own reads can see the old address after the move read saw the new one; refresh a few times.
+        const attempts = addressRefreshes.current.get(moved.completedAt) ?? 0;
+        if (attempts >= MAXIMUM_ADDRESS_REFRESHES) return;
+        addressRefreshes.current.set(moved.completedAt, attempts + 1);
+        router.refresh();
     });
 
     // A refreshed page can render a newer status than the last read: show it at once and confirm it with a read.
@@ -86,8 +120,55 @@ export function ManagedServerMoveProvider({ serverId, initialMove, headerAddress
         readNow.current?.();
     });
 
-    // Move status is refreshed by ManagedServerPollingProvider's shared visible-tab status poll.
-    useEffect(() => { startTracking(); readNow.current = null; return () => { readNow.current = null; }; }, [serverId]);
+    useEffect(() => {
+        let cancelled = false;
+        let timer: number | undefined;
+        let inFlight = false;
+        let readAgain = false;
+
+        // Reads now while the page is visible; a hidden page waits until it is shown again.
+        async function read() {
+            window.clearTimeout(timer);
+            timer = undefined;
+            if (document.visibilityState === "hidden") return;
+            // A read already under way may have started before this request, so another follows it.
+            if (inFlight) {
+                readAgain = true;
+                return;
+            }
+            inFlight = true;
+            const result = await readManagedServerMoveStatus(serverId).catch(() => ({ ok: false as const }));
+            inFlight = false;
+            if (cancelled) return;
+            applyRead(result);
+            if (readAgain) {
+                readAgain = false;
+                void read();
+            } else {
+                schedule();
+            }
+        }
+
+        function schedule() {
+            timer = window.setTimeout(read, serverMovePollDelay(latest.current, Date.now(), failures.current));
+        }
+
+        // Reads as soon as the owner returns to the page, whatever was read or under way while it was hidden.
+        function readOnReturn() {
+            if (document.visibilityState === "visible") void read();
+        }
+
+        startTracking();
+        readNow.current = () => void read();
+        schedule();
+        document.addEventListener("visibilitychange", readOnReturn);
+        return () => {
+            cancelled = true;
+            readNow.current = null;
+            window.clearTimeout(timer);
+            document.removeEventListener("visibilitychange", readOnReturn);
+        };
+    }, [serverId]);
 
     useEffect(() => {
         // Deferred to its own task, like the other prop-driven updates on this page.
