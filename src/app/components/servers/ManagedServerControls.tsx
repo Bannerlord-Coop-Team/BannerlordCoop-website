@@ -175,7 +175,7 @@ export function ManagedServerControls({
     // A move to another machine owns the server until it finishes; an announced one leaves the controls usable.
     const moving = isMoveInProgress(useManagedServerMove());
     const canOperate = accessRole === "owner" || accessRole === "manager";
-    const { job: updateJob, error: updateError, busy: updateBusy, followJob } = useServerUpdateProgress(
+    const { job: updateJob, error: updateError, busy: updateBusy, hasStatus: showUpdateStatus, followJob } = useServerUpdateProgress(
         serverId, canOperate, expectedUpdatedAt, readServerBuildStatus, () => router.refresh());
     const displayedState = startStatus?.state === "succeeded" && expectedUpdatedAt === startRevision ? "running" : operationState;
     const stateIsTransitional = TRANSITIONAL_STATES.has(displayedState);
@@ -529,7 +529,6 @@ export function ManagedServerControls({
     const showStart = pendingOperation === "start" || startJobId !== null || displayedStartStatus !== null;
     // With a Maintenance card, Update now reports beside its own button instead of in the console.
     const updateMessageInSlot = updateSlot !== undefined && lastOperation === "update-now" && updateJob === null;
-    const showUpdateStatus = updateJob !== null || updateError !== null;
     const statusArea = showStart || showUpdateStatus || restart !== null || progressPaused || stopCheckPaused || (message && !updateMessageInSlot && updateJob === null) ? (
         <div className="flex w-full flex-col items-start gap-2">
             {showStart && <StartProgress key={`${serverId}:${startProgressIdentity}`} status={displayedStartStatus} paused={progressPaused} />}

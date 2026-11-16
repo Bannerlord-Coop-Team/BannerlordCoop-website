@@ -71,9 +71,8 @@ export function ServerUpdateProgress({ job }: { job: BuildUpdateJob }) {
     </section>;
 }
 
-/** Shows the followed update's progress and/or why its progress cannot be shown; renders nothing when neither exists. */
+/** Shows the followed update's progress and/or why its progress cannot be shown, rendering whichever exists. */
 export function ServerUpdateStatus({ job, error }: { job: BuildUpdateJob | null; error: UpdateProgressError | null }) {
-    if (job === null && error === null) return null;
     return <>
         {job !== null && <ServerUpdateProgress job={job} />}
         {error !== null && <ServerUpdateProgressError error={error} />}

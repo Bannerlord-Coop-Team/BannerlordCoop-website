@@ -178,5 +178,7 @@ export function useServerUpdateProgress(
 
     const { job, error } = state;
     const busy = job !== null && isActiveJob(job);
-    return { job, error, busy, followJob };
+    // The one rule for whether the Console has update progress or an error to show.
+    const hasStatus = job !== null || error !== null;
+    return { job, error, busy, hasStatus, followJob };
 }
