@@ -32,7 +32,7 @@ type UpdatePollInput = { status: BuildStatus | null; follow: UpdateFollow; now: 
 
 /**
  * Everything the hook shows and follows, kept together so a new follow target can never keep an older job on screen.
- * `generation` counts the follows this page started; each poll loop belongs to the generation it started in.
+ * `generation` is explained on updateProgressReducer.
  */
 export type UpdateProgressState = {
     follow: UpdateFollow;
@@ -122,8 +122,8 @@ function settledOrIdleStep(job: BuildUpdateJob | null, follow: UpdateFollow): Up
 type UpdateProgressRequest = Exclude<UpdateProgressAction, { type: "step" }>;
 
 /**
- * Applies a poll step, or applies a request in a new generation so the loop still running for the old follow state
- * becomes stale. No action other than a step can change what the loop follows without starting a new generation.
+ * Applies a poll step only from the loop of the current generation, the one each loop starts in. Every other action starts
+ * a new generation, which restarts the loop with the new follow state and makes the old loop's steps stale.
  */
 export function updateProgressReducer(state: UpdateProgressState, action: UpdateProgressAction): UpdateProgressState {
     if (action.type === "step") return applyStep(state, action.generation, action.step);
@@ -160,11 +160,10 @@ export function useServerUpdateProgress(
     onFollowedUpdateEnded: () => void,
 ) {
     const [state, dispatch] = useReducer(updateProgressReducer, INITIAL_UPDATE_PROGRESS_STATE);
-    // Effect events: a caller passing a new reader or callback on each render does not restart the poll, and each
-    // loop reads the generation and follow state once when it starts instead of restarting on every step.
+    // Effect events: a new reader or callback on each render does not restart the poll, and neither does a step.
     const readLatest = useEffectEvent((id: string) => readStatus(id));
     const endFollowed = useEffectEvent(() => onFollowedUpdateEnded());
-    const stateAtStart = useEffectEvent(() => state);
+    const followAtStart = useEffectEvent(() => state.follow);
 
     // The poll stops when no update is in flight, so a new server revision (each page refresh brings one) is what
     // wakes it to pick up an update started elsewhere, by the schedule or by hosting support.
@@ -173,11 +172,9 @@ export function useServerUpdateProgress(
         let cancelled = false;
         let timeout: ReturnType<typeof setTimeout>;
         const deadline = Date.now() + POLL_WINDOW_MILLISECONDS;
-        // Only this loop's own steps change the follow state while it runs: the reducer applies every other action in a
-        // new generation, which restarts the loop and drops any step still tagged with this loop's older generation.
-        const start = stateAtStart();
-        const generation = start.generation;
-        let follow = start.follow;
+        // This loop belongs to the current generation; see updateProgressReducer.
+        const generation = state.generation;
+        let follow = followAtStart();
         // Reads the status once and applies the decided step to state, the callback and the timer.
         async function poll() {
             let status: BuildStatus | null;
