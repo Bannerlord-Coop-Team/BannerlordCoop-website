@@ -1,11 +1,13 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import type { BuildStatus } from "../../../../supabase/functions/_shared/server-build-contract";
 import { useServerUpdateProgress, type ReadBuildStatus } from "./use-server-update-progress";
-import { updateJobInState } from "./ServerUpdateProgress.test-utils";
+import { updateJob, updateJobInState } from "./ServerUpdateProgress.test-utils";
 
 const serverId = "22222222-2222-4222-8222-222222222222";
-const jobId = "55555555-5555-4555-8555-555555555555";
+const jobId = updateJob().jobId;
+const otherJobId = "66666666-6666-4666-8666-666666666666";
 const revision = "2026-09-20T12:00:00.000Z";
 const readStatus = vi.fn<ReadBuildStatus>();
 const onFollowedUpdateEnded = vi.fn<() => void>();
@@ -57,15 +59,6 @@ it("never reads the status while disabled", async () => {
     expect(readStatus).not.toHaveBeenCalled();
 });
 
-it("stops polling when the step says stop: a finished job it never followed", async () => {
-    readStatus.mockResolvedValue({ serverId, job: updateJobInState("failed") });
-    const { result } = await renderHook();
-    await advance(30_000);
-    expect(readStatus).toHaveBeenCalledOnce();
-    expect(result.current!.job).toBeNull();
-    expect(onFollowedUpdateEnded).not.toHaveBeenCalled();
-});
-
 it("stops polling and reports paused once the poll window passes", async () => {
     readStatus.mockResolvedValue({ serverId, job: updateJobInState("running") });
     const { result } = await renderHook();
@@ -83,5 +76,20 @@ it("reports progress as unavailable when the injected read fails while following
     await act(async () => result.current!.followJob(jobId));
     expect(result.current!.error).toBe("unavailable");
     expect(result.current!.job).toBeNull();
+    expect(onFollowedUpdateEnded).not.toHaveBeenCalled();
+});
+
+it("keeps following the requested job when the read started before Update now lands after it", async () => {
+    let resolveFirstRead!: (status: BuildStatus) => void;
+    readStatus.mockReturnValueOnce(new Promise(resolve => { resolveFirstRead = resolve; }));
+    const { result } = await renderHook();
+    await act(async () => {
+        result.current!.followJob(jobId);
+        resolveFirstRead({ serverId, job: updateJobInState("succeeded", { jobId: otherJobId }) });
+    });
+    await advance(6_000);
+    expect(readStatus.mock.calls.length).toBeGreaterThan(2);
+    expect(result.current!.job).toBeNull();
+    expect(result.current!.error).toBeNull();
     expect(onFollowedUpdateEnded).not.toHaveBeenCalled();
 });

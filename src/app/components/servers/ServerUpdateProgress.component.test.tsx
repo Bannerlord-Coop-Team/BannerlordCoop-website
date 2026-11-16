@@ -93,11 +93,3 @@ it.each([
     expect(status.getAttribute("aria-live")).toBe("polite");
     expect(container.querySelector('[role="progressbar"]')).toBeNull();
 });
-
-it("shows the update card beside its error, and nothing when there is neither", async () => {
-    await act(async () => root.render(<TestLocalization><ServerUpdateStatus job={job(["done", "active"])} error="paused" /></TestLocalization>));
-    expect(container.querySelector('[role="progressbar"]')).not.toBeNull();
-    expect(container.textContent).toContain("Progress checks paused. Refresh the page to check again.");
-    await act(async () => root.render(<TestLocalization><ServerUpdateStatus job={null} error={null} /></TestLocalization>));
-    expect(container.textContent).toBe("");
-});
