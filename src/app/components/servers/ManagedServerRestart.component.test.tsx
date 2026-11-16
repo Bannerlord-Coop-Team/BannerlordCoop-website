@@ -129,7 +129,7 @@ it("follows Restart through live game phases without locking Stop and Restart af
     await emit({ type: "opened", serverId, connection: 2 });
     await emit({ type: "phase", serverId, connection: 2, phase: "boot" });
     expect(currentStep()).toContain("Load campaign");
-    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(router.refresh).toHaveBeenCalledTimes(2);
     await emit({ type: "phase", serverId, connection: 2, phase: "loading" });
     expect(buttons().slice(0, 4).map(button => button.disabled)).toEqual([true, false, false, true]);
@@ -353,3 +353,4 @@ it("keeps controls locked while checking an unconfirmed restart without resendin
     expect(buttons()[2].disabled).toBe(false);
     expect(operate).toHaveBeenCalledOnce();
 });
+

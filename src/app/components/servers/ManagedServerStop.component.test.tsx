@@ -41,7 +41,7 @@ it.each(["accepted", "unknown", "lost-response"])("automatically confirms Stop a
     expect(container.textContent).not.toContain("private transport details");
     expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
     expect(router.refresh).toHaveBeenCalledOnce();
-    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(router.refresh).toHaveBeenCalledTimes(2);
     await render({ operationState: "stopping", expectedUpdatedAt: "2026-10-02T16:00:01.000Z" });
     expect(container.textContent).not.toContain("Server stopped.");
@@ -80,7 +80,7 @@ it("keeps checking a stopped drifted game until CP verifies readiness and unlock
     await act(async () => vi.advanceTimersByTimeAsync(0));
     expect(container.textContent).not.toContain("Server stopped.");
     const blockedRefreshes = router.refresh.mock.calls.length;
-    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(router.refresh.mock.calls.length).toBeGreaterThan(blockedRefreshes);
     await render({ operationState: "stopped", observedGameState: "stopped", expectedUpdatedAt: "2026-10-02T16:00:03.000Z",
         runtimeInsight: { ...runtimeInsight, desiredState: "stopped", allowedActions: ["start"], failureCode: null, failureMessage: null, recommendedAction: null, recommendation: null } });
@@ -251,7 +251,7 @@ it.each(["provisioning", "configuring"])("automatically follows %s until initial
     await renderWithProbe(undefined, operationState);
     await act(async () => vi.advanceTimersByTimeAsync(0));
     expect(polling.session).toMatchObject({ serverId: server.serverId, statusSource: "initialization" });
-    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(router.refresh).toHaveBeenCalledTimes(2);
     await renderWithProbe(undefined, "stopped");
     await act(async () => vi.advanceTimersByTimeAsync(0));
@@ -260,7 +260,7 @@ it.each(["provisioning", "configuring"])("automatically follows %s until initial
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
     expect(router.refresh).toHaveBeenCalledTimes(refreshes);
     await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt));
-    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(polling.session).toMatchObject({ statusSource: "server" });
     expect(router.refresh).toHaveBeenCalledTimes(refreshes + 2);
 });
@@ -310,16 +310,16 @@ it("re-renders the page only when the compact server status changes", async () =
     // The opening refresh reads the fingerprint first, so an unchanged first check renders nothing.
     expect(readStatus).toHaveBeenCalledTimes(1);
     expect(router.refresh).toHaveBeenCalledTimes(1);
-    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(router.refresh).toHaveBeenCalledTimes(1);
     await act(async () => vi.advanceTimersByTimeAsync(16_000));
     expect(readStatus).toHaveBeenCalledTimes(6);
     expect(router.refresh).toHaveBeenCalledTimes(1);
     readStatus.mockResolvedValue({ ok: true, fingerprint: "stopping" });
-    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(router.refresh).toHaveBeenCalledTimes(2);
     readStatus.mockResolvedValue({ ok: false });
-    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(router.refresh).toHaveBeenCalledTimes(3);
     expect(readStatus).toHaveBeenCalledWith(server.serverId);
 });
@@ -343,11 +343,11 @@ it("shares a slow opening status read with the next check instead of starting an
     await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt));
     await act(async () => vi.advanceTimersByTimeAsync(1_500));
     expect(router.refresh).toHaveBeenCalledOnce();
-    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(readStatus).toHaveBeenCalledOnce();
     await act(async () => release({ ok: true, fingerprint: "running" }));
     expect(router.refresh).toHaveBeenCalledTimes(2);
-    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(readStatus).toHaveBeenCalledTimes(2);
     expect(router.refresh).toHaveBeenCalledTimes(2);
 });
@@ -359,7 +359,7 @@ it("keeps the polling baseline when a backup request's job attaches", async () =
     expect(router.refresh).toHaveBeenCalledOnce();
     await act(async () => polling.attachJob(server.serverId, "33333333-3333-4333-8333-333333333333"));
     expect(router.refresh).toHaveBeenCalledOnce();
-    await act(async () => vi.advanceTimersByTimeAsync(4_000));
+    await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(readStatus).toHaveBeenCalledTimes(2);
     expect(router.refresh).toHaveBeenCalledOnce();
 });
@@ -387,13 +387,13 @@ it("shares one status read when a shown tab's catch-up and a scheduled check ove
         await renderWithProbe(readStatus);
         await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt));
         visibility = "hidden";
-        await act(async () => vi.advanceTimersByTimeAsync(4_000));
+        await act(async () => vi.advanceTimersByTimeAsync(15_000));
         expect(readStatus).toHaveBeenCalledOnce();
         let release!: (value: { ok: true; fingerprint: string }) => void;
         readStatus.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
         visibility = "visible";
         await act(async () => document.dispatchEvent(new Event("visibilitychange")));
-        await act(async () => vi.advanceTimersByTimeAsync(4_000));
+        await act(async () => vi.advanceTimersByTimeAsync(15_000));
         expect(readStatus).toHaveBeenCalledTimes(2);
         await act(async () => release({ ok: true, fingerprint: "stopping" }));
         expect(router.refresh).toHaveBeenCalledTimes(2);
@@ -442,3 +442,4 @@ it("defers refreshes while the tab is hidden and catches up when it is shown", a
         Reflect.deleteProperty(document, "visibilityState");
     }
 });
+

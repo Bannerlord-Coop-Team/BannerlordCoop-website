@@ -18,7 +18,7 @@ const POLL_DEADLINE_MILLISECONDS = 15 * 60_000;
 const UNATTACHED_BACKUP_DEADLINE_MILLISECONDS = 2 * 60_000;
 /** The owner just acted, so the opening refresh waits at most this long for the status fingerprint. */
 const OPENING_FINGERPRINT_WAIT_MILLISECONDS = 1_500;
-const INITIALIZING_SERVER_STATES = new Set(["provisioning", "configuring"]);
+const INITIALIZING_SERVER_STATES = new Set(["provisioning", "configuring", "moving", "starting", "stopping"]);
 
 type PollingSession = {
     /** Distinguishes sessions begun in the same millisecond; attaching a job keeps it. */
@@ -84,6 +84,9 @@ export function managedServerPollDelay(elapsedMilliseconds: number) {
     if (elapsedMilliseconds < 60_000) return 4_000;
     if (elapsedMilliseconds < 3 * 60_000) return 8_000;
     return 15_000;
+}
+export function managedServerEffectivePollDelay(elapsedMilliseconds: number, failures = 0) {
+    return Math.min(5 * 60_000, Math.max(15_000, managedServerPollDelay(elapsedMilliseconds)) * 2 ** failures);
 }
 
 const TERMINAL_OPERATION_STATES = new Set(["stopped", "awaiting-save", "succeeded", "failed", "cancelled", "deleted"]);
@@ -232,6 +235,7 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
                     try {
                         const operationState = JSON.parse(result.fingerprint)[1];
                         if (isTerminalManagedServerOperationState(operationState)) {
+                            router.refresh();
                             setSession((current) => current?.sequence === sequence ? null : current);
                             return;
                         }
@@ -246,6 +250,7 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
                         return;
                     }
                 } else {
+                    router.refresh();
                     setTimedOutSession(session);
                     setSession((current) => current?.sequence === sequence ? null : current);
                     return;
@@ -262,7 +267,7 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
 
         function schedule() {
             if (!cancelled) {
-                const base = Math.max(15_000, managedServerPollDelay(Date.now() - startedAt));
+                const base = managedServerEffectivePollDelay(Date.now() - startedAt);
                 const backoff = failures === 0 ? base : Math.min(5 * 60_000, base * 2 ** failures);
                 const jitter = backoff * (0.9 + Math.random() * 0.2);
                 timer = window.setTimeout(tick, jitter);
