@@ -54,8 +54,8 @@ test("relays the update-progress read through its fixed route and validates the 
     assert.equal((await handler(listRequest(`?resource=build-status&serverId=${SERVER_ID}`))).status, 502);
 });
 
-test("never relays the retired version selection to the control plane", async () => {
-    // ControlPlane #1125 retired server-build-options and set-server-build: servers follow their channel's current build.
+test("rejects version listing and selection without calling the control plane", async () => {
+    // Servers follow their channel's current build, so neither request is relayed.
     const calls: unknown[] = [];
     const handler = createHandler(async (_url, init) => { calls.push(init?.body); return successEnvelope(null); });
     assert.equal((await handler(listRequest(`?resource=build-options&serverId=${SERVER_ID}`))).status, 400);

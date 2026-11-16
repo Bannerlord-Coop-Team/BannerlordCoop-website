@@ -1,8 +1,7 @@
 import { hasExactKeys, isRecord } from "./dto-validation.ts";
 import { REQUEST_ID } from "./server-visibility-contract.ts";
 
-// Owners no longer choose a version (ControlPlane #1125 retired `server-build-options` and `set-server-build`):
-// every server runs its release channel's current build. Only update progress is read here.
+// Owns the owner update-progress contract; every server runs its release channel's current build.
 
 /** Customers see "0.1.6", never "v0.1.6" or a build id; the registry tag spelling is accepted and stripped. */
 export function bareVersion(value: string): string {
