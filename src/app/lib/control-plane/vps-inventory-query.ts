@@ -6,7 +6,7 @@ import { paginateItems } from "@/app/lib/pagination";
 import { HOSTING_REGIONS, hostingRegionLabel, type HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
 type RegionCatalog = readonly HostingRegionPayload[] | null;
-type PlacedHost = Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region" | "totalSlots" | "occupiedSlots">;
+type PlacedHost = Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region" | "totalSlots" | "occupiedSlots" | "availableServers">;
 const UNPLACED_REGION = "unplaced";
 
 export const VPS_PAGE_SIZES = [10, 25, 50, 100] as const;
@@ -109,11 +109,13 @@ export type VpsRegionSlotSummary = {
     label: string;
     totalSlots: number;
     takenSlots: number;
+    allocatableSlots: number;
 };
 
 export type VpsFleetSlotSummary = {
     totalSlots: number;
     takenSlots: number;
+    allocatableSlots: number;
     regions: VpsRegionSlotSummary[];
 };
 
@@ -131,20 +133,23 @@ export function regionSlotOutline(takenSlots: number, totalSlots: number): Regio
 
 /** Counts prepared slots and slots assigned to a server, for the whole fleet and each region it serves. */
 export function summarizeVpsSlots(hosts: readonly PlacedHost[], catalog: RegionCatalog = null): VpsFleetSlotSummary {
-    const totals = new Map<string, { totalSlots: number; takenSlots: number }>();
+    const totals = new Map<string, { totalSlots: number; takenSlots: number; allocatableSlots: number }>();
     let totalSlots = 0;
     let takenSlots = 0;
+    let allocatableSlots = 0;
     for (const host of hosts) {
         const total = Number.isSafeInteger(host.totalSlots) && host.totalSlots > 0 ? host.totalSlots : 0;
         const taken = Array.isArray(host.occupiedSlots) ? host.occupiedSlots.length : 0;
         totalSlots += total;
         takenSlots += taken;
+        allocatableSlots += Number.isSafeInteger(host.availableServers) && host.availableServers > 0 ? host.availableServers : 0;
         const keys = hostServedRegionKeys(host, catalog);
         // A host that satisfies more than one placement is capacity for each of those regions.
         for (const region of keys.length > 0 ? keys : [UNPLACED_REGION]) {
-            const current = totals.get(region) ?? { totalSlots: 0, takenSlots: 0 };
+            const current = totals.get(region) ?? { totalSlots: 0, takenSlots: 0, allocatableSlots: 0 };
             current.totalSlots += total;
             current.takenSlots += taken;
+            current.allocatableSlots += Number.isSafeInteger(host.availableServers) && host.availableServers > 0 ? host.availableServers : 0;
             totals.set(region, current);
         }
     }
@@ -155,7 +160,7 @@ export function summarizeVpsSlots(hosts: readonly PlacedHost[], catalog: RegionC
             label: region === UNPLACED_REGION ? "No stored region" : hostingRegionLabel(region),
             ...counts,
         }));
-    return { totalSlots, takenSlots, regions };
+    return { totalSlots, takenSlots, allocatableSlots, regions };
 }
 
 export function vpsOwnerEmails(hosts: readonly HostingAdminVpsHost[], accounts: readonly WebsiteAccountSummary[]) {
