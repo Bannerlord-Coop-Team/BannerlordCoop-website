@@ -10,6 +10,7 @@ import { DownloadSection } from "@/app/components/home/modulesection/DownloadSec
 import { Footer } from "@/app/components/layout/Footer";
 import { Navbar } from "@/app/components/layout/Navbar";
 import { getNetworkStats } from "@/app/lib/network-stats";
+import { JsonLd, SITE_URL, organizationNode } from "@/app/lib/structured-data";
 import type {Metadata} from "next";
 import { Suspense } from "react";
 
@@ -17,6 +18,7 @@ import { Suspense } from "react";
 export async function generateMetadata(): Promise<Metadata> {
     const { t } = await getTranslations("home");
     return {
+        title: { absolute: t("metadata.title") },
         description: t("metadata.description"),
         alternates: {
             canonical: "/",
@@ -61,6 +63,18 @@ export default async function Home() {
 
     return (
         <LocalizationProvider locale={locale} messages={messages}>
+            <JsonLd data={{
+                "@graph": [
+                    organizationNode,
+                    {
+                        "@type": "WebSite",
+                        "@id": `${SITE_URL}/#website`,
+                        name: "Bannerlord Co-op",
+                        url: SITE_URL,
+                        publisher: { "@id": organizationNode["@id"] },
+                    },
+                ],
+            }} />
             <Navbar />
             <main>
                 <Hero />

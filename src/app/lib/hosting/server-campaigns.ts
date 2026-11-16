@@ -2,13 +2,16 @@ import { MyServersApiError, requestMyServersApi } from "./my-servers";
 import {
     parseCampaignPage,
     parseCampaignResetResult,
+    parseCampaignResetStatus,
     parseCampaignSelection,
     type CampaignMutation,
     type CampaignPage,
     type CampaignResetResult,
+    type CampaignResetStatus,
     type CampaignSelection,
     type CampaignSummary,
 } from "../../../../supabase/functions/_shared/server-campaign-contract";
+import { requireUuid } from "../../../../supabase/functions/_shared/server-file-contract";
 
 const PAGE_LIMIT = 50;
 const MAXIMUM_PAGES = 4;
@@ -49,4 +52,25 @@ export async function selectMyServerCampaign(accessToken: string, requestId: str
 
 export async function resetMyServerCampaign(accessToken: string, requestId: string, input: Extract<CampaignMutation, { action: "reset-campaign" }>): Promise<CampaignResetResult> {
     return parseCampaignResetResult(await requestMyServersApi(accessToken, { method: "POST", body: JSON.stringify(input), requestId }));
+}
+
+/** A missing reader on an older CP/Edge is distinct from a failed reset or an unavailable response. */
+export async function getMyServerCampaignResetStatus(accessToken: string, serverId: string, jobId: string): Promise<CampaignResetStatus | null> {
+    try { requireUuid(serverId); requireUuid(jobId); }
+    catch { throw new MyServersApiError("invalid_request", "Invalid campaign reset status request."); }
+    let result: unknown;
+    try {
+        result = await requestMyServersApi(accessToken, { method: "GET", configureEndpoint(endpoint) {
+            endpoint.searchParams.set("resource", "reset-campaign-status");
+            endpoint.searchParams.set("serverId", serverId);
+            endpoint.searchParams.set("jobId", jobId);
+        } });
+    } catch (error) {
+        // Older HTTP parsers reject the unknown operation as invalid_request; older IPC readers use operation_unavailable.
+        if (error instanceof MyServersApiError && error.parsedEnvelope && !error.retryable && error.operationId === undefined
+            && ["invalid_request", "operation_unavailable"].includes(error.code)) return null;
+        throw error;
+    }
+    try { return parseCampaignResetStatus(result, serverId, jobId); }
+    catch { throw new MyServersApiError("invalid_response", "The campaign reset status could not be verified."); }
 }

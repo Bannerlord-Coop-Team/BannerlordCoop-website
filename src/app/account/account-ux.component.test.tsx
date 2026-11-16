@@ -45,7 +45,7 @@ it("shows account and provider names, a clear next action, and no permanent help
 });
 it("shows contextual synchronization feedback and visible disconnect controls", async () => {
     const view = await render({ ...EMPTY_MEMBERSHIP, linked: true, sync: "pending" });
-    expect(view.textContent).toContain("Your server allowance is updating.");
+    expect(view.textContent).toContain("Your server allowance is being updated. This usually takes a few seconds; refreshing automatically.");
     expect(view.textContent).not.toContain("Check status");
     expect(view.querySelector('[data-status-pending="true"]')).not.toBeNull();
     expect([...view.querySelectorAll("button")].some(button => button.textContent === "Disconnect Patreon")).toBe(true);

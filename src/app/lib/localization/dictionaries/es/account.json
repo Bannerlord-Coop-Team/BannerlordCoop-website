@@ -27,7 +27,7 @@
   "membership.nightlyInstaller": "Quienes apoyan el proyecto en Patreon tienen acceso al instalador de versiones nocturnas (así se usa)",
   "membership.reviewRequired": "Tu membresía necesita una revisión. Contacta con el equipo de soporte antes de volver a intentarlo.",
   "membership.verifyRequired": "Verifica tu membresía antes de crear un nuevo servidor.",
-  "membership.syncPending": "Tu cupo de servidores se está actualizando.",
+  "membership.syncPending": "Se está actualizando tu asignación de servidores. Normalmente tarda unos segundos; el estado se actualiza automáticamente.",
   "membership.syncUnavailable": "No se pudo comprobar tu cupo de servidores.",
   "membership.expiry": "Es posible que debas volver a verificar tu membresía antes de crear un nuevo servidor. Los servidores existentes no se detienen automáticamente cuando caduca la verificación.",
   "patreon.verifyPending": "Abriendo Patreon…",
@@ -44,5 +44,9 @@
   "disconnect.confirm": "Confirmar desconexión de {provider}",
   "disconnect.cancel": "Cancelar",
   "loading.label": "Cargando cuenta",
-  "loading.status": "Cargando cuenta…"
+  "loading.status": "Cargando cuenta…",
+  "boosty.linked": "Tu suscripción de Boosty está vinculada mediante el correo de tu cuenta.",
+  "boosty.notFound": "Ninguna suscripción de Boosty usa el correo de esta cuenta. Para vincular una, suscríbete en Boosty con el mismo correo.",
+  "boosty.nonqualifying": "Tu suscripción de Boosty no incluye un nivel que cumpla los requisitos.",
+  "boosty.checking": "Tu membresía de Boosty se comprobará en breve."
 }

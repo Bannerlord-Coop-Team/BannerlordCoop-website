@@ -22,9 +22,13 @@ import {
     mintSecretsEqual,
     pinClientObjectKey,
     rewriteManifestArtifactUrls,
+    type JsonObject,
+    validateLegacyNightlyClientManifest,
+    validateLegacyNightlyReleaseManifest,
     verifySponsorFormToken,
 } from "./core";
 import { databaseForRequest } from "./database";
+import { NightlyPublicationReadError, readNightlyPublication } from "./publication";
 
 const DISCORD_API = "https://discord.com/api/v10";
 const DISCORD_AUTHORIZE = "https://discord.com/oauth2/authorize";
@@ -33,11 +37,9 @@ const JSON_HEADERS = Object.freeze({
     "content-type": "application/json; charset=utf-8",
     "cache-control": "no-store",
 });
+const NIGHTLY_PUBLICATION_VERSION_HEADER = "x-bannerlord-coop-nightly-version";
 const DEVICE_SECRET_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const USER_CODE_PATTERN = /^[A-Z2-9]{4}-[A-Z2-9]{4}$/;
-const MAXIMUM_MANIFEST_BYTES = 128 * 1024;
-const MAXIMUM_PIN_CLIENT_BYTES = 8 * 1024 * 1024;
-const MAXIMUM_PIN_MINT_BYTES = MAXIMUM_PIN_CLIENT_BYTES + 16 * 1024;
 const MAXIMUM_PIN_SERVER_BYTES = 6 * 1024 * 1024 * 1024;
 const MANUAL_SERVER_FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$/;
 const PUBLIC_MANUAL_SERVER_ORIGIN = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
@@ -66,12 +68,13 @@ export default {
                 event: "nightly_gateway_request_failed",
                 path: new URL(request.url).pathname,
                 error: error instanceof GatewayError ? error.code : "internal_error",
+                ...(error instanceof GatewayError ? error.upstream : undefined),
             }));
             if (error instanceof GatewayError) {
                 if (prefersHtmlError(request)) {
                     return html(errorPage(gatewayErrorMessage(error.code)), error.status);
                 }
-                return json({ error: error.code }, error.status);
+                return json({ error: error.code, ...error.upstream }, error.status);
             }
             return json({ error: "internal_error" }, 500);
         }
@@ -136,10 +139,10 @@ async function route(request: Request, env: Env): Promise<Response> {
         return servePinManifest(request, env);
     }
     if (request.method === "GET" && url.pathname === "/v1/manifests/client") {
-        return serveManifest(request, env, "nightly/client.json");
+        return serveManifest(request, env, true);
     }
     if (request.method === "GET" && url.pathname === "/v1/manifests/release") {
-        return serveManifest(request, env, "nightly/release.json");
+        return serveManifest(request, env, false);
     }
     if (request.method === "GET" && url.pathname.startsWith("/v1/artifacts/")) {
         return serveArtifact(request, env, url.pathname.slice("/v1/artifacts/".length));
@@ -478,7 +481,7 @@ export async function mintCreateBuildPin(request: Request, env: Env): Promise<Re
     const contentLength = request.headers.get("content-length");
     if (contentLength !== null) {
         const declared = Number(contentLength);
-        if (!Number.isSafeInteger(declared) || declared <= 0 || declared > MAXIMUM_PIN_MINT_BYTES) {
+        if (!Number.isSafeInteger(declared) || declared <= 0) {
             throw new GatewayError(413, "request_too_large");
         }
     }
@@ -495,7 +498,7 @@ export async function mintCreateBuildPin(request: Request, env: Env): Promise<Re
         throw new GatewayError(400, "invalid_request");
     }
     const parsed = parseCreateBuildPinMetadata(metadata, env);
-    if (clientFile.size !== parsed.client.bytes || clientFile.size > MAXIMUM_PIN_CLIENT_BYTES) {
+    if (clientFile.size !== parsed.client.bytes) {
         throw new GatewayError(400, "invalid_request");
     }
     const clientBytes = new Uint8Array(await clientFile.arrayBuffer());
@@ -694,7 +697,6 @@ function parseCreateBuildPinMetadata(value: CreateBuildPinMetadata, env: Env): C
         || value.client.fileName !== "Coop.7z"
         || !Number.isSafeInteger(value.client.bytes)
         || value.client.bytes <= 0
-        || value.client.bytes > MAXIMUM_PIN_CLIENT_BYTES
         || !isSha256Hex(value.client.sha256)
         || !MANUAL_SERVER_FILE.test(value.server.fileName)
         || !isAllowedManualServerKey(value.server.key, value.buildId)
@@ -812,13 +814,224 @@ async function sha256Bytes(bytes: Uint8Array): Promise<string> {
     return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function serveManifest(request: Request, env: Env, key: string): Promise<Response> {
+async function serveManifest(request: Request, env: Env, clientOnly: boolean): Promise<Response> {
     await requireNightlyDownloadSession(request, env);
-    const object = await env.RELEASES.get(key);
-    if (object === null || object.size > MAXIMUM_MANIFEST_BYTES) throw new GatewayError(404, "manifest_unavailable");
-    const parsed = JSON.parse(await object.text()) as unknown;
-    const rewritten = rewriteManifestArtifactUrls(parsed, env.PUBLIC_ORIGIN, env.LEGACY_R2_ORIGIN);
+    const wantsV2 = request.headers.get(NIGHTLY_PUBLICATION_VERSION_HEADER)?.trim() === "2";
+    if (clientOnly && !wantsV2) {
+        try {
+            return json(rewriteManifestArtifactUrls(
+                await readHeaderlessNightlyClientManifest(env),
+                env.PUBLIC_ORIGIN,
+                env.LEGACY_R2_ORIGIN,
+            ));
+        } catch (error) {
+            console.error(JSON.stringify({
+                event: "nightly_headerless_client_read_failed",
+                error_code: error instanceof Error && /^[a-z0-9_]{1,64}$/.test(error.message)
+                    ? error.message : "manifest_unavailable",
+            }));
+            throw new GatewayError(503, "manifest_unavailable");
+        }
+    }
+    if (!wantsV2) {
+        try {
+            return json(rewriteManifestArtifactUrls(
+                await readLegacyNightlyManifest(env, clientOnly),
+                env.PUBLIC_ORIGIN,
+                env.LEGACY_R2_ORIGIN,
+            ));
+        } catch (error) {
+            console.error(JSON.stringify({
+                event: "nightly_legacy_default_read_failed",
+                route: clientOnly ? "client" : "release",
+                error_code: error instanceof Error && /^[a-z0-9_]{1,64}$/.test(error.message)
+                    ? error.message : "legacy_manifest_unavailable",
+            }));
+            throw new GatewayError(503, "manifest_unavailable");
+        }
+    }
+    let validated;
+    try {
+        validated = await readNightlyPublication(
+            (key) => env.RELEASES.get(key),
+            fetch,
+            env.PUBLIC_RELEASES === undefined ? undefined : () => env.PUBLIC_RELEASES.get("nightly/release.json"),
+        );
+    } catch (error) {
+        const errorCode = error instanceof Error && /^[a-z0-9_]{1,64}$/.test(error.message)
+            ? error.message : "publication_read_failed";
+        const publicationError = error instanceof NightlyPublicationReadError ? error : null;
+        console.error(JSON.stringify({
+            event: "nightly_publication_read_failed",
+            route: clientOnly ? "client" : "release",
+            error_code: errorCode,
+            stage: publicationError?.stage ?? "unknown",
+            r2_status: publicationError?.status ?? null,
+            exception_class: publicationError?.exceptionClass
+                ?? (error instanceof Error && error.name.length > 0 ? error.name : "Error"),
+            fallback: clientOnly,
+        }));
+        try {
+            if (clientOnly) {
+                const release = validateLegacyNightlyReleaseManifest(
+                    await readLegacyJson(env, "nightly/release.json", 128 * 1024),
+                    env.LEGACY_R2_ORIGIN,
+                    env.PUBLIC_ORIGIN,
+                );
+                validated = projectLegacyReleaseClient(
+                    release,
+                    await tryReadLegacyNightlyClientManifest(env),
+                    env.LEGACY_R2_ORIGIN,
+                    env.PUBLIC_ORIGIN,
+                );
+            } else {
+                validated = await readLegacyNightlyManifest(env, false);
+            }
+            if (clientOnly) {
+                console.error(JSON.stringify({
+                    event: "nightly_legacy_client_fallback_served",
+                    route: "client",
+                    head_sha: (validated.headSha as string).slice(0, 12),
+                }));
+            } else {
+                console.error(JSON.stringify({
+                    event: "nightly_legacy_release_fallback_served",
+                    route: "release",
+                    head_sha: (validated.headSha as string).slice(0, 12),
+                }));
+            }
+        } catch (fallbackError) {
+            console.error(JSON.stringify({
+                event: clientOnly ? "nightly_legacy_client_fallback_failed" : "nightly_legacy_release_fallback_failed",
+                error_code: fallbackError instanceof Error && /^[a-z0-9_]{1,64}$/.test(fallbackError.message)
+                    ? fallbackError.message : clientOnly ? "legacy_client_unavailable" : "legacy_release_unavailable",
+            }));
+            throw new GatewayError(503, "manifest_unavailable");
+        }
+    }
+    const rewritten = rewriteManifestArtifactUrls(validated, env.PUBLIC_ORIGIN, env.LEGACY_R2_ORIGIN);
     return json(rewritten);
+}
+
+async function readHeaderlessNightlyClientManifest(env: Env): Promise<JsonObject> {
+    let publication: JsonObject | null = null;
+    try {
+        publication = await readNightlyPublication(
+            (key) => env.RELEASES.get(key),
+            fetch,
+            env.PUBLIC_RELEASES === undefined ? undefined : () => env.PUBLIC_RELEASES.get("nightly/release.json"),
+        );
+    } catch {
+        // Fall through to the previous complete legacy pair below.
+    }
+
+    if (publication !== null) {
+        const legacy = await tryReadLegacyNightlyClientManifest(env);
+        if (legacy !== null && legacyClientMatchesPublication(legacy, publication)) return legacy;
+        return projectPublicationClientAsLegacy(publication, env.LEGACY_R2_ORIGIN, env.PUBLIC_ORIGIN);
+    }
+
+    const legacyRelease = validateLegacyNightlyReleaseManifest(
+        await readLegacyJson(env, "nightly/release.json", 128 * 1024),
+        env.LEGACY_R2_ORIGIN,
+        env.PUBLIC_ORIGIN,
+    );
+    return projectLegacyReleaseClient(
+        legacyRelease,
+        await tryReadLegacyNightlyClientManifest(env),
+        env.LEGACY_R2_ORIGIN,
+        env.PUBLIC_ORIGIN,
+    );
+}
+
+async function tryReadLegacyNightlyClientManifest(env: Env): Promise<JsonObject | null> {
+    try {
+        return await readLegacyNightlyClientManifest(env);
+    } catch {
+        return null;
+    }
+}
+
+function legacyClientMatchesPublication(legacy: JsonObject, publication: JsonObject): boolean {
+    const legacyClient = legacy.client as Record<string, unknown>;
+    const publicationClient = publication.client as Record<string, unknown>;
+    return legacy.releaseDate === publication.releaseDate
+        && legacy.headSha === publication.headSha
+        && legacyClient.key === publicationClient.key
+        && legacyClient.sha256 === publicationClient.sha256;
+}
+
+function projectPublicationClientAsLegacy(
+    publication: JsonObject,
+    legacyOrigin: string,
+    gatewayOrigin: string,
+): JsonObject {
+    return validateLegacyNightlyClientManifest({
+        version: 1,
+        releaseDate: publication.releaseDate,
+        headSha: publication.headSha,
+        baseSha: null,
+        workflowRunId: Number(publication.clientRunId),
+        builtAt: publication.builtAt,
+        client: publication.client,
+    }, legacyOrigin, gatewayOrigin);
+}
+
+function projectLegacyReleaseClient(
+    release: JsonObject,
+    metadata: JsonObject | null,
+    legacyOrigin: string,
+    gatewayOrigin: string,
+): JsonObject {
+    return validateLegacyNightlyClientManifest({
+        version: 1,
+        releaseDate: release.releaseDate,
+        headSha: release.headSha,
+        baseSha: null,
+        ...(metadata?.headSha === release.headSha ? { workflowRunId: metadata.workflowRunId } : {}),
+        builtAt: metadata?.headSha === release.headSha ? metadata.builtAt : release.builtAt,
+        client: release.client,
+    }, legacyOrigin, gatewayOrigin);
+}
+
+async function readLegacyNightlyClientManifest(env: Env): Promise<JsonObject> {
+    return validateLegacyNightlyClientManifest(
+        await readLegacyJson(env, "nightly/client.json", 32 * 1024),
+        env.LEGACY_R2_ORIGIN,
+        env.PUBLIC_ORIGIN,
+    );
+}
+
+async function readLegacyNightlyManifest(env: Env, clientOnly: boolean): Promise<JsonObject> {
+    if (clientOnly) {
+        return readLegacyNightlyClientManifest(env);
+    }
+    const legacyRelease = validateLegacyNightlyReleaseManifest(
+        await readLegacyJson(env, "nightly/release.json", 128 * 1024),
+        env.LEGACY_R2_ORIGIN,
+        env.PUBLIC_ORIGIN,
+    );
+    const legacyClient = validateLegacyNightlyClientManifest(
+        await readLegacyJson(env, "nightly/client.json", 32 * 1024),
+        env.LEGACY_R2_ORIGIN,
+        env.PUBLIC_ORIGIN,
+    );
+    const releaseClient = legacyRelease.client as Record<string, unknown>;
+    const client = legacyClient.client as Record<string, unknown>;
+    if (legacyRelease.releaseDate !== legacyClient.releaseDate
+        || legacyRelease.headSha !== legacyClient.headSha
+        || releaseClient.key !== client.key
+        || releaseClient.sha256 !== client.sha256) {
+        throw new Error("legacy_release_client_mismatch");
+    }
+    return legacyRelease;
+}
+
+async function readLegacyJson(env: Env, key: string, maximumBytes: number): Promise<Record<string, unknown>> {
+    const object = await env.RELEASES.get(key);
+    if (object === null || object.size > maximumBytes) throw new Error("legacy_manifest_unavailable");
+    const bytes = await object.arrayBuffer();
+    return JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes)) as Record<string, unknown>;
 }
 
 async function serveArtifact(request: Request, env: Env, encodedKey: string): Promise<Response> {
@@ -977,7 +1190,7 @@ async function discordTokenRequest(env: Env, form: URLSearchParams): Promise<Dis
         body: form,
     });
     const text = await boundedText(response, 16 * 1024);
-    if (!response.ok) throw new GatewayError(502, "discord_authorization_failed");
+    if (!response.ok) throw new GatewayError(502, "discord_authorization_failed", discordFailure(response, text));
     const value = JSON.parse(text) as Partial<DiscordToken>;
     if (value.token_type !== "Bearer" || typeof value.access_token !== "string"
         || typeof value.refresh_token !== "string" || typeof value.scope !== "string"
@@ -995,7 +1208,9 @@ async function discordGet<T>(path: string, accessToken: string, allowNotFound = 
     });
     const text = await boundedText(response, 64 * 1024);
     if (allowNotFound && response.status === 404) return null;
-    if (!response.ok) throw new GatewayError(response.status === 404 ? 403 : 502, "discord_membership_required");
+    if (!response.ok) {
+        throw new GatewayError(response.status === 404 ? 403 : 502, "discord_membership_required", discordFailure(response, text));
+    }
     return JSON.parse(text) as T;
 }
 
@@ -1008,7 +1223,7 @@ async function discordBotGetGuildMember(env: Env, userId: string): Promise<Disco
     });
     const text = await boundedText(response, 64 * 1024);
     if (response.status === 404) return null;
-    if (!response.ok) throw new GatewayError(502, "discord_membership_required");
+    if (!response.ok) throw new GatewayError(502, "discord_membership_required", discordFailure(response, text));
     return JSON.parse(text) as DiscordMember;
 }
 
@@ -1219,6 +1434,21 @@ function exactArrayBuffer(bytes: Uint8Array): ArrayBuffer {
     return copy.buffer;
 }
 
+// Carries the HTTP status and stable error code returned to clients, plus Discord's own
+// status and error code when an upstream Discord call caused the failure.
 class GatewayError extends Error {
-    constructor(readonly status: number, readonly code: string) { super(code); }
+    constructor(readonly status: number, readonly code: string, readonly upstream?: DiscordFailure) { super(code); }
+}
+
+type DiscordFailure = { upstream_status: number; upstream_code?: number };
+
+// Extracts Discord's HTTP status and numeric JSON error code (e.g. 40333, 10007) from a failed response body.
+function discordFailure(response: Response, text: string): DiscordFailure {
+    try {
+        const code = (JSON.parse(text) as { code?: unknown }).code;
+        if (Number.isSafeInteger(code)) return { upstream_status: response.status, upstream_code: code as number };
+    } catch {
+        // Non-JSON bodies (e.g. Cloudflare error pages) carry only the status.
+    }
+    return { upstream_status: response.status };
 }

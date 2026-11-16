@@ -62,15 +62,17 @@ describe("home localization", () => {
         expect(root.querySelector("video a")?.getAttribute("href")).toContain("bannerlord-coop-trailer-v4.mp4");
         const heroDownload = root.querySelector("section[aria-labelledby='hero-heading'] button[aria-haspopup='dialog']");
         expect(heroDownload?.textContent).toBe(`${common["download.trigger"]}${home["download.platforms"]}`);
-        // "Rent a Server" opens the same Veteran-tier Patreon checkout as the cheats hosting offer.
-        const rentServer = root.querySelector(`section[aria-labelledby='hero-heading'] a[href='${PATREON_HOSTING_CHECKOUT_URL}']`);
-        expect(PATREON_HOSTING_CHECKOUT_URL).toBe("https://www.patreon.com/checkout/BannerlordCoop?rid=28995946");
-        expect(rentServer?.getAttribute("target")).toBe("_blank");
-        expect(rentServer?.getAttribute("rel")).toBe("noopener noreferrer");
-        expect(rentServer?.textContent).toBe(`${home["hero.rentServer"]}${home["hero.rentServerDetail"]} ${home["hero.rentServerNewTab"]}`);
+        // "Rent a Server" stays on the site and links to the /hosting landing page, which holds the Patreon checkout.
+        const rentServer = root.querySelector("section[aria-labelledby='hero-heading'] a[href='/hosting']");
+        expect(rentServer?.getAttribute("target")).toBeNull();
+        expect(rentServer?.textContent).toBe(`${home["hero.rentServer"]}${home["hero.rentServerDetail"]}`);
+        expect(root.querySelector(`section[aria-labelledby='hero-heading'] a[href='${PATREON_HOSTING_CHECKOUT_URL}']`)).toBeNull();
         expect(root.querySelector("section[aria-labelledby='hero-heading'] a[href='/servers']")).toBeNull();
         expect(root.querySelector("section[aria-labelledby='hero-heading'] a[href='https://discord.gg/bannerlordcoop']")?.getAttribute("aria-label")).toBe(home["hero.discord"]);
-        expect(await generateMetadata()).toMatchObject({ description: home["metadata.description"], alternates: { canonical: "/" }, openGraph: { locale: "en_US", title: "Bannerlord Co-op", description: home["metadata.description"] }, twitter: { description: home["metadata.description"] } });
+        // The page publishes Organization and WebSite structured data for search engines.
+        const structured = JSON.parse(root.querySelector("script[type='application/ld+json']")?.textContent ?? "{}");
+        expect(structured["@graph"].map((node: { "@type": string }) => node["@type"])).toEqual(["Organization", "WebSite"]);
+        expect(await generateMetadata()).toMatchObject({ title: { absolute: home["metadata.title"] }, description: home["metadata.description"], alternates: { canonical: "/" }, openGraph: { locale: "en_US", title: "Bannerlord Co-op", description: home["metadata.description"] }, twitter: { description: home["metadata.description"] } });
     });
 
     it("renders all available homepage prose from activated data and preserves external media", async () => {

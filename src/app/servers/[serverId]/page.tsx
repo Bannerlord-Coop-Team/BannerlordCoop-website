@@ -23,7 +23,9 @@ import { ManagedServerMods } from "@/app/components/servers/ServerModsPanel";
 import { readManagedServerStatusFingerprint } from "@/app/servers/managed-server-actions";
 import { getMemberRole, hasHostedServerAccess } from "@/app/lib/auth/access";
 import { hasServerFleetAccess } from "@/app/lib/auth/roles";
-import type { MyServerMove, MyServerNotice, MyServerSummary } from "@/app/lib/control-plane/types";
+import type { MyServerMove, MyServerNotice, MyServerSavePage, MyServerSummary } from "@/app/lib/control-plane/types";
+import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
+import { campaignUsesWarSails } from "@/app/lib/hosting/war-sails";
 import {
     getMyServerBackupStatus,
     MyServersApiError,
@@ -170,6 +172,7 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
         server.accessRole === "owner" ? readServerManagers(accessToken, server.serverId) : null,
     ]);
     const initializing = INITIALIZING_SERVER_STATES.has(server.operationState);
+    const campaignReads = readCampaignState(accessToken, server);
     const managedAccessLabels: Record<MyServerSummary["accessRole"], string> = {
         admin: t("page.readOnlyAdministrator"),
         manager: t("page.manager"),
@@ -191,9 +194,9 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
             <ManagedServerStatus accessToken={accessToken} server={server} move={move} checkBackup={server.accessRole === "owner" || server.accessRole === "manager"} />
         </Suspense>}
     >
-        <ManagedServerSections userId={userId} accessToken={accessToken} server={server} deletionStatus={deletionStatus} managers={managers} />
+        <ManagedServerSections userId={userId} accessToken={accessToken} server={server} deletionStatus={deletionStatus} managers={managers} campaignReads={campaignReads} />
         <ServerWorkspacePanel section="Mods">
-            <ManagedServerMods key={`${userId}:${server.serverId}`} serverId={server.serverId} canManage={server.accessRole === "owner" || server.accessRole === "manager"} />
+            <ManagedServerMods key={`${userId}:${server.serverId}`} serverId={server.serverId} canManage={server.accessRole === "owner" || server.accessRole === "manager"} warSails={campaignReads ? readCampaignWarSails(campaignReads) : undefined} />
         </ServerWorkspacePanel>
     </ServerManagementWorkspace></ManagedServerMoveProvider>;
 }
@@ -205,12 +208,14 @@ function ManagedServerSections({
     server,
     deletionStatus,
     managers,
+    campaignReads,
 }: {
     userId: string;
     accessToken: string;
     server: MyServerSummary;
     deletionStatus?: MyServerDeletionStatus | null;
     managers: readonly ServerManager[] | null;
+    campaignReads: CampaignReads | null;
 }) {
     return (
         <ManagedServerPollingProvider readStatus={readManagedServerStatusFingerprint} initialServer={{ serverId: server.serverId, updatedAt: server.updatedAt, operationState: server.operationState }}>
@@ -227,7 +232,7 @@ function ManagedServerSections({
                     <ManagedServerDelete key={`${userId}:${server.serverId}`} serverId={server.serverId} displayName={server.displayName} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} deletionStatus={deletionStatus} />
                 </ServerWorkspacePanel>
                 <Suspense fallback={<><ServerWorkspacePanel section="Backups"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel><ServerWorkspacePanel section="Save & config"><ManagedServerBackupsSkeleton /></ServerWorkspacePanel></>}>
-                    <ManagedServerBackupsSection userId={userId} accessToken={accessToken} server={server} />
+                    <ManagedServerBackupsSection userId={userId} accessToken={accessToken} server={server} campaignReads={campaignReads} />
                 </Suspense>
             </ManagedServerMaintenanceProvider>
         </ManagedServerPollingProvider>
@@ -260,17 +265,19 @@ async function ManagedServerBackupsSection({
     userId,
     accessToken,
     server,
+    campaignReads,
 }: {
     userId: string;
     accessToken: string;
     server: MyServerSummary;
+    campaignReads: CampaignReads | null;
 }) {
     const { t } = await getTranslations("managed-server");
-    if (server.accessRole === "support" || server.accessRole === "admin") {
+    if (campaignReads === null || server.accessRole === "support" || server.accessRole === "admin") {
         return <ManagedServerFiles userId={userId} server={server} files={null} saves={null} backups={[]} status={null} />;
     }
 
-    const savesRequest = listAllMyServerSaves(accessToken, server.serverId);
+    const savesRequest = campaignReads.saves;
     // Earlier autosaves belong to the active campaign, so they are read once the save list names it.
     const autosavesRequest = savesRequest.then(async (saves) => {
         if (saves.activeSaveId === null) return null;
@@ -284,7 +291,7 @@ async function ManagedServerBackupsSection({
     const [initialBackups, statusResult, filesResult, savesResult, autosavesResult] = await Promise.allSettled([
         listAllMyServerBackups(accessToken, server.serverId),
         readBackupStatus(accessToken, server.serverId),
-        getMyServerFiles(accessToken, server.serverId),
+        campaignReads.files,
         savesRequest,
         autosavesRequest,
     ]);
@@ -328,6 +335,21 @@ async function ManagedServerBackupsSkeleton() {
             <div className="mt-5 h-20 animate-pulse border border-white/10 bg-white/[0.02]" />
         </section>
     );
+}
+
+/** The file status and campaign list one render reads once and shares between Save & config and the Mods tab. */
+type CampaignReads = { files: Promise<OwnerFileStatus>; saves: Promise<MyServerSavePage> };
+
+// Starts the private file and campaign reads for owners and managers only; other roles never load them.
+function readCampaignState(accessToken: string, server: MyServerSummary): CampaignReads | null {
+    if (server.accessRole !== "owner" && server.accessRole !== "manager") return null;
+    return { files: getMyServerFiles(accessToken, server.serverId), saves: listAllMyServerSaves(accessToken, server.serverId) };
+}
+
+// Resolves whether the active campaign uses War Sails for the Mods tab; failed reads keep the Classic copy.
+function readCampaignWarSails(reads: CampaignReads): Promise<boolean> {
+    return Promise.allSettled([reads.files, reads.saves]).then(([files, saves]) => campaignUsesWarSails(
+        files.status === "fulfilled" ? files.value : null, saves.status === "fulfilled" ? saves.value : null));
 }
 
 // Reads can fail briefly while the server restarts, so backup reads retry once before reporting anything.

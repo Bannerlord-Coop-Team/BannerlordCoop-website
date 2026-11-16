@@ -7,7 +7,7 @@ import { MAXIMUM_WEB_FILE_REQUEST_BYTES, MAXIMUM_WEB_FILE_RESPONSE_BYTES, parseO
 import { parseVisibilityMutation, parseVisibilityResult, type VisibilityMutation } from "./server-visibility-contract.ts";
 import { onboardingMutationRequest, onboardingRequestMutation, onboardingSummaryRequest, parseOnboardingMutation, parseOnboardingResult, parseOnboardingSummary, type OnboardingMutationRequest } from "./server-onboarding-contract.ts";
 import { parseRunnerConfigurationFile, parseRunnerConfigurationMutation, requireRunnerConfigurationPart, type RunnerConfigurationMutation, type RunnerConfigurationPart } from "./server-configuration-contract.ts";
-import { MAXIMUM_CAMPAIGN_LIMIT, parseCampaignMutation, parseCampaignPage, parseCampaignResetResult, parseCampaignSelection } from "./server-campaign-contract.ts";
+import { MAXIMUM_CAMPAIGN_LIMIT, parseCampaignMutation, parseCampaignPage, parseCampaignResetResult, parseCampaignResetStatus, parseCampaignSelection } from "./server-campaign-contract.ts";
 import { requesterFromToken, type RegionFullEvent, type RegionRequestedEvent } from "./region-alerts.ts";
 import { hasExactKeys, isRecord } from "./dto-validation.ts";
 import { parseSaveDeletionStatus } from "./server-save-deletion-contract.ts";
@@ -49,6 +49,7 @@ export type MyServersHandlerOptions = {
 type UpstreamRequest =
     | { operation: "cancel-server-start"; input: StartCancellationInput }
     | { operation: "delete-save-status"; input: { serverId: string; jobId: string } }
+    | { operation: "reset-campaign-status"; input: { serverId: string; jobId: string } }
     | { operation: "save-server-settings"; input: OwnerSettingsMutation }
     | { operation: "console-command"; input: ConsoleSubmission }
     | { operation: "console-command-result" | "acknowledge-console-command"; input: ConsoleReference }
@@ -73,7 +74,7 @@ type UpstreamRequest =
     | { operation: "restore-save-generation"; input: Omit<SaveGenerationRestoreMutation, "action"> }
     | { operation: "select-save"; input: { serverId: string; saveId: string; expectedUpdatedAt: string } }
     | { operation: "delete-save"; input: { serverId: string; saveId: string; expectedUpdatedAt: string; confirmationText: string } }
-    | { operation: "reset-campaign"; input: { serverId: string; expectedUpdatedAt: string } }
+    | { operation: "reset-campaign"; input: { serverId: string; expectedUpdatedAt: string; warSails?: true } }
     | { operation: "server-backup-status"; input: { serverId: string } }
     | { operation: "server-deletion-status"; input: { serverId: string } }
     | { operation: "update-server"; input: { serverId: string; expectedUpdatedAt: string } }
@@ -298,6 +299,7 @@ export function createMyServersHandler(options: MyServersHandlerOptions) {
                 if (upstreamRequest.operation === "server-build-status") parseBuildStatus(envelope.result, upstreamRequest.input.serverId);
                 if (upstreamRequest.operation === "set-server-build") parseBuildChangeResult(envelope.result);
                 if (upstreamRequest.operation === "delete-save-status") parseSaveDeletionStatus(envelope.result, upstreamRequest.input.serverId, upstreamRequest.input.jobId);
+                if (upstreamRequest.operation === "reset-campaign-status") parseCampaignResetStatus(envelope.result, upstreamRequest.input.serverId, upstreamRequest.input.jobId);
                 if (upstreamRequest.operation === "server-deletion-status") parseServerDeletionStatus(envelope.result, upstreamRequest.input.serverId);
                 if (upstreamRequest.operation === "save-server-settings") parseOwnerSettingsResult(envelope.result, upstreamRequest.input.serverId);
                 if (upstreamRequest.operation === "server-files") parseOwnerFileStatus(envelope.result);
@@ -447,6 +449,13 @@ function listRequest(request: Request): UpstreamRequest {
         return { operation: "delete-save-status", input: { serverId: readServerId(url), jobId } };
     }
 
+    if (resource === "reset-campaign-status") {
+        assertQueryParameters(url, ["resource", "serverId", "jobId"]);
+        const jobId = url.searchParams.get("jobId");
+        requireUuid(jobId);
+        return { operation: "reset-campaign-status", input: { serverId: readServerId(url), jobId } };
+    }
+
     if (resource === "backup-status") {
         assertQueryParameters(url, ["resource", "serverId"]);
         return {
@@ -572,7 +581,9 @@ async function operationRequest(request: Request): Promise<UpstreamRequest> {
     }
     if (value.action === "reset-campaign") {
         const parsed = parseCampaignMutation(value);
-        return { operation: "reset-campaign", input: { serverId: parsed.serverId, expectedUpdatedAt: parsed.expectedUpdatedAt } };
+        if (parsed.action !== "reset-campaign") throw new Error("Invalid campaign reset request");
+        // Only a War Sails choice adds the key, so a Classic reset reaches the control plane exactly as before.
+        return { operation: "reset-campaign", input: { serverId: parsed.serverId, expectedUpdatedAt: parsed.expectedUpdatedAt, ...(parsed.warSails ? { warSails: true as const } : {}) } };
     }
     if (value.action === "create-backup") {
         if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) {

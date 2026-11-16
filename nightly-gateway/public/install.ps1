@@ -8,6 +8,7 @@ $script:InstallerUri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.wo
 $script:NightlyGatewayUri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev'
 $script:ClientManifestUri = "$($script:NightlyGatewayUri)/v1/manifests/client"
 $script:ReleaseManifestUri = "$($script:NightlyGatewayUri)/v1/manifests/release"
+$script:NightlyManifestVersionHeader = 'X-Bannerlord-Coop-Nightly-Version'
 $script:ClientArchiveUri = "$($script:NightlyGatewayUri)/v1/artifacts/nightly/Coop.7z"
 $script:ServerArchiveUri = "$($script:NightlyGatewayUri)/v1/artifacts/nightly/BannerlordCoop-DedicatedServer-Win64.7z"
 $script:NightlyAccessToken = $null
@@ -865,6 +866,50 @@ function Get-NightlyDeviceSessionFailureMessage {
     return "$message`nSession diagnostics v2 (safe to share):`n  $($Attempts -join "`n  ")"
 }
 
+# Describes a failed verification check as safe-to-share text: HTTP status, gateway error code,
+# response kind and exception chain. Never includes device codes or raw response bodies.
+function Get-NightlyPollFailureDetail {
+    param(
+        [Parameter(Mandatory = $true)]$ErrorRecord,
+        [int]$StatusCode,
+        [string]$ErrorCode
+    )
+
+    $parts = @()
+    if ($StatusCode -gt 0) { $parts += "HTTP $StatusCode" }
+    $body = $null
+    try { $body = ConvertTo-NightlyJsonObject ([string]$ErrorRecord.ErrorDetails.Message) } catch { }
+    if (-not $ErrorCode) { $ErrorCode = Get-NightlyGatewayErrorCode $body }
+    if ($ErrorCode) { $parts += "error=$ErrorCode" }
+    if (-not [string]::IsNullOrWhiteSpace([string]$body) -and -not $ErrorCode) {
+        $parts += "response=$(Get-NightlyResponseInterceptKind $body)"
+        if (([string]$body).Trim() -match '^error code: \d{3,4}$') { $parts += ([string]$body).Trim() }
+    }
+    $exception = $null
+    try { $exception = $ErrorRecord.Exception } catch { }
+    while ($null -ne $exception) {
+        $text = ([string]$exception.Message).Trim()
+        if ($text) { $parts += "$($exception.GetType().Name): $text" }
+        $exception = $exception.InnerException
+    }
+    if ($parts.Count -eq 0) { return 'no error details were returned' }
+    return $parts -join '; '
+}
+
+# Reports whether a failed verification check is temporary and worth retrying: no HTTP response,
+# timeout, rate limit, or an unnamed/maintenance gateway outage. Named upstream failures fail fast.
+function Test-NightlyTransientPollFailure {
+    param([int]$StatusCode, [string]$ErrorCode)
+
+    if ($StatusCode -eq 0) { return $true }
+    if ($StatusCode -eq 408 -or $StatusCode -eq 429) { return $true }
+    if ($StatusCode -lt 500) { return $false }
+    if (-not $ErrorCode) { return $true }
+    return $ErrorCode -ceq 'migration_in_progress' -or $ErrorCode -ceq 'internal_error'
+}
+
+# Classifies one Discord verification check into Continue, Accept, Retry or Fail.
+# Every non-Accept outcome carries a message, so callers never need to rethrow.
 function Get-NightlyTokenPollDecision {
     param(
         $Response,
@@ -927,7 +972,18 @@ function Get-NightlyTokenPollDecision {
             Message = "The nightly authorization token is invalid. Details: $shape"
         }
     }
-    return [pscustomobject]@{ Action = 'Rethrow'; Token = ''; Message = '' }
+    if (-not $errorCode) {
+        try { $errorCode = Get-NightlyGatewayErrorCode (ConvertTo-NightlyJsonObject ([string]$ErrorRecord.ErrorDetails.Message)) } catch { }
+    }
+    $detail = Get-NightlyPollFailureDetail -ErrorRecord $ErrorRecord -StatusCode $statusCode -ErrorCode $errorCode
+    if (Test-NightlyTransientPollFailure -StatusCode $statusCode -ErrorCode $errorCode) {
+        return [pscustomobject]@{ Action = 'Retry'; Token = ''; Message = $detail }
+    }
+    return [pscustomobject]@{
+        Action = 'Fail'
+        Token = ''
+        Message = "The Discord verification check failed. Details: $detail"
+    }
 }
 
 function Get-NightlyAccessToken {
@@ -977,6 +1033,7 @@ function Get-NightlyAccessToken {
     Start-Process $verificationUri
 
     $deadline = [datetimeoffset]::UtcNow.AddSeconds([Math]::Min(600, [int]$session.expires_in))
+    $lastRetryDetail = ''
     while ([datetimeoffset]::UtcNow -lt $deadline) {
         Start-Sleep -Seconds ([Math]::Max($script:NightlyTokenPollMinimumSeconds, [int]$session.interval))
         $decision = $null
@@ -993,8 +1050,15 @@ function Get-NightlyAccessToken {
             Write-Host 'Nightly access verified.' -ForegroundColor Green
             return [string]$decision.Token
         }
-        if ($decision.Action -eq 'Fail') { throw $decision.Message }
-        throw
+        if ($decision.Action -eq 'Retry') {
+            $lastRetryDetail = [string]$decision.Message
+            Write-Host "Verification check failed, retrying. Details: $lastRetryDetail" -ForegroundColor Yellow
+            continue
+        }
+        throw $decision.Message
+    }
+    if ($lastRetryDetail) {
+        throw "Discord verification timed out after repeated check failures. Last error: $lastRetryDetail"
     }
     throw 'Discord verification timed out. Run the installer again when you are ready to authorize it.'
 }
@@ -1005,6 +1069,7 @@ function Get-NightlyHeaders {
     }
     return @{
         Authorization = "Bearer $($script:NightlyAccessToken)"
+        $script:NightlyManifestVersionHeader = '2'
         'Cache-Control' = 'no-cache'
         Pragma = 'no-cache'
     }
@@ -1083,17 +1148,20 @@ function Get-CreateBuildPinAccessToken {
     Write-Host 'Create-build installer' -ForegroundColor Cyan
     Write-Host 'Redeeming the one-time installer link for this exact client and dedicated-server pair.'
     $decision = $null
+    $redeemError = $null
     try {
         $response = Invoke-RestMethod -Method Post -Uri "$($script:NightlyGatewayUri)/v1/pins/token" `
             -ContentType 'application/x-www-form-urlencoded' `
             -Body @{ pin = $Pin }
         $decision = Get-CreateBuildPinRedeemDecision -Response $response
     } catch {
+        $redeemError = $_
         $decision = Get-CreateBuildPinRedeemDecision -ErrorRecord $_
     }
     if ($decision.Action -eq 'Accept') { return [string]$decision.Token }
     if ($decision.Action -eq 'Fail') { throw $decision.Message }
-    throw
+    $detail = Get-NightlyPollFailureDetail -ErrorRecord $redeemError -StatusCode (Get-HttpStatusCode $redeemError)
+    throw "The create-build installer link could not be redeemed. Details: $detail"
 }
 
 function Get-NormalizedPath {
@@ -1316,11 +1384,104 @@ function Test-NightlyClientArtifactUri {
     return $parsed.AbsolutePath -ceq "/v1/artifacts/nightly/clients/$HeadSha/$Sha256/Coop.7z"
 }
 
+function Test-NightlyServerArtifactUri {
+    param(
+        [Parameter(Mandatory = $true)][string]$Uri,
+        [Parameter(Mandatory = $true)][string]$HeadSha,
+        [Parameter(Mandatory = $true)][string]$ServerSha,
+        [Parameter(Mandatory = $true)][string]$Sha256
+    )
+
+    if ($HeadSha -notmatch '^[a-f0-9]{40}$' -or $ServerSha -notmatch '^[a-f0-9]{40}$' -or $Sha256 -notmatch '^[a-f0-9]{64}$') {
+        return $false
+    }
+    try { $parsed = [Uri]$Uri } catch { return $false }
+    if ($parsed.Scheme -cne 'https' -or
+        $parsed.Authority -cne 'bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev' -or
+        -not [string]::IsNullOrEmpty($parsed.Query) -or
+        -not [string]::IsNullOrEmpty($parsed.Fragment)) { return $false }
+    return $parsed.AbsolutePath -ceq "/v1/artifacts/nightly/windows/full/$HeadSha/$ServerSha/$Sha256/BannerlordCoop-DedicatedServer-Win64.7z"
+}
+
+function Test-NightlyLegacyServerArtifactUri {
+    param([Parameter(Mandatory = $true)][string]$Uri)
+
+    return $Uri -ceq $script:ServerArchiveUri
+}
+
+function Test-NightlyBuiltAt {
+    param([Parameter(Mandatory = $true)]$Value)
+
+    if ($Value -is [DateTime]) { return $Value.Kind -eq [DateTimeKind]::Utc }
+    if ($Value -is [DateTimeOffset]) { return $Value.Offset -eq [TimeSpan]::Zero }
+    return ([string]$Value -match '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,7})?Z$')
+}
+
+function Assert-LegacyNightlyReleaseManifest {
+    param([Parameter(Mandatory = $true)]$Manifest)
+
+    if ($null -eq $Manifest -or $Manifest.version -ne 1 -or
+        [string]$Manifest.releaseDate -notmatch '^\d{4}-\d{2}-\d{2}$' -or
+        [string]$Manifest.headSha -notmatch '^[a-f0-9]{40}$' -or
+        -not (Test-NightlyBuiltAt $Manifest.builtAt)) {
+        throw 'The legacy nightly release manifest is invalid.'
+    }
+    $client = $Manifest.client
+    $clientBytes = 0L
+    $validClientBytes = [long]::TryParse([string]$client.bytes, [ref]$clientBytes)
+    $clientSha = [string]$client.sha256
+    if ($null -eq $client -or
+        [string]$client.fileName -cnotmatch '^[A-Za-z0-9][A-Za-z0-9 ._-]{0,199}\.7z$' -or
+        [string]$client.key -cne "nightly/clients/$($Manifest.headSha)/$clientSha/Coop.7z" -or
+        $clientSha -notmatch '^[a-f0-9]{64}$' -or
+        -not $validClientBytes -or $clientBytes -le 0 -or
+        -not (Test-NightlyClientArtifactUri ([string]$client.publicUrl) $Manifest.headSha $clientSha)) {
+        throw 'The legacy nightly client release metadata is invalid.'
+    }
+    $server = $Manifest.server
+    $serverBytes = 0L
+    $validServerBytes = [long]::TryParse([string]$server.bytes, [ref]$serverBytes)
+    if ($null -eq $server -or
+        [string]$server.fileName -cnotmatch '^[A-Za-z0-9][A-Za-z0-9 ._-]{0,199}\.7z$' -or
+        [string]$server.sha256 -notmatch '^[a-f0-9]{64}$' -or
+        -not $validServerBytes -or $serverBytes -le 0 -or $serverBytes -gt 8589934592L -or
+        -not (Test-NightlyLegacyServerArtifactUri ([string]$server.publicUrl))) {
+        throw 'The legacy nightly server release metadata is invalid.'
+    }
+    $incremental = $server.incremental
+    if ($null -eq $incremental -or $incremental.version -ne 1 -or
+        [string]$incremental.layout -cne 'base-overlay-v1' -or
+        [string]$incremental.baseFingerprint -notmatch '^[a-f0-9]{64}$') {
+        throw 'The legacy incremental Windows server release metadata is invalid.'
+    }
+    $compatibleFingerprints = @($incremental.compatibleBaseFingerprints | Where-Object { $null -ne $_ })
+    if ($compatibleFingerprints.Count -gt 16 -or
+        @($compatibleFingerprints | Where-Object { [string]$_ -notmatch '^[a-f0-9]{64}$' }).Count -gt 0 -or
+        @($compatibleFingerprints | Select-Object -Unique).Count -ne $compatibleFingerprints.Count) {
+        throw 'The legacy incremental Windows server compatibility metadata is invalid.'
+    }
+    foreach ($partName in @('base', 'update')) {
+        $part = $incremental.$partName
+        $partBytes = 0L
+        $validPartBytes = [long]::TryParse([string]$part.bytes, [ref]$partBytes)
+        $maximum = if ($partName -eq 'base') { 8589934592L } else { 536870912L }
+        if ($null -eq $part -or
+            [string]$part.fileName -cnotmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$' -or
+            [string]$part.sha256 -notmatch '^[a-f0-9]{64}$' -or
+            -not $validPartBytes -or $partBytes -le 0 -or $partBytes -gt $maximum -or
+            -not (Test-PublicArtifactUri ([string]$part.publicUrl) $partName)) {
+            throw "The legacy incremental Windows server $partName metadata is invalid."
+        }
+    }
+    return $Manifest
+}
+
 function Get-ReleaseManifest {
     param([bool]$ClientOnly = $false)
 
     $headers = Get-NightlyHeaders
-    $manifestUri = if ($ClientOnly) { $script:ClientManifestUri } else { $script:ReleaseManifestUri }
+    # Client-only installs use the same complete publication marker as server installs.
+    $manifestUri = $script:ReleaseManifestUri
     Write-Host 'Checking the latest completed nightly release...'
     try {
         $manifest = Invoke-RestMethod -Method Get -Uri $manifestUri -Headers $headers
@@ -1331,15 +1492,35 @@ function Get-ReleaseManifest {
         }
         throw
     }
-    if ($manifest.version -ne 1 -or
+    if ($manifest.version -eq 1) {
+        return (Assert-LegacyNightlyReleaseManifest $manifest)
+    }
+    if ($manifest.version -ne 2 -or
+        [string]$manifest.kind -cne 'bannerlordcoop-nightly-publication' -or
         [string]$manifest.releaseDate -notmatch '^\d{4}-\d{2}-\d{2}$' -or
-        [string]$manifest.headSha -notmatch '^[a-f0-9]{40}$') {
+        [string]$manifest.headSha -notmatch '^[a-f0-9]{40}$' -or
+        [string]$manifest.serverSha -notmatch '^[a-f0-9]{40}$' -or
+        [string]$manifest.clientRunId -notmatch '^[1-9]\d{0,19}$' -or
+        [string]$manifest.serverRunId -notmatch '^[1-9]\d{0,19}$') {
         throw 'The nightly release manifest is invalid.'
     }
-    $expected = @(@{ Name = 'client'; Uri = $script:ClientArchiveUri; Maximum = 26214400L })
-    if (-not $ClientOnly) {
-        $expected += @{ Name = 'server'; Uri = $script:ServerArchiveUri; Maximum = 8589934592L }
+    $container = $manifest.container
+    $digest = if ($null -eq $container) { '' } else { [string]$container.manifestDigest }
+    $serverPrefix = ([string]$manifest.serverSha).Substring(0, 12)
+    $clientPrefix = ([string]$manifest.headSha).Substring(0, 12)
+    $digestHex = if ($digest.Length -ge 7) { $digest.Substring(7) } else { '' }
+    $expectedImmutable = "ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server:nightly-$serverPrefix-$clientPrefix-$digestHex"
+    if ($null -eq $container -or
+        [string]$container.repository -cne 'ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server' -or
+        $digest -notmatch '^sha256:[a-f0-9]{64}$' -or
+        [string]$container.digestReference -cne "ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server@$digest" -or
+        [string]$container.immutableReference -cne $expectedImmutable) {
+        throw 'The nightly container publication identity is invalid.'
     }
+    $expected = @(
+        @{ Name = 'client'; Uri = $script:ClientArchiveUri },
+        @{ Name = 'server'; Uri = $script:ServerArchiveUri; Maximum = 8589934592L }
+    )
     foreach ($entry in $expected) {
         $release = $manifest.($entry.Name)
         $bytes = 0L
@@ -1350,16 +1531,23 @@ function Get-ReleaseManifest {
                 -HeadSha ([string]$manifest.headSha) `
                 -Sha256 ([string]$release.sha256)
         } else {
-            [string]$release.publicUrl -ceq $entry.Uri
+            Test-NightlyServerArtifactUri `
+                -Uri ([string]$release.publicUrl) `
+                -HeadSha ([string]$manifest.headSha) `
+                -ServerSha ([string]$manifest.serverSha) `
+                -Sha256 ([string]$release.sha256)
         }
         if (-not $validUri -or
             [string]$release.sha256 -notmatch '^[a-f0-9]{64}$' -or
-            -not $validBytes -or $bytes -le 0 -or $bytes -gt $entry.Maximum -or
+            -not $validBytes -or $bytes -le 0 -or ($null -ne $entry.Maximum -and $bytes -gt $entry.Maximum) -or
             [string]$release.fileName -cnotmatch '^[A-Za-z0-9][A-Za-z0-9 ._-]{0,199}\.7z$') {
             throw "The nightly $($entry.Name) release metadata is invalid."
         }
     }
-    if (-not $ClientOnly -and $null -ne $manifest.server.incremental) {
+    if ($null -eq $manifest.server.incremental) {
+        throw 'The incremental Windows server release metadata is invalid.'
+    }
+    if ($null -ne $manifest.server.incremental) {
         $incremental = $manifest.server.incremental
         if ($incremental.version -ne 1 -or
             [string]$incremental.layout -cne 'base-overlay-v1' -or
@@ -1434,7 +1622,7 @@ function Get-PinManifest {
         [string]$manifest.headSha -cne [string]$manifest.clientSha -or
         -not (Test-PinClientArtifactUri ([string]$manifest.client.publicUrl)) -or
         [string]$manifest.client.sha256 -notmatch '^[a-f0-9]{64}$' -or
-        -not $validClientBytes -or $clientBytes -le 0 -or $clientBytes -gt 8388608L -or
+        -not $validClientBytes -or $clientBytes -le 0 -or
         [string]$manifest.client.fileName -cne 'Coop.7z' -or
         -not (Test-PinServerArtifactUri ([string]$manifest.server.publicUrl)) -or
         [string]$manifest.server.sha256 -notmatch '^[a-f0-9]{64}$' -or
@@ -1900,7 +2088,11 @@ function Install-ServerIncremental {
 
     Assert-ServerStopped $ServerPath
     $parent = Split-Path -Parent $ServerPath
-    New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    # New-Item rejects an existing drive root (D:\), so only create a missing parent.
+    if (-not [string]::IsNullOrWhiteSpace($parent) -and
+        -not (Test-Path -LiteralPath $parent -PathType Container)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
     $work = Join-Path $parent ('.bannerlordcoop-installer-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $work -Force | Out-Null
     $incremental = $Release.incremental
@@ -2031,7 +2223,11 @@ function Install-Server {
         return
     }
     $parent = Split-Path -Parent $ServerPath
-    New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    # New-Item rejects an existing drive root (D:\), so only create a missing parent.
+    if (-not [string]::IsNullOrWhiteSpace($parent) -and
+        -not (Test-Path -LiteralPath $parent -PathType Container)) {
+        New-Item -ItemType Directory -Path $parent -Force | Out-Null
+    }
     $work = Join-Path $parent ('.bannerlordcoop-installer-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $work -Force | Out-Null
     try {

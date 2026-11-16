@@ -17,6 +17,8 @@ export type CampaignSummary = {
     createdAt: string;
     lastUsedAt: string | null;
     importedBy: "system" | "owner";
+    /** The save's War Sails mode read from its header; null when unknown, absent from older control planes. */
+    warSails?: boolean | null;
 };
 
 export type CampaignPage = {
@@ -31,9 +33,46 @@ export type CampaignSelection = { serverId: string; activeSaveId: string | null;
 
 export type CampaignResetResult = { outcome: "enqueued" | "existing"; jobId: string; action: "reset-campaign" };
 
+export const CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION = "Contact support to update this server's runner, then request Reset Campaign again.";
+const RESET_STATES = ["queued", "running", "retry-wait", "succeeded", "failed", "cancelled"] as const;
+export type CampaignResetStatus = {
+    serverId: string;
+    jobId: string;
+    state: typeof RESET_STATES[number];
+    errorCode: "agent_capability_unavailable" | "queue_timeout" | "operation_failed" | null;
+    instruction: string | null;
+};
+
+/** Accepts only the named job's safe projection, including the fixed support instruction. */
+export function parseCampaignResetStatus(value: unknown, serverId: string, jobId: string): CampaignResetStatus {
+    requireUuid(serverId); requireUuid(jobId);
+    if (!isRecord(value) || !hasExactKeys(value, ["serverId", "jobId", "state", "errorCode", "instruction"])
+        || value.serverId !== serverId || value.jobId !== jobId || typeof value.state !== "string"
+        || !(RESET_STATES as readonly string[]).includes(value.state)) throw new Error("Invalid campaign reset status");
+    const terminal = value.state === "failed" || value.state === "cancelled";
+    if (!terminal) {
+        if (value.errorCode !== null || value.instruction !== null) throw new Error("Nonterminal campaign reset failure");
+    } else if (value.state === "failed" && value.errorCode === "agent_capability_unavailable") {
+        if (value.instruction !== CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION) throw new Error("Invalid campaign reset instruction");
+    } else if (typeof value.errorCode !== "string" || !["queue_timeout", "operation_failed"].includes(value.errorCode) || value.instruction !== null) {
+        throw new Error("Invalid campaign reset failure");
+    }
+    return value as CampaignResetStatus;
+}
+
+/** Fixed presentation shared by the authenticated action and its consumer checks. */
+export function campaignResetStatusMessage(status: CampaignResetStatus | null): string {
+    if (status === null) return "The reset status is not available from the hosting service yet. Your request has not been submitted again.";
+    if (status.state === "succeeded") return "Your fresh campaign is ready. Start the server when you want to play it.";
+    if (status.errorCode === "agent_capability_unavailable") return CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION;
+    if (status.errorCode === "queue_timeout") return "The campaign reset expired before it could start. Refresh before requesting another reset.";
+    if (status.state === "failed" || status.state === "cancelled") return "The campaign reset did not complete. Check your campaigns or contact support before trying again.";
+    return "Preparing your fresh campaign. This takes about a minute…";
+}
+
 export type CampaignMutation =
     | { action: "select-save"; serverId: string; saveId: string; expectedUpdatedAt: string }
-    | { action: "reset-campaign"; serverId: string; expectedUpdatedAt: string };
+    | { action: "reset-campaign"; serverId: string; expectedUpdatedAt: string; warSails?: true };
 
 export const MAXIMUM_CAMPAIGN_LIMIT = 100;
 
@@ -47,8 +86,12 @@ export function requireCampaignTimestamp(value: unknown): asserts value is strin
     if (!isTimestamp(value)) throw new Error("Invalid campaign timestamp");
 }
 
+const CAMPAIGN_KEYS = ["byteSize", "createdAt", "displayName", "importedBy", "lastUsedAt", "saveId"];
+
+/** Validates one listed campaign; the War Sails label is optional so older control planes still parse. */
 function parseCampaignSummary(value: unknown): CampaignSummary {
-    if (!isRecord(value) || !hasExactKeys(value, ["byteSize", "createdAt", "displayName", "importedBy", "lastUsedAt", "saveId"])) throw new Error("Invalid campaign");
+    if (!isRecord(value) || !hasExactKeys(value, Object.hasOwn(value, "warSails") ? [...CAMPAIGN_KEYS, "warSails"] : CAMPAIGN_KEYS)) throw new Error("Invalid campaign");
+    if (Object.hasOwn(value, "warSails") && value.warSails !== null && typeof value.warSails !== "boolean") throw new Error("Invalid campaign War Sails mode");
     requireUuid(value.saveId);
     if (typeof value.displayName !== "string" || value.displayName.length < 1 || value.displayName.length > 128 || /[\p{Cc}\p{Cf}]/u.test(value.displayName)) throw new Error("Invalid campaign name");
     if (typeof value.byteSize !== "number" || !Number.isSafeInteger(value.byteSize) || value.byteSize < 0) throw new Error("Invalid campaign size");
@@ -84,6 +127,18 @@ export function parseCampaignResetResult(value: unknown): CampaignResetResult {
     return value as CampaignResetResult;
 }
 
+/**
+ * Validates a fresh-campaign request. `warSails` is optional (absent = Classic); only `true` is forwarded, so a
+ * Classic request stays byte-identical to the request older control planes accept.
+ */
+function parseCampaignResetMutation(value: Record<string, unknown>, serverId: string, expectedUpdatedAt: string): CampaignMutation {
+    const keys = ["action", "expectedUpdatedAt", "serverId"];
+    if (!hasExactKeys(value, Object.hasOwn(value, "warSails") ? [...keys, "warSails"] : keys)) throw new Error("Invalid campaign reset request");
+    if (Object.hasOwn(value, "warSails") && typeof value.warSails !== "boolean") throw new Error("Invalid campaign reset mode");
+    return { action: "reset-campaign", serverId, expectedUpdatedAt, ...(value.warSails === true ? { warSails: true as const } : {}) };
+}
+
+/** Validates an owner's select-save or reset-campaign request before it is relayed. */
 export function parseCampaignMutation(value: unknown): CampaignMutation {
     if (!isRecord(value)) throw new Error("Invalid campaign request");
     requireUuid(value.serverId);
@@ -93,9 +148,6 @@ export function parseCampaignMutation(value: unknown): CampaignMutation {
         requireUuid(value.saveId);
         return { action: "select-save", serverId: value.serverId, saveId: value.saveId, expectedUpdatedAt: value.expectedUpdatedAt };
     }
-    if (value.action === "reset-campaign") {
-        if (!hasExactKeys(value, ["action", "expectedUpdatedAt", "serverId"])) throw new Error("Invalid campaign reset request");
-        return { action: "reset-campaign", serverId: value.serverId, expectedUpdatedAt: value.expectedUpdatedAt };
-    }
+    if (value.action === "reset-campaign") return parseCampaignResetMutation(value, value.serverId, value.expectedUpdatedAt);
     throw new Error("Invalid campaign request");
 }

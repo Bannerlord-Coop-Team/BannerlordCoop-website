@@ -4,6 +4,7 @@ import { startImpersonation } from "./impersonation-actions";
 import { DEFAULT_MEMBER_PAGE_SIZE, parseMemberListState, type MemberListState } from "./member-list";
 import { paginateItems } from "@/app/lib/pagination";
 import { getMemberRole, hasAdminAccess, isBootstrapAdmin } from "@/app/lib/auth/access";
+import { getLoginRedirect } from "@/app/lib/auth/redirect";
 import { createSupabaseServerClient, getSupabaseServerClient } from "@/app/lib/supabase/server";
 import {
     AUTH_USERS_MAX_PAGES,
@@ -71,14 +72,14 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
     const sessionClient = await getSupabaseServerClient({ impersonation: "actor" });
     const { data: sessionData } = await sessionClient.auth.getUser();
     const currentUser = sessionData.user;
+    const params = await searchParams;
 
-    if (!currentUser) redirect("/login?next=/admin");
+    if (!currentUser) redirect(getLoginRedirect("/admin", params));
     if (!hasAdminAccess(currentUser)) redirect("/");
     // The picker belongs to the original admin; role mutations still use the
     // effective user's permissions, just like the rest of the website.
     const effectiveUser = (await (await createSupabaseServerClient()).auth.getUser()).data.user;
 
-    const params = await searchParams;
     const requestedList = parseMemberListState({
         query: firstValue(params.q),
         page: firstValue(params.page),
@@ -252,12 +253,12 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
                                     return (
                                         <tr key={member.id} className="transition-colors hover:bg-white/2.5">
                                             <td className="px-5 py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="flex size-10 shrink-0 items-center justify-center rounded-full border border-gold/25 bg-gold/10 font-label text-xs font-bold text-gold">
+                                                <div className="flex max-w-80 items-center gap-3">
+                                                    <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-gold/25 bg-gold/10 font-label text-xs font-bold text-gold">
                                                         {initials(name)}
                                                     </span>
                                                     <div className="min-w-0">
-                                                        <p className="font-medium text-foreground">{name}</p>
+                                                        <p title={name} className="truncate font-medium text-foreground">{name}</p>
                                                         <p className="mt-0.5 truncate text-xs text-foreground-muted">{member.email ?? "No email"}</p>
                                                     </div>
                                                 </div>

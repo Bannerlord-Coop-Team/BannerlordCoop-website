@@ -27,7 +27,7 @@
   "membership.nightlyInstaller": "Patreon destekçileri nightly yükleyiciye erişebilir (nasıl kullanılacağını buradan öğrenebilirsiniz)",
   "membership.reviewRequired": "Üyeliğinizin incelenmesi gerekiyor. Yeniden denemeden önce destekle iletişime geçin.",
   "membership.verifyRequired": "Yeni bir sunucu oluşturmadan önce üyeliğinizi doğrulayın.",
-  "membership.syncPending": "Sunucu hakkınız güncelleniyor.",
+  "membership.syncPending": "Sunucu hakkınız güncelleniyor. Bu işlem genellikle birkaç saniye sürer; durum otomatik olarak yenilenir.",
   "membership.syncUnavailable": "Sunucu hakkınız kontrol edilemedi.",
   "membership.expiry": "Yeni bir sunucu oluşturmadan önce üyeliğinizi yeniden doğrulamanız gerekebilir. Doğrulama süresi dolduğunda mevcut sunucular otomatik olarak durdurulmaz.",
   "patreon.verifyPending": "Patreon açılıyor…",
@@ -44,5 +44,9 @@
   "disconnect.confirm": "{provider} bağlantısını kesmeyi onayla",
   "disconnect.cancel": "İptal",
   "loading.label": "Hesap yükleniyor",
-  "loading.status": "Hesap yükleniyor…"
+  "loading.status": "Hesap yükleniyor…",
+  "boosty.linked": "Boosty aboneliğin hesabının e-posta adresiyle bağlandı.",
+  "boosty.notFound": "Bu hesabın e-posta adresini kullanan bir Boosty aboneliği yok. Bağlamak için Boosty'de aynı e-posta adresiyle abone ol.",
+  "boosty.nonqualifying": "Boosty aboneliğin uygun bir seviye içermiyor.",
+  "boosty.checking": "Boosty üyeliğin kısa süre içinde kontrol edilecek."
 }

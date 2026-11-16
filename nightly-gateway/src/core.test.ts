@@ -17,6 +17,7 @@ import {
     mintSecretsEqual,
     pinClientObjectKey,
     rewriteManifestArtifactUrls,
+    validateNightlyPublicationManifest,
     verifySponsorFormToken,
 } from "./core";
 import { completeOAuth, nightlyAccessPage, page } from "./index";
@@ -338,7 +339,7 @@ test("manifest URLs are rewritten to authenticated gateway paths", () => {
         version: 1,
         client: { key: clientKey, publicUrl: `${legacy}/${clientKey}` },
         server: {
-            publicUrl: `${legacy}/nightly/BannerlordCoop-DedicatedServer-Win64.7z`,
+            publicUrl: `${legacy}/nightly/windows/full/${"a".repeat(40)}/${"b".repeat(40)}/${"d".repeat(64)}/BannerlordCoop-DedicatedServer-Win64.7z`,
             incremental: {
                 base: {
                     key: "nightly/windows/base/server-base.7z",
@@ -350,6 +351,13 @@ test("manifest URLs are rewritten to authenticated gateway paths", () => {
     assert.equal(manifest.client && typeof manifest.client === "object" && !Array.isArray(manifest.client)
         ? manifest.client.publicUrl
         : null, `${gateway}/v1/artifacts/${clientKey}`);
+});
+
+test("nightly publication validation rejects client-only or malformed markers", () => {
+    assert.throws(
+        () => validateNightlyPublicationManifest({ version: 1, client: {} }, legacy),
+        /invalid_nightly_publication/,
+    );
 });
 
 test("gateway pages use the site brand without weakening page security", () => {

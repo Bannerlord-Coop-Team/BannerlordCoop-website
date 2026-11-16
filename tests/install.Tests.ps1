@@ -128,10 +128,14 @@ try {
 }
 
 $validManifest = [pscustomobject]@{
-    version = 1
+    version = 2
+    kind = 'bannerlordcoop-nightly-publication'
     releaseDate = '2026-08-03'
     builtAt = '2026-08-04T05:30:00Z'
     headSha = 'a' * 40
+    serverSha = '1' * 40
+    clientRunId = '12345678901'
+    serverRunId = '12345678902'
     client = [pscustomobject]@{
         fileName = 'Coop 08-03-2026.7z'
         bytes = 7000000
@@ -142,7 +146,7 @@ $validManifest = [pscustomobject]@{
         fileName = 'BannerlordCoop-DedicatedServer-Win64-2026-08-03-coop-aaaaaaa.7z'
         bytes = 4380000000
         sha256 = 'c' * 64
-        publicUrl = $script:ServerArchiveUri
+        publicUrl = "$($script:NightlyGatewayUri)/v1/artifacts/nightly/windows/full/$('a' * 40)/$('1' * 40)/$('c' * 64)/BannerlordCoop-DedicatedServer-Win64.7z"
         incremental = [pscustomobject]@{
             version = 1
             layout = 'base-overlay-v1'
@@ -162,6 +166,12 @@ $validManifest = [pscustomobject]@{
             }
         }
     }
+    container = [pscustomobject]@{
+        repository = 'ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server'
+        manifestDigest = 'sha256:' + ('9' * 64)
+        digestReference = 'ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server@sha256:' + ('9' * 64)
+        immutableReference = 'ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server:nightly-' + ('1' * 12) + '-' + ('a' * 12) + '-' + ('9' * 64)
+    }
 }
 function Invoke-RestMethod {
     param($Method, $Uri, $Headers)
@@ -169,16 +179,58 @@ function Invoke-RestMethod {
 }
 $script:ManifestResponse = $validManifest
 $script:NightlyAccessToken = 't' * 43
+$nightlyHeaders = Get-NightlyHeaders
+if ([string]$nightlyHeaders[$script:NightlyManifestVersionHeader] -cne '2') {
+    throw 'The nightly installer did not request the v2 manifest explicitly.'
+}
 $result = Get-ReleaseManifest
 if ($result.releaseDate -ne '2026-08-03') {
     throw 'A valid release manifest was rejected.'
 }
+$legacyClientSha = 'b' * 64
+$legacyClientKey = "nightly/clients/$($validManifest.headSha)/$legacyClientSha/Coop.7z"
+$legacyManifest = [pscustomobject]@{
+    version = 1
+    releaseDate = '2026-08-03'
+    builtAt = '2026-08-04T05:30:00Z'
+    headSha = $validManifest.headSha
+    client = [pscustomobject]@{
+        fileName = 'Coop 08-03-2026.7z'
+        key = $legacyClientKey
+        bytes = 7000000
+        sha256 = $legacyClientSha
+        publicUrl = "$($script:NightlyGatewayUri)/v1/artifacts/$legacyClientKey"
+    }
+    server = [pscustomobject]@{
+        fileName = 'BannerlordCoop-DedicatedServer-Win64-2026-08-03-coop-aaaaaaa.7z'
+        bytes = 4380000000
+        sha256 = 'c' * 64
+        publicUrl = $script:ServerArchiveUri
+        incremental = $validManifest.server.incremental
+    }
+}
+$script:ManifestResponse = $legacyManifest
+$legacyResult = Get-ReleaseManifest
+if ($legacyResult.version -ne 1 -or $legacyResult.headSha -cne $legacyManifest.headSha) {
+    throw 'A valid legacy v1 release manifest was rejected.'
+}
+$legacyBad = $legacyManifest.PSObject.Copy()
+$legacyBad.server = $legacyManifest.server.PSObject.Copy()
+$legacyBad.server.publicUrl = 'https://example.invalid/server.7z'
+$script:ManifestResponse = $legacyBad
+$rejected = $false
+try { Get-ReleaseManifest | Out-Null } catch { $rejected = $true }
+if (-not $rejected) {
+    throw 'A legacy v1 release manifest containing an untrusted server URL was accepted.'
+}
+$script:ManifestResponse = $validManifest
 $clientOnlyManifest = $validManifest.PSObject.Copy()
 $clientOnlyManifest.PSObject.Properties.Remove('server')
 $script:ManifestResponse = $clientOnlyManifest
-$clientResult = Get-ReleaseManifest $true
-if ($clientResult.client.publicUrl -ne $script:ClientArchiveUri) {
-    throw 'A valid standalone client manifest was rejected.'
+$rejected = $false
+try { Get-ReleaseManifest $true | Out-Null } catch { $rejected = $true }
+if (-not $rejected) {
+    throw 'A client-only nightly manifest was accepted.'
 }
 $immutableManifest = $validManifest.PSObject.Copy()
 $immutableManifest.client = $validManifest.client.PSObject.Copy()
@@ -407,6 +459,28 @@ try {
     Remove-Item -LiteralPath $installRoot -Recurse -Force -ErrorAction SilentlyContinue
 }
 
+$driveRootTarget = Join-Path ([IO.Path]::GetTempPath()) ('BannerlordCoopDriveRootServerTests-' + [guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $driveRootTarget -Force | Out-Null
+try {
+    $driveRootUsedNames = @(Get-PSDrive -PSProvider FileSystem | ForEach-Object { $_.Name.ToUpperInvariant() })
+    $driveRootName = @(68..90 | ForEach-Object { ([char]$_).ToString() } | Where-Object { $driveRootUsedNames -notcontains $_ }) | Select-Object -First 1
+    if (-not $driveRootName) { throw 'The drive-root server install test requires an available drive letter.' }
+    & "$env:SystemRoot\System32\subst.exe" "$($driveRootName):" "$driveRootTarget"
+    if ($LASTEXITCODE -ne 0) { throw 'The drive-root server install test could not map its temporary drive.' }
+    try {
+        $driveRootServer = Join-Path "$($driveRootName):\" 'BannerlordCoop Dedicated Server'
+        $script:DownloadedLabels = @()
+        Install-Server $validManifest.server $driveRootServer 'unused.exe'
+        if (-not (Test-Path -LiteralPath (Join-Path $driveRootServer 'BannerlordCoopServer.exe') -PathType Leaf)) {
+            throw 'The dedicated server was not installed into a folder directly under a drive root.'
+        }
+    } finally {
+        & "$env:SystemRoot\System32\subst.exe" "$($driveRootName):" '/d'
+    }
+} finally {
+    Remove-Item -LiteralPath $driveRootTarget -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 function New-GatewayWebError {
     param(
         [Parameter(Mandatory = $true)][int]$StatusCode,
@@ -447,6 +521,24 @@ if ($denied.Action -cne 'Fail' -or $denied.Message -notmatch 'Discord access was
 $statusPending = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 428 'authorization_pending')
 if ($statusPending.Action -cne 'Continue') {
     throw 'An HTTP 428 token poll did not continue waiting for Discord.'
+}
+$outage = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 503 'migration_in_progress')
+if ($outage.Action -cne 'Retry' -or $outage.Message -notmatch 'HTTP 503' -or $outage.Message -notmatch 'error=migration_in_progress') {
+    throw 'A 503 token poll did not retry with its status and gateway error code.'
+}
+$discordUpstream = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 502 'discord_membership_required')
+if ($discordUpstream.Action -cne 'Fail' -or $discordUpstream.Message -notmatch 'HTTP 502; error=discord_membership_required') {
+    throw 'A named Discord upstream failure retried instead of failing fast with its details.'
+}
+$networkRecord = $null
+try { throw [Net.WebException]::new('The underlying connection was closed: An unexpected error occurred on a send.') } catch { $networkRecord = $_ }
+$network = Get-NightlyTokenPollDecision -ErrorRecord $networkRecord
+if ($network.Action -cne 'Retry' -or $network.Message -notmatch 'WebException: The underlying connection was closed') {
+    throw 'A token poll with no HTTP response did not retry with the network error text.'
+}
+$notFound = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 404)
+if ($notFound.Action -cne 'Fail' -or $notFound.Message -notmatch '^The Discord verification check failed\. Details: HTTP 404') {
+    throw 'An unexpected 404 token poll did not fail with its details.'
 }
 $invalid = Get-NightlyTokenPollDecision -Response ([pscustomobject]@{ token_type = 'Basic'; access_token = 'nope' })
 if ($invalid.Action -cne 'Fail' -or $invalid.Message -cne 'The nightly authorization token is invalid. Details: response=invalid; bearer=false; token_length=4') {
@@ -760,6 +852,49 @@ if ($usedMessage -notmatch 'already used') {
     throw 'An already-used token poll still surfaced as an invalid token.'
 }
 
+$script:TokenPolls = 0
+function Invoke-RestMethod {
+    param($Method, $Uri, $ContentType, $Body)
+    if ([string]$Uri -match '/v1/device/sessions$') {
+        return [pscustomobject]@{
+            device_code = 'f' * 43
+            user_code = 'Q3W8-N5TR'
+            verification_uri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=Q3W8-N5TR'
+            expires_in = 600
+            interval = 0
+        }
+    }
+    $script:TokenPolls += 1
+    if ($script:TokenPolls -eq 1) { throw (New-GatewayWebError 503 'internal_error').Exception }
+    return [pscustomobject]@{ token_type = 'Bearer'; access_token = 'r' * 43; expires_in = 3600 }
+}
+$retryOutput = (& { $script:RetriedToken = Get-NightlyAccessToken } 6>&1 | Out-String)
+if ($script:TokenPolls -ne 2 -or $script:RetriedToken -cne ('r' * 43)) {
+    throw 'A transient 503 token poll did not retry until Discord verification succeeded.'
+}
+if ($retryOutput -notmatch 'Verification check failed, retrying\. Details: HTTP 503') {
+    throw 'A retried token poll did not print its failure details.'
+}
+
+function Invoke-RestMethod {
+    param($Method, $Uri, $ContentType, $Body)
+    if ([string]$Uri -match '/v1/device/sessions$') {
+        return [pscustomobject]@{
+            device_code = 'g' * 43
+            user_code = 'H6J2-K9LM'
+            verification_uri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=H6J2-K9LM'
+            expires_in = 600
+            interval = 0
+        }
+    }
+    throw (New-GatewayWebError 404).Exception
+}
+$unexpectedMessage = $null
+try { Get-NightlyAccessToken | Out-Null } catch { $unexpectedMessage = $_.Exception.Message }
+if ($unexpectedMessage -notmatch '^The Discord verification check failed\. Details: HTTP 404' -or $unexpectedMessage -match 'ScriptHalted') {
+    throw 'An unexpected token poll failure was not reported with its details.'
+}
+
 $script:NightlyObservedProcessNames = @('goodbyedpi')
 function Invoke-RestMethod {
     param($Method, $Uri, $ContentType, $Body)
@@ -862,6 +997,16 @@ $pinAccepted = Get-CreateBuildPinRedeemDecision -Response ([pscustomobject]@{
 })
 if ($pinAccepted.Action -cne 'Accept' -or $pinAccepted.Token -cne ('p' * 43)) {
     throw 'A valid create-build pin session was not accepted.'
+}
+function Invoke-RestMethod {
+    param($Method, $Uri, $ContentType, $Body)
+    throw (New-GatewayWebError 503 'internal_error').Exception
+}
+$pinOutageMessage = $null
+try { Get-CreateBuildPinAccessToken -Pin ('P' * 43) | Out-Null } catch { $pinOutageMessage = $_.Exception.Message }
+if ($pinOutageMessage -notmatch '^The create-build installer link could not be redeemed\. Details: HTTP 503' -or
+    $pinOutageMessage -match 'ScriptHalted') {
+    throw 'An unexpected create-build pin failure was not reported with its details.'
 }
 $pinUsed = Get-CreateBuildPinRedeemDecision -Response ([pscustomobject]@{ error = 'already_used' })
 if ($pinUsed.Action -cne 'Fail' -or $pinUsed.Message -notmatch 'already used') {

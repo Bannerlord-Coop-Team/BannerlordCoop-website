@@ -17,6 +17,7 @@
     "DISCORD_CLIENT_ID": "1537575576745803799"
   },
   "r2_buckets": [
+    { "binding": "PUBLIC_RELEASES", "bucket_name": "bannerlordcoop-nightly-releases" },
     { "binding": "RELEASES", "bucket_name": "bannerlordcoop-patron-nightlies" }
   ],
   "d1_databases": [

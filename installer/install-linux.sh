@@ -9,7 +9,7 @@ set -u
 GATEWAY='https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev'
 CLIENT_ARCHIVE_URI="$GATEWAY/v1/artifacts/nightly/Coop.7z"
 SERVER_ARCHIVE_URI="$GATEWAY/v1/artifacts/nightly/BannerlordCoop-DedicatedServer-Win64.7z"
-MAX_CLIENT=26214400
+MANIFEST_VERSION_HEADER='X-Bannerlord-Coop-Nightly-Version: 2'
 MAX_SERVER=8589934592
 MAX_BASE=8589934592
 MAX_UPDATE=536870912
@@ -403,10 +403,9 @@ printf 'Nightly access verified.\n'
 
 AUTH=(-H "Authorization: Bearer $TOKEN")
 MANIFEST_URI="$GATEWAY/v1/manifests/release"
-[ "$WANT_SERVER" = 0 ] && MANIFEST_URI="$GATEWAY/v1/manifests/client"
 printf 'Checking the latest completed nightly release...\n'
 mf="$AUTH_WORK/manifest.json"
-st=$(curl -sS --max-time 60 "${AUTH[@]}" -o "$mf" -w '%{http_code}' "$MANIFEST_URI")
+st=$(curl -sS --max-time 60 "${AUTH[@]}" -H "$MANIFEST_VERSION_HEADER" -o "$mf" -w '%{http_code}' "$MANIFEST_URI")
 if [ "$st" != 200 ]; then
     rm -f "$mf"
     if [ "$st" = 404 ]; then
@@ -422,6 +421,7 @@ REL_DATE=$(json_get releaseDate < "$mf")
 BUILT_AT=$(json_get builtAt < "$mf")
 HEAD_SHA=$(json_get headSha < "$mf")
 MAN_VER=$(json_get version < "$mf")
+MAN_KIND=$(json_get kind < "$mf")
 CLIENT_URL=$(json_get client.publicUrl < "$mf")
 CLIENT_SHA=$(json_get client.sha256 < "$mf")
 CLIENT_BYTES=$(json_get client.bytes < "$mf")
@@ -430,6 +430,13 @@ FULL_URL=$(json_get server.publicUrl < "$mf")
 FULL_SHA=$(json_get server.sha256 < "$mf")
 FULL_BYTES=$(json_get server.bytes < "$mf")
 FULL_NAME=$(json_get server.fileName < "$mf")
+SERVER_SHA=$(json_get serverSha < "$mf")
+CLIENT_RUN_ID=$(json_get clientRunId < "$mf")
+SERVER_RUN_ID=$(json_get serverRunId < "$mf")
+CONTAINER_REPOSITORY=$(json_get container.repository < "$mf")
+CONTAINER_DIGEST=$(json_get container.manifestDigest < "$mf")
+CONTAINER_DIGEST_REFERENCE=$(json_get container.digestReference < "$mf")
+CONTAINER_IMMUTABLE_REFERENCE=$(json_get container.immutableReference < "$mf")
 INC_VER=$(json_get server.incremental.version < "$mf")
 INC_LAYOUT=$(json_get server.incremental.layout < "$mf")
 INC_FP=$(json_get server.incremental.baseFingerprint < "$mf")
@@ -444,29 +451,53 @@ UPD_NAME=$(json_get server.incremental.update.fileName < "$mf")
 COMPAT_FPS=$(json_list server.incremental.compatibleBaseFingerprints < "$mf")
 rm -f "$mf"
 
-[ "$MAN_VER" = 1 ] || die "The nightly release manifest is invalid."
+case "$MAN_VER" in
+    1|2) ;;
+    *) die "The nightly release manifest is invalid." ;;
+esac
+if [ "$MAN_VER" = 2 ]; then
+    [ "$MAN_KIND" = bannerlordcoop-nightly-publication ] || die "The nightly release manifest is invalid."
+fi
 case "$REL_DATE" in
     [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
     *) die "The nightly release manifest is invalid." ;;
 esac
 is_hex40 "$HEAD_SHA" || die "The nightly release manifest is invalid."
+if [ "$MAN_VER" = 2 ]; then
+    is_hex40 "$SERVER_SHA" || die "The nightly release manifest is invalid."
+    is_num "$CLIENT_RUN_ID" || die "The nightly release manifest is invalid."
+    is_num "$SERVER_RUN_ID" || die "The nightly release manifest is invalid."
+    CONTAINER_REPOSITORY_EXPECTED='ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server'
+    [ "$CONTAINER_REPOSITORY" = "$CONTAINER_REPOSITORY_EXPECTED" ] || die "The nightly container publication identity is invalid."
+    [[ $CONTAINER_DIGEST =~ ^sha256:[0-9a-f]{64}$ ]] || die "The nightly container publication identity is invalid."
+    [ "$CONTAINER_DIGEST_REFERENCE" = "$CONTAINER_REPOSITORY_EXPECTED@$CONTAINER_DIGEST" ] || die "The nightly container publication identity is invalid."
+    EXPECTED_IMMUTABLE="$CONTAINER_REPOSITORY_EXPECTED:nightly-${SERVER_SHA:0:12}-${HEAD_SHA:0:12}-${CONTAINER_DIGEST:7}"
+    [ "$CONTAINER_IMMUTABLE_REFERENCE" = "$EXPECTED_IMMUTABLE" ] || die "The nightly container publication identity is invalid."
+fi
 printf 'Latest nightly: %s (%s)\n' "$(display_date "$REL_DATE" "$BUILT_AT")" "$(short_sha "$HEAD_SHA")"
 
 check_client_url
 is_hex64 "$CLIENT_SHA" || die "The nightly client release metadata is invalid."
-is_num "$CLIENT_BYTES" && [ "$CLIENT_BYTES" -gt 0 ] && [ "$CLIENT_BYTES" -le "$MAX_CLIENT" ] \
+is_num "$CLIENT_BYTES" && [ "$CLIENT_BYTES" -gt 0 ] \
     || die "The nightly client release metadata is invalid."
 [[ $CLIENT_NAME =~ ^[A-Za-z0-9][A-Za-z0-9\ ._-]{0,199}\.7z$ ]] \
     || die "The nightly client release metadata is invalid."
 
-if [ "$WANT_SERVER" = 1 ]; then
+if [ "$MAN_VER" = 1 ]; then
     [ "$FULL_URL" = "$SERVER_ARCHIVE_URI" ] || die "The nightly server release metadata is invalid."
-    is_hex64 "$FULL_SHA" || die "The nightly server release metadata is invalid."
-    is_num "$FULL_BYTES" && [ "$FULL_BYTES" -gt 0 ] && [ "$FULL_BYTES" -le "$MAX_SERVER" ] \
+else
+    [ "$FULL_URL" = "$GATEWAY/v1/artifacts/nightly/windows/full/$HEAD_SHA/$SERVER_SHA/$FULL_SHA/BannerlordCoop-DedicatedServer-Win64.7z" ] \
         || die "The nightly server release metadata is invalid."
-    [[ $FULL_NAME =~ ^[A-Za-z0-9][A-Za-z0-9\ ._-]{0,199}\.7z$ ]] \
-        || die "The nightly server release metadata is invalid."
-    if [ -n "$INC_LAYOUT" ] || [ -n "$INC_FP" ]; then
+fi
+is_hex64 "$FULL_SHA" || die "The nightly server release metadata is invalid."
+is_num "$FULL_BYTES" && [ "$FULL_BYTES" -gt 0 ] && [ "$FULL_BYTES" -le "$MAX_SERVER" ] \
+    || die "The nightly server release metadata is invalid."
+[[ $FULL_NAME =~ ^[A-Za-z0-9][A-Za-z0-9\ ._-]{0,199}\.7z$ ]] \
+    || die "The nightly server release metadata is invalid."
+if [ -z "$INC_LAYOUT" ] || [ -z "$INC_FP" ]; then
+    die "The incremental Windows server release metadata is invalid."
+fi
+if [ -n "$INC_LAYOUT" ] || [ -n "$INC_FP" ]; then
         [ "$INC_LAYOUT" = base-overlay-v1 ] || die "The incremental Windows server release metadata is invalid."
         [ "$INC_VER" = 1 ] || die "The incremental Windows server release metadata is invalid."
         is_hex64 "$INC_FP" || die "The incremental Windows server release metadata is invalid."
@@ -496,7 +527,6 @@ EOF
             || die "The incremental Windows server base metadata is invalid."
         [[ $UPD_NAME =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,199}\.7z$ ]] \
             || die "The incremental Windows server update metadata is invalid."
-    fi
 fi
 
 [ "$WANT_CLIENT" = 1 ] && select_client_path

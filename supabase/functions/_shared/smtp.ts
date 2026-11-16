@@ -27,7 +27,7 @@ export type SmtpOptions = {
     password: string;
     timeoutMilliseconds?: number;
 };
-export type SmtpMessage = { from: string; fromName?: string; to: readonly string[]; subject: string; text: string };
+export type SmtpMessage = { from: string; fromName?: string; to: readonly string[]; subject: string; text: string; html?: string };
 type Reply = { code: number; lines: string[] };
 
 export class SmtpError extends Error {}
@@ -91,9 +91,18 @@ export function encodeMessage(message: SmtpMessage, meta: { date: Date; messageI
         `Date: ${meta.date.toUTCString().replace(/GMT$/u, "+0000")}`,
         `Message-ID: <${meta.messageId}>`,
         "MIME-Version: 1.0",
-        "Content-Type: text/plain; charset=utf-8",
-        "Content-Transfer-Encoding: base64",
     ];
+    if (message.html !== undefined) {
+        // Base64 parts cannot contain an underscore, so this fixed MIME boundary cannot collide.
+        const boundary = "=_bannerlordcoop_alternative";
+        headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+        const part = (type: "plain" | "html", body: string) => [
+            `--${boundary}`, `Content-Type: text/${type}; charset=utf-8`, "Content-Transfer-Encoding: base64", "", wrap(base64(body), 76),
+        ].join(CRLF);
+        return headers.join(CRLF) + CRLF + CRLF
+            + [part("plain", message.text), part("html", message.html), `--${boundary}--`, ""].join(CRLF);
+    }
+    headers.push("Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: base64");
     return headers.join(CRLF) + CRLF + CRLF + wrap(base64(message.text), 76);
 }
 

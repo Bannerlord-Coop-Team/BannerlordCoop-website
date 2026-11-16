@@ -36,7 +36,9 @@ export async function getMyServerSummary(accessToken: string, serverId: string, 
         "observedGameState", "releaseChannel", "maintenanceSlot", "timezone", "visibility", "connectionIp", "gamePorts", "updatedAt",
         ...(Object.hasOwn(value, "subscriptionHold") ? ["subscriptionHold"] : []),
         ...(Object.hasOwn(value, "installedVersion") ? ["installedVersion"] : []),
-        ...(Object.hasOwn(value, "runtimeInsight") ? ["runtimeInsight"] : [])])
+        ...(Object.hasOwn(value, "runtimeInsight") ? ["runtimeInsight"] : []),
+        ...(Object.hasOwn(value, "warSailsCapable") ? ["warSailsCapable"] : [])])
+        || (Object.hasOwn(value, "warSailsCapable") && typeof value.warSailsCapable !== "boolean")
         || (Object.hasOwn(value, "installedVersion") && !isInstalledVersion(value.installedVersion))
         || (Object.hasOwn(value, "subscriptionHold") && !isSubscriptionHold(value.subscriptionHold))
         || (Object.hasOwn(value, "runtimeInsight") && !isOwnerRuntimeInsight(value.runtimeInsight, { operationState: value.operationState, observedGameState: value.observedGameState, subscriptionHold: value.subscriptionHold }))

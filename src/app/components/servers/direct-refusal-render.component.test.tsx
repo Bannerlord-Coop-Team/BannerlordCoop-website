@@ -19,7 +19,7 @@ vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: async () 
 } }) }));
 vi.mock("@/app/lib/hosting/my-servers", async original => ({ ...await original<object>(), requestMyServerOperation: mocks.command }));
 vi.mock("@/app/lib/hosting/server-configuration", () => ({ getMyServerConfiguration: mocks.config }));
-vi.mock("./ServerManagementWorkspace", () => ({ useRevealServerAddress: () => vi.fn() }));
+vi.mock("./ServerManagementWorkspace", () => ({ useRevealServerAddress: () => vi.fn(), useServerWorkspaceSectionShown: () => false }));
 vi.mock("./ManagedServerPollingProvider", () => ({
     useManagedServerPolling: () => ({ session: null, timedOutSession: null, beginPolling: mocks.begin, endPolling: vi.fn() }),
     useManagedConsoleSignals: () => null, useManagedServerSaves: () => null, useManagedServerStatusSlot: () => undefined,

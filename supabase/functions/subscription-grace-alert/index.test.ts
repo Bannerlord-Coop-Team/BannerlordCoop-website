@@ -76,7 +76,9 @@ test("the owner email names the server, the UTC deadline and how to keep it", ()
     assert.equal(message.from, "admin@bannerlordcoop.com");
     assert.equal(message.fromName, "Bannerlord Co-op");
     assert.equal(message.subject, "[BannerlordCoop] Your server \"GSR\" has been stopped and will be removed after 2026-10-15 15:00 UTC");
-    assert.match(message.text, /has been stopped because the Patreon membership/u);
+    assert.match(message.text, /has been stopped because the supporter membership/u);
+    // Grace covers every funding provider (a released Patreon or Boosty binding), so the copy names none exclusively.
+    assert.doesNotMatch(message.text, /the Patreon membership|qualifying Patreon account/u);
     assert.match(message.text, /locked and scheduled for removal after 2026-10-15 15:00 UTC\./u);
     assert.match(message.text, /stays stopped; press Start to run it again\./u);
     assert.match(message.text, /https:\/\/bannerlordcoop\.com\/account/u);

@@ -85,7 +85,7 @@ it.each([undefined, "invalid-locale", "es"])("keeps metadata and page English fo
     expect(page.props.locale).toBe("en");
     expect(Object.keys(page.props.messages)).toEqual(["changelog"]);
     expect(page.props.messages.changelog).toEqual(english);
-    expect(await generateMetadata()).toEqual({ title: "Changelog", description: english["metadata.description"] });
+    expect(await generateMetadata()).toEqual({ title: "Changelog", description: english["metadata.description"], alternates: { canonical: "/changelog" } });
     expect(container.querySelector("h1")?.textContent).toBe("Bannerlord Co-op Changelog");
     expect(container.textContent).toContain("Showing 1 release");
     expect(container.querySelector("time")?.textContent).toBe("Published September 30, 2026");
@@ -99,7 +99,7 @@ it("preserves external release names, markdown, author, tags, and links while tr
     const { page, container } = await renderPage();
     expect(page.props.locale).toBe("es");
     expect(page.props.messages).toEqual({ changelog: spanish });
-    expect(await generateMetadata()).toEqual({ title: spanish["metadata.title"], description: spanish["metadata.description"] });
+    expect(await generateMetadata()).toEqual({ title: spanish["metadata.title"], description: spanish["metadata.description"], alternates: { canonical: "/changelog" } });
     for (const key of ["hero.eyebrow", "hero.title", "hero.description", "links.githubReleases", "links.fullRelease", "history.eyebrow", "history.title", "history.description", "release.latest", "release.label", "release.prerelease"]) {
         expect(container.textContent).toContain(spanish[key]);
     }

@@ -45,9 +45,16 @@ test("parses the closed version-selection contract and rejects anything else", (
 
     assert.equal(parseBuildStatus({ serverId: SERVER_ID, job: null }, SERVER_ID).job, null);
     assert.equal(parseBuildStatus({ serverId: SERVER_ID, job: job() }, SERVER_ID).job?.phase, "backup");
+    // A current control plane adds durable receipt timestamps; an older response without them remains valid.
+    const timestamped = parseBuildStatus({ serverId: SERVER_ID, job: job({ steps: steps(["done", "done", "active", "pending", "pending", "pending"]).map((step, index) => ({
+        ...step, startedAt: index < 2 ? UPDATED_AT : null, completedAt: index < 2 ? UPDATED_AT : null,
+    })) }) }, SERVER_ID);
+    assert.deepEqual(timestamped.job?.steps[0], { id: "queued", state: "done", startedAt: UPDATED_AT, completedAt: UPDATED_AT });
+    assert.deepEqual(timestamped.job?.steps[2], { id: "backup", state: "active", startedAt: null, completedAt: null });
     assert.equal(parseBuildStatus({ serverId: SERVER_ID, job: job({ backup: { backupId: JOB_ID }, state: "failed", phase: "failed", failureCode: "update_rolled_back", failureMessage: "No change.", nextStep: "Try again." }) }, SERVER_ID).job?.backup?.backupId, JOB_ID);
     for (const bad of [{ extra: 1 }, { phase: "unknown" }, { steps: steps(["done"]).slice(0, 2) }, { completedSteps: 9 }, { progress: "bad\u0000" },
-        { backup: { backupId: "x" } }, { state: "paused" }, { steps: steps(["done", "done", "active", "pending", "pending", "weird"]) }]) {
+        { backup: { backupId: "x" } }, { state: "paused" }, { steps: steps(["done", "done", "active", "pending", "pending", "weird"]) },
+        { steps: steps(["done", "done", "active", "pending", "pending", "pending"]).map(step => ({ ...step, startedAt: "yesterday", completedAt: null })) }]) {
         assert.throws(() => parseBuildStatus({ serverId: SERVER_ID, job: job(bad) }, SERVER_ID), JSON.stringify(Object.keys(bad)));
     }
 

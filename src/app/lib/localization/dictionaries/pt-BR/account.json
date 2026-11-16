@@ -27,7 +27,7 @@
   "membership.nightlyInstaller": "Apoiadores no Patreon têm acesso ao instalador da versão nightly (veja como usá-lo)",
   "membership.reviewRequired": "Sua assinatura precisa de revisão. Entre em contato com o suporte antes de tentar novamente.",
   "membership.verifyRequired": "Verifique sua assinatura antes de criar um novo servidor.",
-  "membership.syncPending": "Seu limite de servidores está sendo atualizado.",
+  "membership.syncPending": "Seu limite de servidores está sendo atualizado. Isso costuma levar alguns segundos; o status é atualizado automaticamente.",
   "membership.syncUnavailable": "Não foi possível verificar seu limite de servidores.",
   "membership.expiry": "Talvez seja necessário verificar sua assinatura novamente antes de criar um novo servidor. Os servidores existentes não são interrompidos automaticamente quando a verificação expira.",
   "patreon.verifyPending": "Abrindo o Patreon…",
@@ -44,5 +44,9 @@
   "disconnect.confirm": "Confirmar desconexão de {provider}",
   "disconnect.cancel": "Cancelar",
   "loading.label": "Carregando conta",
-  "loading.status": "Carregando conta…"
+  "loading.status": "Carregando conta…",
+  "boosty.linked": "Sua assinatura do Boosty está vinculada pelo e-mail da sua conta.",
+  "boosty.notFound": "Nenhuma assinatura do Boosty usa o e-mail desta conta. Para vincular uma, assine no Boosty com o mesmo e-mail.",
+  "boosty.nonqualifying": "Sua assinatura do Boosty não inclui um nível qualificado.",
+  "boosty.checking": "Sua assinatura do Boosty será verificada em breve."
 }

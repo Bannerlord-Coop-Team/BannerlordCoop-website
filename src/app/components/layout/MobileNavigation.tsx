@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 const navigation = [
     { label: "nav.home", href: "/" },
     { label: "nav.servers", href: "/servers" },
+    { label: "nav.hosting", href: "/hosting" },
     { label: "nav.cheats", href: "/cheats" },
     { label: "nav.changelog", href: "/changelog" },
     { label: "nav.support", href: "/support" },

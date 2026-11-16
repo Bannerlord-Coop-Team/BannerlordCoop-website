@@ -130,7 +130,7 @@ it("reads slot sizing once when it opens, says it is a recommendation, and offer
     expect(pane.textContent).toContain("Recommendations only · nothing is applied");
     expect(pane.textContent).toContain("These are recommendations to review: nothing applies them, and no slot count, server or placement changes until automatic sizing is turned on, which does not exist yet. Raising slots by hand in the VPS view stays separate.");
     expect(pane.textContent).toContain("at most 1 core-hour a week of expected CPU shortage, and more servers online at once than its memory holds in under 1% of the week.");
-    expect(pane.textContent).toContain("A typical new server needs 1.6 vCPU and 2.5 GiB while online and is online 41.37 hours a week, the mean of servers' weeks over the last 28 days (14-day half-life).");
+    expect(pane.textContent).toContain("A typical new server plans 1.600 cores and 2.5 GiB while online, as reported by the current capacity model. It is online 41.37 hours a week. Servers with short activity history use that typical week.");
     expect(pane.querySelector('time[datetime="2026-10-20T14:05:12.345Z"]')).not.toBeNull();
     // Every button is Refresh or a figure's explanation: there is no apply, raise or lower action.
     for (const item of container.querySelectorAll("button")) {

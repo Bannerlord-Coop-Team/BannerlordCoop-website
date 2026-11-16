@@ -1,18 +1,22 @@
 "use client";
 
-import { useEffect, useEffectEvent, useId, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
+import { useRouter } from "next/navigation";
+
+import { Suspense, use, useEffect, useEffectEvent, useId, useRef, useState, type ChangeEvent, type DragEvent, type KeyboardEvent } from "react";
 import { Download, FlaskConical, Lock, Menu, Puzzle, RefreshCw, Trash2, Upload } from "lucide-react";
 
 import { useTranslations } from "@/app/lib/localization/client";
-import { buildModArchive, ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
+import { buildResumableModArchive, ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
+import { discardPreparedModArchive } from "@/app/lib/hosting/server-mod-upload-cache";
 import {
     canChooseServerModRunsOn, canMoveServerMod, changedServerModRunsOn, enabledOwnerModCount, findServerMod, isOwnerMod, isPlayersOnlyAgainstDefault,
     moveServerMod, sameServerModOrder, serverModListFile, serverModLoadOrder, serverModsPlayersNeed, ServerModsError, setServerModRunsOn,
-    toggleServerMod,
-    type ServerMod, type ServerModArchive, type ServerModCatalog, type ServerModListFile, type ServerModRunsOn, type ServerModsState, type ServerModUploadProgress,
+    toggleServerMod, serverModArchiveSize,
+    type PendingServerModUpload, type ServerMod, type ServerModArchive, type ServerModCatalog, type ServerModListFile, type ServerModRunsOn, type ServerModsState, type ServerModUploadProgress,
 } from "@/app/lib/hosting/server-mods";
 import { createBrowserServerModCatalog } from "@/app/lib/hosting/server-mods-transport";
-import { MOD_MAXIMUM_ENABLED_OWNER_MODS } from "../../../../supabase/functions/_shared/server-mods-contract";
+import { WAR_SAILS_MODULE } from "@/app/lib/hosting/war-sails";
+import { MOD_INSTALLED_QUOTA_BYTES, MOD_MAXIMUM_ENABLED_OWNER_MODS } from "../../../../supabase/functions/_shared/server-mods-contract";
 import { useServerWorkspaceSectionShown } from "./ServerManagementWorkspace";
 import { archiveProblemMessage, describeModIssue, lockedRunsOnMessage, modsErrorMessage } from "./server-mods-messages";
 import { fileButtonClass, fileIconButtonClass, filePrimaryButtonClass } from "./server-file-styles";
@@ -30,17 +34,20 @@ const KEYBOARD_SAVE_DELAY_MS = 600;
 const PLAIN_REFUSALS = ["server_suspended", "mod_order_invalid", "mod_dependency_unsatisfied", "mod_reserved_id", "upload_busy", "unauthenticated", "server_not_found", "runner_unsupported"];
 
 type Busy = null | "loading" | "deleting" | "preparing" | "uploading";
+/** Whether the active campaign uses War Sails, known now or once the page's campaign reads finish. */
+type CampaignWarSails = boolean | Promise<boolean>;
 type Notice = { tone: "info" | "error"; text: string };
 
 /** The managed page's Mods tab: owners and managers load the list when the tab first opens; others see why they cannot. */
-export function ManagedServerMods({ serverId, canManage }: { serverId: string; canManage: boolean }) {
+export function ManagedServerMods({ serverId, canManage, warSails }: { serverId: string; canManage: boolean; warSails?: CampaignWarSails }) {
+    const router = useRouter();
     const shown = useServerWorkspaceSectionShown("Mods");
     const [catalog] = useState<ServerModCatalog>(() => createBrowserServerModCatalog());
-    return <ServerModsPanel serverId={serverId} catalog={catalog} canEdit={canManage} active={shown} />;
+    return <ServerModsPanel serverId={serverId} catalog={catalog} canEdit={canManage} active={shown} onChanged={() => router.refresh()} warSails={warSails} />;
 }
 
 /** Lists a server's mods and saves each load-order or enabled change as it is made; uploads and deletes use the same catalog. */
-export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: { serverId: string; catalog: ServerModCatalog; canEdit: boolean; active?: boolean }) {
+export function ServerModsPanel({ serverId, catalog, canEdit, active = true, onChanged, warSails = false }: { serverId: string; catalog: ServerModCatalog; canEdit: boolean; active?: boolean; onChanged?: () => void; warSails?: CampaignWarSails }) {
     const { t } = useTranslations("managed-server");
     const idPrefix = useId();
     const listRef = useRef<HTMLOListElement>(null);
@@ -61,6 +68,10 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
     const [draggingId, setDraggingId] = useState<string | null>(null);
     const [announcement, setAnnouncement] = useState("");
     const [notice, setNotice] = useState<Notice | null>(null);
+    const [pendingUpload, setPendingUpload] = useState<PendingServerModUpload | null>(null);
+    const [uploadName, setUploadName] = useState("");
+    const uploadController = useRef<AbortController | null>(null);
+    useEffect(() => () => uploadController.current?.abort(), []);
 
     useEffect(() => {
         const id = pendingFocusId.current;
@@ -100,6 +111,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         setBusy("loading");
         try {
             apply(await catalog.listServerMods(serverId));
+            setPendingUpload(await catalog.pendingServerModUpload?.(serverId).catch(() => null) ?? null);
         } catch (error) {
             setLoadFailed(error instanceof ServerModsError && error.code === "server_suspended" ? t("state.suspended")
                 : error instanceof ServerModsError ? modsErrorMessage(error, t) : t("mods.error.other"));
@@ -125,14 +137,20 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
             const state = await run();
             apply(state);
             setNotice({ tone: "info", text: success(state) });
+            onChanged?.();
         } catch (error) {
             if (error instanceof ServerModsError && error.code === CANCELLED) return;
+            if (error instanceof ServerModsError && error.code === "upload_paused") {
+                setNotice({ tone: "info", text: t("mods.uploadPaused") });
+                return;
+            }
             const message = error instanceof ServerModsError ? modsErrorMessage(error, t) : error instanceof ModArchiveError ? archiveProblemMessage(error, t) : t("mods.error.other");
             setNotice({ tone: "error", text: message });
             if (!(error instanceof ModArchiveError)) await reconcile(error);
         } finally {
             setBusy(null);
             setProgress(null);
+            setPendingUpload(await catalog.pendingServerModUpload?.(serverId).catch(() => null) ?? null);
         }
     }
 
@@ -165,6 +183,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
                 if (draftRef.current === sent) updateDraft(state.mods);
             }
             setNotice({ tone: "info", text: t("mods.saved") });
+            onChanged?.();
         } catch (error) {
             setNotice({ tone: "error", text: error instanceof ServerModsError ? modsErrorMessage(error, t, changedRunsOn) : t("mods.error.other") });
             await reconcile(error, changedRunsOn.length > 0);
@@ -273,15 +292,26 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         const picked: { archive?: ServerModArchive; replaced?: boolean } = {};
         await change("preparing", async () => {
             // Let the browser paint the preparing state between file reads and before compressing.
-            const archive = picked.archive = await buildModArchive(files, { yieldToBrowser: () => new Promise(resolve => setTimeout(resolve, 0)) });
+            const archive = picked.archive = await buildResumableModArchive(files, { yieldToBrowser: () => new Promise(resolve => setTimeout(resolve, 0)) });
+            setUploadName(archive.manifest.name);
             const existing = findServerMod(loaded.mods, archive.manifest.id);
             picked.replaced = existing !== undefined;
             if (existing && !window.confirm(t("mods.confirmReplace", { name: existing.name, current: existing.version, version: archive.manifest.version }))) {
+                if (archive.source) await discardPreparedModArchive(archive.source.id);
                 throw new ServerModsError(CANCELLED);
             }
             setBusy("uploading");
-            return catalog.uploadServerMod(serverId, revision, archive, setProgress);
+            uploadController.current = new AbortController();
+            return catalog.uploadServerMod(serverId, revision, archive, setProgress, { signal: uploadController.current.signal });
         }, state => installedMessage(state, picked.archive!, picked.replaced === true));
+    }
+
+    async function resumeUpload() {
+        if (!pendingUpload || !catalog.resumeServerModUpload) return;
+        uploadController.current = new AbortController();
+        setUploadName(pendingUpload.archive.manifest.name);
+        await change("uploading", () => catalog.resumeServerModUpload!(serverId, setProgress, { signal: uploadController.current!.signal }),
+            state => installedMessage(state, pendingUpload.archive, pendingUpload.session?.replaces === true));
     }
 
     /** Names the installed mod, saying when it replaced a version or was left disabled by a dependency or limit rule. */
@@ -301,12 +331,22 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
         actions={canEdit && <>
             <input ref={input => { uploadRef.current = input; if (input) input.webkitdirectory = true; }} type="file" hidden aria-label={t("mods.folderInput")} onChange={upload} />
             <button type="button" disabled={busyNow || !settled} onClick={() => void load()} className={fileButtonClass}><RefreshCw className="size-4" aria-hidden="true" />{t("mods.refresh")}</button>
-            <button type="button" disabled={busyNow || !settled} onClick={() => uploadRef.current?.click()} className={filePrimaryButtonClass}><Upload className="size-4" aria-hidden="true" />{t("mods.upload")}</button>
+            <button type="button" disabled={busyNow || !settled || pendingUpload !== null} onClick={() => uploadRef.current?.click()} className={filePrimaryButtonClass}><Upload className="size-4" aria-hidden="true" />{t("mods.upload")}</button>
         </>}>
         {!canEdit && <p className="p-5 text-sm leading-6 text-foreground-muted">{t("mods.readOnly")}</p>}
         <div className="space-y-3 border-b border-white/10 px-5 py-3 empty:hidden">
+            {loaded && <div className="space-y-2 text-sm">
+                <div className="flex flex-wrap justify-between gap-2"><span>{t("mods.storage")}</span><span className="text-foreground-muted">{t("mods.storageUsage", { used: modStorageSize(loaded.mods.filter(isOwnerMod).reduce((bytes, mod) => bytes + mod.sizeBytes, 0)) })}</span></div>
+                <progress className="h-1.5 w-full accent-gold" value={loaded.mods.filter(isOwnerMod).reduce((bytes, mod) => bytes + mod.sizeBytes, 0)} max={MOD_INSTALLED_QUOTA_BYTES} aria-label={t("mods.storage")} />
+                <p className="text-xs text-foreground-muted">{t("mods.limits")}</p>
+            </div>}
             {loaded?.restartRequired && <p role="status" className={workspaceNoticeClass}>{t("mods.restartRequired")}</p>}
-            {progress && <UploadProgress progress={progress} />}
+            {progress && <UploadProgress progress={progress} name={uploadName} onPause={progress.phase === "uploading" ? () => uploadController.current?.abort() : undefined} />}
+            {!progress && pendingUpload && busy === null && <div className="space-y-2 rounded-lg border border-white/10 p-3">
+                <p className="text-sm font-medium">{pendingUpload.archive.manifest.name}</p>
+                <p className="text-xs text-foreground-muted">{t("mods.uploadPaused")} {t("mods.uploadAmount", { sent: modStorageSize(pendingUpload.sentBytes ?? 0), total: modStorageSize(serverModArchiveSize(pendingUpload.archive)) })}</p>
+                <button type="button" onClick={() => void resumeUpload()} className={filePrimaryButtonClass}>{t("mods.resumeUpload")}</button>
+            </div>}
             {busy === "preparing" && <p role="status" className="text-sm text-foreground-muted">{t("mods.phase.preparing")}</p>}
             {saving && <p role="status" className="text-sm text-foreground-muted">{t("mods.saving")}</p>}
             {notice && !saving && <p aria-live="polite" className={`text-sm ${notice.tone === "error" ? "text-red-300" : "text-foreground-muted"}`}>{notice.text}</p>}
@@ -325,7 +365,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true }: {
                     onKeyDown={event => handleKey(event, index)} onToggle={() => toggle(mod)} onRunsOn={runsOn => chooseRunsOn(mod, runsOn)} onDelete={() => remove(mod)} />)}
             </ol>
             <p id={`${idPrefix}-reorder-help`} className="sr-only">{t("mods.reorderHelp")}</p>
-            <ModsPlayersNeed serverId={serverId} mods={loaded.mods} idPrefix={idPrefix} />
+            <Suspense fallback={null}><ModsPlayersNeed serverId={serverId} mods={loaded.mods} idPrefix={idPrefix} warSails={warSails} /></Suspense>
         </>}
         <p role="status" className="sr-only">{announcement}</p>
     </WorkspaceCard>;
@@ -382,22 +422,30 @@ function ModRunsOnChoice({ mod, id, editable, onChange }: { mod: ServerMod; id: 
     </div>;
 }
 
-/** Lists the mods every player must install, at their exact versions, from the saved list, and offers it as a JSON download. */
-function ModsPlayersNeed({ serverId, mods, idPrefix }: { serverId: string; mods: readonly ServerMod[]; idPrefix: string }) {
+/**
+ * Lists the mods every player must install, at their exact versions, from the saved list, and offers it as a JSON download.
+ * A War Sails campaign also needs the War Sails DLC enabled, so it is listed first and added to the download after Coop.
+ */
+function ModsPlayersNeed({ serverId, mods, idPrefix, warSails }: { serverId: string; mods: readonly ServerMod[]; idPrefix: string; warSails: CampaignWarSails }) {
     const { t } = useTranslations("managed-server");
+    const usesWarSails = typeof warSails === "boolean" ? warSails : use(warSails);
     const needed = serverModsPlayersNeed(mods);
     return <section aria-labelledby={`${idPrefix}-players-need`} className="border-t border-white/10 p-5">
         <h3 id={`${idPrefix}-players-need`} className="text-sm font-semibold">{t("mods.playersNeed.heading")}</h3>
         <p className="mt-1 text-sm leading-6 text-foreground-muted">{needed.length === 0 ? t("mods.playersNeed.none") : t("mods.playersNeed.exact")}</p>
-        <p className="text-sm leading-6 text-foreground-muted">{t("mods.playersNeed.noDlc")}</p>
-        {needed.length > 0 && <ul className="mt-3 space-y-1.5 text-sm">
+        <p className="text-sm leading-6 text-foreground-muted">{t(usesWarSails ? "mods.playersNeed.warSails" : "mods.playersNeed.noDlc")}</p>
+        {(needed.length > 0 || usesWarSails) && <ul className="mt-3 space-y-1.5 text-sm">
+            {usesWarSails && <li key={WAR_SAILS_MODULE.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="font-medium text-foreground">{WAR_SAILS_MODULE.name}</span>
+                <span className="font-mono text-xs text-foreground-muted">{WAR_SAILS_MODULE.id}</span>
+            </li>}
             {needed.map(mod => <li key={mod.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                 <span className="font-medium text-foreground">{mod.name}</span>
                 <span className="font-mono text-xs text-foreground-muted">{mod.id} {mod.version}</span>
                 {mod.runsOn === "players" && <span className={badgeClass}>{t("mods.playersNeed.playersOnly")}</span>}
             </li>)}
         </ul>}
-        {needed.length > 0 && <button type="button" onClick={() => downloadModList(serverModListFile(serverId, mods, new Date()))} className={`${fileButtonClass} mt-4`}>
+        {(needed.length > 0 || usesWarSails) && <button type="button" onClick={() => downloadModList(serverModListFile(serverId, mods, new Date(), usesWarSails))} className={`${fileButtonClass} mt-4`}>
             <Download className="size-4" aria-hidden="true" />{t("mods.playersNeed.download")}
         </button>}
     </section>;
@@ -413,13 +461,22 @@ function downloadModList(file: ServerModListFile) {
 }
 
 /** Shows the current upload phase, with a percentage while chunks are sent. */
-function UploadProgress({ progress }: { progress: ServerModUploadProgress }) {
+function modStorageSize(bytes: number): string {
+    const unit = bytes >= 1_000_000_000 ? "GB" : "MB";
+    const value = bytes / (unit === "GB" ? 1_000_000_000 : 1_000_000);
+    return `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(value)} ${unit}`;
+}
+
+function UploadProgress({ progress, name, onPause }: { progress: ServerModUploadProgress; name: string; onPause?: () => void }) {
     const { t } = useTranslations("managed-server");
     const percent = progress.totalBytes === 0 ? 0 : Math.floor(progress.sentBytes / progress.totalBytes * 100);
     const label = progress.phase === "uploading" ? t("mods.phase.uploading", { percent }) : t(`mods.phase.${progress.phase}`);
-    return <div className="w-full" role="status">
+    return <div className="w-full space-y-2 rounded-lg border border-white/10 p-3" role="status">
+        <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm font-medium">{name}</p>
+            {onPause && <button type="button" onClick={onPause} className={fileButtonClass}>{t("mods.pauseUpload")}</button>}</div>
         <p className="text-sm text-foreground-muted">{label}</p>
         {progress.phase === "uploading" && <progress className="mt-2 h-1.5 w-full accent-gold" max={100} value={percent} aria-label={label} />}
+        <p className="text-xs text-foreground-muted">{t("mods.uploadAmount", { sent: modStorageSize(progress.sentBytes), total: modStorageSize(progress.totalBytes) })}</p>
     </div>;
 }
 

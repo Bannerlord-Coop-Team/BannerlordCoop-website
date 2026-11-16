@@ -20,6 +20,10 @@ const navigationLinks = [
         href: "/#download",
     },
     {
+        label: "nav.hosting",
+        href: "/hosting",
+    },
+    {
         label: "nav.cheats",
         href: "/cheats",
     },

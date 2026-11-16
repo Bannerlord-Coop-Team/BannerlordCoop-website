@@ -2,7 +2,9 @@
 
 The creator-authenticated Patreon allocation refresh can now add optional
 `paidAccessEndedAt` evidence after validating a former patron with a paid charge
-history, no currently entitled tiers and zero entitlement amount. It is the
+history, no currently entitled paid tiers and zero entitlement amount. Patreon keeps
+cancelled patrons on the campaign's $0 tier, so a $0 tier does not count as a remaining
+benefit; confirmed-loss evidence records an empty `tierIds`. It is the
 observation time, not a guessed billing or historical expiration date. Cancellation
 with remaining benefits, declined charges, ambiguous data, outages and stale
 observations do not produce it. OAuth linking remains unchanged.

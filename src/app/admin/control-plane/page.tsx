@@ -18,6 +18,7 @@ import { ManualVpsOnboardingCard } from "@/app/components/admin/ManualVpsOnboard
 import { AuditTable, Panel, Definition, SectionHeading, State, Empty, ReleaseMetadata, shortId } from "@/app/components/admin/ControlPlanePresentation";
 import { ClickableTableRow } from "@/app/components/admin/ClickableTableRow";
 import { hasAdminAccess } from "@/app/lib/auth/access";
+import { getLoginRedirect } from "@/app/lib/auth/redirect";
 import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
 import { serverProgressView } from "@/app/lib/control-plane/server-progress";
 import { readControlPlaneAdmin } from "@/app/lib/control-plane/server-read";
@@ -119,6 +120,7 @@ type PageProps = {
 
 export default async function ControlPlaneAdminPage({ searchParams }: PageProps) {
     const params = await searchParams;
+    const loginRedirect = getLoginRedirect("/admin/control-plane", params);
     const view = parseView(first(params.view));
     const query = (first(params.q) ?? "").trim().slice(0, 100);
     const serverId = (first(params.serverId) ?? "").trim();
@@ -131,7 +133,7 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
     async function loadAuthenticatedView() {
         try {
             const { session, impersonating } = await getSupabaseServerReadSession();
-            if (!session) redirect("/login?next=/admin/control-plane");
+            if (!session) redirect(loginRedirect);
             const authority = Promise.withResolvers<void>();
             let authenticated = false, fallbackStarted = false;
             const identity = { expectedUserId: session.user.id, requireOrdinarySession: !impersonating, onAuthenticated: () => {
@@ -150,7 +152,7 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
                     // website verification may only permit the existing read-error UI.
                     fallbackStarted = true;
                     const { user, accessToken } = await getSupabaseServerViewer();
-                    if (!user || !accessToken || user.id !== session.user.id) redirect("/login?next=/admin/control-plane");
+                    if (!user || !accessToken || user.id !== session.user.id) redirect(loginRedirect);
                     if (!hasAdminAccess(user)) redirect("/");
                 }),
             ]);

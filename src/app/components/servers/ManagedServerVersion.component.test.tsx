@@ -154,6 +154,47 @@ it("reports a failed change with its reason, the automatic return and the next s
     expect([...container.querySelectorAll("ol li")][3].textContent).toBe("Installing 0.1.9Failed");
 });
 
+it("renders stopped success, confirmed rollback and needs-support outcomes without exposing job identifiers", async () => {
+    actions.status.mockResolvedValue({ serverId, job: job(["done", "done", "active"], {
+        state: "running", phase: "backup", targetVersion: "0.1.11", previousVersion: "0.1.10",
+        progress: "Creating a safe restore point",
+    }) });
+    await render();
+    actions.status.mockResolvedValue({ serverId, job: job(["done", "done", "done"], {
+        state: "succeeded", phase: "done", targetVersion: "0.1.11", previousVersion: "0.1.10",
+        progress: "Version 0.1.11 is installed. Your server remains stopped.", completedAt: updatedAt,
+    }) });
+    await act(async () => { await vi.advanceTimersByTimeAsync(3_100); });
+    expect(container.textContent).toContain("0.1.10");
+    expect(container.textContent).toContain("Version 0.1.11 is installed. Your server remains stopped.");
+    expect(container.textContent).not.toContain(jobId);
+    expect(container.querySelector("ol")?.getAttribute("aria-live")).toBe("polite");
+    expect([...container.querySelectorAll("section")].at(-1)?.className).toContain("w-full");
+
+    actions.status.mockResolvedValue({ serverId, job: job(["done", "done", "active"], {
+        state: "running", phase: "backup", targetVersion: "0.1.11", previousVersion: "0.1.10", progress: "Creating a safe restore point",
+    }) });
+    await render({ expectedUpdatedAt: "2026-10-30T12:01:00.000Z" });
+    actions.status.mockResolvedValue({ serverId, job: job(["done", "done", "done", "failed"], {
+        state: "failed", phase: "failed", rolledBack: true, failureCode: "agent_game_health_failed",
+        progress: "The version change did not finish.",
+        failureMessage: "The selected release could not be confirmed healthy. We returned your server to 0.1.10. The pre-update backup is available under Backups.",
+        nextStep: "Check your campaign and try again.", backup: { backupId: jobId }, completedAt: updatedAt,
+    }) });
+    await render({ expectedUpdatedAt: "2026-10-30T12:02:00.000Z" });
+    expect(container.textContent).toContain("We returned your server to 0.1.10");
+    expect(container.textContent).toContain("pre-update backup is available under Backups");
+    expect(container.textContent).not.toContain(jobId);
+
+    actions.status.mockResolvedValue({ serverId, job: job(["done", "done", "done", "failed"], {
+        state: "failed", phase: "failed", rolledBack: false, failureCode: "update_rollback_requires_review",
+        progress: "The version change did not finish.", failureMessage: "The return to the previous version could not be confirmed. No pre-update backup is currently confirmed.",
+        nextStep: "Contact hosting support before changing versions again.", completedAt: updatedAt,
+    }) });
+    await render({ expectedUpdatedAt: "2026-10-30T12:03:00.000Z" });
+    expect(container.textContent).toContain("Contact hosting support before changing versions again.");
+});
+
 it("returns to Latest from a pin and resumes automatic updates without asking about saves", async () => {
     actions.options.mockResolvedValue(options({ installedVersion: "0.1.9", pinnedVersion: "0.1.9", latestVersion: "0.1.11",
         options: [option("0.1.11", { isLatest: true, direction: "newer", requiresSaveAcknowledgement: false }), option("0.1.9", { isInstalled: true, isPinned: true, direction: "same", requiresSaveAcknowledgement: false })] }));

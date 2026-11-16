@@ -1,0 +1,32 @@
+import { expect, it } from 'vitest';
+import { parseRunnerConfigurationFile } from '../../../../supabase/functions/_shared/server-configuration-contract';
+import { parseModsState } from '../../../../supabase/functions/_shared/server-mods-contract';
+import { maximumBattleSize } from '../../../../supabase/functions/_shared/battle-size-policy';
+import { MyServersApiError, readMyServersResponse } from './my-servers';
+
+import fixture from '../../../../test/fixtures/limitless-contract/v1.json';
+it('consumes the same versioned CP config/catalog fixture and fails closed for either missing module', () => {
+    expect(fixture.schema).toBe('limitless-battle-size-v1');
+    const file = parseRunnerConfigurationFile(fixture.file);
+    // The retained v1 wire fixture predates War Sails; current website parsing fills its default.
+    expect(file).toEqual({ ...fixture.file, settings: { ...fixture.file.settings,
+        modOptions: { ...fixture.file.settings.modOptions, warSails: false } } });
+    const state = parseModsState(fixture.state);
+    expect(state).toEqual(fixture.state);
+    expect(maximumBattleSize(state.mods)).toBe(12000);
+    for (const id of ['Limitless', 'Limitless.CoopCompat']) {
+        expect(maximumBattleSize(state.mods.filter(mod => mod.id !== id))).toBe(1000);
+        expect(maximumBattleSize(state.mods.map(mod => mod.id === id ? { ...mod, enabled: false } : mod))).toBe(1000);
+    }
+    expect(() => parseRunnerConfigurationFile({ ...fixture.file, settings: { ...fixture.file.settings,
+        modOptions: { ...fixture.file.settings.modOptions, battleSize: 12001 } } })).toThrow();
+    expect(() => parseModsState({ ...fixture.state, revision: 'invalid' })).toThrow();
+});
+
+it('parses the paired permanent capability refusal without losing its owner guidance', async () => {
+    const requestId = '11111111-1111-4111-8111-111111111111';
+    const response = Response.json({ version: 1, requestId, ok: false, error: fixture.runnerUnsupportedError }, { status: 409 });
+    await expect(readMyServersResponse(response, requestId)).rejects.toMatchObject({
+        ...fixture.runnerUnsupportedError, parsedEnvelope: true, name: MyServersApiError.name,
+    });
+});

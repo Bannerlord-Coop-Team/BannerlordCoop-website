@@ -1,4 +1,5 @@
 import type { ModEntry, ModOrderEntry, ModRunsOn, ModsState, ModUploadManifest } from "../../../../supabase/functions/_shared/server-mods-contract";
+import { WAR_SAILS_MODULE } from "./war-sails";
 
 // The Mods tab's domain: installed mods as the control plane lists them, the catalog the panel depends
 // on (the API-backed catalog implements it; panel tests use an in-memory one), and pure load-order edits.
@@ -14,7 +15,48 @@ export type ServerModRunsOn = ModRunsOn;
 // website keeps no list of mod ids and infers no lock reason.
 
 /** A zipped module folder ready to upload, with the identity read from its `SubModule.xml`. */
-export type ServerModArchive = { manifest: ModUploadManifest; bytes: Uint8Array<ArrayBuffer>; fileCount: number; uncompressedBytes: number };
+export type ServerModArchive = {
+    manifest: ModUploadManifest;
+    /** Small in-memory fixtures; empty when the production archive has a browser-backed source. */
+    bytes: Uint8Array<ArrayBuffer>;
+    source?: ServerModArchiveSource;
+    fileCount: number;
+    uncompressedBytes: number;
+};
+
+/** A prepared archive kept in browser storage, read one bounded upload part at a time. */
+export interface ServerModArchiveSource {
+    readonly id: string;
+    readonly sizeBytes: number;
+    readonly sha256: string;
+    read(offset: number, length: number): Promise<Uint8Array<ArrayBuffer>>;
+}
+
+export function serverModArchiveSize(archive: ServerModArchive): number {
+    return archive.source?.sizeBytes ?? archive.bytes.byteLength;
+}
+
+export function readServerModArchive(archive: ServerModArchive, offset: number, length: number): Promise<Uint8Array<ArrayBuffer>> {
+    return archive.source?.read(offset, length) ?? Promise.resolve(archive.bytes.subarray(offset, offset + length));
+}
+
+export interface PendingServerModUpload {
+    serverId: string;
+    archive: ServerModArchive;
+    expectedRevision: string;
+    createRequestId: string;
+    completeRequestId: string;
+    sentBytes?: number;
+    completionStarted?: boolean;
+    session?: { uploadId: string; chunkBytes: number; chunkCount: number; expiresAt: string; replaces: boolean };
+}
+
+/** Local resume metadata, separate from the control plane's authoritative receipts. */
+export interface ServerModResumeStore {
+    get(serverId: string): Promise<PendingServerModUpload | null>;
+    save(upload: PendingServerModUpload): Promise<void>;
+    clear(serverId: string): Promise<void>;
+}
 
 /** Where an upload is: creating its session, sending chunks, installing on the runner, or confirming the result. */
 export type ServerModUploadProgress = { phase: "creating" | "uploading" | "installing" | "verifying"; sentBytes: number; totalBytes: number };
@@ -27,7 +69,9 @@ export interface ServerModCatalog {
     listServerMods(serverId: string): Promise<ServerModsState>;
     saveServerModOrder(serverId: string, expectedRevision: string, order: ServerModOrderEntry[]): Promise<ServerModsState>;
     deleteServerMod(serverId: string, expectedRevision: string, modId: string): Promise<ServerModsState>;
-    uploadServerMod(serverId: string, expectedRevision: string, archive: ServerModArchive, onProgress?: (progress: ServerModUploadProgress) => void): Promise<ServerModsState>;
+    uploadServerMod(serverId: string, expectedRevision: string, archive: ServerModArchive, onProgress?: (progress: ServerModUploadProgress) => void, options?: { signal?: AbortSignal }): Promise<ServerModsState>;
+    pendingServerModUpload?(serverId: string): Promise<PendingServerModUpload | null>;
+    resumeServerModUpload?(serverId: string, onProgress?: (progress: ServerModUploadProgress) => void, options?: { signal?: AbortSignal }): Promise<ServerModsState>;
 }
 
 /** A refused or unconfirmed catalog call: the closed code, whether retrying may help, and any module it names. */
@@ -119,15 +163,24 @@ export function serverModsPlayerLoadOrder(mods: readonly ServerMod[]): ServerMod
     return mods.filter(mod => mod.enabled && !isDedicatedServerModule(mod));
 }
 
-/** Builds the downloadable mod list from the saved list, stamped with the given export time. */
-export function serverModListFile(serverId: string, mods: readonly ServerMod[], exportedAt: Date): ServerModListFile {
+/** Builds the downloadable mod list from the saved list, stamped with the given export time; a War Sails campaign adds NavalDLC. */
+export function serverModListFile(serverId: string, mods: readonly ServerMod[], exportedAt: Date, warSails = false): ServerModListFile {
+    const entries: Omit<ServerModListEntry, "order">[] = serverModsPlayerLoadOrder(mods).map(mod => ({
+        id: mod.id, name: mod.name, version: mod.version,
+        kind: mod.required ? "coop" : mod.pinned ? "core" : "mod", playersOnly: mod.runsOn === "players",
+    }));
     return {
         format: "bannerlord-coop-mod-list", formatVersion: 1, serverId, exportedAt: exportedAt.toISOString(),
-        mods: serverModsPlayerLoadOrder(mods).map((mod, index) => ({
-            order: index + 1, id: mod.id, name: mod.name, version: mod.version,
-            kind: mod.required ? "coop" : mod.pinned ? "core" : "mod", playersOnly: mod.runsOn === "players",
-        })),
+        mods: (warSails ? withWarSailsModule(entries) : entries).map((entry, index) => ({ order: index + 1, ...entry })),
     };
+}
+
+/** Inserts the War Sails DLC right after Coop (after the core modules when Coop is missing), unless the list already has it. */
+function withWarSailsModule(entries: readonly Omit<ServerModListEntry, "order">[]): Omit<ServerModListEntry, "order">[] {
+    if (entries.some(entry => entry.id.toLowerCase() === WAR_SAILS_MODULE.id.toLowerCase())) return [...entries];
+    const coop = entries.findIndex(entry => entry.kind === "coop");
+    const at = coop >= 0 ? coop + 1 : entries.findLastIndex(entry => entry.kind === "core") + 1;
+    return [...entries.slice(0, at), { ...WAR_SAILS_MODULE, version: "", kind: "core", playersOnly: false }, ...entries.slice(at)];
 }
 
 /** Counts enabled owner mods, which the control plane caps at 32. */

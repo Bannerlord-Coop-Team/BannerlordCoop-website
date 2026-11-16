@@ -2,8 +2,9 @@ import { isColdSleeping } from "./cold-sleep";
 import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
 import { timestamp } from "../../../../supabase/functions/_shared/server-visibility-contract";
 import { isModLoadFailure, type ModLoadFailure } from "./mod-load-failure";
+import { WAR_SAILS_FAILURE_CODES, type WarSailsFailureCode } from "./war-sails";
 
-export type OwnerFailureCode = "game_crashed_during_load" | "game_unavailable" | "crash_loop_cooldown" | "mod_load_failed" | "operation_failed";
+export type OwnerFailureCode = "game_crashed_during_load" | "game_unavailable" | "crash_loop_cooldown" | "mod_load_failed" | "operation_failed" | WarSailsFailureCode;
 type Recommendation = "review-backups" | "check-console" | "wait" | "contact-support";
 export type OwnerStartInsight = {
     action: "start" | "restart-game" | "provision";
@@ -32,7 +33,7 @@ export type OwnerRuntimeInsight = {
 };
 export const START_INSIGHT_KEYS = ["action", "jobId", "state", "phase", "progress", "attemptCount", "maximumAttempts", "nextRetryAt", "stoppedRetrying", "failureCode", "recommendedAction"];
 const RUNTIME_KEYS = ["desiredState", "observedAt", "allowedActions", "crashLoopDetected", "failureCode", "recommendedAction", "failureMessage", "recommendation", "start"];
-const FAILURE_CODES = ["game_crashed_during_load", "game_unavailable", "crash_loop_cooldown", "mod_load_failed", "operation_failed"];
+const FAILURE_CODES: readonly string[] = ["game_crashed_during_load", "game_unavailable", "crash_loop_cooldown", "mod_load_failed", "operation_failed", ...WAR_SAILS_FAILURE_CODES];
 const RECOMMENDATIONS = ["review-backups", "check-console", "wait", "contact-support"];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 const text = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 256 && !/[\p{Cc}\p{Cf}]/u.test(value);

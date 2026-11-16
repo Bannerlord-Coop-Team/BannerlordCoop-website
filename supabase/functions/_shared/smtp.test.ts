@@ -80,6 +80,20 @@ const deliverySteps = (): Step[] => [
     { expect: /^QUIT$/u, reply: "221 bye\r\n" },
 ];
 
+test("encodes HTML mail as multipart/alternative with plain text first and both UTF-8 bodies intact", async () => {
+    const multipart = { ...message, text: "Review server (https://bannerlordcoop.com/admin) — quota", html: '<p>Review <a href="https://bannerlordcoop.com/admin">server</a> — quota</p>' };
+    const tls = new FakeSocket([
+        { expect: /^EHLO example\.test$/u, reply: "250-smtp.example.test\r\n250 AUTH PLAIN\r\n" },
+        { expect: /^AUTH PLAIN /u, reply: "235 ok\r\n" }, ...deliverySteps(),
+    ]);
+    await sendSmtpMail(fakeTransport({ tls }).transport, { hostname: "smtp.example.test", port: 465, tls: "implicit", ...credentials }, multipart);
+    const data = tls.received.find(entry => entry.startsWith("<DATA>"))!.slice(6);
+    assert.match(data, /Content-Type: multipart\/alternative; boundary="=_bannerlordcoop_alternative"\r\n\r\n/u);
+    const parts = [...data.matchAll(/Content-Type: text\/(plain|html); charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n([A-Za-z0-9+/=\r\n]+?)\r\n--/gu)];
+    assert.deepEqual(parts.map(part => [part[1], Buffer.from(part[2], "base64").toString("utf8")]), [["plain", multipart.text], ["html", multipart.html]]);
+    assert.ok(data.endsWith("--=_bannerlordcoop_alternative--\r\n"));
+});
+
 test("sends over implicit TLS with AUTH PLAIN, dot-stuffed base64 body and closes the socket", async () => {
     const tls = new FakeSocket([
         { expect: /^EHLO example\.test$/u, reply: "250-smtp.example.test\r\n250-AUTH PLAIN LOGIN\r\n250 8BITMIME\r\n" },

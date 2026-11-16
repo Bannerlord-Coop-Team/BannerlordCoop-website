@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 import { ServerModsPanel } from "./ServerModsPanel";
 import {
-    changedServerModRunsOn, moveServerMod, sameServerModOrder, serverModLoadOrder, ServerModsError, setServerModRunsOn, toggleServerMod, type ServerMod, type ServerModCatalog,
+    changedServerModRunsOn, moveServerMod, sameServerModOrder, serverModLoadOrder, ServerModsError, setServerModRunsOn, toggleServerMod, type PendingServerModUpload, type ServerMod, type ServerModCatalog,
 } from "@/app/lib/hosting/server-mods";
 import { createMockServerModCatalog, sampleOwnerMod, sampleServerMods, type MockServerModCatalog } from "./ServerModsPanel.test-utils";
 
@@ -17,7 +17,7 @@ beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.restoreAllMocks(); });
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 /** The baseline list with three owner mods: Alpha (enabled), Beta (disabled, depends on Alpha) and Gamma. */
 function mods() {
@@ -27,6 +27,47 @@ function mods() {
         sampleOwnerMod("Gamma", { issues: ["stripped:0Harmony.dll"] }),
     ]);
 }
+
+it("keeps inline progress and Pause beside the list, restores Resume after interruption, and resumes without choosing a folder", async () => {
+    const catalog = createMockServerModCatalog(mods());
+    let pending: PendingServerModUpload | null = { serverId: SERVER_ID, expectedRevision: catalog.state.revision,
+        createRequestId: "00000000-0000-4000-8000-000000000001", completeRequestId: "00000000-0000-4000-8000-000000000002", sentBytes: 1_000_000_000,
+        archive: { manifest: { id: "LargeMod", name: "Large Mod", version: "v1" }, fileCount: 2, uncompressedBytes: 3_000_000_000, bytes: new Uint8Array(0),
+            source: { id: "00000000-0000-4000-8000-000000000003", sizeBytes: 3_000_000_000, sha256: "a".repeat(64),
+                read: async () => { throw new Error("component must not read archive bytes"); } } } };
+    catalog.pendingServerModUpload = async () => pending;
+    const resume = vi.fn<NonNullable<ServerModCatalog["resumeServerModUpload"]>>((id, report, options) => {
+        expect(id).toBe(SERVER_ID);
+        report?.({ phase: "uploading", sentBytes: 1_500_000_000, totalBytes: 3_000_000_000 });
+        return new Promise((_, reject) => options?.signal?.addEventListener("abort", () => reject(new ServerModsError("upload_paused")), { once: true }));
+    });
+    catalog.resumeServerModUpload = resume;
+    await render(catalog);
+    expect(container.textContent).toContain("1 GB of 3 GB");
+    expect(button("Upload mod folder")?.disabled).toBe(true);
+    await click(button("Resume upload")!);
+    expect(container.querySelector('progress[aria-label="Uploading… 50%"]')?.getAttribute("value")).toBe("50");
+    expect(container.textContent).toContain("1.5 GB of 3 GB");
+    expect(order()).toContain("Alpha");
+    await click(button("Pause upload")!);
+    expect(button("Resume upload")).toBeDefined();
+    expect(container.textContent).toContain("Your progress is saved in this browser");
+    resume.mockImplementationOnce(async () => { pending = null; return catalog.state; });
+    await click(button("Resume upload")!);
+    expect(resume).toHaveBeenCalledTimes(2);
+    expect(button("Resume upload")).toBeUndefined();
+    expect(button("Upload mod folder")?.disabled).toBe(false);
+});
+
+it("shows the measured host refusal and the 5 GB current-set storage meter", async () => {
+    const catalog = createMockServerModCatalog(sampleServerMods([sampleOwnerMod("Existing", { sizeBytes: 4_000_000_000 })]));
+    await render(catalog);
+    expect(container.textContent).toContain("4 GB / 5 GB");
+    vi.spyOn(catalog, "uploadServerMod").mockRejectedValueOnce(new ServerModsError("mod_host_storage_low"));
+    await chooseFolder({ "NewMod/SubModule.xml": submodule("NewMod", "New Mod", "v1") });
+    expect(container.textContent).toContain("This host is low on storage; mod uploads are paused");
+    expect(order()).toContain("Existing");
+});
 
 it("shows a suspended refusal and restores the saved order without replaying the mutation", async () => {
     const catalog = createMockServerModCatalog(mods());
@@ -54,8 +95,8 @@ it("keeps an upload unknown when a suspended reconciliation read cannot confirm 
 });
 
 /** Renders the panel and waits for its first load. */
-async function render(catalog: ServerModCatalog, props: { canEdit?: boolean; active?: boolean } = {}) {
-    await act(async () => root.render(<TestLocalization><ServerModsPanel serverId={SERVER_ID} catalog={catalog} canEdit={props.canEdit ?? true} active={props.active ?? true} /></TestLocalization>));
+async function render(catalog: ServerModCatalog, props: { canEdit?: boolean; active?: boolean; warSails?: boolean | Promise<boolean> } = {}) {
+    await act(async () => root.render(<TestLocalization><ServerModsPanel serverId={SERVER_ID} catalog={catalog} canEdit={props.canEdit ?? true} active={props.active ?? true} warSails={props.warSails} /></TestLocalization>));
 }
 
 /** Reads the rendered load order as mod names. */
@@ -494,8 +535,11 @@ it("downloads the players' full load order as JSON, leaving out disabled and ded
     vi.stubGlobal("Blob", NodeBlob);
     vi.stubGlobal("URL", { createObjectURL: vi.fn((blob: NodeBlob) => { saved = blob; return "blob:mod-list"; }), revokeObjectURL: vi.fn() });
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { expect(this.download).toBe("BannerlordCoop-mod-list.json"); });
-    vi.useFakeTimers({ toFake: ["Date"] }).setSystemTime(new Date("2026-10-24T12:00:00.000Z"));
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] }).setSystemTime(new Date("2026-10-24T12:00:00.000Z"));
     await act(async () => downloadButton()!.click());
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(URL.revokeObjectURL).toHaveBeenCalledOnce();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:mod-list");
     vi.unstubAllGlobals();
     expect(click).toHaveBeenCalledOnce();
     expect(saved!.type).toBe("application/json");
@@ -515,6 +559,49 @@ it("downloads the players' full load order as JSON, leaving out disabled and ded
 it("offers no mod list download when players need no community mods", async () => {
     await render(createMockServerModCatalog(sampleServerMods([sampleOwnerMod("Off", { enabled: false })])));
     expect(downloadButton()).toBeUndefined();
+});
+
+/** Downloads the mod list and returns the parsed JSON file. */
+async function downloadedModList() {
+    let saved: NodeBlob | undefined;
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.stubGlobal("Blob", NodeBlob);
+    vi.stubGlobal("URL", { createObjectURL: vi.fn((blob: NodeBlob) => { saved = blob; return "blob:mod-list"; }), revokeObjectURL: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) { expect(this.download).toBe("BannerlordCoop-mod-list.json"); });
+    await act(async () => downloadButton()!.click());
+    await act(async () => vi.advanceTimersByTimeAsync(1_000));
+    expect(URL.revokeObjectURL).toHaveBeenCalledOnce();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:mod-list");
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    return JSON.parse(await saved!.text()) as { mods: { order: number; id: string; name: string; version: string; kind: string; playersOnly: boolean }[] };
+}
+
+it("tells players of a War Sails campaign to enable War Sails and lists NavalDLC after Coop in the view and the download", async () => {
+    await render(createMockServerModCatalog(runsOnMods()), { warSails: true });
+    expect(container.textContent).toContain("Players must enable War Sails (NavalDLC) to join this War Sails campaign, and disable any other official DLC.");
+    expect(container.textContent).not.toContain("Players must also disable any official DLC");
+    expect(playersNeed()[0]).toBe("War SailsNavalDLC");
+    const file = await downloadedModList();
+    expect(file.mods.map(mod => mod.id)).toEqual(["Native", "SandBoxCore", "SandBox", "Coop", "NavalDLC", "Bannerlord.Harmony", "ClientUi", "Gamma"]);
+    expect(file.mods[4]).toEqual({ order: 5, id: "NavalDLC", name: "War Sails", version: "", kind: "core", playersOnly: false });
+});
+
+it("offers the War Sails list download even when players need no community mods", async () => {
+    await render(createMockServerModCatalog(sampleServerMods([sampleOwnerMod("Off", { enabled: false })])), { warSails: true });
+    expect(container.textContent).toContain("Players need no community mods besides Bannerlord Co-op to join.");
+    expect(playersNeed()).toEqual(["War SailsNavalDLC"]);
+    expect((await downloadedModList()).mods.map(mod => [mod.id, mod.kind])).toEqual([["Native", "core"], ["SandBoxCore", "core"], ["SandBox", "core"], ["Coop", "coop"], ["NavalDLC", "core"]]);
+});
+
+it("waits for the page's campaign reads before showing what players need, and keeps today's copy for a Classic campaign", async () => {
+    let resolve!: (value: boolean) => void;
+    await render(createMockServerModCatalog(runsOnMods()), { warSails: new Promise<boolean>(done => { resolve = done; }) });
+    expect(container.textContent).not.toContain("Mods players need");
+    await act(async () => resolve(false));
+    expect(container.textContent).toContain("Players must also disable any official DLC, such as War Sails.");
+    expect(playersNeed()).not.toContain("War SailsNavalDLC");
+    expect((await downloadedModList()).mods.map(mod => mod.id)).not.toContain("NavalDLC");
 });
 
 it("shows where each owner mod runs, locks Harmony, and lists players-only mods as needed by players", async () => {
