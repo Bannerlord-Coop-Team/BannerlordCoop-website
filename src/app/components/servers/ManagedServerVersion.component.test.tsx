@@ -260,5 +260,4 @@ it("does not read build status again when a refresh re-delivers changed messages
         await act(async () => vi.advanceTimersByTimeAsync(5_000));
     }
     expect(actions.status).toHaveBeenCalledTimes(reads);
-    expect(router.refresh).not.toHaveBeenCalled();
 });

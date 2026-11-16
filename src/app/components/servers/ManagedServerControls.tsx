@@ -154,7 +154,7 @@ export function ManagedServerControls({
     const [startStatus, setStartStatus] = useState<StartProgressStatus | null>(null);
     const cancelledStart = useRef<string | null>(null);
     const startPollVersion = useRef(0);
-    // A finished Start refreshes the page once; a later re-run of the poll (refreshed render, role or poll restart) must not read or refresh that job again.
+    // The Start job whose finish already refreshed the page.
     const refreshedStartJob = useRef<string | null>(null);
     const [cancellingStart, setCancellingStart] = useState(false);
     const [locallyRequested, setLocallyRequested] = useState(false);
@@ -280,7 +280,9 @@ export function ManagedServerControls({
     const translateInPoll = useEffectEvent((...args: Parameters<typeof t>) => t(...args));
 
     useEffect(() => {
-        if (!canOperate || startJobId === null || refreshedStartJob.current === startJobId) return;
+        if (!canOperate || startJobId === null) return;
+        // This finished job already refreshed the page; a re-run must not read or refresh it again.
+        if (refreshedStartJob.current === startJobId) return;
         const jobId = startJobId;
         let cancelled = false;
         const version = ++startPollVersion.current;
