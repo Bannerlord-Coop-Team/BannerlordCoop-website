@@ -14,7 +14,7 @@
   "included.official.title": "Modチームが提供",
   "included.official.description": "Modの開発者が作った、Bannerlord Co-op専用の唯一のホスティングです。",
   "included.versions.title": "公開版またはナイトリービルド",
-  "included.versions.description": "公開リリースまたは最新のナイトリービルドを実行でき、バージョンはウェブサイトから選べます。",
+  "included.versions.description": "公開リリースまたは最新のナイトリービルドを実行でき、チャンネルはウェブサイトから切り替えられます。サーバーは常にそのチャンネルの最新ビルドで動作します。",
   "included.backups.title": "毎日の自動バックアップ",
   "included.backups.description": "キャンペーンのセーブデータは毎日サーバー外にバックアップされます。",
   "included.control.title": "ブラウザから操作",

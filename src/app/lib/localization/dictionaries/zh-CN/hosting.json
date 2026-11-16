@@ -14,7 +14,7 @@
   "included.official.title": "模组团队出品",
   "included.official.description": "唯一由模组开发者为 Bannerlord Co-op 打造的托管服务。",
   "included.versions.title": "公开版或每夜构建版",
-  "included.versions.description": "运行公开版本或最新的每夜构建版，并在网站上选择版本。",
+  "included.versions.description": "运行公开版本或最新的每夜构建版，并在网站上切换频道。服务器始终运行其频道的当前构建版本。",
   "included.backups.title": "每日自动备份",
   "included.backups.description": "战役存档每天都会备份到服务器之外。",
   "included.control.title": "在浏览器中管理",

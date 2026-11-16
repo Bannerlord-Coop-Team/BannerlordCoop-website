@@ -14,7 +14,7 @@
   "included.official.title": "모드 팀이 직접 제공",
   "included.official.description": "모드 개발자가 만든 유일한 Bannerlord Co-op 전용 호스팅입니다.",
   "included.versions.title": "공개 또는 나이틀리 빌드",
-  "included.versions.description": "공개 릴리스나 최신 나이틀리 빌드를 실행하고, 버전은 웹사이트에서 선택하세요.",
+  "included.versions.description": "공개 릴리스나 최신 나이틀리 빌드를 실행하고, 채널은 웹사이트에서 전환하세요. 서버는 항상 해당 채널의 현재 빌드로 실행됩니다.",
   "included.backups.title": "매일 자동 백업",
   "included.backups.description": "캠페인 저장 파일은 매일 서버 외부에 백업됩니다.",
   "included.control.title": "브라우저에서 제어",

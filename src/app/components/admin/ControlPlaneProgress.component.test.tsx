@@ -146,6 +146,8 @@ it("reads compact server progress then hydrates final details once without a pag
     expect(request.mock.calls.map(([input]) => input.operation)).toEqual(["server-progress", "server-progress", "server-dashboard"]);
     expect(container.textContent).toContain("Final campaign");
     expect(container.textContent).not.toContain("Operation in progress");
+    // Every server follows its channel, and the update policy names it.
+    expect(container.textContent).toContain("Update policyFollow Public channel");
     await advance(120_000); expect(request).toHaveBeenCalledTimes(3); expect(refresh).not.toHaveBeenCalled();
 });
 it("handles server deletion without repeatedly requesting an unavailable dashboard", async () => {

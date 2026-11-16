@@ -14,7 +14,7 @@
   "included.official.title": "Conçu par l’équipe du mod",
   "included.official.description": "Le seul hébergement conçu pour Bannerlord Co-op par les développeurs du mod.",
   "included.versions.title": "Versions publiques ou nocturnes",
-  "included.versions.description": "Utilisez la version publique ou la dernière version nocturne, et choisissez la version depuis le site.",
+  "included.versions.description": "Utilisez la version publique ou la dernière version nocturne, et changez de canal depuis le site. Votre serveur exécute toujours la version actuelle de son canal.",
   "included.backups.title": "Sauvegardes quotidiennes automatiques",
   "included.backups.description": "Les sauvegardes de campagne sont copiées hors du serveur chaque jour.",
   "included.control.title": "Contrôle depuis le navigateur",
