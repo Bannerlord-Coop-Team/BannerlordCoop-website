@@ -33,7 +33,20 @@ const accounts: WebsiteAccountSummary[] = [
 let container: HTMLDivElement;
 let root: Root;
 
+function memoryStorage(): Storage {
+    const values = new Map<string, string>();
+    return {
+        getItem: key => values.get(key) ?? null,
+        setItem: (key, value) => { values.set(key, String(value)); },
+        removeItem: key => { values.delete(key); },
+        clear: () => { values.clear(); },
+        key: index => [...values.keys()][index] ?? null,
+        get length() { return values.size; },
+    } as Storage;
+}
+
 beforeEach(() => {
+    if (typeof globalThis.localStorage === "undefined") vi.stubGlobal("localStorage", memoryStorage());
     localStorage.clear();
     setRememberedVpsPageSize(10);
     localStorage.clear();
@@ -183,19 +196,28 @@ describe("VPS inventory query", () => {
         expect(filterVpsHosts(hosts, accounts, { regions: ["poland"], email: "CARA@", emptySlotsOnly: false }).map((item) => item.name)).toEqual(["cara-host"]);
         expect(filterVpsHosts(hosts, accounts, { regions: [], email: "", emptySlotsOnly: true }).map((item) => item.name)).toEqual(["ada-host", "unknown-host"]);
         expect(vpsRegionOptions(hosts).map((option) => option.label)).toEqual(["US-West", "Poland"]);
-        expect(summarizeVpsSlots([
+        const summary = summarizeVpsSlots([
             ...hosts,
             host("empty-region", "", 0, null),
             host("later-east", "us-east", 2, ADA),
-        ])).toMatchObject({
-            totalSlots: 15,
+            { ...host("invalid-free", "us-west", 0, null), availableServers: Number.NaN },
+            { ...host("negative-free", "us-west", -1, null), availableServers: -1 },
+        ]);
+        expect(summary).toMatchObject({
+            totalSlots: 21,
             takenSlots: 4,
+            allocatableSlots: 4,
             regions: [
-                { region: "us-west", label: "US-West", totalSlots: 3, takenSlots: 1 },
-                { region: "us-east", label: "US-East", totalSlots: 3, takenSlots: 1 },
-                { region: "poland", label: "Poland", totalSlots: 6, takenSlots: 2 },
-                { region: "unplaced", label: "No stored region", totalSlots: 3, takenSlots: 0 },
+                { region: "us-west", label: "US-West", totalSlots: 9, takenSlots: 1, allocatableSlots: 1 },
+                { region: "us-east", label: "US-East", totalSlots: 3, takenSlots: 1, allocatableSlots: 2 },
+                { region: "poland", label: "Poland", totalSlots: 6, takenSlots: 2, allocatableSlots: 1 },
+                { region: "unplaced", label: "No stored region", totalSlots: 3, takenSlots: 0, allocatableSlots: 0 },
             ],
+        });
+        expect(summary.regions.find(region => region.region === "us-west")).toMatchObject({ allocatableSlots: 1 });
+        expect(summarizeVpsSlots([{ ...host("us-west-stuck", "us-west", 0, null), totalSlots: 2, occupiedSlots: [host("occupied", "us-west", 0, ADA).occupiedSlots[0]!] }])).toMatchObject({
+            totalSlots: 2, takenSlots: 1, allocatableSlots: 0,
+            regions: [{ region: "us-west", totalSlots: 2, takenSlots: 1, allocatableSlots: 0 }],
         });
         const catalog = hostingRegionCatalogPayload();
         const warsaw = { ...host("warsaw", "us-east", 1, ADA), countryCode: "PL", locationId: "os-waw2", region: null };
@@ -206,11 +228,14 @@ describe("VPS inventory query", () => {
         expect(summarizeVpsSlots([warsaw, gravelines], catalog)).toMatchObject({
             totalSlots: 6,
             takenSlots: 1,
+            allocatableSlots: 1,
             regions: [
-                { region: "france", label: "France", totalSlots: 3, takenSlots: 0 },
-                { region: "poland", label: "Poland", totalSlots: 3, takenSlots: 1 },
+                { region: "france", label: "France", totalSlots: 3, takenSlots: 0, allocatableSlots: 0 },
+                { region: "poland", label: "Poland", totalSlots: 3, takenSlots: 1, allocatableSlots: 1 },
             ],
         });
+        expect(regionSlotOutline(1, 1)).toBe("full");
+        expect(regionSlotOutline(1, 2)).toBe("one-left");
         expect(regionSlotOutline(5, 5)).toBe("full");
         expect(regionSlotOutline(1, 1)).toBe("full");
         expect(regionSlotOutline(3, 4)).toBe("one-left");
@@ -333,3 +358,4 @@ function host(name: string, region: string, availableServers: number, ownerAccou
         runnerOnboarding: null,
     };
 }
+

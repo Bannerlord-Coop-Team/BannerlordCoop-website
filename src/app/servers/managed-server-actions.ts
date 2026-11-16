@@ -271,7 +271,7 @@ export async function readManagedServerResources(serverId: string): Promise<{ ok
  * Reads only the compact status that lifecycle, backup, and deletion polling watch. Polling re-renders the
  * page only when this fingerprint changes, keeping repeated checks far cheaper than full renders.
  */
-export async function readManagedServerStatusFingerprint(serverId: string): Promise<{ ok: true; fingerprint: string } | { ok: false }> {
+export async function readManagedServerStatusFingerprint(serverId: string): Promise<{ ok: true; fingerprint: string } | { ok: false; retryable?: boolean }> {
     if (typeof serverId !== "string" || !SERVER_ID.test(serverId)) return { ok: false };
     try {
         const supabase = await getSupabaseServerClient();
@@ -292,6 +292,6 @@ export async function readManagedServerStatusFingerprint(serverId: string): Prom
             summary.runtimeInsight?.desiredState ?? null, summary.runtimeInsight?.allowedActions ?? null,
         ]) };
     } catch {
-        return { ok: false };
+        return { ok: false, retryable: true };
     }
 }
