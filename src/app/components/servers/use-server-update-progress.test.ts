@@ -54,10 +54,15 @@ test("hides a different finished job after settling, without refreshing", () => 
     assert.deepEqual(step, { show: { kind: "hidden" }, error: null, refresh: false, poll: "stop", follow: idle });
 });
 
-test("keeps waiting for a requested job while an older finished job is still the latest", () => {
-    const step = nextUpdatePollStep({ status: status("succeeded", "66666666-6666-4666-8666-666666666666"), follow: { kind: "following", jobId }, now, deadline });
-    assert.deepEqual(step, { show: { kind: "unchanged" }, error: null, refresh: false, poll: "continue", follow: { kind: "following", jobId } });
-});
+for (const [latest, read] of [
+    ["no job", { serverId, job: null }],
+    ["an older finished job", status("succeeded", "66666666-6666-4666-8666-666666666666")],
+] as const) {
+    test(`keeps waiting for a requested job while ${latest} is the latest`, () => {
+        const step = nextUpdatePollStep({ status: read, follow: { kind: "following", jobId }, now, deadline });
+        assert.deepEqual(step, { show: { kind: "unchanged" }, error: null, refresh: false, poll: "continue", follow: { kind: "following", jobId } });
+    });
+}
 
 test("reports progress as unavailable when a read fails while following", () => {
     assert.deepEqual(nextUpdatePollStep({ status: null, follow: { kind: "following", jobId }, now, deadline }), {

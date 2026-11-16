@@ -41,19 +41,16 @@ test("create-server regions are the stored-catalog entries reported available, i
     assert.deepEqual(createServerRegionOptions([]), []);
 });
 
-test("administrator create sends only the region key; other operations get no defaults", () => {
+test("operation defaults: create gets the stable channel, Update an explicit null buildId, and others nothing", () => {
     const input: Record<string, unknown> = { friendlyRegion: "us-east" };
     applyControlPlaneOperationDefaults("create-server", input);
     assert.deepEqual(input, { friendlyRegion: "us-east", releaseChannel: "stable" });
+    const update: Record<string, unknown> = { serverId: "22222222-2222-4222-8222-222222222222", reason: "Roll forward" };
+    applyControlPlaneOperationDefaults("update-server", update);
+    assert.deepEqual(update, { serverId: "22222222-2222-4222-8222-222222222222", reason: "Roll forward", buildId: null });
     const maintenance: Record<string, unknown> = { reason: "Roll the fleet" };
     applyControlPlaneOperationDefaults("batch-maintenance", maintenance);
     assert.deepEqual(maintenance, { reason: "Roll the fleet" });
-});
-
-test("administrator Update sends an explicit null buildId so the server follows its channel", () => {
-    const input: Record<string, unknown> = { serverId: "22222222-2222-4222-8222-222222222222", reason: "Roll forward" };
-    applyControlPlaneOperationDefaults("update-server", input);
-    assert.deepEqual(input, { serverId: "22222222-2222-4222-8222-222222222222", reason: "Roll forward", buildId: null });
 });
 
 test("Create server offers to pin only providers holding a registered VPS, named and in catalog order", () => {
