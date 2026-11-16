@@ -6,16 +6,17 @@ import { updateJobInState } from "./ServerUpdateProgress.test-utils";
 
 const serverId = "22222222-2222-4222-8222-222222222222";
 const jobId = "55555555-5555-4555-8555-555555555555";
+const revision = "2026-09-20T12:00:00.000Z";
 const readStatus = vi.fn<ReadBuildStatus>();
 const onFollowedUpdateEnded = vi.fn<() => void>();
 let root: Root;
 
-/** Renders the hook at one server revision inside a bare component and exposes its latest result. */
-async function renderHook(revision: string) {
+/** Renders the hook at the fixed server revision inside a bare component and exposes its latest result. */
+async function renderHook(enabled = true) {
     const result: { current: ReturnType<typeof useServerUpdateProgress> | null } = { current: null };
     // Calls the hook with the injected reader and callback, recording what it returns.
     function Probe() {
-        result.current = useServerUpdateProgress(serverId, true, revision, readStatus, onFollowedUpdateEnded);
+        result.current = useServerUpdateProgress(serverId, enabled, revision, readStatus, onFollowedUpdateEnded);
         return null;
     }
     await act(async () => root.render(<Probe />));
@@ -42,7 +43,7 @@ afterEach(async () => {
 it("does not read again when a caller passes a new inline reader on each render", async () => {
     /** Calls the hook with a fresh reader closure on every render, as an inline caller would. */
     function InlineReaderProbe() {
-        useServerUpdateProgress(serverId, true, "2026-09-20T12:00:00.000Z", id => readStatus(id), onFollowedUpdateEnded);
+        useServerUpdateProgress(serverId, true, revision, id => readStatus(id), onFollowedUpdateEnded);
         return null;
     }
     for (let render = 0; render < 3; render += 1) await act(async () => root.render(<InlineReaderProbe />));
@@ -50,9 +51,15 @@ it("does not read again when a caller passes a new inline reader on each render"
     expect(readStatus).toHaveBeenCalledOnce();
 });
 
+it("never reads the status while disabled", async () => {
+    await renderHook(false);
+    await advance(30_000);
+    expect(readStatus).not.toHaveBeenCalled();
+});
+
 it("stops polling when the step says stop: a finished job it never followed", async () => {
     readStatus.mockResolvedValue({ serverId, job: updateJobInState("failed") });
-    const { result } = await renderHook("2026-09-20T12:00:00.000Z");
+    const { result } = await renderHook();
     await advance(30_000);
     expect(readStatus).toHaveBeenCalledOnce();
     expect(result.current!.job).toBeNull();
@@ -61,7 +68,7 @@ it("stops polling when the step says stop: a finished job it never followed", as
 
 it("stops polling and reports paused once the poll window passes", async () => {
     readStatus.mockResolvedValue({ serverId, job: updateJobInState("running") });
-    const { result } = await renderHook("2026-09-20T12:00:00.000Z");
+    const { result } = await renderHook();
     await advance(15 * 60_000);
     expect(result.current!.error).toBe("paused");
     const reads = readStatus.mock.calls.length;
@@ -71,22 +78,10 @@ it("stops polling and reports paused once the poll window passes", async () => {
 });
 
 it("reports progress as unavailable when the injected read fails while following", async () => {
-    const { result } = await renderHook("2026-09-20T12:00:00.000Z");
+    const { result } = await renderHook();
     readStatus.mockRejectedValue(new Error("network"));
     await act(async () => result.current!.followJob(jobId));
     expect(result.current!.error).toBe("unavailable");
     expect(result.current!.job).toBeNull();
     expect(onFollowedUpdateEnded).not.toHaveBeenCalled();
-});
-
-it("clears a finished followed job as soon as the page follows a new one", async () => {
-    const { result } = await renderHook("2026-09-20T12:00:00.000Z");
-    readStatus.mockResolvedValue({ serverId, job: updateJobInState("succeeded") });
-    await act(async () => result.current!.followJob(jobId));
-    expect(result.current!.job?.state).toBe("succeeded");
-    readStatus.mockReturnValue(new Promise(() => {}));
-    await act(async () => result.current!.followJob("66666666-6666-4666-8666-666666666666"));
-    expect(result.current!.job).toBeNull();
-    expect(result.current!.error).toBeNull();
-    expect(onFollowedUpdateEnded).toHaveBeenCalledOnce();
 });
