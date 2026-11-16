@@ -1,5 +1,5 @@
 import { createTranslator } from "@/app/lib/localization/translator";
-import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
+import { TestLocalization, refreshedMessages, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { LocalizationProvider } from "@/app/lib/localization/client";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -658,13 +658,7 @@ it("follows the accepted Start through real phases and readiness without sending
     } finally { await act(async () => root.unmount()); }
 });
 
-/** Simulates a refreshed page payload: equal messages as fresh objects, or a managed dictionary whose content differs per refresh. */
-function refreshedMessages(content: "identical" | "changed", refresh: number) {
-    const messages = structuredClone(serverTestMessages);
-    return content === "identical" ? messages : { ...messages, "managed-server": { ...messages["managed-server"], "test.refreshed": `Refresh ${refresh}` } };
-}
-
-it.each(["identical", "changed"] as const)("refreshes a finished Start once and stays idle when a refresh re-delivers %s messages", async content => {
+it("refreshes a finished Start once and stays idle when a refresh re-delivers changed messages", async () => {
     vi.useFakeTimers();
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId));
@@ -681,7 +675,7 @@ it.each(["identical", "changed"] as const)("refreshes a finished Start once and 
         const reads = { start: startStatus.mock.calls.length, build: buildStatus.mock.calls.length };
         // Each router.refresh() delivers a new messages object; none of them may restart the polls.
         for (let refresh = 0; refresh < 3; refresh++) {
-            await act(async () => root.render(<LocalizationProvider locale="en" messages={refreshedMessages(content, refresh)}>{controls}</LocalizationProvider>));
+            await act(async () => root.render(<LocalizationProvider locale="en" messages={refreshedMessages(refresh)}>{controls}</LocalizationProvider>));
             await act(async () => vi.advanceTimersByTimeAsync(5_000));
         }
         expect(router.refresh).toHaveBeenCalledOnce();
@@ -690,13 +684,39 @@ it.each(["identical", "changed"] as const)("refreshes a finished Start once and 
         expect(container.textContent).toContain("Your server is ready to join");
         // Losing and regaining operate access re-runs the Start poll for the same finished job; it must not read or refresh it again.
         for (const accessRole of ["support", "owner"] as const) {
-            await act(async () => root.render(<LocalizationProvider locale="en" messages={refreshedMessages(content, 3)}>
+            await act(async () => root.render(<LocalizationProvider locale="en" messages={refreshedMessages(3)}>
                 <ManagedServerControls observedGameState="stopped" {...progressProps} accessRole={accessRole} />
             </LocalizationProvider>));
             await act(async () => vi.advanceTimersByTimeAsync(5_000));
         }
         expect(router.refresh).toHaveBeenCalledOnce();
         expect(startStatus).toHaveBeenCalledTimes(reads.start);
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("follows and refreshes a later Start job after an earlier one already refreshed", async () => {
+    vi.useFakeTimers();
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    const laterJobId = "66666666-6666-4666-8666-666666666666";
+    request.mockReset().mockRejectedValueOnce(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId))
+        .mockRejectedValueOnce(new MyServersApiError("operation_timeout", "Timed out", false, laterJobId));
+    startStatus.mockReset().mockImplementation(async (_token: string, _serverId: string, jobId: string) =>
+        ({ ...progress("ready", "succeeded", "Server started and ready to join."), jobId }));
+    router.refresh.mockClear();
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls observedGameState="stopped" {...progressProps} /></TestLocalization>));
+        await act(async () => container.querySelector("button")!.click());
+        await act(async () => vi.advanceTimersByTimeAsync(10));
+        expect(router.refresh).toHaveBeenCalledOnce();
+        // The refreshed page reports the server stopped again under a new revision, which offers Start once more.
+        await act(async () => root.render(<TestLocalization><ManagedServerControls observedGameState="stopped" {...progressProps} expectedUpdatedAt="2026-09-20T12:01:00.000Z" /></TestLocalization>));
+        expect(container.querySelector("button")!.disabled).toBe(false);
+        await act(async () => container.querySelector("button")!.click());
+        await act(async () => vi.advanceTimersByTimeAsync(10));
+        expect(request).toHaveBeenCalledTimes(2);
+        expect(startStatus).toHaveBeenCalledWith("token", progressServerId, laterJobId);
+        expect(router.refresh).toHaveBeenCalledTimes(2);
     } finally { await act(async () => root.unmount()); }
 });
 

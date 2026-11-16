@@ -22,7 +22,7 @@ export type LocalizationProviderProps = {
 /** Composes page messages without replacing inherited common messages or their locale. */
 export function LocalizationProvider({ locale, messages: deliveredMessages, enabledLocales, children }: LocalizationProviderProps) {
     const parent = useContext(LocalizationContext);
-    const messages = useStableMessages(locale, deliveredMessages);
+    const messages = useStableMessages(deliveredMessages);
     const value = useMemo(() => ({
         locale: parent?.locale ?? locale,
         enabledLocales: parent?.enabledLocales ?? enabledLocales ?? [],
@@ -35,11 +35,12 @@ export function LocalizationProvider({ locale, messages: deliveredMessages, enab
 }
 
 /** Keeps earlier dictionaries when a refresh re-delivers identical content, so translators keep their identity. */
-function useStableMessages(locale: Locale, delivered: Messages): Messages {
-    const [stable, setStable] = useState({ locale, delivered, messages: delivered });
-    if (stable.delivered === delivered && stable.locale === locale) return stable.messages;
-    const messages = stable.locale === locale ? reuseDictionaries(stable.messages, delivered) : delivered;
-    setStable({ locale, delivered, messages });
+function useStableMessages(delivered: Messages): Messages {
+    const [stable, setStable] = useState({ delivered, messages: delivered });
+    if (stable.delivered === delivered) return stable.messages;
+    // Adjusts state during render so this render already uses the reused dictionaries, without an extra effect pass.
+    const messages = reuseDictionaries(stable.messages, delivered);
+    setStable({ delivered, messages });
     return messages;
 }
 

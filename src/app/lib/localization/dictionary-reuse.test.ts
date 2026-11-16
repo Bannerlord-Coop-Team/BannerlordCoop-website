@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { reuseDictionaries, sameDictionary, sameMessage } from "./dictionary-reuse";
+import { reuseDictionaries } from "./dictionary-reuse";
 import type { Messages } from "./types";
 
 /** Builds a fresh copy of the same two-namespace payload a refresh would deliver. */
@@ -21,6 +21,9 @@ const changedCheats: [string, Messages["cheats"]][] = [
     ["a changed plural form", { heading: "Commands", count: { one: "{count} command", other: "{count} console commands" } }],
     ["an added key", { heading: "Commands", count: { one: "{count} command", other: "{count} commands" }, empty: "No commands" }],
     ["a removed key", { heading: "Commands" }],
+    ["a renamed key", { title: "Commands", count: { one: "{count} command", other: "{count} commands" } }],
+    ["a missing plural form", { heading: "Commands", count: { other: "{count} commands" } }],
+    ["a plain value replacing a plural", { heading: "Commands", count: "{count} commands" }],
 ];
 for (const [label, cheats] of changedCheats) {
     test(`replaces a namespace with ${label} and keeps the unchanged namespace's earlier object`, () => {
@@ -49,12 +52,4 @@ test("returns new messages without a namespace the refresh no longer delivers", 
     assert.notEqual(result, previous);
     assert.deepEqual(Object.keys(result), ["common"]);
     assert.equal(result.common, previous.common);
-});
-
-test("compares dictionaries and messages by value, including plural form sets", () => {
-    assert.equal(sameDictionary({ a: "x" }, { a: "x" }), true);
-    assert.equal(sameDictionary({ a: "x" }, { b: "x" }), false);
-    assert.equal(sameMessage({ one: "a", other: "b" }, { one: "a", other: "b" }), true);
-    assert.equal(sameMessage({ one: "a", other: "b" }, { other: "b" }), false);
-    assert.equal(sameMessage("b", { other: "b" }), false);
 });

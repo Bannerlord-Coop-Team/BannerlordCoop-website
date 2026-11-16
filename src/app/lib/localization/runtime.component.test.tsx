@@ -50,8 +50,8 @@ function mountCheatsProbe() {
         return null;
     }
     const root = createRoot(document.createElement("div"));
-    const render = (cheats: Dictionary, outer: Messages = { common }) => act(async () => root.render(
-        <LocalizationProvider locale="en" messages={outer}>
+    const render = (cheats: Dictionary, parentMessages: Messages = { common }) => act(async () => root.render(
+        <LocalizationProvider locale="en" messages={parentMessages}>
             <LocalizationProvider locale="en" messages={{ cheats }}><TranslatorProbe /></LocalizationProvider>
         </LocalizationProvider>));
     return { seen, render, unmount: () => act(async () => root.unmount()) };
@@ -132,22 +132,19 @@ describe("localization runtime", () => {
         const probe = mountCheatsProbe();
         try {
             await probe.render(cheatsMessages());
+            // A fresh parent payload re-composes the context; the cheats translator must survive it.
             await probe.render(cheatsMessages(), { common: { ...common } });
             expect(new Set(probe.seen).size).toBe(1);
         } finally { await probe.unmount(); }
     });
 
-    it.each([
-        { change: "a changed plain value", cheats: { ...cheatsMessages(), heading: "Console commands" }, key: "heading", params: undefined, text: "Console commands" },
-        { change: "a changed plural form", cheats: { ...cheatsMessages(), count: { one: "{count} command", other: "{count} console commands" } }, key: "count", params: { count: 2 }, text: "2 console commands" },
-        { change: "an added key", cheats: { ...cheatsMessages(), empty: "No commands" }, key: "empty", params: undefined, text: "No commands" },
-    ])("replaces the translator when a refresh delivers $change", async ({ cheats, key, params, text }) => {
+    it("replaces the translator when a refresh delivers a changed value", async () => {
         const probe = mountCheatsProbe();
         try {
             await probe.render(cheatsMessages());
-            await probe.render(cheats);
+            await probe.render({ ...cheatsMessages(), heading: "Console commands" });
             expect(new Set(probe.seen).size).toBe(2);
-            expect(probe.seen.at(-1)!.t(key, params)).toBe(text);
+            expect(probe.seen.at(-1)!.t("heading")).toBe("Console commands");
         } finally { await probe.unmount(); }
     });
 

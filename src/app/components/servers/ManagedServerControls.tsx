@@ -3,7 +3,6 @@
 import { isColdSleeping } from "@/app/lib/hosting/cold-sleep";
 
 import { useTranslations } from "@/app/lib/localization/client";
-import type { TranslationParams } from "@/app/lib/localization/types";
 
 import {
     useManagedConsoleSignals,
@@ -278,7 +277,7 @@ export function ManagedServerControls({
     }, [serverId, verifyRevision, verifyWindowOpen, verifyTimedOut, operationState, expectedUpdatedAt, isPending, endPolling, t, runtimeInsight?.desiredState, subscriptionHold]);
 
     // Reads the current translator inside polls, so a refreshed dictionary never restarts them.
-    const translateInPoll = useEffectEvent((key: string, params?: TranslationParams) => t(key, params));
+    const translateInPoll = useEffectEvent((...args: Parameters<typeof t>) => t(...args));
 
     useEffect(() => {
         if (!canOperate || startJobId === null || refreshedStartJob.current === startJobId) return;

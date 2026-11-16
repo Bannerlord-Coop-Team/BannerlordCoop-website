@@ -1,7 +1,6 @@
 "use client";
 
 import { useTranslations } from "@/app/lib/localization/client";
-import type { TranslationParams } from "@/app/lib/localization/types";
 
 import { useCallback, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -54,7 +53,7 @@ export function ManagedServerVersion({ serverId, expectedUpdatedAt, canEdit }: {
     useEffect(() => { if (canEdit) void loadOptions(); }, [canEdit, loadOptions, expectedUpdatedAt]);
 
     // Reads the current translator inside polls, so a refreshed dictionary never restarts them.
-    const translateInPoll = useEffectEvent((key: string, params?: TranslationParams) => t(key, params));
+    const translateInPoll = useEffectEvent((...args: Parameters<typeof t>) => t(...args));
 
     useEffect(() => {
         if (!canEdit) return;
