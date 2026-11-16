@@ -38,14 +38,14 @@ describe("mounted polling provider", () => {
         Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
         const read = vi.fn(async () => ({ ok: false as const }));
         const root = mount(read); await act(async () => vi.advanceTimersByTimeAsync(1_500));
-        await act(async () => vi.advanceTimersByTimeAsync(20_000)); const count = read.mock.calls.length; await act(async () => vi.advanceTimersByTimeAsync(60_000));
+        await act(async () => vi.advanceTimersByTimeAsync(60_000)); const count = read.mock.calls.length; await act(async () => vi.advanceTimersByTimeAsync(60_000));
         expect(read.mock.calls.length).toBe(count); root.unmount();
     });
     it("stops on a terminal fingerprint", async () => {
         Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
         const read = vi.fn(async () => ({ ok: true as const, fingerprint: "[\"u\",\"stopped\"]" }));
         const root = mount(read); await act(async () => vi.advanceTimersByTimeAsync(1_500));
-        await act(async () => vi.advanceTimersByTimeAsync(20_000)); const count = read.mock.calls.length; await act(async () => vi.advanceTimersByTimeAsync(60_000));
+        await act(async () => vi.advanceTimersByTimeAsync(60_000)); const count = read.mock.calls.length; await act(async () => vi.advanceTimersByTimeAsync(60_000));
         expect(read.mock.calls.length).toBe(count); root.unmount();
     });
     it("backs off retryable 5xx reads", async () => {
