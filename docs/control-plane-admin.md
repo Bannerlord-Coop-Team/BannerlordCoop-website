@@ -277,7 +277,7 @@ Edge Function change; the old adapter will reject accounts without Discord.
 
 ### Rollout
 
-These controls pair with
+Update server and Reinstall previous build pair with
 [ControlPlane #1125](https://github.com/Bannerlord-Coop-Team/BannerlordCoop.ControlPlane/pull/1125),
 and either may deploy first. Update server sends `buildId: null` rather than
 omitting it because a control plane before #1125 keeps an existing pin when the
