@@ -6,6 +6,13 @@ import type { Translator } from "@/app/lib/localization/types";
 import { useId } from "react";
 import { Check, CircleAlert, LoaderCircle, Minus } from "lucide-react";
 import type { BuildUpdateJob, BuildStepId, BuildStepState } from "../../../../supabase/functions/_shared/server-build-contract";
+import type { UpdateProgressError } from "./use-server-update-progress";
+
+/** The owner-facing text for each reason update progress cannot be shown. */
+const ERROR_KEYS: Record<UpdateProgressError, string> = {
+    unavailable: "serverUpdate.progressIsUnavailableTheUpdateMayStillBeRunning",
+    paused: "serverUpdate.progressChecksPausedRefreshToCheckAgain",
+};
 
 /** Shows the ordered steps of one update with a progress bar, live status, the restore point and any failure. */
 export function ServerUpdateProgress({ job }: { job: BuildUpdateJob }) {
@@ -24,9 +31,13 @@ export function ServerUpdateProgress({ job }: { job: BuildUpdateJob }) {
         done: t("serverUpdate.stateDone"), active: t("serverUpdate.stateInProgress"), pending: t("serverUpdate.stateWaiting"),
         skipped: t("serverUpdate.stateNotNeeded"), failed: t("serverUpdate.stateFailed"),
     };
+    const succeeded = job.state === "succeeded";
+    const stoppedShort = job.state === "failed" || job.state === "cancelled";
+    const doneCount = succeeded ? job.totalSteps : job.completedSteps;
     const active = job.steps.find(step => step.state === "active" || step.state === "failed");
-    const valueText = job.state === "succeeded" ? t("serverUpdate.complete") : t("serverUpdate.stepOfTotal", { done: job.completedSteps + (active?.state === "active" ? 1 : 0), total: job.totalSteps, phase: active ? labels[active.id] : "" });
-    const percent = job.state === "succeeded" ? 100 : Math.min(100, Math.round((job.completedSteps / job.totalSteps) * 100));
+    const valueText = succeeded ? t("serverUpdate.complete") : t("serverUpdate.stepOfTotal", { done: job.completedSteps + (active?.state === "active" ? 1 : 0), total: job.totalSteps, phase: active ? labels[active.id] : "" });
+    const percent = Math.min(100, Math.round((doneCount / job.totalSteps) * 100));
+    const activeStatus = active ? `${labels[active.id]}: ${states[active.state]}` : null;
     return <section aria-labelledby={headingId} className="w-full space-y-3 rounded-md border border-white/10 p-4">
         <h3 id={headingId} className="text-sm font-semibold text-foreground">
             {updateHeading(job, t)}
@@ -34,9 +45,9 @@ export function ServerUpdateProgress({ job }: { job: BuildUpdateJob }) {
         {(job.previousVersion !== null || version !== null) && <p className="text-sm text-foreground-muted" aria-label={t("serverUpdate.updateProgress")}>
             {job.previousVersion ?? "—"} <span aria-hidden="true">→</span> {version ?? "—"}
         </p>}
-        <div role="progressbar" aria-labelledby={headingId} aria-valuemin={0} aria-valuemax={job.totalSteps} aria-valuenow={job.state === "succeeded" ? job.totalSteps : job.completedSteps} aria-valuetext={valueText}
+        <div role="progressbar" aria-labelledby={headingId} aria-valuemin={0} aria-valuemax={job.totalSteps} aria-valuenow={doneCount} aria-valuetext={valueText}
             className="h-2 w-full overflow-hidden rounded-full bg-white/10">
-            <div className={`h-full rounded-full transition-[width] motion-reduce:transition-none ${job.state === "failed" || job.state === "cancelled" ? "bg-red-400" : "bg-gold"}`} style={{ width: `${percent}%` }} />
+            <div className={`h-full rounded-full transition-[width] motion-reduce:transition-none ${stoppedShort ? "bg-red-400" : "bg-gold"}`} style={{ width: `${percent}%` }} />
         </div>
         <ol className="space-y-1.5" aria-live="polite" aria-atomic="false">
             {job.steps.map(step => <li key={step.id} aria-current={step.state === "active" ? "step" : undefined} className={`flex items-center gap-2 text-sm ${step.state === "pending" || step.state === "skipped" ? "text-foreground-muted" : "text-foreground"}`}>
@@ -46,11 +57,11 @@ export function ServerUpdateProgress({ job }: { job: BuildUpdateJob }) {
             </li>)}
         </ol>
         <p className="sr-only" role="status" aria-live="polite">
-            {active ? `${labels[active.id]}: ${states[active.state]}` : job.state === "succeeded" ? t("serverUpdate.complete") : job.progress}
+            {liveStatusText(job, activeStatus, t)}
         </p>
-        <p role="status" aria-live="polite" className="text-sm text-foreground-muted">{job.state === "failed" || job.state === "cancelled" ? "" : job.progress}</p>
+        <p role="status" aria-live="polite" className="text-sm text-foreground-muted">{stoppedShort ? "" : job.progress}</p>
         {job.backup !== null && <p className="text-sm text-foreground-muted">{t("serverUpdate.backupCreatedBeforeTheUpdateRestoreItAnyTimeFromBackups")}</p>}
-        {job.state === "succeeded" && <p className="text-sm font-medium text-foreground">{job.progress}</p>}
+        {succeeded && <p className="text-sm font-medium text-foreground">{job.progress}</p>}
         {job.state === "failed" && <div role="alert" className="space-y-1 rounded-md border border-red-400/40 bg-red-400/[0.07] p-3 text-sm">
             <p className="font-semibold text-red-200">{t("serverUpdate.theUpdateDidNotFinish")}</p>
             {job.failureMessage && <p className="text-foreground">{job.failureMessage}</p>}
@@ -58,6 +69,19 @@ export function ServerUpdateProgress({ job }: { job: BuildUpdateJob }) {
         </div>}
         {job.state === "cancelled" && <p role="status" className="text-sm text-foreground-muted">{t("serverUpdate.theUpdateWasCancelled")}</p>}
     </section>;
+}
+
+/** Tells the owner why update progress cannot be shown right now, as a polite status. */
+export function ServerUpdateProgressError({ error }: { error: UpdateProgressError }) {
+    const { t } = useTranslations("managed-server");
+    return <p role="status" aria-live="polite" className="max-w-xl text-sm leading-6 text-foreground-muted">{t(ERROR_KEYS[error])}</p>;
+}
+
+/** Picks the screen-reader status line: the current step and its state, completion, or the job's own progress text. */
+function liveStatusText(job: BuildUpdateJob, activeStatus: string | null, t: Translator["t"]): string {
+    if (activeStatus !== null) return activeStatus;
+    if (job.state === "succeeded") return t("serverUpdate.complete");
+    return job.progress;
 }
 
 /** Names who started the update and, when known, the version it installs. */
