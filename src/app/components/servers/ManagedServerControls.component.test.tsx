@@ -270,6 +270,46 @@ it("reattaches to an update already running after reload and keeps owner copy fr
     } finally { await act(async () => root.unmount()); }
 });
 
+it("picks up an update started elsewhere when the page revision changes and refreshes once when it ends", async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    vi.useFakeTimers();
+    router.refresh.mockClear();
+    const serverId = "22222222-2222-4222-8222-222222222222";
+    const running = {
+        jobId: "55555555-5555-4555-8555-555555555555", state: "running", initiatedBy: "automatic", ownerSelected: false, phase: "installing",
+        steps: [
+            { id: "queued", state: "done" }, { id: "stopping", state: "done" }, { id: "backup", state: "done" },
+            { id: "installing", state: "active" }, { id: "starting", state: "pending" }, { id: "verifying", state: "pending" },
+        ], completedSteps: 3, totalSteps: 6, targetVersion: "0.1.11", previousVersion: "0.1.10",
+        progress: "Installing the update", backup: null, rolledBack: false, failureCode: null,
+        failureMessage: null, nextStep: null, attemptCount: 1, maximumAttempts: 3, nextRetryAt: null,
+        createdAt: "2026-09-20T12:00:00.000Z", updatedAt: "2026-09-20T12:01:00.000Z", completedAt: null,
+    };
+    const succeeded = { ...running, state: "succeeded", phase: "done", completedSteps: 6, progress: "Now running 0.1.11.",
+        steps: running.steps.map(step => ({ ...step, state: "done" })), completedAt: "2026-09-20T12:05:00.000Z" };
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    // Renders the controls at one server revision, as each page refresh does.
+    const render = (expectedUpdatedAt: string) => act(async () => root.render(<TestLocalization><ManagedServerControls serverId={serverId} displayName="Campaign"
+        accessRole="owner" operationState="running" observedGameState="running" expectedUpdatedAt={expectedUpdatedAt} /></TestLocalization>));
+    try {
+        await render("2026-09-20T12:00:00.000Z");
+        expect(container.textContent).not.toContain("Automatic update to 0.1.11");
+        buildStatus.mockResolvedValue({ serverId, job: running });
+        await render("2026-09-20T12:01:00.000Z");
+        expect(container.textContent).toContain("Automatic update to 0.1.11");
+        expect(router.refresh).not.toHaveBeenCalled();
+        buildStatus.mockResolvedValue({ serverId, job: succeeded });
+        await act(async () => { await vi.advanceTimersByTimeAsync(3_100); });
+        expect(container.textContent).toContain("Now running 0.1.11.");
+        expect(router.refresh).toHaveBeenCalledOnce();
+        // The refreshed page re-reads the finished job without refreshing again.
+        await render("2026-09-20T12:05:00.000Z");
+        await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+        expect(router.refresh).toHaveBeenCalledOnce();
+    } finally { await act(async () => root.unmount()); }
+});
+
 it.each(["stable", "nightly"] as const)("refreshes the update revision only while the displayed channel is unchanged: %s", async channel => {
     const serverId = "22222222-2222-4222-8222-222222222222";
     const expectedUpdatedAt = "2026-09-20T12:00:00.000Z";
