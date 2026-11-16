@@ -73,7 +73,7 @@ export function parseBuildStatus(value: unknown, serverId: string): BuildStatus 
         || !count(job.attemptCount, 1_000) || !count(job.maximumAttempts, 1_000)
         || !nullable(isTime, job.nextRetryAt) || !isTime(job.createdAt) || !isTime(job.updatedAt) || !nullable(isTime, job.completedAt)
         || !(job.backup === null || (isRecord(job.backup) && hasExactKeys(job.backup, ["backupId"]) && isId(job.backup.backupId)))
-        || !Array.isArray(job.steps) || job.steps.length !== BUILD_STEP_IDS.length) throw invalid("build change");
+        || !Array.isArray(job.steps) || job.steps.length !== BUILD_STEP_IDS.length) throw invalid("update job");
     const steps = (job.steps as unknown[]).map((step, index) => {
         if (!isRecord(step) || !(hasExactKeys(step, ["id", "state"])
             || hasExactKeys(step, ["completedAt", "id", "startedAt", "state"]))
