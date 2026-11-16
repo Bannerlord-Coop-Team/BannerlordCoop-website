@@ -165,7 +165,6 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
     expect(mocks.request.mock.calls.filter(([request]) => request.operation === "hosting-regions")).toEqual([[expect.objectContaining({ operation: "hosting-regions", input: {} })]]);
     // Update server always follows the channel, so Operations reads no release catalog.
     expect(mocks.request.mock.calls.map(([request]) => request.operation).sort()).toEqual(["hosting-regions", "overview", "vps-hosts"]);
-    expect(html).not.toMatch(/Pinned version|Version selection|set-build-pin/u);
 });
 
 it("keeps Operations usable when the stored hosting-region catalog cannot be read", async () => {

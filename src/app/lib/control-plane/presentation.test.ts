@@ -54,7 +54,6 @@ test("administrator Update sends an explicit null buildId so the server follows 
     const input: Record<string, unknown> = { serverId: "22222222-2222-4222-8222-222222222222", reason: "Roll forward" };
     applyControlPlaneOperationDefaults("update-server", input);
     assert.deepEqual(input, { serverId: "22222222-2222-4222-8222-222222222222", reason: "Roll forward", buildId: null });
-    assert.ok(Object.hasOwn(input, "buildId"));
 });
 
 test("Create server offers to pin only providers holding a registered VPS, named and in catalog order", () => {
