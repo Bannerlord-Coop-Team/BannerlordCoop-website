@@ -243,7 +243,8 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
                     } catch { /* malformed evidence is handled as a failed read below */ }
                     if (result.fingerprint === polled.fingerprint) return;
                     polled.fingerprint = result.fingerprint;
-                } else if (result?.retryable) {
+                } else if (result === null || result.retryable) {
+                    // A slow opening read or a lost one (null) is not evidence the server is gone, so it backs off like a 5xx.
                     failures += 1;
                     if (failures >= MAXIMUM_POLL_FAILURES) {
                         setTimedOutSession(session);

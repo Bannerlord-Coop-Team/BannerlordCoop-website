@@ -12,8 +12,8 @@ vi.mock("@/app/lib/control-plane/client", async (importOriginal) => ({
 vi.mock("@/app/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({ auth: { getSession: session } }) }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh, push }) }));
 const servers: AdminActionField = { name: "serverId", label: "Server", kind: "server", required: true, options: [
-    { label: "Alpha", value: "server-a", updatedAt: "2026-09-06T12:00:00Z", releaseChannel: "stable" },
-    { label: "Bravo", value: "server-b", updatedAt: "2026-09-06T12:00:00Z", releaseChannel: "nightly" },
+    { label: "Alpha", value: "server-a", updatedAt: "2026-09-06T12:00:00Z" },
+    { label: "Bravo", value: "server-b", updatedAt: "2026-09-06T12:00:00Z" },
 ] };
 const backup: Backup = { backupId: "backup-a", serverId: "server-a", backupType: "manual", byteSize: 1024,
     buildId: "stable-build", saveId: null, createdAt: "2026-09-06T12:00:00Z", retentionExpiresAt: "2099-09-06T12:00:00Z",
@@ -73,20 +73,15 @@ it("retries failed backup reads and loads older pages without keeping a stale se
     expect(request.mock.calls[2]?.[0].input).toMatchObject({ serverId: "server-a", cursor: "older-page" });
     expect(submit().disabled).toBe(true);
 });
-it("offers only the selected channel's builds and sends pinning as one update request", async () => {
+// GHCR is the only release source of truth: Update installs the channel's current build and never names one.
+it("sends Update server with a null build so the server follows its channel", async () => {
     request.mockResolvedValue({ outcome: "enqueued", job: { jobId: "job-a", serverId: "server-a", action: "update", state: "queued" } });
-    await act(async () => root.render(<ControlPlaneActionCard operation="update-server" title="Update server" description="Update"
-        fields={[servers, { name: "buildId", label: "Build", kind: "select", required: true, options: [
-            { label: "Latest", value: "__latest__" },
-            { label: "Pinned version: v0.1.5 · Public", value: "stable-build", releaseChannel: "stable" },
-            { label: "Nightly release", value: "nightly-build", releaseChannel: "nightly" },
-        ] }]} />));
+    await act(async () => root.render(<ControlPlaneActionCard operation="update-server" title="Update server" description="Update" fields={[servers]} />));
     await select("serverId", 1);
-    expect(container.querySelector('option[value="nightly-build"]')).toBeNull();
-    await select("buildId", 2);
     await act(async () => container.querySelector("form")!.requestSubmit());
     expect(request).toHaveBeenCalledOnce();
-    expect(request.mock.calls[0]?.[0]).toMatchObject({ operation: "update-server", input: { serverId: "server-a", buildId: "stable-build", expectedUpdatedAt: "2026-09-06T12:00:00Z" } });
+    expect(request.mock.calls[0]?.[0]).toMatchObject({ operation: "update-server" });
+    expect(request.mock.calls[0]?.[0].input).toEqual({ serverId: "server-a", expectedUpdatedAt: "2026-09-06T12:00:00Z", buildId: null });
 });
 
 it("resets the server and backup state with the form after an action", async () => {
@@ -97,21 +92,6 @@ it("resets the server and backup state with the form after an action", async () 
     expect(submit().disabled).toBe(true);
     expect(container.querySelector('select[name="backupId"]')).toBeNull();
     expect(container.querySelector<HTMLSelectElement>('select[name="serverId"]')?.value).toBe("");
-});
-
-// Follow and keep must remain distinct transport intents when changing a version pin.
-it("sends null for Follow channel and omits the build for Keep current selection", async () => {
-    request.mockResolvedValue({ outcome: "enqueued" });
-    await act(async () => root.render(<ControlPlaneActionCard operation="update-server" title="Update" description="Update"
-        fields={[servers, { name: "buildId", label: "Version selection", kind: "select", required: true, options: [
-            { label: "Follow channel", value: "__latest__" }, { label: "Keep current selection", value: "__keep__" },
-        ] }]} />));
-    await select("serverId", 1); await select("buildId", 1);
-    await act(async () => container.querySelector("form")!.requestSubmit());
-    expect(request.mock.calls[0][0].input.buildId).toBeNull();
-    await select("buildId", 2);
-    await act(async () => container.querySelector("form")!.requestSubmit());
-    expect(request.mock.calls[1][0].input).not.toHaveProperty("buildId");
 });
 
 it("continues a stale job with unchanged intent and preserves selections across refreshed props", async () => {

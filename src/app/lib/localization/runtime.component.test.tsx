@@ -1,6 +1,6 @@
 import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { hydrateRoot } from "react-dom/client";
+import { createRoot, hydrateRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -8,7 +8,7 @@ import { createTranslator } from "./translator";
 import { LocalizationProvider, useLocalization, useTranslations } from "./client";
 import { assertDictionaryParity } from "./integrity";
 import { localeDefinitions, getEnabledLocales, resolveLocale } from "./registry";
-import { locales, namespaces, localeCookie, localeCookieOptions, type Dictionary } from "./types";
+import { locales, namespaces, localeCookie, localeCookieOptions, type Dictionary, type Translator } from "./types";
 import common from "./dictionaries/en/common.json";
 
 const request = vi.hoisted(() => ({ value: undefined as string | undefined, set: vi.fn() }));
@@ -34,6 +34,28 @@ function ScopedProbe() {
     const cheats = useTranslations("cheats");
     const root = useLocalization();
     return <p>{root.locale}|{common.locale}|{cheats.locale}|{cheats.t("heading")}</p>;
+}
+
+/** Builds a fresh cheats dictionary, as each refreshed payload would deliver it. */
+function cheatsMessages(): Dictionary {
+    return { heading: "Commands", count: { one: "{count} command", other: "{count} commands" } };
+}
+
+/** Mounts nested providers around a probe that records every cheats translator the hook hands out. */
+function mountCheatsProbe() {
+    const seen: Translator[] = [];
+    /** Records each translator the hook hands out. */
+    function TranslatorProbe() {
+        seen.push(useTranslations("cheats"));
+        return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    // Like the root layout on every refresh, each render re-sends common and a new enabledLocales array.
+    const render = (cheats: Dictionary) => act(async () => root.render(
+        <LocalizationProvider locale="en" messages={{ common: { ...common } }} enabledLocales={[{ locale: "en", name: "English" }]}>
+            <LocalizationProvider locale="en" messages={{ cheats }}><TranslatorProbe /></LocalizationProvider>
+        </LocalizationProvider>));
+    return { seen, render, unmount: () => act(async () => root.unmount()) };
 }
 
 describe("localization runtime", () => {
@@ -107,6 +129,26 @@ describe("localization runtime", () => {
         )).toContain("en|en|zh-CN|命令");
     });
 
+    it("keeps a translator across refreshed payloads with equal messages", async () => {
+        const probe = mountCheatsProbe();
+        try {
+            await probe.render(cheatsMessages());
+            // The new enabledLocales array re-composes both contexts and their bindings; the cheats translator must survive it.
+            await probe.render(cheatsMessages());
+            expect(new Set(probe.seen).size).toBe(1);
+        } finally { await probe.unmount(); }
+    });
+
+    it("replaces the translator when a refresh delivers a changed value", async () => {
+        const probe = mountCheatsProbe();
+        try {
+            await probe.render(cheatsMessages());
+            await probe.render({ ...cheatsMessages(), heading: "Console commands" });
+            expect(new Set(probe.seen).size).toBe(2);
+            expect(probe.seen.at(-1)!.t("heading")).toBe("Console commands");
+        } finally { await probe.unmount(); }
+    });
+
     it("selects plurals via count and formats dates/numbers deterministically", () => {
         const t = createTranslator("ru", { count: { one: "one {count}", few: "few {count}", many: "many {count}", other: "other {count}" } });
         expect(t.t("count", { count: 1 })).toBe("one 1");
@@ -127,7 +169,7 @@ describe("localization runtime", () => {
     });
 
     it("keeps client runtime imports separate from cookies, loaders, and dictionary payloads", () => {
-        for (const file of ["client.tsx", "translator.tsx", "types.ts", "navigation.ts"]) {
+        for (const file of ["client.tsx", "dictionary-reuse.ts", "translator.tsx", "types.ts", "navigation.ts"]) {
             const source = readFileSync(resolve("src/app/lib/localization", file), "utf8");
             expect(source).not.toMatch(/from ["'].*(?:server|registry|locales\/|dictionaries\/|next\/headers)/);
         }

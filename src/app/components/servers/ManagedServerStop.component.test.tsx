@@ -26,6 +26,8 @@ const render = (overrides: Partial<ComponentProps<typeof ManagedServerControls>>
 beforeEach(() => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     vi.useFakeTimers();
+    // Polling jitter is 0.9-1.1x; pinning it to 1x puts each 15 s check exactly on its scheduled time.
+    vi.spyOn(Math, "random").mockReturnValue(0.5);
     vi.spyOn(window, "confirm").mockReturnValue(true);
     operate.mockReset(); router.refresh.mockClear();
     container = document.createElement("div"); root = createRoot(container);
@@ -252,7 +254,7 @@ it.each(["provisioning", "configuring"])("automatically follows %s until initial
     await act(async () => vi.advanceTimersByTimeAsync(0));
     expect(polling.session).toMatchObject({ serverId: server.serverId, statusSource: "initialization" });
     await act(async () => vi.advanceTimersByTimeAsync(15_000));
-    expect(router.refresh).toHaveBeenCalledTimes(1);
+    expect(router.refresh).toHaveBeenCalledTimes(2);
     await renderWithProbe(undefined, "stopped");
     await act(async () => vi.advanceTimersByTimeAsync(0));
     expect(polling.session).toBeNull();
@@ -276,9 +278,9 @@ it("keeps a backup session, and the controls busy, until the operation settles o
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
     expect(router.refresh).toHaveBeenCalledTimes(5);
     await act(async () => vi.advanceTimersByTimeAsync(120_000));
-    expect(router.refresh).toHaveBeenCalledTimes(12);
+    expect(router.refresh).toHaveBeenCalledTimes(13);
     await act(async () => vi.advanceTimersByTimeAsync(150_000));
-    expect(router.refresh).toHaveBeenCalledTimes(22);
+    expect(router.refresh).toHaveBeenCalledTimes(23);
     expect(polling.session).not.toBeNull();
     expect(polling.timedOutSession).toBeNull();
     expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
@@ -313,14 +315,16 @@ it("re-renders the page only when the compact server status changes", async () =
     await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(router.refresh).toHaveBeenCalledTimes(1);
     await act(async () => vi.advanceTimersByTimeAsync(16_000));
-    expect(readStatus).toHaveBeenCalledTimes(2);
+    expect(readStatus).toHaveBeenCalledTimes(3);
     expect(router.refresh).toHaveBeenCalledTimes(1);
     readStatus.mockResolvedValue({ ok: true, fingerprint: "stopping" });
     await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(router.refresh).toHaveBeenCalledTimes(2);
+    // A non-retryable failed read renders the page once more and ends the session.
     readStatus.mockResolvedValue({ ok: false });
     await act(async () => vi.advanceTimersByTimeAsync(15_000));
-    expect(router.refresh).toHaveBeenCalledTimes(2);
+    expect(router.refresh).toHaveBeenCalledTimes(3);
+    expect(polling.session).toBeNull();
     expect(readStatus).toHaveBeenCalledWith(server.serverId);
 });
 
@@ -343,12 +347,14 @@ it("shares a slow opening status read with the next check instead of starting an
     await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt));
     await act(async () => vi.advanceTimersByTimeAsync(1_500));
     expect(router.refresh).toHaveBeenCalledOnce();
-    await act(async () => vi.advanceTimersByTimeAsync(15_000));
+    // The slow opening read counts as one failed read, so the next check backs off to 30 s and shares it.
+    await act(async () => vi.advanceTimersByTimeAsync(30_000));
     expect(readStatus).toHaveBeenCalledOnce();
+    expect(polling.session).not.toBeNull();
     await act(async () => release({ ok: true, fingerprint: "running" }));
-    expect(router.refresh).toHaveBeenCalledTimes(1);
+    expect(router.refresh).toHaveBeenCalledTimes(2);
     await act(async () => vi.advanceTimersByTimeAsync(15_000));
-    expect(readStatus).toHaveBeenCalledTimes(1);
+    expect(readStatus).toHaveBeenCalledTimes(2);
     expect(router.refresh).toHaveBeenCalledTimes(2);
 });
 
