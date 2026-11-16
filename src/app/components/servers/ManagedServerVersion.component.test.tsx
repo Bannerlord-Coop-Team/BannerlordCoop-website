@@ -3,7 +3,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { BuildChangeJob, BuildOptions, BuildStatus } from "../../../../supabase/functions/_shared/server-build-contract";
 import { ManagedServerVersion } from "./ManagedServerVersion";
-import { TestLocalization } from "./ManagedServerLocalization.test-utils";
+import { TestLocalization, serverTestMessages } from "./ManagedServerLocalization.test-utils";
+import { LocalizationProvider } from "@/app/lib/localization/client";
 
 const { actions, router } = vi.hoisted(() => ({
     actions: { change: vi.fn(), options: vi.fn(), status: vi.fn() },
@@ -247,4 +248,19 @@ it("keeps one request identity for a retry and releases it after a definitive re
     expect(container.textContent).toContain("no longer available");
     await act(async () => { button("Install 0.1.9")!.click(); });
     expect((actions.change.mock.calls[2]![0] as { requestId: string }).requestId).not.toBe(first);
+});
+
+it.each(["identical", "changed"] as const)("does not read build status again when a refresh re-delivers %s messages", async content => {
+    // The provider is rendered directly every time, so each re-render updates the same tree instead of remounting it.
+    await act(async () => root.render(<LocalizationProvider locale="en" messages={serverTestMessages}><ManagedServerVersion serverId={serverId} expectedUpdatedAt={updatedAt} canEdit /></LocalizationProvider>));
+    const reads = actions.status.mock.calls.length;
+    expect(reads).toBe(1);
+    for (let refresh = 0; refresh < 3; refresh++) {
+        const messages = structuredClone(serverTestMessages);
+        const delivered = content === "identical" ? messages : { ...messages, "managed-server": { ...messages["managed-server"], "test.refreshed": `Refresh ${refresh}` } };
+        await act(async () => root.render(<LocalizationProvider locale="en" messages={delivered}><ManagedServerVersion serverId={serverId} expectedUpdatedAt={updatedAt} canEdit /></LocalizationProvider>));
+        await act(async () => vi.advanceTimersByTimeAsync(5_000));
+    }
+    expect(actions.status).toHaveBeenCalledTimes(reads);
+    expect(router.refresh).not.toHaveBeenCalled();
 });

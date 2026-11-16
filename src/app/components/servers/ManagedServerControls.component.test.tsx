@@ -1,5 +1,6 @@
 import { createTranslator } from "@/app/lib/localization/translator";
 import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
+import { LocalizationProvider } from "@/app/lib/localization/client";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -654,6 +655,39 @@ it("follows the accepted Start through real phases and readiness without sending
         expect(container.querySelectorAll("button")[1].disabled).toBe(false);
         await act(async () => root.render(<TestLocalization>{<ManagedServerControls observedGameState="stopped" {...progressProps} operationState="stopped" expectedUpdatedAt="2026-09-20T12:01:00.000Z" />} </TestLocalization>));
         expect(container.querySelectorAll("button")[0].disabled).toBe(false);
+    } finally { await act(async () => root.unmount()); }
+});
+
+/** Simulates a refreshed page payload: equal messages as fresh objects, or a managed dictionary whose content differs per refresh. */
+function refreshedMessages(content: "identical" | "changed", refresh: number) {
+    const messages = structuredClone(serverTestMessages);
+    return content === "identical" ? messages : { ...messages, "managed-server": { ...messages["managed-server"], "test.refreshed": `Refresh ${refresh}` } };
+}
+
+it.each(["identical", "changed"] as const)("refreshes a finished Start once and stays idle when a refresh re-delivers %s messages", async content => {
+    vi.useFakeTimers();
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId));
+    startStatus.mockReset().mockResolvedValue(progress("ready", "succeeded", "Server started and ready to join."));
+    router.refresh.mockClear();
+    const container = document.createElement("div"); const root = createRoot(container);
+    const controls = <ManagedServerControls observedGameState="stopped" {...progressProps} />;
+    try {
+        await act(async () => root.render(<LocalizationProvider locale="en" messages={serverTestMessages}>{controls}</LocalizationProvider>));
+        await act(async () => container.querySelector("button")!.click());
+        await act(async () => vi.advanceTimersByTimeAsync(10));
+        expect(container.textContent).toContain("Your server is ready to join");
+        expect(router.refresh).toHaveBeenCalledOnce();
+        const reads = { start: startStatus.mock.calls.length, build: buildStatus.mock.calls.length };
+        // Each router.refresh() delivers a new messages object; none of them may restart the polls.
+        for (let refresh = 0; refresh < 3; refresh++) {
+            await act(async () => root.render(<LocalizationProvider locale="en" messages={refreshedMessages(content, refresh)}>{controls}</LocalizationProvider>));
+            await act(async () => vi.advanceTimersByTimeAsync(5_000));
+        }
+        expect(router.refresh).toHaveBeenCalledOnce();
+        expect(startStatus).toHaveBeenCalledTimes(reads.start);
+        expect(buildStatus).toHaveBeenCalledTimes(reads.build);
+        expect(container.textContent).toContain("Your server is ready to join");
     } finally { await act(async () => root.unmount()); }
 });
 

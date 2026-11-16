@@ -1,6 +1,6 @@
 import { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { hydrateRoot } from "react-dom/client";
+import { createRoot, hydrateRoot } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -8,7 +8,7 @@ import { createTranslator } from "./translator";
 import { LocalizationProvider, useLocalization, useTranslations } from "./client";
 import { assertDictionaryParity } from "./integrity";
 import { localeDefinitions, getEnabledLocales, resolveLocale } from "./registry";
-import { locales, namespaces, localeCookie, localeCookieOptions, type Dictionary } from "./types";
+import { locales, namespaces, localeCookie, localeCookieOptions, type Dictionary, type Translator } from "./types";
 import common from "./dictionaries/en/common.json";
 
 const request = vi.hoisted(() => ({ value: undefined as string | undefined, set: vi.fn() }));
@@ -105,6 +105,29 @@ describe("localization runtime", () => {
                 <LocalizationProvider locale="zh-CN" messages={{ cheats: { heading: "命令" } }}><ScopedProbe /></LocalizationProvider>
             </LocalizationProvider>,
         )).toContain("en|en|zh-CN|命令");
+    });
+
+    it("keeps a translator across refreshed payloads with equal messages and replaces it when content changes", async () => {
+        const seen: Translator[] = [];
+        /** Records each translator the hook hands out. */
+        function TranslatorProbe() {
+            seen.push(useTranslations("cheats"));
+            return null;
+        }
+        const container = document.createElement("div");
+        const root = createRoot(container);
+        const render = (cheats: Dictionary, outer = { common }) => act(async () => root.render(
+            <LocalizationProvider locale="en" messages={outer}>
+                <LocalizationProvider locale="en" messages={{ cheats }}><TranslatorProbe /></LocalizationProvider>
+            </LocalizationProvider>));
+        try {
+            await render({ heading: "Commands", count: { one: "{count} command", other: "{count} commands" } });
+            await render({ heading: "Commands", count: { one: "{count} command", other: "{count} commands" } }, { common: { ...common } });
+            expect(new Set(seen).size).toBe(1);
+            await render({ heading: "Console commands", count: { one: "{count} command", other: "{count} commands" } });
+            expect(new Set(seen).size).toBe(2);
+            expect(seen.at(-1)!.t("heading")).toBe("Console commands");
+        } finally { await act(async () => root.unmount()); }
     });
 
     it("selects plurals via count and formats dates/numbers deterministically", () => {
