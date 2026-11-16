@@ -142,6 +142,7 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
     const [consoleSignals] = useState(createManagedConsoleSignals);
     const [savesInFlight, setSavesInFlight] = useState<ReadonlyMap<string, number>>(() => new Map());
     const sessionSequence = useRef(0);
+    const haltedServers = useRef(new Set<string>());
     const pollingBaseline = useRef<{
         sequence: number; fingerprint: string | null; opened: boolean;
         read: Promise<Awaited<ReturnType<ManagedServerStatusReader>> | null> | null;
@@ -251,12 +252,14 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
                     }
                 } else {
                     router.refresh();
+                    haltedServers.current.add(serverId);
                     setTimedOutSession(session);
                     setSession((current) => current?.sequence === sequence ? null : current);
                     return;
                 }
             }
             router.refresh();
+                            haltedServers.current.add(serverId);
         }
 
         // One check at a time: a tab shown just before a scheduled tick shares that tick's read.
@@ -336,7 +339,7 @@ export function ManagedServerPollingProvider({ children, readStatus, initialServ
         const trackingInitialState = session?.serverId === initialServer.serverId
             && session.statusSource === "initialization";
         let timer: ReturnType<typeof setTimeout> | undefined;
-        if (initializing && !trackingInitialState) {
+        if (initializing && !trackingInitialState && !haltedServers.current.has(initialServer.serverId)) {
             timer = setTimeout(() => beginPolling(initialServer.serverId, initialServer.updatedAt, undefined, "initialization"), 0);
         } else if (!initializing && trackingInitialState) {
             timer = setTimeout(() => endPolling(initialServer.serverId), 0);
