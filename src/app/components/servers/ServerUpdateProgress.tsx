@@ -1,6 +1,7 @@
 "use client";
 
 import { useTranslations } from "@/app/lib/localization/client";
+import type { Translator } from "@/app/lib/localization/types";
 
 import { useId } from "react";
 import { Check, CircleAlert, LoaderCircle, Minus } from "lucide-react";
@@ -28,9 +29,7 @@ export function ServerUpdateProgress({ job }: { job: BuildUpdateJob }) {
     const percent = job.state === "succeeded" ? 100 : Math.min(100, Math.round((job.completedSteps / job.totalSteps) * 100));
     return <section aria-labelledby={headingId} className="w-full space-y-3 rounded-md border border-white/10 p-4">
         <h3 id={headingId} className="text-sm font-semibold text-foreground">
-            {job.initiatedBy === "automatic" ? (version ? t("serverUpdate.automaticUpdateTo", { version }) : t("serverUpdate.automaticUpdate"))
-                : job.initiatedBy === "administrator" ? (version ? t("serverUpdate.hostingSupportIsInstallingVersion", { version }) : t("serverUpdate.hostingSupportIsInstallingABuild"))
-                    : version ? t("serverUpdate.updatingToVersion", { version }) : t("serverUpdate.updateProgress")}
+            {updateHeading(job, t)}
         </h3>
         {(job.previousVersion !== null || version !== null) && <p className="text-sm text-foreground-muted" aria-label={t("serverUpdate.updateProgress")}>
             {job.previousVersion ?? "—"} <span aria-hidden="true">→</span> {version ?? "—"}
@@ -59,6 +58,21 @@ export function ServerUpdateProgress({ job }: { job: BuildUpdateJob }) {
         </div>}
         {job.state === "cancelled" && <p role="status" className="text-sm text-foreground-muted">{t("serverUpdate.theUpdateWasCancelled")}</p>}
     </section>;
+}
+
+/** Names who started the update and, when known, the version it installs. */
+function updateHeading(job: BuildUpdateJob, t: Translator["t"]): string {
+    const version = job.targetVersion;
+    if (job.initiatedBy === "automatic") {
+        if (version) return t("serverUpdate.automaticUpdateTo", { version });
+        return t("serverUpdate.automaticUpdate");
+    }
+    if (job.initiatedBy === "administrator") {
+        if (version) return t("serverUpdate.hostingSupportIsInstallingVersion", { version });
+        return t("serverUpdate.hostingSupportIsInstallingABuild");
+    }
+    if (version) return t("serverUpdate.updatingToVersion", { version });
+    return t("serverUpdate.updateProgress");
 }
 
 /** Marks a step's state with a shape as well as a color, so progress never relies on color alone. */

@@ -8,6 +8,7 @@ import { TestLocalization } from "./ManagedServerLocalization.test-utils";
 const jobId = "33333333-3333-4333-8333-333333333333";
 const updatedAt = "2026-10-30T12:00:00.000Z";
 const stepNames = ["queued", "stopping", "backup", "installing", "starting", "verifying"] as const;
+// Builds a running update job with the given step states in display order; later steps default to pending.
 const job = (states: BuildUpdateJob["steps"][number]["state"][], extra: Partial<BuildUpdateJob> = {}): BuildUpdateJob => ({
     jobId, state: "running", initiatedBy: "automatic", ownerSelected: false, phase: "backup",
     steps: stepNames.map((id, index) => ({ id, state: states[index] ?? "pending" })),
@@ -44,6 +45,18 @@ it("shows each phase of the update with a progress bar, the restore point and th
     expect(container.textContent).toContain("Automatic update to 0.1.11");
     expect(container.textContent).toContain("A backup was created before the update. You can restore it any time from Backups.");
     expect(container.querySelector("ol")?.getAttribute("aria-live")).toBe("polite");
+});
+
+it.each([
+    ["automatic", "0.1.11", "Automatic update to 0.1.11"],
+    ["automatic", null, "Automatic update"],
+    ["administrator", "0.1.11", "Hosting support is installing 0.1.11 on your server"],
+    ["administrator", null, "Hosting support is installing a build on your server"],
+    ["owner", "0.1.11", "Updating to 0.1.11"],
+    ["owner", null, "Update progress"],
+] as const)("heads an update started by %s with version %s as %s", async (initiatedBy, targetVersion, expectedHeading) => {
+    await render(job(["done", "active"], { initiatedBy, targetVersion }));
+    expect(container.querySelector("h3")?.textContent).toBe(expectedHeading);
 });
 
 it("names the install step without a version when the control plane reports none", async () => {
