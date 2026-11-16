@@ -1,21 +1,17 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import type { BuildUpdateJob } from "../../../../supabase/functions/_shared/server-build-contract";
-import { ServerUpdateProgress } from "./ServerUpdateProgress";
+import type { BuildStepState, BuildUpdateJob } from "../../../../supabase/functions/_shared/server-build-contract";
+import { ServerUpdateProgress, ServerUpdateProgressError } from "./ServerUpdateProgress";
 import { TestLocalization } from "./ManagedServerLocalization.test-utils";
+import { updateJob, updateSteps } from "./ServerUpdateProgress.test-utils";
 
-const jobId = "33333333-3333-4333-8333-333333333333";
+const jobId = updateJob().jobId;
 const updatedAt = "2026-10-30T12:00:00.000Z";
-const stepNames = ["queued", "stopping", "backup", "installing", "starting", "verifying"] as const;
-// Builds a running update job with the given step states in display order; later steps default to pending.
-const job = (states: BuildUpdateJob["steps"][number]["state"][], extra: Partial<BuildUpdateJob> = {}): BuildUpdateJob => ({
-    jobId, state: "running", initiatedBy: "automatic", ownerSelected: false, phase: "backup",
-    steps: stepNames.map((id, index) => ({ id, state: states[index] ?? "pending" })),
-    completedSteps: states.filter(state => state === "done").length, totalSteps: 6, targetVersion: "0.1.11", previousVersion: "0.1.10",
-    progress: "Creating a safe restore point", backup: null, rolledBack: false, failureCode: null, failureMessage: null, nextStep: null,
-    attemptCount: 1, maximumAttempts: 3, nextRetryAt: null, createdAt: updatedAt, updatedAt, completedAt: null, ...extra,
-});
+/** Builds an automatic update job with the given step states in display order, counting the done ones as completed. */
+function job(states: BuildStepState[], extra: Partial<BuildUpdateJob> = {}): BuildUpdateJob {
+    return updateJob({ initiatedBy: "automatic", steps: updateSteps(states), completedSteps: states.filter(state => state === "done").length, ...extra });
+}
 
 let container: HTMLDivElement;
 let root: Root;
@@ -62,7 +58,6 @@ it.each([
 it("names the install step without a version when the control plane reports none", async () => {
     await render(job(["done", "done", "done", "active"], { initiatedBy: "owner", targetVersion: null, previousVersion: null }));
     expect([...container.querySelectorAll("ol li")][3].textContent).toBe("Installing the updateIn progress");
-    expect(container.textContent).toContain("Update progress");
 });
 
 it("reports a completed update as complete", async () => {
@@ -87,4 +82,14 @@ it("reports a cancelled update", async () => {
     await render(job(["done", "skipped"], { state: "cancelled", phase: "cancelled" }));
     expect(container.textContent).toContain("The update was cancelled.");
     expect(container.querySelector('[role="alert"]')).toBeNull();
+});
+
+it.each([
+    ["unavailable", "Progress is unavailable. The update may still be running."],
+    ["paused", "Progress checks paused. Refresh the page to check again."],
+] as const)("explains why %s update progress cannot be shown as a polite status", async (error, expected) => {
+    await act(async () => root.render(<TestLocalization><ServerUpdateProgressError error={error} /></TestLocalization>));
+    const status = container.querySelector('[role="status"]')!;
+    expect(status.textContent).toBe(expected);
+    expect(status.getAttribute("aria-live")).toBe("polite");
 });

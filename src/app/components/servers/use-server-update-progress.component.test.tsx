@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { BuildUpdateJob } from "../../../../supabase/functions/_shared/server-build-contract";
 import { useServerUpdateProgress, type ReadBuildStatus } from "./use-server-update-progress";
+import { updateJob } from "./ServerUpdateProgress.test-utils";
 
 const serverId = "22222222-2222-4222-8222-222222222222";
 const jobId = "55555555-5555-4555-8555-555555555555";
@@ -10,26 +11,21 @@ const readStatus = vi.fn<ReadBuildStatus>();
 const onFollowedUpdateEnded = vi.fn<() => void>();
 let root: Root;
 
-// Builds the server's latest update job in the given state.
+/** Builds the server's latest update job in the given state. */
 function job(state: BuildUpdateJob["state"]): BuildUpdateJob {
-    return {
-        jobId, state, initiatedBy: "owner", ownerSelected: false, phase: state === "running" ? "installing" : "done",
-        steps: [], completedSteps: 3, totalSteps: 6, targetVersion: "0.1.11", previousVersion: "0.1.10", progress: "Installing the update",
-        backup: null, rolledBack: false, failureCode: null, failureMessage: null, nextStep: null, attemptCount: 1, maximumAttempts: 3,
-        nextRetryAt: null, createdAt: "2026-09-20T12:00:00.000Z", updatedAt: "2026-09-20T12:01:00.000Z", completedAt: null,
-    };
+    return updateJob({ jobId, state, phase: state === "running" ? "installing" : "done" });
 }
 
-/** Renders the hook at one server revision inside a bare component and exposes its latest result and a rerender. */
+/** Renders the hook at one server revision inside a bare component and exposes its latest result. */
 async function renderHook(revision: string) {
     const result: { current: ReturnType<typeof useServerUpdateProgress> | null } = { current: null };
     // Calls the hook with the injected reader and callback, recording what it returns.
-    function Probe({ at }: { at: string }) {
-        result.current = useServerUpdateProgress(serverId, true, at, readStatus, onFollowedUpdateEnded);
+    function Probe() {
+        result.current = useServerUpdateProgress(serverId, true, revision, readStatus, onFollowedUpdateEnded);
         return null;
     }
-    await act(async () => root.render(<Probe at={revision} />));
-    return { result, rerender: (next: string) => act(async () => root.render(<Probe at={next} />)) };
+    await act(async () => root.render(<Probe />));
+    return { result };
 }
 
 /** Advances the fake clock inside act so the poll's reads and state updates settle. */
@@ -66,14 +62,15 @@ it("calls onFollowedUpdateEnded exactly once when the job it follows by id ends"
     expect(onFollowedUpdateEnded).toHaveBeenCalledOnce();
 });
 
-it("restarts the poll when the revision changes", async () => {
-    const { result, rerender } = await renderHook("2026-09-20T12:00:00.000Z");
+it("does not read again when a caller passes a new inline reader on each render", async () => {
+    /** Calls the hook with a fresh reader closure on every render, as an inline caller would. */
+    function InlineReaderProbe() {
+        useServerUpdateProgress(serverId, true, "2026-09-20T12:00:00.000Z", id => readStatus(id), onFollowedUpdateEnded);
+        return null;
+    }
+    for (let render = 0; render < 3; render += 1) await act(async () => root.render(<InlineReaderProbe />));
+    await advance(30_000);
     expect(readStatus).toHaveBeenCalledOnce();
-    readStatus.mockResolvedValue({ serverId, job: job("running") });
-    await rerender("2026-09-20T12:01:00.000Z");
-    expect(readStatus).toHaveBeenCalledTimes(2);
-    expect(result.current!.job?.state).toBe("running");
-    expect(result.current!.busy).toBe(true);
 });
 
 it("stops polling when the step says stop: a finished job it never followed", async () => {

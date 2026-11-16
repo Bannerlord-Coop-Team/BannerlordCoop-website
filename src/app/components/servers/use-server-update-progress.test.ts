@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { BuildUpdateJob, BuildStatus } from "../../../../supabase/functions/_shared/server-build-contract";
 import { nextUpdatePollStep, type UpdateFollow } from "./use-server-update-progress";
+import { updateJob } from "./ServerUpdateProgress.test-utils";
 
 const serverId = "22222222-2222-4222-8222-222222222222";
 const jobId = "55555555-5555-4555-8555-555555555555";
@@ -11,12 +12,7 @@ const idle: UpdateFollow = { kind: "idle" };
 
 // Builds a status read carrying one update job in the given state.
 function status(state: BuildUpdateJob["state"], id = jobId): BuildStatus {
-    return { serverId, job: {
-        jobId: id, state, initiatedBy: "automatic", ownerSelected: false, phase: state === "running" ? "installing" : "done",
-        steps: [], completedSteps: 3, totalSteps: 6, targetVersion: "0.1.11", previousVersion: "0.1.10", progress: "Installing the update",
-        backup: null, rolledBack: false, failureCode: null, failureMessage: null, nextStep: null, attemptCount: 1, maximumAttempts: 3,
-        nextRetryAt: null, createdAt: "2026-09-20T12:00:00.000Z", updatedAt: "2026-09-20T12:01:00.000Z", completedAt: null,
-    } };
+    return { serverId, job: updateJob({ jobId: id, state, initiatedBy: "automatic", phase: state === "running" ? "installing" : "done" }) };
 }
 
 test("follows a job that is running when the page loads", () => {

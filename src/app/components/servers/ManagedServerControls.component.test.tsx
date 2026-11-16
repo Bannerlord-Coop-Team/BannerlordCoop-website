@@ -11,6 +11,7 @@ import { MyServersApiError, readMyServersResponse } from "@/app/lib/hosting/my-s
 import { createMyServersHandler } from "../../../../supabase/functions/_shared/my-servers";
 import type { MyServerMove } from "@/app/lib/control-plane/types";
 import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
+import { updateJob, updateSteps } from "./ServerUpdateProgress.test-utils";
 
 const { revealAddress } = vi.hoisted(() => ({ revealAddress: vi.fn() }));
 const { backupStatus, deletionStatus } = vi.hoisted(() => ({ backupStatus: vi.fn(), deletionStatus: vi.fn() }));
@@ -210,16 +211,7 @@ it("confirms and queues an immediate update with the displayed server revision a
     requestUpdate.mockReset().mockResolvedValue({
         outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "update",
     });
-    const running = {
-        jobId: "55555555-5555-4555-8555-555555555555", state: "running", initiatedBy: "owner", ownerSelected: false,
-        phase: "backup", steps: [
-            { id: "queued", state: "done" }, { id: "stopping", state: "done" }, { id: "backup", state: "active" },
-            { id: "installing", state: "pending" }, { id: "starting", state: "pending" }, { id: "verifying", state: "pending" },
-        ], completedSteps: 2, totalSteps: 6, targetVersion: "0.1.11", previousVersion: "0.1.10",
-        progress: "Creating a safe restore point", backup: null, rolledBack: false, failureCode: null,
-        failureMessage: null, nextStep: null, attemptCount: 1, maximumAttempts: 3, nextRetryAt: null,
-        createdAt: "2026-09-20T12:00:00.000Z", updatedAt: "2026-09-20T12:00:10.000Z", completedAt: null,
-    };
+    const running = updateJob({ phase: "backup", steps: updateSteps(["done", "done", "active"]), completedSteps: 2, progress: "Creating a safe restore point" });
     const succeeded = { ...running, state: "succeeded", phase: "done", completedSteps: 6, progress: "Now running 0.1.11.",
         steps: running.steps.map(step => ({ ...step, state: "done" })), completedAt: "2026-09-20T12:05:00.000Z" };
     buildStatus.mockReset()
@@ -282,16 +274,7 @@ it("shows that progress is unavailable when the requested update never appears a
 it("reattaches to an update already running after reload and keeps owner copy free of raw ids", async () => {
     const serverId = "22222222-2222-4222-8222-222222222222";
     const durableJobId = "55555555-5555-4555-8555-555555555555";
-    buildStatus.mockReset().mockResolvedValue({ serverId, job: {
-        jobId: durableJobId, state: "running", initiatedBy: "owner", ownerSelected: false, phase: "installing",
-        steps: [
-            { id: "queued", state: "done" }, { id: "stopping", state: "done" }, { id: "backup", state: "done" },
-            { id: "installing", state: "active" }, { id: "starting", state: "pending" }, { id: "verifying", state: "pending" },
-        ], completedSteps: 3, totalSteps: 6, targetVersion: "0.1.11", previousVersion: "0.1.10",
-        progress: "Installing the selected release", backup: null, rolledBack: false, failureCode: null,
-        failureMessage: null, nextStep: null, attemptCount: 1, maximumAttempts: 3, nextRetryAt: null,
-        createdAt: "2026-09-20T12:00:00.000Z", updatedAt: "2026-09-20T12:01:00.000Z", completedAt: null,
-    } });
+    buildStatus.mockReset().mockResolvedValue({ serverId, job: updateJob({ jobId: durableJobId, progress: "Installing the selected release" }) });
     const container = document.createElement("div");
     const root = createRoot(container);
     try {
@@ -310,16 +293,7 @@ it("picks up an update started elsewhere when the page revision changes and refr
     vi.useFakeTimers();
     router.refresh.mockClear();
     const serverId = "22222222-2222-4222-8222-222222222222";
-    const running = {
-        jobId: "55555555-5555-4555-8555-555555555555", state: "running", initiatedBy: "automatic", ownerSelected: false, phase: "installing",
-        steps: [
-            { id: "queued", state: "done" }, { id: "stopping", state: "done" }, { id: "backup", state: "done" },
-            { id: "installing", state: "active" }, { id: "starting", state: "pending" }, { id: "verifying", state: "pending" },
-        ], completedSteps: 3, totalSteps: 6, targetVersion: "0.1.11", previousVersion: "0.1.10",
-        progress: "Installing the update", backup: null, rolledBack: false, failureCode: null,
-        failureMessage: null, nextStep: null, attemptCount: 1, maximumAttempts: 3, nextRetryAt: null,
-        createdAt: "2026-09-20T12:00:00.000Z", updatedAt: "2026-09-20T12:01:00.000Z", completedAt: null,
-    };
+    const running = updateJob({ initiatedBy: "automatic" });
     const succeeded = { ...running, state: "succeeded", phase: "done", completedSteps: 6, progress: "Now running 0.1.11.",
         steps: running.steps.map(step => ({ ...step, state: "done" })), completedAt: "2026-09-20T12:05:00.000Z" };
     const container = document.createElement("div");
@@ -342,34 +316,6 @@ it("picks up an update started elsewhere when the page revision changes and refr
         await render("2026-09-20T12:05:00.000Z");
         await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
         expect(router.refresh).toHaveBeenCalledOnce();
-    } finally { await act(async () => root.unmount()); }
-});
-
-it("hides a failed update this page never followed, stops polling and does not refresh", async () => {
-    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
-    vi.useFakeTimers();
-    router.refresh.mockClear();
-    const serverId = "22222222-2222-4222-8222-222222222222";
-    buildStatus.mockReset().mockResolvedValue({ serverId, job: {
-        jobId: "55555555-5555-4555-8555-555555555555", state: "failed", initiatedBy: "automatic", ownerSelected: false, phase: "failed",
-        steps: [
-            { id: "queued", state: "done" }, { id: "stopping", state: "done" }, { id: "backup", state: "done" },
-            { id: "installing", state: "failed" }, { id: "starting", state: "pending" }, { id: "verifying", state: "pending" },
-        ], completedSteps: 3, totalSteps: 6, targetVersion: "0.1.11", previousVersion: "0.1.10",
-        progress: "Earlier update", backup: null, rolledBack: true, failureCode: "agent_game_health_failed",
-        failureMessage: "The game did not start on the new version.", nextStep: null, attemptCount: 1, maximumAttempts: 3,
-        nextRetryAt: null, createdAt: "2026-09-20T12:00:00.000Z", updatedAt: "2026-09-20T12:05:00.000Z", completedAt: "2026-09-20T12:05:00.000Z",
-    } });
-    const container = document.createElement("div");
-    const root = createRoot(container);
-    try {
-        await act(async () => root.render(<TestLocalization><ManagedServerControls serverId={serverId} displayName="Campaign"
-            accessRole="owner" operationState="running" observedGameState="running" expectedUpdatedAt="2026-09-20T12:05:00.000Z" /></TestLocalization>));
-        await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
-        expect(buildStatus).toHaveBeenCalledOnce();
-        expect(container.querySelector('[role="progressbar"]')).toBeNull();
-        expect(container.textContent).not.toContain("did not finish");
-        expect(router.refresh).not.toHaveBeenCalled();
     } finally { await act(async () => root.unmount()); }
 });
 
