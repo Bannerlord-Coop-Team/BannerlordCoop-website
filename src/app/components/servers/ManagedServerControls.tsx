@@ -324,7 +324,7 @@ export function ManagedServerControls({
                 setUpdateJob(job);
                 setUpdateProgressError("");
             } else if (updateFollowed.current && status === null) {
-                setUpdateProgressError(t("serverVersion.progressIsUnavailableTheChangeMayStillBeRunning"));
+                setUpdateProgressError(t("serverUpdate.progressIsUnavailableTheUpdateMayStillBeRunning"));
             } else if (job === null && !updateFollowed.current) {
                 return;
             }
@@ -334,7 +334,7 @@ export function ManagedServerControls({
                 return;
             }
             if (Date.now() >= deadline) {
-                setUpdateProgressError(t("serverVersion.progressChecksPausedRefreshToCheckAgain"));
+                setUpdateProgressError(t("serverUpdate.progressChecksPausedRefreshToCheckAgain"));
                 return;
             }
             timeout = setTimeout(pollUpdate, 3_000);

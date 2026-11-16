@@ -42,14 +42,14 @@ it("shows each phase of the update with a progress bar, the restore point and th
         "Starting the gameWaiting", "Checking that the server is readyWaiting",
     ]);
     expect(container.textContent).toContain("Automatic update to 0.1.11");
-    expect(container.textContent).toContain("A backup was created before the change. You can restore it any time from Backups.");
+    expect(container.textContent).toContain("A backup was created before the update. You can restore it any time from Backups.");
     expect(container.querySelector("ol")?.getAttribute("aria-live")).toBe("polite");
 });
 
 it("names the install step without a version when the control plane reports none", async () => {
     await render(job(["done", "done", "done", "active"], { initiatedBy: "owner", targetVersion: null, previousVersion: null }));
     expect([...container.querySelectorAll("ol li")][3].textContent).toBe("Installing the updateIn progress");
-    expect(container.textContent).toContain("Version change progress");
+    expect(container.textContent).toContain("Update progress");
 });
 
 it("reports a completed update as complete", async () => {
@@ -72,6 +72,6 @@ it("reports a failed update with its reason, the automatic return and the next s
 
 it("reports a cancelled update", async () => {
     await render(job(["done", "skipped"], { state: "cancelled", phase: "cancelled" }));
-    expect(container.textContent).toContain("The version change was cancelled.");
+    expect(container.textContent).toContain("The update was cancelled.");
     expect(container.querySelector('[role="alert"]')).toBeNull();
 });

@@ -12,27 +12,27 @@ export function ServerUpdateProgress({ job }: { job: BuildChangeJob }) {
     const headingId = useId();
     const version = job.targetVersion;
     const labels: Record<BuildStepId, string> = {
-        queued: t("serverVersion.stepQueued"),
-        stopping: t("serverVersion.stepStopping"),
-        backup: t("serverVersion.stepBackup"),
-        installing: version ? t("serverVersion.stepInstalling", { version }) : t("serverVersion.stepInstallingUpdate"),
-        starting: t("serverVersion.stepStarting"),
-        verifying: t("serverVersion.stepVerifying"),
+        queued: t("serverUpdate.stepQueued"),
+        stopping: t("serverUpdate.stepStopping"),
+        backup: t("serverUpdate.stepBackup"),
+        installing: version ? t("serverUpdate.stepInstalling", { version }) : t("serverUpdate.stepInstallingUpdate"),
+        starting: t("serverUpdate.stepStarting"),
+        verifying: t("serverUpdate.stepVerifying"),
     };
     const states: Record<BuildStepState, string> = {
-        done: t("serverVersion.stateDone"), active: t("serverVersion.stateInProgress"), pending: t("serverVersion.stateWaiting"),
-        skipped: t("serverVersion.stateNotNeeded"), failed: t("serverVersion.stateFailed"),
+        done: t("serverUpdate.stateDone"), active: t("serverUpdate.stateInProgress"), pending: t("serverUpdate.stateWaiting"),
+        skipped: t("serverUpdate.stateNotNeeded"), failed: t("serverUpdate.stateFailed"),
     };
     const active = job.steps.find(step => step.state === "active" || step.state === "failed");
-    const valueText = job.state === "succeeded" ? t("serverVersion.complete") : t("serverVersion.stepOfTotal", { done: job.completedSteps + (active?.state === "active" ? 1 : 0), total: job.totalSteps, phase: active ? labels[active.id] : "" });
+    const valueText = job.state === "succeeded" ? t("serverUpdate.complete") : t("serverUpdate.stepOfTotal", { done: job.completedSteps + (active?.state === "active" ? 1 : 0), total: job.totalSteps, phase: active ? labels[active.id] : "" });
     const percent = job.state === "succeeded" ? 100 : Math.min(100, Math.round((job.completedSteps / job.totalSteps) * 100));
     return <section aria-labelledby={headingId} className="w-full space-y-3 rounded-md border border-white/10 p-4">
         <h3 id={headingId} className="text-sm font-semibold text-foreground">
-            {job.initiatedBy === "automatic" ? (version ? t("serverVersion.automaticUpdateTo", { version }) : t("serverVersion.automaticUpdate"))
-                : job.initiatedBy === "administrator" ? (version ? t("serverVersion.hostingSupportIsChangingTo", { version }) : t("serverVersion.hostingSupportIsChangingYourVersion"))
-                    : version ? t("serverVersion.changingToVersion", { version }) : t("serverVersion.versionChangeProgress")}
+            {job.initiatedBy === "automatic" ? (version ? t("serverUpdate.automaticUpdateTo", { version }) : t("serverUpdate.automaticUpdate"))
+                : job.initiatedBy === "administrator" ? (version ? t("serverUpdate.hostingSupportIsInstallingVersion", { version }) : t("serverUpdate.hostingSupportIsInstallingABuild"))
+                    : version ? t("serverUpdate.updatingToVersion", { version }) : t("serverUpdate.updateProgress")}
         </h3>
-        {(job.previousVersion !== null || version !== null) && <p className="text-sm text-foreground-muted" aria-label={t("serverVersion.versionChangeProgress")}>
+        {(job.previousVersion !== null || version !== null) && <p className="text-sm text-foreground-muted" aria-label={t("serverUpdate.updateProgress")}>
             {job.previousVersion ?? "—"} <span aria-hidden="true">→</span> {version ?? "—"}
         </p>}
         <div role="progressbar" aria-labelledby={headingId} aria-valuemin={0} aria-valuemax={job.totalSteps} aria-valuenow={job.state === "succeeded" ? job.totalSteps : job.completedSteps} aria-valuetext={valueText}
@@ -47,17 +47,17 @@ export function ServerUpdateProgress({ job }: { job: BuildChangeJob }) {
             </li>)}
         </ol>
         <p className="sr-only" role="status" aria-live="polite">
-            {active ? `${labels[active.id]}: ${states[active.state]}` : job.state === "succeeded" ? t("serverVersion.complete") : job.progress}
+            {active ? `${labels[active.id]}: ${states[active.state]}` : job.state === "succeeded" ? t("serverUpdate.complete") : job.progress}
         </p>
         <p role="status" aria-live="polite" className="text-sm text-foreground-muted">{job.state === "failed" || job.state === "cancelled" ? "" : job.progress}</p>
-        {job.backup !== null && <p className="text-sm text-foreground-muted">{t("serverVersion.backupCreatedBeforeTheChangeRestoreItAnyTimeFromBackups")}</p>}
+        {job.backup !== null && <p className="text-sm text-foreground-muted">{t("serverUpdate.backupCreatedBeforeTheUpdateRestoreItAnyTimeFromBackups")}</p>}
         {job.state === "succeeded" && <p className="text-sm font-medium text-foreground">{job.progress}</p>}
         {job.state === "failed" && <div role="alert" className="space-y-1 rounded-md border border-red-400/40 bg-red-400/[0.07] p-3 text-sm">
-            <p className="font-semibold text-red-200">{t("serverVersion.theVersionChangeDidNotFinish")}</p>
+            <p className="font-semibold text-red-200">{t("serverUpdate.theUpdateDidNotFinish")}</p>
             {job.failureMessage && <p className="text-foreground">{job.failureMessage}</p>}
             {job.nextStep && <p className="text-foreground-muted">{job.nextStep}</p>}
         </div>}
-        {job.state === "cancelled" && <p role="status" className="text-sm text-foreground-muted">{t("serverVersion.theVersionChangeWasCancelled")}</p>}
+        {job.state === "cancelled" && <p role="status" className="text-sm text-foreground-muted">{t("serverUpdate.theUpdateWasCancelled")}</p>}
     </section>;
 }
 
