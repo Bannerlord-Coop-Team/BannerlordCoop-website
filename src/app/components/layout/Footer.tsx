@@ -28,6 +28,10 @@ const navigationLinks = [
         href: "/cheats",
     },
     {
+        label: "nav.linux",
+        href: "/linux",
+    },
+    {
         label: "nav.changelog",
         href: "/changelog",
     }

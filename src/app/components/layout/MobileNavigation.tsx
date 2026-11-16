@@ -12,6 +12,7 @@ const navigation = [
     { label: "nav.servers", href: "/servers" },
     { label: "nav.hosting", href: "/hosting" },
     { label: "nav.cheats", href: "/cheats" },
+    { label: "nav.linux", href: "/linux" },
     { label: "nav.changelog", href: "/changelog" },
     { label: "nav.support", href: "/support" },
 ] as const;

@@ -1,0 +1,3258 @@
+{
+  "sections": [
+    {
+      "id": "terminal",
+      "kicker": "Step 1",
+      "title": "Install with one script",
+      "sub": "One copy-paste script for your distro.",
+      "blocks": [
+        {
+          "type": "p",
+          "c": [
+            {
+              "t": "text",
+              "v": "Paste it in a terminal and press Enter. Run it as your normal user: it asks before it changes anything and uses sudo only where needed."
+            }
+          ],
+          "role": "lead"
+        },
+        {
+          "type": "tabs",
+          "name": "oneshot",
+          "label": "Scripts by distro",
+          "tabs": [
+            {
+              "label": "Ubuntu",
+              "script": "ubuntu",
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-oneshot-ubuntu",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Ubuntu setup script"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": true
+                }
+              ]
+            },
+            {
+              "label": "Debian",
+              "script": "debian",
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-oneshot-debian",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Debian setup script"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": true
+                }
+              ]
+            },
+            {
+              "label": "Linux Mint",
+              "script": "mint",
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-oneshot-mint",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Linux Mint setup script"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": true
+                }
+              ]
+            },
+            {
+              "label": "Fedora",
+              "script": "fedora",
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-oneshot-fedora",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Fedora setup script"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": true
+                }
+              ]
+            },
+            {
+              "label": "Arch Linux",
+              "script": "arch",
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-oneshot-arch",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Arch Linux setup script"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": true
+                }
+              ]
+            },
+            {
+              "label": "Manjaro",
+              "script": "manjaro",
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-oneshot-manjaro",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Manjaro setup script"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": true
+                }
+              ]
+            },
+            {
+              "label": "openSUSE",
+              "script": "suse",
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-oneshot-suse",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "openSUSE setup script"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": true
+                }
+              ]
+            },
+            {
+              "label": "Bazzite",
+              "script": "bazzite",
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-oneshot-bazzite",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Bazzite setup script"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": true
+                }
+              ]
+            },
+            {
+              "label": "Steam Deck",
+              "script": "deck",
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-oneshot-deck",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Steam Deck setup script"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": true
+                }
+              ]
+            },
+            {
+              "label": "NixOS",
+              "script": "nix",
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-oneshot-nix",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "NixOS setup script"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": true
+                }
+              ]
+            },
+            {
+              "label": "Other distros",
+              "script": "other",
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-oneshot-other",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Generic setup script"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": true
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "p",
+          "c": [
+            {
+              "t": "text",
+              "v": "Read it before you run it. Re-running is safe: finished steps are skipped."
+            }
+          ],
+          "role": "safe"
+        },
+        {
+          "type": "columns",
+          "columns": [
+            {
+              "blocks": [
+                {
+                  "type": "h3",
+                  "c": [
+                    {
+                      "t": "text",
+                      "v": "What the script does"
+                    }
+                  ]
+                },
+                {
+                  "type": "ul",
+                  "className": "",
+                  "items": [
+                    [
+                      {
+                        "t": "text",
+                        "v": "Installs what is missing: Steam, 7-Zip, curl and python3."
+                      }
+                    ],
+                    [
+                      {
+                        "t": "text",
+                        "v": "Downloads the Co-op client and dedicated server from the official GitHub release and checks their SHA-256."
+                      }
+                    ],
+                    [
+                      {
+                        "t": "text",
+                        "v": "Unpacks them under ~/Games/BannerlordCoop and writes start-server.sh."
+                      }
+                    ],
+                    [
+                      {
+                        "t": "text",
+                        "v": "Opens UDP 4200–4201 if ufw or firewalld is active."
+                      }
+                    ]
+                  ]
+                }
+              ]
+            },
+            {
+              "blocks": [
+                {
+                  "type": "h3",
+                  "c": [
+                    {
+                      "t": "text",
+                      "v": "What is left for you"
+                    }
+                  ]
+                },
+                {
+                  "type": "ul",
+                  "className": "",
+                  "items": [
+                    [
+                      {
+                        "t": "text",
+                        "v": "Log in to Steam, own and install Bannerlord, and run it once."
+                      }
+                    ],
+                    [
+                      {
+                        "t": "text",
+                        "v": "Enable the Co-op mod (Workshop or copy the module); every player needs the same version."
+                      }
+                    ],
+                    [
+                      {
+                        "t": "text",
+                        "v": "Start the server once, read and accept the EULA yourself, then edit server-config.json."
+                      }
+                    ],
+                    [
+                      {
+                        "t": "text",
+                        "v": "Forward UDP 4200–4201 on your router if players join over the internet."
+                      }
+                    ]
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "oneshot-steps",
+          "className": "oneshot-steps",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Show individual steps"
+            }
+          ],
+          "blocks": []
+        }
+      ]
+    },
+    {
+      "id": "overview",
+      "kicker": "Step 2",
+      "title": "Overview",
+      "sub": "What you will set up.",
+      "blocks": [
+        {
+          "type": "callout",
+          "kind": "info",
+          "title": "No native Linux dedicated server",
+          "id": "",
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Official Co-op ships a Win64 server executable. Linux hosts run it under a Windows compatibility layer."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "p",
+          "c": [
+            {
+              "t": "text",
+              "v": "Run a"
+            },
+            {
+              "t": "strong",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Windows dedicated server"
+                }
+              ]
+            },
+            {
+              "t": "text",
+              "v": "under"
+            },
+            {
+              "t": "term",
+              "term": "Proton",
+              "def": "Valve's compatibility layer that runs many Windows games on Linux through Steam.",
+              "v": "Proton"
+            },
+            {
+              "t": "text",
+              "v": "/"
+            },
+            {
+              "t": "term",
+              "term": "Wine",
+              "def": "A compatibility layer that runs Windows programs on Linux without a full Windows install.",
+              "v": "Wine"
+            },
+            {
+              "t": "text",
+              "v": "/umu on Linux, install the matching Co-op"
+            },
+            {
+              "t": "strong",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "client"
+                }
+              ]
+            },
+            {
+              "t": "text",
+              "v": ", and open"
+            },
+            {
+              "t": "term",
+              "term": "UDP",
+              "def": "A network protocol used for game traffic; Co-op direct connect listens on a UDP port (default 4200).",
+              "v": "UDP"
+            },
+            {
+              "t": "strong",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "4200"
+                }
+              ]
+            },
+            {
+              "t": "text",
+              "v": "(optional service later)."
+            }
+          ]
+        },
+        {
+          "type": "ol",
+          "className": "step-cards",
+          "items": [
+            [
+              {
+                "t": "text",
+                "v": "Install tools and Steam (any supported format)."
+              }
+            ],
+            [
+              {
+                "t": "text",
+                "v": "Download matching client zip + dedicated server"
+              },
+              {
+                "t": "code",
+                "v": ".7z"
+              },
+              {
+                "t": "text",
+                "v": "."
+              }
+            ],
+            [
+              {
+                "t": "text",
+                "v": "Configure"
+              },
+              {
+                "t": "code",
+                "v": "server-config.json"
+              },
+              {
+                "t": "text",
+                "v": ", launch, firewall, join."
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "variables",
+      "kicker": "Step 3",
+      "title": "Variables",
+      "sub": "Placeholders used in every command.",
+      "blocks": [
+        {
+          "type": "dl",
+          "items": [
+            {
+              "dt": [
+                {
+                  "t": "code",
+                  "v": "<STEAMROOT>"
+                }
+              ],
+              "dd": [
+                {
+                  "t": "text",
+                  "v": "Steam library root (native or Flatpak path)"
+                }
+              ]
+            },
+            {
+              "dt": [
+                {
+                  "t": "code",
+                  "v": "<SERVER_DIR>"
+                }
+              ],
+              "dd": [
+                {
+                  "t": "text",
+                  "v": "Extracted dedicated server folder"
+                }
+              ]
+            },
+            {
+              "dt": [
+                {
+                  "t": "code",
+                  "v": "<COOP_DATA>"
+                }
+              ],
+              "dd": [
+                {
+                  "t": "text",
+                  "v": "Server data directory under the Proton prefix Documents path"
+                }
+              ]
+            },
+            {
+              "dt": [
+                {
+                  "t": "code",
+                  "v": "<SAVE_NAME>"
+                }
+              ],
+              "dd": [
+                {
+                  "t": "text",
+                  "v": "Save name without"
+                },
+                {
+                  "t": "code",
+                  "v": ".sav"
+                }
+              ]
+            },
+            {
+              "dt": [
+                {
+                  "t": "code",
+                  "v": "<SERVER_PASSWORD>"
+                }
+              ],
+              "dd": [
+                {
+                  "t": "text",
+                  "v": "Join password (or empty)"
+                }
+              ]
+            },
+            {
+              "dt": [
+                {
+                  "t": "code",
+                  "v": "COOP_VERSION"
+                }
+              ],
+              "dd": [
+                {
+                  "t": "text",
+                  "v": "Optional pin (example"
+                },
+                {
+                  "t": "code",
+                  "v": "v0.1.7"
+                },
+                {
+                  "t": "text",
+                  "v": "). Default is the latest GitHub release."
+                }
+              ]
+            },
+            {
+              "dt": [
+                {
+                  "t": "code",
+                  "v": "<UDP_PORT>"
+                }
+              ],
+              "dd": [
+                {
+                  "t": "text",
+                  "v": "Listen port (default"
+                },
+                {
+                  "t": "code",
+                  "v": "4200"
+                },
+                {
+                  "t": "text",
+                  "v": ")"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "field",
+          "label": [
+            {
+              "t": "text",
+              "v": "Preview"
+            },
+            {
+              "t": "code",
+              "v": "SERVER_DIR"
+            },
+            {
+              "t": "text",
+              "v": "(optional)"
+            }
+          ],
+          "id": "var-SERVER_DIR",
+          "name": "SERVER_DIR",
+          "placeholder": "$HOME/Games/BannerlordCoop-DedicatedServer"
+        },
+        {
+          "type": "code",
+          "id": "code-environment-8227218",
+          "title": [
+            {
+              "t": "text",
+              "v": "Environment"
+            }
+          ],
+          "lang": "bash",
+          "langLabel": "Bash",
+          "oneshot": false
+        }
+      ]
+    },
+    {
+      "id": "deps",
+      "kicker": "Step 4",
+      "title": "Install dependencies",
+      "sub": "curl, 7z, networking tools.",
+      "blocks": [
+        {
+          "type": "tabs",
+          "name": "deps",
+          "label": "Dependencies tabs",
+          "tabs": [
+            {
+              "label": "Debian / Ubuntu",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-apt-60837352",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "apt"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "Fedora / RHEL",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-dnf-85923249",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "dnf"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "Arch / Manjaro",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-pacman-79745825",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "pacman"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "openSUSE",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-zypper-95307813",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "zypper"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "Immutable / Deck OS",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "callout",
+                  "kind": "info",
+                  "title": "Immutable OS",
+                  "id": "",
+                  "blocks": [
+                    {
+                      "type": "p",
+                      "c": [
+                        {
+                          "t": "text",
+                          "v": "Prefer home user space, Flatpak, or a"
+                        },
+                        {
+                          "t": "code",
+                          "v": "distrobox"
+                        },
+                        {
+                          "t": "text",
+                          "v": "container. Use"
+                        },
+                        {
+                          "t": "code",
+                          "v": "rpm-ostree"
+                        },
+                        {
+                          "t": "text",
+                          "v": "on the host only when required."
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "code",
+                  "id": "code-distrobox-26746609",
+                  "title": [
+                    {
+                      "t": "term",
+                      "term": "Distrobox",
+                      "def": "A tool that runs another Linux distro in a container while sharing your home files.",
+                      "v": "distrobox"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "NixOS",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-nix-28769868",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "nix"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "Steam Deck",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "callout",
+                  "kind": "info",
+                  "title": "Steam Deck",
+                  "id": "",
+                  "blocks": [
+                    {
+                      "type": "p",
+                      "c": [
+                        {
+                          "t": "text",
+                          "v": "Not officially supported. Use Desktop Mode and the existing Steam installation. Prefer Distrobox or Flatpak for extra tools; run the server under Proton/GE."
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "code",
+                  "id": "code-verify-75258262",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "verify"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "callout",
+          "kind": "ok",
+          "title": "Verify",
+          "id": "",
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "code",
+                  "v": "command -v curl python3 ss"
+                },
+                {
+                  "t": "text",
+                  "v": "should print paths."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "steam",
+      "kicker": "Step 5",
+      "title": "Steam install",
+      "sub": "Install Steam for your distro.",
+      "blocks": [
+        {
+          "type": "callout",
+          "kind": "warn",
+          "title": "Flatpak paths",
+          "id": "",
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Flatpak Steam uses"
+                },
+                {
+                  "t": "code",
+                  "v": "~/.var/app/com.valvesoftware.Steam/..."
+                },
+                {
+                  "t": "text",
+                  "v": ". Grant filesystem overrides if the server lives elsewhere."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tabs",
+          "name": "steam",
+          "label": "Steam tabs",
+          "tabs": [
+            {
+              "label": "Debian / Ubuntu",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-steam-ubuntu",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Ubuntu / Linux Mint"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                },
+                {
+                  "type": "code",
+                  "id": "code-steam-debian",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Debian"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "Fedora / RHEL",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-steam-fedora",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Fedora (RPM Fusion)"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "Arch / Manjaro",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-steam-arch",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Arch Linux"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                },
+                {
+                  "type": "code",
+                  "id": "code-steam-manjaro",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Manjaro"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "openSUSE",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-steam-suse",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "openSUSE"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "Immutable / Deck OS",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-steam-immutable",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Bazzite and other immutable systems"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "Steam Deck / SteamOS",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "callout",
+                  "kind": "warn",
+                  "title": "Steam Deck — not officially supported",
+                  "id": "",
+                  "blocks": [
+                    {
+                      "type": "p",
+                      "c": [
+                        {
+                          "t": "text",
+                          "v": "Use Desktop Mode and the existing Steam installation. Do not unlock the read-only OS or install a second Steam copy. Verify runtime paths locally."
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "code",
+                  "id": "code-steamos-inspection-55952700",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "SteamOS inspection"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "NixOS",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-steam-nix",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "NixOS (configuration.nix)"
+                    }
+                  ],
+                  "lang": "nix",
+                  "langLabel": "Nix",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "Other distros",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-steam-flatpak",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Flatpak Steam"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "download",
+      "kicker": "Step 6",
+      "title": "Download Co-op client + server",
+      "sub": "Same latest release for both artifacts.",
+      "blocks": [
+        {
+          "type": "callout",
+          "kind": "warn",
+          "title": "GitHub Assets caveat",
+          "id": "",
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "GitHub Assets often list only the client zip and"
+                },
+                {
+                  "t": "code",
+                  "v": "manifest.json"
+                },
+                {
+                  "t": "text",
+                  "v": ". The large Windows dedicated-server archive is commonly linked from the release body/manifest CDN URL. The resolver follows those published links."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "callout",
+          "kind": "warn",
+          "title": "Workshop vs manual",
+          "id": "",
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Steam Workshop stays on the latest TaleWorlds-approved Workshop build automatically. That can lag GitHub/CDN, and every player plus the host must still share one Co-op version. Do not enable manual"
+                },
+                {
+                  "t": "code",
+                  "v": "Modules/Coop"
+                },
+                {
+                  "t": "text",
+                  "v": "and Workshop Co-op together."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "p",
+          "c": [
+            {
+              "t": "text",
+              "v": "Resolve the"
+            },
+            {
+              "t": "strong",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "latest"
+                }
+              ]
+            },
+            {
+              "t": "text",
+              "v": "Co-op release (client module"
+            },
+            {
+              "t": "em",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "and"
+                }
+              ]
+            },
+            {
+              "t": "text",
+              "v": "dedicated server) from the"
+            },
+            {
+              "t": "a",
+              "href": "https://github.com/Bannerlord-Coop-Team/BannerlordCoop/releases",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "GitHub Releases API"
+                }
+              ]
+            },
+            {
+              "t": "text",
+              "v": ". Both assets come from one resolver so they match. Optional"
+            },
+            {
+              "t": "code",
+              "v": "COOP_VERSION"
+            },
+            {
+              "t": "text",
+              "v": "pins an older tag when you must match an existing host."
+            }
+          ]
+        },
+        {
+          "type": "ol",
+          "className": "step-cards",
+          "items": [
+            [
+              {
+                "t": "text",
+                "v": "Run the command-line staging block (curl + jq/python3). It prints the resolved version before downloading."
+              }
+            ],
+            [
+              {
+                "t": "text",
+                "v": "Install"
+              },
+              {
+                "t": "code",
+                "v": "client-module/Coop"
+              },
+              {
+                "t": "text",
+                "v": "into the game"
+              },
+              {
+                "t": "code",
+                "v": "Modules/"
+              },
+              {
+                "t": "text",
+                "v": "folder for every player, or use Workshop (Steam tracks the latest approved Workshop build; host and players must still match)."
+              }
+            ],
+            [
+              {
+                "t": "text",
+                "v": "Published checksums from the release/manifest are verified when present; otherwise the script prints the computed sha256 and says so."
+              }
+            ]
+          ]
+        },
+        {
+          "type": "code",
+          "id": "code-resolve-latest-client-server-preferred-87734510",
+          "title": [
+            {
+              "t": "text",
+              "v": "Resolve latest client + server (preferred)"
+            }
+          ],
+          "lang": "bash",
+          "langLabel": "Bash",
+          "oneshot": false
+        },
+        {
+          "type": "code",
+          "id": "code-version-pin-installed-client-check-14939572",
+          "title": [
+            {
+              "t": "text",
+              "v": "Version pin / installed client check"
+            }
+          ],
+          "lang": "bash",
+          "langLabel": "Bash",
+          "oneshot": false
+        },
+        {
+          "type": "callout",
+          "kind": "ok",
+          "title": "Expected",
+          "id": "",
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Staging folder with matching client zip + dedicated-server archive,"
+                },
+                {
+                  "t": "code",
+                  "v": "server/BannerlordCoopServer.exe"
+                },
+                {
+                  "t": "text",
+                  "v": ", and"
+                },
+                {
+                  "t": "code",
+                  "v": "client-module/Coop/SubModule.xml"
+                },
+                {
+                  "t": "text",
+                  "v": ". No separate .NET install."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "configure",
+      "kicker": "Step 7",
+      "title": "Configure the server",
+      "sub": "Minimal server-config.json.",
+      "blocks": [
+        {
+          "type": "callout",
+          "kind": "warn",
+          "title": "First launch: license review",
+          "id": "callout-eula",
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "On first launch the server shows EULA.md / LICENSE.txt and asks"
+                },
+                {
+                  "t": "code",
+                  "v": "Accept the EULA? [y/N]"
+                },
+                {
+                  "t": "text",
+                  "v": ". A person must agree — do not auto-accept or copy another server’s acceptance file. A service can look “running” while stuck on this prompt with no"
+                },
+                {
+                  "t": "term",
+                  "term": "UDP",
+                  "def": "A network protocol used for game traffic; Co-op direct connect listens on a UDP port (default 4200).",
+                  "v": "UDP"
+                },
+                {
+                  "t": "text",
+                  "v": "listener. Finish this interactively before enabling any service."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "callout",
+          "kind": "warn",
+          "title": "Edit config after the first successful launch",
+          "id": "",
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "The server may regenerate"
+                },
+                {
+                  "t": "code",
+                  "v": "server-config.json"
+                },
+                {
+                  "t": "text",
+                  "v": "on first start (comments/JSONC allowed). Stop only this intended server, set"
+                },
+                {
+                  "t": "code",
+                  "v": "port"
+                },
+                {
+                  "t": "text",
+                  "v": "/"
+                },
+                {
+                  "t": "code",
+                  "v": "steam"
+                },
+                {
+                  "t": "text",
+                  "v": "/"
+                },
+                {
+                  "t": "code",
+                  "v": "password"
+                },
+                {
+                  "t": "text",
+                  "v": "/"
+                },
+                {
+                  "t": "code",
+                  "v": "saveName"
+                },
+                {
+                  "t": "text",
+                  "v": "with placeholders such as"
+                },
+                {
+                  "t": "code",
+                  "v": "<your-password>"
+                },
+                {
+                  "t": "text",
+                  "v": "and"
+                },
+                {
+                  "t": "code",
+                  "v": "<server-name>"
+                },
+                {
+                  "t": "text",
+                  "v": ", then start again. Default listen port is"
+                },
+                {
+                  "t": "strong",
+                  "c": [
+                    {
+                      "t": "text",
+                      "v": "4200"
+                    }
+                  ]
+                },
+                {
+                  "t": "text",
+                  "v": "."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "p",
+          "c": [
+            {
+              "t": "text",
+              "v": "Typical data path under"
+            },
+            {
+              "t": "term",
+              "term": "Proton",
+              "def": "Valve's compatibility layer that runs many Windows games on Linux through Steam.",
+              "v": "Proton"
+            },
+            {
+              "t": "text",
+              "v": ":"
+            }
+          ]
+        },
+        {
+          "type": "code",
+          "id": "bare-32",
+          "title": [
+            {
+              "t": "text",
+              "v": ""
+            }
+          ],
+          "lang": "text",
+          "langLabel": "Text",
+          "oneshot": false,
+          "bare": true
+        },
+        {
+          "type": "details",
+          "id": "",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Show example"
+            },
+            {
+              "t": "code",
+              "v": "server-config.json"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "code",
+              "id": "code-server-config-json-2242099",
+              "title": [
+                {
+                  "t": "text",
+                  "v": "server-config.json"
+                }
+              ],
+              "lang": "json",
+              "langLabel": "JSON",
+              "oneshot": false
+            }
+          ]
+        },
+        {
+          "type": "table",
+          "id": "",
+          "headers": [
+            "Key",
+            "Meaning"
+          ],
+          "rows": [
+            {
+              "id": "",
+              "cells": [
+                [
+                  {
+                    "t": "code",
+                    "v": "saveName"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "Save under Game Saves/ (no"
+                  },
+                  {
+                    "t": "code",
+                    "v": ".sav"
+                  },
+                  {
+                    "t": "text",
+                    "v": ")"
+                  }
+                ]
+              ]
+            },
+            {
+              "id": "",
+              "cells": [
+                [
+                  {
+                    "t": "code",
+                    "v": "password"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "Empty = open"
+                  }
+                ]
+              ]
+            },
+            {
+              "id": "",
+              "cells": [
+                [
+                  {
+                    "t": "code",
+                    "v": "port"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "UDP listen (default 4200)"
+                  }
+                ]
+              ]
+            },
+            {
+              "id": "",
+              "cells": [
+                [
+                  {
+                    "t": "code",
+                    "v": "steam"
+                  }
+                ],
+                [
+                  {
+                    "t": "code",
+                    "v": "true"
+                  },
+                  {
+                    "t": "text",
+                    "v": "= Steam lobby when Steam is logged in"
+                  }
+                ]
+              ]
+            },
+            {
+              "id": "",
+              "cells": [
+                [
+                  {
+                    "t": "code",
+                    "v": "logFile"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "Write logs under"
+                  },
+                  {
+                    "t": "code",
+                    "v": "logs/"
+                  }
+                ]
+              ]
+            },
+            {
+              "id": "",
+              "cells": [
+                [
+                  {
+                    "t": "code",
+                    "v": "autosaveMinutes"
+                  }
+                ],
+                [
+                  {
+                    "t": "code",
+                    "v": "0"
+                  },
+                  {
+                    "t": "text",
+                    "v": "disables"
+                  }
+                ]
+              ]
+            }
+          ]
+        },
+        {
+          "type": "p",
+          "c": [
+            {
+              "t": "text",
+              "v": "Restart the server after edits. Optional"
+            },
+            {
+              "t": "code",
+              "v": "--data-dir '/absolute/path'"
+            },
+            {
+              "t": "text",
+              "v": "."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "launch",
+      "kicker": "Step 8",
+      "title": "Launch the dedicated server",
+      "sub": "Proton, Wine, or umu.",
+      "blocks": [
+        {
+          "type": "callout",
+          "kind": "info",
+          "title": "Headless / VPS",
+          "id": "",
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "First launch can take a minute while Proton creates its prefix. Confirm a real"
+                },
+                {
+                  "t": "code",
+                  "v": "[DedicatedServer] SERVING"
+                },
+                {
+                  "t": "text",
+                  "v": "log line — a bound socket alone is not join proof."
+                }
+              ]
+            },
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "code",
+                  "v": "\"steam\": false"
+                },
+                {
+                  "t": "text",
+                  "v": "means direct"
+                },
+                {
+                  "t": "term",
+                  "term": "UDP",
+                  "def": "A network protocol used for game traffic; Co-op direct connect listens on a UDP port (default 4200).",
+                  "v": "UDP"
+                },
+                {
+                  "t": "text",
+                  "v": "only (default 4200). Steam lobby needs a logged-in Steam client."
+                },
+                {
+                  "t": "term",
+                  "term": "headless",
+                  "def": "Running without a physical monitor — common on VPS hosts.",
+                  "v": "Headless"
+                },
+                {
+                  "t": "text",
+                  "v": "SERVING was validated with WineHQ"
+                },
+                {
+                  "t": "term",
+                  "term": "Wine",
+                  "def": "A compatibility layer that runs Windows programs on Linux without a full Windows install.",
+                  "v": "Wine"
+                },
+                {
+                  "t": "strong",
+                  "c": [
+                    {
+                      "t": "text",
+                      "v": "11.0"
+                    }
+                  ]
+                },
+                {
+                  "t": "text",
+                  "v": "+"
+                },
+                {
+                  "t": "term",
+                  "term": "Xvfb",
+                  "def": "A virtual display server used for headless Wine/Proton so apps that need a display can start.",
+                  "v": "Xvfb"
+                },
+                {
+                  "t": "text",
+                  "v": "; stock Wine 8 failed. Wine 9/10 untested."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "tabs",
+          "name": "runtime",
+          "label": "Runtime tabs",
+          "tabs": [
+            {
+              "label": "Proton / GE",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-proton-82795168",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "proton"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "Wine",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "callout",
+                  "kind": "warn",
+                  "title": "Wine 11.0 validated (not a proven minimum)",
+                  "id": "",
+                  "blocks": [
+                    {
+                      "type": "p",
+                      "c": [
+                        {
+                          "t": "text",
+                          "v": "For"
+                        },
+                        {
+                          "t": "code",
+                          "v": "steam:false"
+                        },
+                        {
+                          "t": "text",
+                          "v": "/"
+                        },
+                        {
+                          "t": "term",
+                          "term": "headless",
+                          "def": "Running without a physical monitor — common on VPS hosts.",
+                          "v": "headless"
+                        },
+                        {
+                          "t": "text",
+                          "v": ": use"
+                        },
+                        {
+                          "t": "strong",
+                          "c": [
+                            {
+                              "t": "text",
+                              "v": "WineHQ"
+                            },
+                            {
+                              "t": "term",
+                              "term": "Wine",
+                              "def": "A compatibility layer that runs Windows programs on Linux without a full Windows install.",
+                              "v": "Wine"
+                            },
+                            {
+                              "t": "text",
+                              "v": "11.0"
+                            }
+                          ]
+                        },
+                        {
+                          "t": "text",
+                          "v": "+"
+                        },
+                        {
+                          "t": "term",
+                          "term": "Xvfb",
+                          "def": "A virtual display server used for headless Wine/Proton so apps that need a display can start.",
+                          "v": "Xvfb"
+                        },
+                        {
+                          "t": "text",
+                          "v": "(validated here)."
+                        },
+                        {
+                          "t": "strong",
+                          "c": [
+                            {
+                              "t": "text",
+                              "v": "Debian stock Wine 8 failed"
+                            }
+                          ]
+                        },
+                        {
+                          "t": "text",
+                          "v": "SERVING (stack overflow). Wine 9/10 untested — do not read “≥11” as every release proven. Prefer"
+                        },
+                        {
+                          "t": "term",
+                          "term": "Proton",
+                          "def": "Valve's compatibility layer that runs many Windows games on Linux through Steam.",
+                          "v": "Proton"
+                        },
+                        {
+                          "t": "text",
+                          "v": "with Bannerlord compatdata when Steam is already on the host."
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "label": "umu-launcher",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "callout",
+                  "kind": "warn",
+                  "title": "Community / unverified",
+                  "id": "",
+                  "blocks": [
+                    {
+                      "type": "p",
+                      "c": [
+                        {
+                          "t": "text",
+                          "v": "Example shape only — verify flags for your umu version:"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "code",
+                  "id": "code-umu-2800646",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "umu"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "code",
+          "id": "code-ready-check-65772305",
+          "title": [
+            {
+              "t": "text",
+              "v": "Ready check"
+            }
+          ],
+          "lang": "bash",
+          "langLabel": "Bash",
+          "oneshot": false
+        }
+      ]
+    },
+    {
+      "id": "firewall",
+      "kicker": "Step 9",
+      "title": "Firewall",
+      "sub": "Allow UDP 4200–4201 for direct connect.",
+      "blocks": [
+        {
+          "type": "tabs",
+          "name": "fw",
+          "label": "Firewall tabs",
+          "tabs": [
+            {
+              "label": "ufw",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-ufw-51623524",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "ufw"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "firewalld",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-firewalld-25960623",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "firewalld"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "iptables",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-iptables-16551329",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "iptables"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "service",
+      "kicker": "Step 10",
+      "title": "Keep it running",
+      "sub": "systemd or other init.",
+      "blocks": [
+        {
+          "type": "tabs",
+          "name": "svc",
+          "label": "Service tabs",
+          "tabs": [
+            {
+              "label": "systemd",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "code",
+                  "id": "code-install-a-new-isolated-user-service-43365780",
+                  "title": [
+                    {
+                      "t": "text",
+                      "v": "Install a new isolated user service"
+                    }
+                  ],
+                  "lang": "bash",
+                  "langLabel": "Bash",
+                  "oneshot": false
+                }
+              ]
+            },
+            {
+              "label": "OpenRC / runit",
+              "script": null,
+              "blocks": [
+                {
+                  "type": "callout",
+                  "kind": "info",
+                  "title": "Non-systemd",
+                  "id": "",
+                  "blocks": [
+                    {
+                      "type": "p",
+                      "c": [
+                        {
+                          "t": "text",
+                          "v": "Wrap the same launch command in an OpenRC script or runit"
+                        },
+                        {
+                          "t": "code",
+                          "v": "run"
+                        },
+                        {
+                          "t": "text",
+                          "v": "file. Treat as a template."
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "client",
+      "kicker": "Step 11",
+      "title": "Client + join",
+      "sub": "Matching Co-op module version.",
+      "blocks": [
+        {
+          "type": "callout",
+          "kind": "warn",
+          "title": "Version pin",
+          "id": "",
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Every player and server need the same Co-op release and exact Bannerlord build. Workshop auto-updates can break joins."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "ol",
+          "className": "step-cards",
+          "items": [
+            [
+              {
+                "t": "text",
+                "v": "Install Bannerlord on Steam; set game version to match the Co-op release notes."
+              }
+            ],
+            [
+              {
+                "t": "text",
+                "v": "Unzip the client module into"
+              },
+              {
+                "t": "code",
+                "v": "Modules/"
+              },
+              {
+                "t": "text",
+                "v": ", or use Workshop (disable auto-update if you must stay pinned)."
+              }
+            ],
+            [
+              {
+                "t": "text",
+                "v": "Launch Bannerlord with Co-op enabled."
+              }
+            ],
+            [
+              {
+                "t": "text",
+                "v": "Join via Steam invite/lobby when"
+              },
+              {
+                "t": "code",
+                "v": "steam:true"
+              },
+              {
+                "t": "text",
+                "v": ", or direct-connect to"
+              },
+              {
+                "t": "code",
+                "v": "host:4200"
+              },
+              {
+                "t": "text",
+                "v": "with the password."
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "backups",
+      "kicker": "Step 12",
+      "title": "Backups and updates",
+      "sub": "Protect saves; bump versions together.",
+      "blocks": [
+        {
+          "type": "callout",
+          "kind": "warn",
+          "title": "Do not delete saves casually",
+          "id": "",
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Do not delete or overwrite saves to “fix” issues unless the owner explicitly asks."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "ul",
+          "className": "",
+          "items": [
+            [
+              {
+                "t": "text",
+                "v": "Save cleanly and stop only the intended server. Back up CoopData and any separate server-data folder before updates."
+              }
+            ],
+            [
+              {
+                "t": "text",
+                "v": "Server may keep"
+              },
+              {
+                "t": "code",
+                "v": "<saveName>.backup1"
+              },
+              {
+                "t": "text",
+                "v": "/"
+              },
+              {
+                "t": "code",
+                "v": ".backup2"
+              },
+              {
+                "t": "text",
+                "v": "."
+              }
+            ],
+            [
+              {
+                "t": "text",
+                "v": "Extract the matching update separately; retain configs/saves and check exact game builds before relaunching."
+              }
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "id": "troubleshooting",
+      "kicker": "Step 13",
+      "title": "Troubleshooting",
+      "sub": "Match a symptom, then try the fix.",
+      "blocks": [
+        {
+          "type": "table",
+          "id": "trouble-table",
+          "headers": [
+            "Symptom",
+            "Likely cause",
+            "Fix"
+          ],
+          "rows": [
+            {
+              "id": "trouble-steamapi",
+              "cells": [
+                [
+                  {
+                    "t": "text",
+                    "v": "SteamAPI_Init failed"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "Steam not running or wrong compatdata"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "Start Steam; verify STEAM_COMPAT_DATA_PATH for AppID 261550"
+                  }
+                ]
+              ]
+            },
+            {
+              "id": "trouble-exit-4",
+              "cells": [
+                [
+                  {
+                    "t": "text",
+                    "v": "Exit code 4"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "Older unverified diagnostic"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "Read preceding errors; verify archive checksum and exact versions"
+                  }
+                ]
+              ]
+            },
+            {
+              "id": "trouble-exit-25",
+              "cells": [
+                [
+                  {
+                    "t": "text",
+                    "v": "Exit code 25"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "TaleWorlds startup failure"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "Read ProgramData/Mount and Blade II Bannerlord/logs/starter_log.txt inside the prefix"
+                  }
+                ]
+              ]
+            },
+            {
+              "id": "trouble-no-udp",
+              "cells": [
+                [
+                  {
+                    "t": "text",
+                    "v": "No UDP listener or normal logs"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "First-run EULA decision or startup failure"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "Read terminal output; review the license interactively; do not automate acceptance"
+                  }
+                ]
+              ]
+            },
+            {
+              "id": "trouble-joining-stalls",
+              "cells": [
+                [
+                  {
+                    "t": "text",
+                    "v": "Joining stalls"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "Exact game build or mod mismatch"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "Compare full game builds and Co-op versions; read server refusal logs"
+                  }
+                ]
+              ]
+            },
+            {
+              "id": "trouble-cannot-join",
+              "cells": [
+                [
+                  {
+                    "t": "text",
+                    "v": "Players cannot join"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "Firewall / wrong port / steam false"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "Open UDP 4200; check server-config port; try direct IP"
+                  }
+                ]
+              ]
+            },
+            {
+              "id": "trouble-module-mismatch",
+              "cells": [
+                [
+                  {
+                    "t": "text",
+                    "v": "Module mismatch on join"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "Client ≠ server Co-op build"
+                  }
+                ],
+                [
+                  {
+                    "t": "text",
+                    "v": "Install the exact same release on both"
+                  }
+                ]
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "faq",
+      "kicker": "Step 14",
+      "title": "FAQ",
+      "sub": "Short answers for common setup questions.",
+      "blocks": [
+        {
+          "type": "details",
+          "id": "faq-versions-match",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Which versions must match?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-versions-match"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-cant-connect",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Why can’t other players connect?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-cant-connect"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-platforms",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "What differs on Steam Deck, Bazzite and Flatpak Steam?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-platforms"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-proton",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Which Proton version should I choose?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-proton"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-server-crash",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Why does the server close or crash?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-server-crash"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-workshop-updates",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Can Workshop auto-updates break joining?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-workshop-updates"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-gpu-display",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Does the server need a GPU or display?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-gpu-display"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-update-safely",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "How do I update safely?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-update-safely"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-keep-running",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "How do I keep it running?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-keep-running"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-logs-saves",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Where are logs and saves?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-logs-saves"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-dedicated-download",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Where is the dedicated-server download?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-dedicated-download"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-watchdog",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Does disabling the watchdog help Linux stutter?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-watchdog"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-workshop-ds",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Can I use the Workshop dedicated server?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-workshop-ds"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-ports",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Which ports should direct-IP players allow?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-ports"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-no-udp-eula",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Why is the service running but there is no UDP listener?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-no-udp-eula"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-linux-deck",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Is Linux or Steam Deck supported?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-linux-deck"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-host-and-play",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "What if I host and play on the same PC?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-host-and-play"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-difficulty",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Where are difficulty and battle settings?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-difficulty"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-epic-steam",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Can Epic or manually installed clients use Steam invites?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-epic-steam"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-client-server-match",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Do client and server versions match?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-client-server-match"
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "faq-ai-assistant",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Can I use an AI assistant?"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "rich",
+              "id": "faq-ai-assistant"
+            },
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "This AI prompt is in English so assistants parse it reliably."
+                }
+              ],
+              "key": "ui.ai_prompt_note"
+            },
+            {
+              "type": "code",
+              "id": "ai-prompt-pre",
+              "title": [
+                {
+                  "t": "text",
+                  "v": "Self-contained AI prompt"
+                }
+              ],
+              "lang": "text",
+              "langLabel": "Text",
+              "oneshot": false
+            },
+            {
+              "type": "details",
+              "id": "",
+              "className": "ai-optional",
+              "summary": [
+                {
+                  "t": "text",
+                  "v": "Optional reference file"
+                }
+              ],
+              "blocks": [
+                {
+                  "type": "p",
+                  "c": [
+                    {
+                      "t": "text",
+                      "v": "Use"
+                    },
+                    {
+                      "t": "strong",
+                      "c": [
+                        {
+                          "t": "text",
+                          "v": "Download .md"
+                        }
+                      ]
+                    },
+                    {
+                      "t": "text",
+                      "v": "only if your assistant accepts a file attachment. Prefer Copy first. If paste fails, select the text in the box and copy manually."
+                    }
+                  ],
+                  "role": "muted"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "linux-notes",
+      "kicker": "Step 15",
+      "title": "Linux compatibility and support",
+      "sub": "Watchdog, Workshop, mods, ports and community VPS notes.",
+      "blocks": [
+        {
+          "type": "p",
+          "c": [
+            {
+              "t": "text",
+              "v": "Source: official Co-op Discord setup, FAQ and Linux-support notes, reviewed 6 November 2026. Community recipes remain unverified unless stated otherwise."
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Install from Workshop or manually — not both"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Official Co-op Discord setup notes (6 November 2026): Workshop item 3770450698 contains DedicatedServer/BannerlordCoopServer.exe under steamapps/workshop/content/261550/3770450698/. For a manual install, extract the matching latest client so Modules/Coop/SubModule.xml exists. Enable only Co-op for the baseline test, disable other mods and War Sails, and choose No to Safe Mode. Do not combine a manual Modules/Coop copy with the Workshop module; back up and remove the redundant manual copy when switching. Workshop updates require TaleWorlds approval and may lag the release; check versions rather than assuming parity."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Linux client and Steam"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Launch the Linux client through Steam. For SteamAPI_Init failed, restart Steam when safe; first confirm no running server depends on it. Do not change an active game or server session during a test."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Optional watchdog stutter workaround"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Official Discord reports describe renaming the client bin/Win64_Shipping_Client/watchdog directory to a backup name to reduce world-map stutter on Bazzite, CachyOS and Arch. Developer caveat: disabling it removes crash logs needed for support. Only do this with explicit permission, while the game is closed, and retain the backup so it can be restored. --no-watchdog is a SERVER argument only, not a client launch option. Issue: https://github.com/Bannerlord-Coop-Team/BannerlordCoop/issues/2536."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "GE-Proton non-Steam server method"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Add BannerlordCoopServer.exe as a non-Steam game, select GE-Proton and put --no-watchdog in the server launch options. Alternatively use the game’s Proton prefix. For safety testing, use a separate prefix and --data-dir, not an existing live server prefix or save directory. A Steam-listed lobby under Proton/Wine is still unverified; direct IP is the reproducible fallback."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Ports, CGNAT and direct IP"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Official Discord direct-IP instructions use steam:false in server-config.json and UDP 4200–4201 through the host firewall, router and cloud firewall. The configured main port defaults to 4200. Steam player-hosting Join Game/invites can avoid port forwarding and CGNAT; do not assume dedicated-server Steam hosting under Proton/Wine has the same verified behavior. Turn off conflicting VPN/DNS-routing tools only after considering other active sessions."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Server mod configuration"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Gameplay and difficulty settings live in CoopData/mod-config.json; server settings in CoopData/DedicatedServer/server-config.json. Workshop layouts can also use DedicatedServer/server-data/mod-config.json. Confirm active paths at boot and stop only the intended server before editing. Keys include battleSize (default 1000; about 400 suggested), autoPauseEnabled, goldFoodInfluenceChangeInSettlements, enablePlayerExecutions and enableHeroExecutions. Difficulty birth/death options include birthAndDeath, clanMemberDeathChance and battleDeath; keep the separate Birth and Aging module disabled."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Load server mods consistently"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "First verify Coop-only operation. Copy a compatible mod folder into engine/Modules; its folder name must match the mod Id. In the server UI reload, enable, set load order and Save Mods, then restart only that intended server. Every client needs matching mods, versions and order. Official Discord reports War Sails, Birth and Aging Options and Fast Mode are unsupported on dedicated servers. Do not alter Steam subscriptions automatically."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Logs and recovery"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Dedicated logs: CoopData/DedicatedServer/logs/coop-server-{date}-{time}.log. Client: bin/Win64_Shipping_Client/Coop_client.log; in-game host: Coop_server.log. Case matters on Linux. Crashes can be under the prefix’s drive_c/ProgramData/Mount and Blade II Bannerlord/crashes or Documents/Mount and Blade II Bannerlord/Coop Crash Reports. Keep the crash report (the Send action can remove it), redact secrets and use the official support-ticket channel. Do not repeatedly rejoin a stalled session."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "VPS / Docker / Wine — validated Wine 11.0 headless path"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Headless dedicated-server SERVING was validated in this guide’s disposable tests with WineHQ Wine 11.0 (image docker.io/tianon/wine:11.0.0 / winehq-stable 11.0.0 on Debian trixie) plus Xvfb. Debian stock Wine 8.0 failed the same recipe (virtual_setup_exception stack overflow; no SERVING). Wine 9 and 10 were not tested here — treat 11.0 as the validated version, not a proven minimum across every Wine release. Do not use distro apt/yum “wine” metapackages that resolve to Wine 8 as an end-to-end recommendation. Preserve the Workshop layout (DedicatedServer alongside bin/, GUI/, SubModule.xml). Prefer host networking for UDP; keep stdin_open/tty for the console. GPU is not required for SERVING; a display server (Xvfb is enough; some setups need MIT-SHM disabled) is. Official Discord also mentions Ubuntu + Wine + winbind + Xvfb as community hosting notes."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Community tools — unofficial"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "The bannerlordcoop-server-manager project and the Unofficial Bannerlord Co-op Pterodactyl egg are community tools, not official support. Review their source and compatibility before use. This guide does not install them."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Linux support and hardware"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "The official FAQ says Linux is supported but Steam Deck is not; Deck reports vary (https://github.com/Bannerlord-Coop-Team/BannerlordCoop/issues/2162). Hosting and playing together is estimated at 8 CPU cores and 16 GB RAM, with a dedicated server. A running game instance is not required for dedicated hosting. Linux host-and-play transfer stalls are tracked in issue #2095."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Exact game builds and safe updates"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Compare full Bannerlord build identifiers as well as Co-op releases. Even minor build differences can stall joining. Check the server log for the refused build or mod. Save cleanly, stop only the intended server, then back up CoopData and any distribution server-data before replacing files. Never automate Workshop unsubscribe/resubscribe or restart Steam during someone’s active session."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Server exit diagnostics"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "Windows exit -1073741819 indicates access violation; check blocked/missing DLLs and retained save backups. -532462766 indicates an unhandled .NET exception. Exit 1 is generic. Exit 25 points to ProgramData/Mount and Blade II Bannerlord/logs/starter_log.txt inside the prefix. Diagnose from the preceding log messages, not the number alone. These official FAQ diagnostics were not deliberately reproduced here."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "details",
+          "id": "",
+          "className": "",
+          "summary": [
+            {
+              "t": "text",
+              "v": "Native server and unsupported tooling"
+            }
+          ],
+          "blocks": [
+            {
+              "type": "p",
+              "c": [
+                {
+                  "t": "text",
+                  "v": "This guide uses distributed Win64 binaries. Native .NET server work is tracked at https://github.com/Bannerlord-Coop-Team/BannerlordCoop/issues/2843; repository visibility is not permission to self-build or redistribute. The TAOM client launcher is Windows-only and is reported not to work under Proton/Wine. Other mods are not guaranteed; establish a Co-op-only baseline first."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "code",
+          "id": "code-dockerfile-wine-11-0-validated-outline-71121604",
+          "title": [
+            {
+              "t": "text",
+              "v": "Dockerfile — Wine 11.0 validated outline"
+            }
+          ],
+          "lang": "dockerfile",
+          "langLabel": "Dockerfile",
+          "oneshot": false
+        },
+        {
+          "type": "code",
+          "id": "code-compose-wine-11-0-rootless-podman-outlin-74440469",
+          "title": [
+            {
+              "t": "text",
+              "v": "Compose — Wine 11.0 / rootless Podman outline"
+            }
+          ],
+          "lang": "yaml",
+          "langLabel": "YAML",
+          "oneshot": false
+        }
+      ]
+    },
+    {
+      "id": "agents",
+      "kicker": "Step 16",
+      "title": "Agent notes",
+      "sub": "Safety rules for AI helpers.",
+      "blocks": [
+        {
+          "type": "ol",
+          "className": "step-cards",
+          "items": [
+            [
+              {
+                "t": "text",
+                "v": "Ask before any"
+              },
+              {
+                "t": "code",
+                "v": "sudo"
+              },
+              {
+                "t": "text",
+                "v": ", before stopping a running server, and before deleting or overwriting saves."
+              }
+            ],
+            [
+              {
+                "t": "text",
+                "v": "Match Co-op client and dedicated server versions exactly."
+              }
+            ],
+            [
+              {
+                "t": "text",
+                "v": "Prefer Steam Join when lobby is enabled; otherwise direct"
+              },
+              {
+                "t": "term",
+                "term": "UDP",
+                "def": "A network protocol used for game traffic; Co-op direct connect listens on a UDP port (default 4200).",
+                "v": "UDP"
+              },
+              {
+                "t": "text",
+                "v": "."
+              }
+            ],
+            [
+              {
+                "t": "text",
+                "v": "Redact passwords and personal paths from logs and chat."
+              }
+            ],
+            [
+              {
+                "t": "text",
+                "v": "On immutable OS prefer"
+              },
+              {
+                "t": "code",
+                "v": "$HOME"
+              },
+              {
+                "t": "text",
+                "v": "/"
+              },
+              {
+                "t": "term",
+                "term": "Distrobox",
+                "def": "A tool that runs another Linux distro in a container while sharing your home files.",
+                "v": "distrobox"
+              },
+              {
+                "t": "text",
+                "v": "/"
+              },
+              {
+                "t": "term",
+                "term": "Flatpak",
+                "def": "A sandboxed app format on Linux. Flatpak Steam keeps its library under its own app data path.",
+                "v": "Flatpak"
+              },
+              {
+                "t": "text",
+                "v": "."
+              }
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}
