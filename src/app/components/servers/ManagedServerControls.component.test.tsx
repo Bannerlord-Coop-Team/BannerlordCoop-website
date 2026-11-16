@@ -1,6 +1,5 @@
 import { createTranslator } from "@/app/lib/localization/translator";
 import { TestLocalization, refreshedMessages, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
-import { LocalizationProvider } from "@/app/lib/localization/client";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -667,7 +666,7 @@ it("refreshes a finished Start once and stays idle when a refresh re-delivers ch
     const container = document.createElement("div"); const root = createRoot(container);
     const controls = <ManagedServerControls observedGameState="stopped" {...progressProps} />;
     try {
-        await act(async () => root.render(<LocalizationProvider locale="en" messages={serverTestMessages}>{controls}</LocalizationProvider>));
+        await act(async () => root.render(<TestLocalization>{controls}</TestLocalization>));
         await act(async () => container.querySelector("button")!.click());
         await act(async () => vi.advanceTimersByTimeAsync(10));
         expect(container.textContent).toContain("Your server is ready to join");
@@ -675,22 +674,36 @@ it("refreshes a finished Start once and stays idle when a refresh re-delivers ch
         const reads = { start: startStatus.mock.calls.length, build: buildStatus.mock.calls.length };
         // Each router.refresh() delivers a new messages object; none of them may restart the polls.
         for (let refresh = 0; refresh < 3; refresh++) {
-            await act(async () => root.render(<LocalizationProvider locale="en" messages={refreshedMessages(refresh)}>{controls}</LocalizationProvider>));
+            await act(async () => root.render(<TestLocalization messages={refreshedMessages(refresh)}>{controls}</TestLocalization>));
             await act(async () => vi.advanceTimersByTimeAsync(5_000));
         }
         expect(router.refresh).toHaveBeenCalledOnce();
         expect(startStatus).toHaveBeenCalledTimes(reads.start);
         expect(buildStatus).toHaveBeenCalledTimes(reads.build);
         expect(container.textContent).toContain("Your server is ready to join");
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("does not re-read or re-refresh a finished Start when operate access returns", async () => {
+    vi.useFakeTimers();
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId));
+    startStatus.mockReset().mockResolvedValue(progress("ready", "succeeded", "Server started and ready to join."));
+    router.refresh.mockClear();
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls observedGameState="stopped" {...progressProps} /></TestLocalization>));
+        await act(async () => container.querySelector("button")!.click());
+        await act(async () => vi.advanceTimersByTimeAsync(10));
+        expect(router.refresh).toHaveBeenCalledOnce();
+        const reads = startStatus.mock.calls.length;
         // Losing and regaining operate access re-runs the Start poll for the same finished job; it must not read or refresh it again.
         for (const accessRole of ["support", "owner"] as const) {
-            await act(async () => root.render(<LocalizationProvider locale="en" messages={refreshedMessages(3)}>
-                <ManagedServerControls observedGameState="stopped" {...progressProps} accessRole={accessRole} />
-            </LocalizationProvider>));
+            await act(async () => root.render(<TestLocalization><ManagedServerControls observedGameState="stopped" {...progressProps} accessRole={accessRole} /></TestLocalization>));
             await act(async () => vi.advanceTimersByTimeAsync(5_000));
         }
         expect(router.refresh).toHaveBeenCalledOnce();
-        expect(startStatus).toHaveBeenCalledTimes(reads.start);
+        expect(startStatus).toHaveBeenCalledTimes(reads);
     } finally { await act(async () => root.unmount()); }
 });
 

@@ -3,8 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { BuildChangeJob, BuildOptions, BuildStatus } from "../../../../supabase/functions/_shared/server-build-contract";
 import { ManagedServerVersion } from "./ManagedServerVersion";
-import { refreshedMessages, serverTestMessages } from "./ManagedServerLocalization.test-utils";
-import { LocalizationProvider } from "@/app/lib/localization/client";
+import { TestLocalization, refreshedMessages, type serverTestMessages } from "./ManagedServerLocalization.test-utils";
 
 const { actions, router } = vi.hoisted(() => ({
     actions: { change: vi.fn(), options: vi.fn(), status: vi.fn() },
@@ -46,9 +45,9 @@ const radio = (value: string) => container.querySelector<HTMLInputElement>(`inpu
 /** Renders the version panel inside the server page's localization, optionally with refreshed messages. */
 async function render(props: Partial<{ canEdit: boolean; expectedUpdatedAt: string; messages: typeof serverTestMessages }> = {}) {
     await act(async () => root.render(
-        <LocalizationProvider locale="en" messages={props.messages ?? serverTestMessages}>
+        <TestLocalization messages={props.messages}>
             <ManagedServerVersion serverId={serverId} expectedUpdatedAt={props.expectedUpdatedAt ?? updatedAt} canEdit={props.canEdit ?? true} />
-        </LocalizationProvider>));
+        </TestLocalization>));
 }
 const choose = (value: string) => act(async () => { radio(value).click(); });
 

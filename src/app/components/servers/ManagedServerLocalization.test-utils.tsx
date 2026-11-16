@@ -14,7 +14,7 @@ export function refreshedMessages(refresh: number) {
     return { ...messages, "managed-server": { ...messages["managed-server"], "test.refreshed": `Refresh ${refresh}` } };
 }
 
-// Gives standalone server UI tests the same namespace composition as the unified page.
-export function TestLocalization({ children }: { children: ReactNode }) {
-    return <LocalizationProvider locale="en" messages={serverTestMessages}>{children}</LocalizationProvider>;
+// Gives standalone server UI tests the unified page's namespace composition, or the given (e.g. refreshed) messages.
+export function TestLocalization({ children, messages = serverTestMessages }: { children: ReactNode; messages?: typeof serverTestMessages }) {
+    return <LocalizationProvider locale="en" messages={messages}>{children}</LocalizationProvider>;
 }
