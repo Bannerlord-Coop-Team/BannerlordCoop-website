@@ -102,8 +102,11 @@ it("keeps following the requested job when the read started before Update now la
         resolveFirstRead({ serverId, job: updateJobInState("succeeded", { jobId: otherJobId }) });
     });
     await advance(6_000);
-    expect(readStatus.mock.calls.length).toBeGreaterThan(2);
     expect(result.current!.job).toBeNull();
     expect(result.current!.error).toBeNull();
     expect(onFollowedUpdateEnded).not.toHaveBeenCalled();
+    readStatus.mockResolvedValue({ serverId, job: updateJobInState("succeeded", { jobId }) });
+    await advance(3_000);
+    expect(onFollowedUpdateEnded).toHaveBeenCalledOnce();
+    expect(result.current!.job?.jobId).toBe(jobId);
 });

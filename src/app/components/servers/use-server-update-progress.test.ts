@@ -114,7 +114,16 @@ test("keeps the shown running job and reports unavailable when a read fails whil
     const follow: UpdateFollow = { kind: "following", jobId };
     const following: UpdateProgressState = { ...INITIAL_UPDATE_PROGRESS_STATE, follow, job: status("running").job, generation: 1 };
     const step = nextUpdatePollStep({ status: null, follow, now, deadline });
+    assert.deepEqual(step, { show: { kind: "unchanged" }, error: "unavailable", refresh: false, poll: "continue", follow });
     assert.deepEqual(updateProgressReducer(following, { type: "step", generation: 1, step }), {
         follow, job: following.job, error: "unavailable", generation: 1,
+    });
+});
+
+test("clears a shown job when a step hides a finished job this page never followed", () => {
+    const showing: UpdateProgressState = { follow: idle, job: status("running").job, error: null, generation: 1 };
+    const step = nextUpdatePollStep({ status: status("failed"), follow: idle, now, deadline });
+    assert.deepEqual(updateProgressReducer(showing, { type: "step", generation: 1, step }), {
+        follow: idle, job: null, error: null, generation: 1,
     });
 });
