@@ -33,7 +33,20 @@ const accounts: WebsiteAccountSummary[] = [
 let container: HTMLDivElement;
 let root: Root;
 
+function memoryStorage(): Storage {
+    const values = new Map<string, string>();
+    return {
+        getItem: key => values.get(key) ?? null,
+        setItem: (key, value) => { values.set(key, String(value)); },
+        removeItem: key => { values.delete(key); },
+        clear: () => { values.clear(); },
+        key: index => [...values.keys()][index] ?? null,
+        get length() { return values.size; },
+    } as Storage;
+}
+
 beforeEach(() => {
+    if (typeof globalThis.localStorage === "undefined") vi.stubGlobal("localStorage", memoryStorage());
     localStorage.clear();
     setRememberedVpsPageSize(10);
     localStorage.clear();
@@ -190,12 +203,11 @@ describe("VPS inventory query", () => {
         ])).toMatchObject({
             totalSlots: 15,
             takenSlots: 4,
-            allocatableSlots: 3,
             regions: [
-                { region: "us-west", label: "US-West", totalSlots: 3, takenSlots: 1, allocatableSlots: 1 },
-                { region: "us-east", label: "US-East", totalSlots: 3, takenSlots: 1, allocatableSlots: 2 },
-                { region: "poland", label: "Poland", totalSlots: 6, takenSlots: 2, allocatableSlots: 1 },
-                { region: "unplaced", label: "No stored region", totalSlots: 3, takenSlots: 0, allocatableSlots: 0 },
+                { region: "us-west", label: "US-West", totalSlots: 3, takenSlots: 1 },
+                { region: "us-east", label: "US-East", totalSlots: 3, takenSlots: 1 },
+                { region: "poland", label: "Poland", totalSlots: 6, takenSlots: 2 },
+                { region: "unplaced", label: "No stored region", totalSlots: 3, takenSlots: 0 },
             ],
         });
         const catalog = hostingRegionCatalogPayload();
@@ -207,10 +219,9 @@ describe("VPS inventory query", () => {
         expect(summarizeVpsSlots([warsaw, gravelines], catalog)).toMatchObject({
             totalSlots: 6,
             takenSlots: 1,
-            allocatableSlots: 3,
             regions: [
-                { region: "france", label: "France", totalSlots: 3, takenSlots: 0, allocatableSlots: 0 },
-                { region: "poland", label: "Poland", totalSlots: 3, takenSlots: 1, allocatableSlots: 1 },
+                { region: "france", label: "France", totalSlots: 3, takenSlots: 0 },
+                { region: "poland", label: "Poland", totalSlots: 3, takenSlots: 1 },
             ],
         });
         expect(regionSlotOutline(5, 5)).toBe("full");
