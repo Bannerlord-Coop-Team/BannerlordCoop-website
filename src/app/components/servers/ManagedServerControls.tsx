@@ -154,6 +154,8 @@ export function ManagedServerControls({
     const [startStatus, setStartStatus] = useState<StartProgressStatus | null>(null);
     const cancelledStart = useRef<string | null>(null);
     const startPollVersion = useRef(0);
+    // The Start job whose finish already refreshed the page.
+    const refreshedStartJob = useRef<string | null>(null);
     const [cancellingStart, setCancellingStart] = useState(false);
     const [locallyRequested, setLocallyRequested] = useState(false);
     const receiptId = runtimeInsight?.start?.jobId ?? null;
@@ -274,8 +276,14 @@ export function ManagedServerControls({
         return () => clearTimeout(timeout);
     }, [serverId, verifyRevision, verifyWindowOpen, verifyTimedOut, operationState, expectedUpdatedAt, isPending, endPolling, t, runtimeInsight?.desiredState, subscriptionHold]);
 
+    // Reads the current translator inside polls, so a refreshed dictionary never restarts them.
+    const translateInPoll = useEffectEvent((...args: Parameters<typeof t>) => t(...args));
+
     useEffect(() => {
         if (!canOperate || startJobId === null) return;
+        // This finished job already refreshed the page; a re-run must not read or refresh it again.
+        if (refreshedStartJob.current === startJobId) return;
+        const jobId = startJobId;
         let cancelled = false;
         const version = ++startPollVersion.current;
         let timeout: ReturnType<typeof setTimeout>;
@@ -283,19 +291,23 @@ export function ManagedServerControls({
         // Refreshes existing operation progress and reports localized connection feedback.
         async function poll() {
             try {
-                const result = await readManagedServerStartStatus(serverId, startJobId!);
+                const result = await readManagedServerStartStatus(serverId, jobId);
                 if (cancelled || version !== startPollVersion.current) return;
                 if (result.ok) {
                     setStartStatus(result.status);
                     setMessage("");
-                    if (["succeeded", "failed", "cancelled"].includes(result.status.state)) { router.refresh(); return; }
+                    if (["succeeded", "failed", "cancelled"].includes(result.status.state)) {
+                        refreshedStartJob.current = jobId;
+                        router.refresh();
+                        return;
+                    }
                 } else {
                     setMessage(result.message);
                     if (!result.retryable) { setProgressPaused(true); return; }
                 }
             } catch {
                 if (cancelled || version !== startPollVersion.current) return;
-                setMessage(t("controls.reconnectingToServerProgressYourStartRequestIsStillBeing"));
+                setMessage(translateInPoll("controls.reconnectingToServerProgressYourStartRequestIsStillBeing"));
             }
             if (Date.now() >= deadline) {
                 setProgressPaused(true);
@@ -305,7 +317,7 @@ export function ManagedServerControls({
         }
         void poll();
         return () => { cancelled = true; clearTimeout(timeout); };
-    }, [serverId, startJobId, pollRun, router, canOperate, t]);
+    }, [serverId, startJobId, pollRun, router, canOperate]);
 
     useEffect(() => {
         if (!canOperate) return;
@@ -322,20 +334,20 @@ export function ManagedServerControls({
                 setUpdateJob(job);
                 setUpdateProgressError("");
             } else if (updateFollowed.current && status === null) {
-                setUpdateProgressError(t("serverVersion.progressIsUnavailableTheChangeMayStillBeRunning"));
+                setUpdateProgressError(translateInPoll("serverVersion.progressIsUnavailableTheChangeMayStillBeRunning"));
             } else if (job === null && !updateFollowed.current) {
                 return;
             }
             if (job !== null && ["succeeded", "failed", "cancelled"].includes(job.state)) return;
             if (Date.now() >= deadline) {
-                setUpdateProgressError(t("serverVersion.progressChecksPausedRefreshToCheckAgain"));
+                setUpdateProgressError(translateInPoll("serverVersion.progressChecksPausedRefreshToCheckAgain"));
                 return;
             }
             timeout = setTimeout(pollUpdate, 3_000);
         }
         void pollUpdate();
         return () => { cancelled = true; clearTimeout(timeout); };
-    }, [serverId, canOperate, updatePollRun, t]);
+    }, [serverId, canOperate, updatePollRun]);
 
     /** Keeps the restart ref and rendered progress in step. */
     function updateRestart(next: RestartProgress | null) {

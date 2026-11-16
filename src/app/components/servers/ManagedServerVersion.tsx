@@ -2,7 +2,7 @@
 
 import { useTranslations } from "@/app/lib/localization/client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, CircleAlert, History, LoaderCircle, Minus } from "lucide-react";
 import { changeServerBuild, readServerBuildOptions, readServerBuildStatus } from "@/app/servers/server-build-actions";
@@ -52,6 +52,9 @@ export function ManagedServerVersion({ serverId, expectedUpdatedAt, canEdit }: {
     // A refreshed page carries a new revision, so the offered versions and what runs are read again.
     useEffect(() => { if (canEdit) void loadOptions(); }, [canEdit, loadOptions, expectedUpdatedAt]);
 
+    // Reads the current translator inside polls, so a refreshed dictionary never restarts them.
+    const translateInPoll = useEffectEvent((...args: Parameters<typeof t>) => t(...args));
+
     useEffect(() => {
         if (!canEdit) return;
         let cancelled = false;
@@ -61,7 +64,7 @@ export function ManagedServerVersion({ serverId, expectedUpdatedAt, canEdit }: {
         async function poll() {
             const next = await readServerBuildStatus(serverId);
             if (cancelled) return;
-            if (next === null) setProgressError(t("serverVersion.progressIsUnavailableTheChangeMayStillBeRunning"));
+            if (next === null) setProgressError(translateInPoll("serverVersion.progressIsUnavailableTheChangeMayStillBeRunning"));
             else {
                 setStatus(next);
                 setProgressError("");
@@ -76,11 +79,11 @@ export function ManagedServerVersion({ serverId, expectedUpdatedAt, canEdit }: {
                 }
             }
             if (Date.now() < deadline) timer = setTimeout(poll, POLL_INTERVAL_MILLISECONDS);
-            else setProgressError(t("serverVersion.progressChecksPausedRefreshToCheckAgain"));
+            else setProgressError(translateInPoll("serverVersion.progressChecksPausedRefreshToCheckAgain"));
         }
         void poll();
         return () => { cancelled = true; clearTimeout(timer); };
-    }, [serverId, canEdit, expectedUpdatedAt, pollVersion, router, loadOptions, t]);
+    }, [serverId, canEdit, expectedUpdatedAt, pollVersion, router, loadOptions]);
 
     const job = status?.job ?? null;
     const busy = job !== null && ACTIVE_JOB_STATES.has(job.state);

@@ -8,7 +8,13 @@ import servers from "@/app/lib/localization/dictionaries/en/servers.json";
 
 export const serverTestMessages = { common, "managed-server": managed, "server-common": shared, cheats, servers };
 
-// Gives standalone server UI tests the same namespace composition as the unified page.
-export function TestLocalization({ children }: { children: ReactNode }) {
-    return <LocalizationProvider locale="en" messages={serverTestMessages}>{children}</LocalizationProvider>;
+/** Simulates the payload of one router.refresh(): fresh message objects whose managed dictionary changed. */
+export function refreshedMessages(refresh: number) {
+    const messages = structuredClone(serverTestMessages);
+    return { ...messages, "managed-server": { ...messages["managed-server"], "test.refreshed": `Refresh ${refresh}` } };
+}
+
+// Gives standalone server UI tests the unified page's namespace composition, or the given (e.g. refreshed) messages.
+export function TestLocalization({ children, messages = serverTestMessages }: { children: ReactNode; messages?: typeof serverTestMessages }) {
+    return <LocalizationProvider locale="en" messages={messages}>{children}</LocalizationProvider>;
 }
