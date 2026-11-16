@@ -100,7 +100,10 @@ export function useServerUpdateProgress(
     const [pollRun, setPollRun] = useState(0);
     // A ref, not state: the poll loop reads and advances it between reads without restarting itself.
     const followState = useRef<UpdateFollow>({ kind: "idle" });
+    // Refs, so a caller passing a new reader or callback on each render does not restart the poll.
+    const reader = useRef(readStatus);
     const followedUpdateEnded = useRef(onFollowedUpdateEnded);
+    useEffect(() => { reader.current = readStatus; }, [readStatus]);
     useEffect(() => { followedUpdateEnded.current = onFollowedUpdateEnded; }, [onFollowedUpdateEnded]);
 
     // The poll stops when no update is in flight, so a new server revision (each page refresh brings one) is what
@@ -112,7 +115,7 @@ export function useServerUpdateProgress(
         const deadline = Date.now() + POLL_WINDOW_MILLISECONDS;
         // Reads the status once and applies the decided step to state, the callback and the timer.
         async function poll() {
-            const status = await readOrNull(readStatus, serverId);
+            const status = await readOrNull(reader.current, serverId);
             if (cancelled) return;
             const step = nextUpdatePollStep({ status, follow: followState.current, now: Date.now(), deadline });
             followState.current = step.follow;
@@ -124,7 +127,7 @@ export function useServerUpdateProgress(
         }
         void poll();
         return () => { cancelled = true; clearTimeout(timeout); };
-    }, [serverId, enabled, revision, pollRun, readStatus]);
+    }, [serverId, enabled, revision, pollRun]);
 
     /** Starts following the update this page just requested, so its result stays visible when it ends. */
     function followJob(jobId: string) {
