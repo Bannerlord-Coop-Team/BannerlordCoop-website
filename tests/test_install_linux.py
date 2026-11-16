@@ -18,7 +18,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = Path(os.environ.get("COOP_TEST_INSTALLER", ROOT / "installer/install-linux.sh"))
-GATEWAY = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev"
+GATEWAY = "https://nightly.bannerlordcoop.com"
 HEAD = "a" * 40
 TOKEN = {"access_token": "T" * 43, "token_type": "Bearer"}
 COOP_DLL = "Coop/bin/Win64_Shipping_Client/Coop.Core.dll"
@@ -277,6 +277,12 @@ class LinuxInstallerTests(unittest.TestCase):
 
     def test_invalid_device_code_is_rejected(self):
         self.config["session"]["device_code"] = "AAA" + "!" * 40
+        self.assertIn("invalid response", self.run_installer(success=False))
+        self.assertFalse(any("/token" in url for url in self.requests))
+
+    def test_verification_uri_on_another_host_is_rejected(self):
+        legacy = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev"
+        self.config["session"]["verification_uri"] = legacy + "/activate?code=ABCD-2345"
         self.assertIn("invalid response", self.run_installer(success=False))
         self.assertFalse(any("/token" in url for url in self.requests))
 

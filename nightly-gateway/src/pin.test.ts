@@ -1,16 +1,26 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import test from "node:test";
+import { after, before, test } from "node:test";
+import type { PGlite } from "@electric-sql/pglite";
+import {
+    clearGatewayTables,
+    FRIEND,
+    SPONSOR,
+    seedDownloadSession,
+    seedGrant,
+} from "../../supabase/functions/nightly-gateway/test-harness.ts";
 import {
     CREATE_BUILD_PIN_KIND,
     createBuildPinToken,
-} from "./core";
-import worker, {
-    serveCreateBuildPinLauncher,
-    serveCreateBuildPinPage,
-} from "./index";
+} from "./pin-rules";
+import type { RequestEnv } from "./database";
+import { createGateway } from "./index";
+import { serveCreateBuildPinLauncher, serveCreateBuildPinPage } from "./pins";
+import { createWorkerSchemaDatabase, workerDatabase } from "./postgres-test-database";
+import { noLog } from "./test-log";
 
-const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+const gateway = "https://nightly.bannerlordcoop.com";
+const legacyGateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
 const legacy = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const BUILD_ID = "1527333818711806084";
 const CLIENT_SHA = "1234567890abcdef1234567890abcdef12345678";
@@ -22,145 +32,32 @@ const SERVER_FILE = "BannerlordCoop-DedicatedServer-Win64-client-1234567-server-
 const SERVER_KEY = `manual/${BUILD_ID}/${SERVER_FILE}`;
 const SERVER_SHA256 = "c".repeat(64);
 
-type PinRow = {
-    token_hash: string;
-    build_id: string;
-    client_sha: string;
-    server_sha: string;
-    client_file_name: string;
-    client_bytes: number;
-    client_sha256: string;
-    server_file_name: string;
-    server_key: string;
-    server_public_url: string;
-    server_bytes: number;
-    server_sha256: string;
-    created_at: number;
-    expires_at: number;
-    consumed_at: number | null;
-};
+// One in-process PostgreSQL with the real gateway schema, emptied before each test's environment is built.
+let database: PGlite;
 
-type PinSession = {
-    token_hash: string;
-    pin_token_hash: string;
-    created_at: number;
-    expires_at: number;
-};
+before(async () => {
+    database = await createWorkerSchemaDatabase();
+});
 
-type NightlySession = {
-    token_hash: string;
-    expires_at: number;
-};
+after(async () => {
+    await database.close();
+});
 
-function sha256(value: string): string {
-    return createHash("sha256").update(value).digest("hex");
-}
+// The Worker under test: pin routes never call upstream, and each request opens the PGlite-backed database.
+const worker = createGateway({
+    fetch: () => Promise.reject(new Error("pin routes must not call upstream")),
+    log: noLog,
+    openDatabase: async () => workerDatabase(database),
+});
 
-function pinEnvironment(): {
-    env: Env;
-    objects: Map<string, Uint8Array>;
-    nightlySessions: NightlySession[];
-} {
-    const pins: PinRow[] = [];
-    const sessions: PinSession[] = [];
-    const nightlySessions: NightlySession[] = [];
+// Empties every gateway table and builds the Worker bindings around an in-memory R2 bucket.
+async function pinEnvironment(): Promise<{ env: Env; objects: Map<string, Uint8Array> }> {
+    await clearGatewayTables(database);
+    await database.exec("truncate nightly_gateway.installer_pins, nightly_gateway.pin_download_sessions cascade");
     const objects = new Map<string, Uint8Array>();
-    const database = {
-        prepare(sql: string) {
-            const statement = {
-                args: [] as unknown[],
-                bind(...args: unknown[]) {
-                    statement.args = args;
-                    return statement;
-                },
-                async first<T>() {
-                    if (sql.includes("FROM installer_pins WHERE build_id = ?")) {
-                        return (pins.find((pin) => pin.build_id === statement.args[0]) ?? null) as T;
-                    }
-                    if (sql.includes("FROM installer_pins WHERE token_hash = ?")) {
-                        return (pins.find((pin) => pin.token_hash === statement.args[0]) ?? null) as T;
-                    }
-                    if (sql.includes("FROM pin_download_sessions") && sql.includes("JOIN installer_pins")) {
-                        const session = sessions.find((entry) => entry.token_hash === statement.args[0]);
-                        if (session === undefined) return null as T;
-                        const pin = pins.find((entry) => entry.token_hash === session.pin_token_hash);
-                        if (pin === undefined) return null as T;
-                        return {
-                            build_id: pin.build_id,
-                            session_expires_at: session.expires_at,
-                            pin_expires_at: pin.expires_at,
-                        } as T;
-                    }
-                    if (sql.includes("FROM download_sessions WHERE token_hash")) {
-                        return (nightlySessions.find((entry) => entry.token_hash === statement.args[0]) ?? null) as T;
-                    }
-                    throw new Error(`Unexpected test query: ${sql}`);
-                },
-                async run() {
-                    if (sql.includes("INSERT INTO installer_pins")) {
-                        const [
-                            tokenHash, buildId, clientSha, serverSha, clientFileName, clientBytes,
-                            clientSha256, serverFileName, serverKey, serverPublicUrl, serverBytes,
-                            serverSha256, createdAt, expiresAt,
-                        ] = statement.args;
-                        pins.push({
-                            token_hash: String(tokenHash),
-                            build_id: String(buildId),
-                            client_sha: String(clientSha),
-                            server_sha: String(serverSha),
-                            client_file_name: String(clientFileName),
-                            client_bytes: Number(clientBytes),
-                            client_sha256: String(clientSha256),
-                            server_file_name: String(serverFileName),
-                            server_key: String(serverKey),
-                            server_public_url: String(serverPublicUrl),
-                            server_bytes: Number(serverBytes),
-                            server_sha256: String(serverSha256),
-                            created_at: Number(createdAt),
-                            expires_at: Number(expiresAt),
-                            consumed_at: null,
-                        });
-                        return { success: true, meta: { changes: 1 } };
-                    }
-                    if (sql.includes("UPDATE installer_pins SET consumed_at")) {
-                        const [consumedAt, tokenHash, now] = statement.args;
-                        const pin = pins.find((entry) =>
-                            entry.token_hash === tokenHash
-                            && entry.consumed_at === null
-                            && entry.expires_at > Number(now));
-                        if (pin === undefined) return { success: true, meta: { changes: 0 } };
-                        pin.consumed_at = Number(consumedAt);
-                        return { success: true, meta: { changes: 1 } };
-                    }
-                    if (sql.includes("INSERT INTO pin_download_sessions")) {
-                        const [sessionHash, createdAt, expiresAt, pinHash, consumedAt] = statement.args;
-                        const pin = pins.find((entry) =>
-                            entry.token_hash === pinHash && entry.consumed_at === Number(consumedAt));
-                        if (pin === undefined) return { success: true, meta: { changes: 0 } };
-                        sessions.push({
-                            token_hash: String(sessionHash),
-                            pin_token_hash: String(pinHash),
-                            created_at: Number(createdAt),
-                            expires_at: Number(expiresAt),
-                        });
-                        return { success: true, meta: { changes: 1 } };
-                    }
-                    throw new Error(`Unexpected test mutation: ${sql}`);
-                },
-            };
-            return statement;
-        },
-        async batch(entries: Array<{ run(): Promise<{ success: boolean; meta?: { changes: number } }> }>) {
-            const results = [];
-            for (const entry of entries) results.push(await entry.run());
-            return results;
-        },
-    };
     return {
         objects,
-        nightlySessions,
         env: {
-            DB: database,
             RELEASES: {
                 async put(key: string, value: ArrayBuffer | ArrayBufferView | string) {
                     const bytes = typeof value === "string"
@@ -182,15 +79,16 @@ function pinEnvironment(): {
                     };
                 },
             },
-            DISCORD_BOT_TOKEN: "B".repeat(59),
-            DISCORD_CLIENT_ID: "1537575576745803799",
-            DISCORD_CLIENT_SECRET: "test-secret-value-that-is-long-enough",
-            PUBLIC_ORIGIN: gateway,
             LEGACY_R2_ORIGIN: legacy,
-            TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+            NIGHTLY_FUNCTION_URL: "https://example.supabase.co/functions/v1/nightly-gateway",
             PIN_MINT_SECRET: PIN_SECRET,
         } as unknown as Env,
     };
+}
+
+// Gives a handler called directly the request-scoped database the Worker would have opened for it.
+function withDatabase(env: Env): RequestEnv {
+    return { ...env, DB: workerDatabase(database) };
 }
 
 function metadata() {
@@ -214,23 +112,47 @@ function metadata() {
     };
 }
 
-function mintRequest(envSecret = PIN_SECRET, body = metadata(), archive: Buffer = CLIENT_ARCHIVE): Request {
+function mintRequest(
+    envSecret = PIN_SECRET,
+    body = metadata(),
+    archive: Buffer = CLIENT_ARCHIVE,
+    origin = gateway,
+): Request {
     const form = new FormData();
     form.set("metadata", JSON.stringify(body));
     form.set("client", new File([archive], "Coop.7z"));
-    return new Request(`${gateway}/v1/pins`, {
+    return new Request(`${origin}/v1/pins`, {
         method: "POST",
         headers: { authorization: `Bearer ${envSecret}` },
         body: form,
     });
 }
 
+// Sends one request through the Worker's fetch handler.
 async function fetchGateway(request: Request, env: Env): Promise<Response> {
     return worker.fetch(request, env, {} as ExecutionContext);
 }
 
+// Builds the installer's pin redemption request.
+function redeemRequest(token: string, origin = gateway): Request {
+    return new Request(`${origin}/v1/pins/token`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: `pin=${token}`,
+    });
+}
+
+// Reads one installer_pins row's consumption time straight from the schema.
+async function consumedAt(buildId: string): Promise<number | null> {
+    const result = await database.query<{ consumed_at: number | null }>(
+        "SELECT consumed_at FROM nightly_gateway.installer_pins WHERE build_id = $1",
+        [buildId],
+    );
+    return result.rows[0]?.consumed_at ?? null;
+}
+
 test("the bot can mint a create-build pin and the installer can redeem it once", async () => {
-    const { env, objects } = pinEnvironment();
+    const { env, objects } = await pinEnvironment();
     const body = metadata();
     const minted = await fetchGateway(mintRequest(PIN_SECRET, body), env);
     assert.equal(minted.status, 201);
@@ -244,20 +166,24 @@ test("the bot can mint a create-build pin and the installer can redeem it once",
     assert.equal(reminted.status, 200);
     assert.deepEqual(await reminted.json(), payload);
 
-    const page = await serveCreateBuildPinPage(new URL(payload.installUrl), env);
+    const page = await serveCreateBuildPinPage(new URL(payload.installUrl), withDatabase(env));
     assert.equal(page.status, 200);
     const markup = await page.text();
     assert.match(markup, /Install this <span>exact<\/span> build/);
     assert.match(markup, new RegExp(CLIENT_SHA.slice(0, 7)));
     assert.match(markup, /v1\/pins\/install\.cmd\?pin=/);
 
-    const launcher = await serveCreateBuildPinLauncher(new URL(`${gateway}/v1/pins/install.cmd?pin=${payload.token}`), env);
+    const launcher = await serveCreateBuildPinLauncher(new URL(`${gateway}/v1/pins/install.cmd?pin=${payload.token}`), withDatabase(env));
     assert.equal(launcher.status, 200);
     const cmd = await launcher.text();
     assert.match(cmd, new RegExp(`BANNERLORDCOOP_INSTALLER_PIN=${payload.token}`));
     assert.match(cmd, /Create-Build Installer/);
+    assert.ok(cmd.includes(`set "INSTALLER_PRIMARY=${gateway}/install.ps1"\r\n`));
+    assert.ok(cmd.includes(
+        'set "INSTALLER_MIRROR=https://raw.githubusercontent.com/Bannerlord-Coop-Team/BannerlordCoop-website/main/installer/install.ps1"',
+    ));
 
-    const stillVisible = await serveCreateBuildPinPage(new URL(payload.installUrl), env);
+    const stillVisible = await serveCreateBuildPinPage(new URL(payload.installUrl), withDatabase(env));
     assert.equal(stillVisible.status, 200);
 
     const redeemed = await fetchGateway(new Request(`${gateway}/v1/pins/token`, {
@@ -298,20 +224,45 @@ test("the bot can mint a create-build pin and the installer can redeem it once",
     }), env);
     assert.equal(reused.status, 409);
     assert.deepEqual(await reused.json(), { error: "already_used" });
+    assert.notEqual(await consumedAt(BUILD_ID), null);
 
-    const usedPage = await serveCreateBuildPinPage(new URL(payload.installUrl), env);
+    const usedPage = await serveCreateBuildPinPage(new URL(payload.installUrl), withDatabase(env));
     assert.equal(usedPage.status, 400);
     assert.match(await usedPage.text(), /already used/);
 });
 
+test("a redemption whose download session cannot be written rolls back and leaves the pin redeemable", async () => {
+    const { env } = await pinEnvironment();
+    const minted = await fetchGateway(mintRequest(), env);
+    const { token } = await minted.json() as { token: string };
+    await database.exec(`
+        CREATE FUNCTION nightly_gateway.refuse_pin_session() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN RAISE EXCEPTION 'pin_session_insert_refused'; END $$;
+        CREATE TRIGGER refuse_pin_session BEFORE INSERT ON nightly_gateway.pin_download_sessions
+            FOR EACH ROW EXECUTE FUNCTION nightly_gateway.refuse_pin_session();
+    `);
+    try {
+        const failed = await fetchGateway(redeemRequest(token), env);
+        assert.equal(failed.status, 500);
+        assert.equal(await consumedAt(BUILD_ID), null);
+    } finally {
+        await database.exec(`
+            DROP TRIGGER refuse_pin_session ON nightly_gateway.pin_download_sessions;
+            DROP FUNCTION nightly_gateway.refuse_pin_session();
+        `);
+    }
+
+    const redeemed = await fetchGateway(redeemRequest(token), env);
+    assert.equal(redeemed.status, 200);
+    assert.notEqual(await consumedAt(BUILD_ID), null);
+});
+
 test("a nightly download session cannot read a create-build pin artifact", async () => {
-    const { env, nightlySessions } = pinEnvironment();
+    const { env } = await pinEnvironment();
     assert.equal((await fetchGateway(mintRequest(), env)).status, 201);
     const nightlyToken = "n".repeat(43);
-    nightlySessions.push({
-        token_hash: sha256(nightlyToken),
-        expires_at: Math.floor(Date.now() / 1000) + 3600,
-    });
+    await seedGrant(database, SPONSOR);
+    await seedDownloadSession(database, FRIEND, SPONSOR, nightlyToken);
     const response = await fetchGateway(new Request(`${gateway}/v1/artifacts/pins/${BUILD_ID}/Coop.7z`, {
         headers: { authorization: `Bearer ${nightlyToken}` },
     }), env);
@@ -320,7 +271,7 @@ test("a nightly download session cannot read a create-build pin artifact", async
 });
 
 test("a create-build pin session cannot read a nightly artifact", async () => {
-    const { env } = pinEnvironment();
+    const { env } = await pinEnvironment();
     const minted = await fetchGateway(mintRequest(), env);
     const { token } = await minted.json() as { token: string };
     const redeemed = await fetchGateway(new Request(`${gateway}/v1/pins/token`, {
@@ -341,7 +292,7 @@ test("a create-build pin session cannot read a nightly artifact", async () => {
 });
 
 test("pin mint rejects a missing or wrong shared secret", async () => {
-    const { env } = pinEnvironment();
+    const { env } = await pinEnvironment();
     const missing = await fetchGateway(new Request(`${gateway}/v1/pins`, {
         method: "POST",
         body: new FormData(),
@@ -357,14 +308,38 @@ test("pin mint rejects a missing or wrong shared secret", async () => {
     assert.deepEqual(await unavailable.json(), { error: "pin_mint_unavailable" });
 });
 
-test("migration mode fails closed before any gateway state can change", async () => {
-    const { env } = pinEnvironment();
-    const locked = { ...env, MIGRATION_MODE: "locked" as const };
-    const health = await fetchGateway(new Request(`${gateway}/health`), locked);
-    assert.equal(health.status, 503);
-    assert.deepEqual(await health.json(), { ok: false, maintenance: true });
+test("create-build pins keep install links, manifests, and launchers on the allowlisted host that was used", async () => {
+    const cases = [
+        { origin: gateway, expected: gateway },
+        { origin: legacyGateway, expected: legacyGateway },
+        { origin: "https://gateway.attacker.invalid", expected: gateway },
+    ];
+    for (const { origin, expected } of cases) {
+        const { env } = await pinEnvironment();
+        const minted = await fetchGateway(mintRequest(PIN_SECRET, metadata(), CLIENT_ARCHIVE, origin), env);
+        assert.equal(minted.status, 201);
+        const { token, installUrl } = await minted.json() as { token: string; installUrl: string };
+        assert.equal(installUrl, `${expected}/install?pin=${token}`, origin);
 
-    const create = await fetchGateway(new Request(`${gateway}/v1/device/sessions`, { method: "POST" }), locked);
-    assert.equal(create.status, 503);
-    assert.deepEqual(await create.json(), { error: "migration_in_progress" });
+        const page = await fetchGateway(new Request(installUrl), env);
+        assert.equal(page.status, 200);
+        assert.match(await page.text(), /href="\/v1\/pins\/install\.cmd\?pin=/);
+
+        const launcher = await fetchGateway(new Request(`${origin}/v1/pins/install.cmd?pin=${token}`), env);
+        assert.equal(launcher.status, 200);
+        assert.ok((await launcher.text()).includes(`set "INSTALLER_PRIMARY=${expected}/install.ps1"\r\n`), origin);
+
+        const redeemed = await fetchGateway(new Request(`${origin}/v1/pins/token`, {
+            method: "POST",
+            headers: { "content-type": "application/x-www-form-urlencoded" },
+            body: `pin=${token}`,
+        }), env);
+        const { access_token: accessToken } = await redeemed.json() as { access_token: string };
+        const manifest = await fetchGateway(new Request(`${origin}/v1/manifests/pin`, {
+            headers: { authorization: `Bearer ${accessToken}` },
+        }), env);
+        const body = await manifest.json() as { client: { publicUrl: string }; server: { publicUrl: string } };
+        assert.equal(body.client.publicUrl, `${expected}/v1/artifacts/pins/${BUILD_ID}/Coop.7z`, origin);
+        assert.equal(body.server.publicUrl, `${legacy}/${SERVER_KEY}`);
+    }
 });
