@@ -1,8 +1,9 @@
 "use client";
 
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
+import { reuseDictionaries } from "./dictionary-reuse";
 import { createTranslator } from "./translator";
-import type { Dictionary, Locale, LocaleOption, Messages, Namespace, PluralMessage, Translator } from "./types";
+import type { Dictionary, Locale, LocaleOption, Messages, Namespace, Translator } from "./types";
 
 type LocalizationContextValue = {
     locale: Locale;
@@ -40,32 +41,6 @@ function useStableMessages(locale: Locale, delivered: Messages): Messages {
     const messages = stable.locale === locale ? reuseDictionaries(stable.messages, delivered) : delivered;
     setStable({ locale, delivered, messages });
     return messages;
-}
-
-/** Substitutes each unchanged namespace's earlier dictionary, returning the earlier messages when nothing changed. */
-function reuseDictionaries(previous: Messages, next: Messages): Messages {
-    const merged = Object.fromEntries(Object.entries(next).map(([namespace, dictionary]) => {
-        const earlier = previous[namespace as Namespace];
-        return [namespace, earlier && sameDictionary(earlier, dictionary) ? earlier : dictionary];
-    })) as Messages;
-    const unchanged = Object.keys(previous).length === Object.keys(merged).length
-        && Object.entries(merged).every(([namespace, dictionary]) => previous[namespace as Namespace] === dictionary);
-    return unchanged ? previous : merged;
-}
-
-/** Compares two dictionaries by their messages rather than by object identity. */
-function sameDictionary(left: Dictionary, right: Dictionary): boolean {
-    if (left === right) return true;
-    const keys = Object.keys(left);
-    if (keys.length !== Object.keys(right).length) return false;
-    return keys.every((key) => Object.hasOwn(right, key) && sameMessage(left[key], right[key]));
-}
-
-/** Compares one plain or plural message by value. */
-function sameMessage(left: string | PluralMessage, right: string | PluralMessage): boolean {
-    if (typeof left === "string" || typeof right === "string") return left === right;
-    const forms = Object.keys(left) as (keyof PluralMessage)[];
-    return forms.length === Object.keys(right).length && forms.every((form) => left[form] === right[form]);
 }
 
 /** Exposes root locale/selector options without importing any server loaders or cookies. */

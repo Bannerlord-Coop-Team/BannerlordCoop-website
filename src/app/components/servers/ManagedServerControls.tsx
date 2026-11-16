@@ -3,6 +3,7 @@
 import { isColdSleeping } from "@/app/lib/hosting/cold-sleep";
 
 import { useTranslations } from "@/app/lib/localization/client";
+import type { TranslationParams } from "@/app/lib/localization/types";
 
 import {
     useManagedConsoleSignals,
@@ -154,8 +155,8 @@ export function ManagedServerControls({
     const [startStatus, setStartStatus] = useState<StartProgressStatus | null>(null);
     const cancelledStart = useRef<string | null>(null);
     const startPollVersion = useRef(0);
-    // A finished Start refreshes the page once; the refreshed render must not read or refresh that job again.
-    const refreshedStartJobs = useRef(new Set<string>());
+    // A finished Start refreshes the page once; a later re-run of the poll (refreshed render, role or poll restart) must not read or refresh that job again.
+    const refreshedStartJob = useRef<string | null>(null);
     const [cancellingStart, setCancellingStart] = useState(false);
     const [locallyRequested, setLocallyRequested] = useState(false);
     const receiptId = runtimeInsight?.start?.jobId ?? null;
@@ -277,10 +278,11 @@ export function ManagedServerControls({
     }, [serverId, verifyRevision, verifyWindowOpen, verifyTimedOut, operationState, expectedUpdatedAt, isPending, endPolling, t, runtimeInsight?.desiredState, subscriptionHold]);
 
     // Reads the current translator inside polls, so a refreshed dictionary never restarts them.
-    const translateInPoll = useEffectEvent((key: string) => t(key));
+    const translateInPoll = useEffectEvent((key: string, params?: TranslationParams) => t(key, params));
 
     useEffect(() => {
-        if (!canOperate || startJobId === null || refreshedStartJobs.current.has(startJobId)) return;
+        if (!canOperate || startJobId === null || refreshedStartJob.current === startJobId) return;
+        const jobId = startJobId;
         let cancelled = false;
         const version = ++startPollVersion.current;
         let timeout: ReturnType<typeof setTimeout>;
@@ -288,13 +290,13 @@ export function ManagedServerControls({
         // Refreshes existing operation progress and reports localized connection feedback.
         async function poll() {
             try {
-                const result = await readManagedServerStartStatus(serverId, startJobId!);
+                const result = await readManagedServerStartStatus(serverId, jobId);
                 if (cancelled || version !== startPollVersion.current) return;
                 if (result.ok) {
                     setStartStatus(result.status);
                     setMessage("");
                     if (["succeeded", "failed", "cancelled"].includes(result.status.state)) {
-                        refreshedStartJobs.current.add(startJobId!);
+                        refreshedStartJob.current = jobId;
                         router.refresh();
                         return;
                     }

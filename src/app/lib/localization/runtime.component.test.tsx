@@ -8,7 +8,7 @@ import { createTranslator } from "./translator";
 import { LocalizationProvider, useLocalization, useTranslations } from "./client";
 import { assertDictionaryParity } from "./integrity";
 import { localeDefinitions, getEnabledLocales, resolveLocale } from "./registry";
-import { locales, namespaces, localeCookie, localeCookieOptions, type Dictionary, type Translator } from "./types";
+import { locales, namespaces, localeCookie, localeCookieOptions, type Dictionary, type Messages, type Translator } from "./types";
 import common from "./dictionaries/en/common.json";
 
 const request = vi.hoisted(() => ({ value: undefined as string | undefined, set: vi.fn() }));
@@ -34,6 +34,27 @@ function ScopedProbe() {
     const cheats = useTranslations("cheats");
     const root = useLocalization();
     return <p>{root.locale}|{common.locale}|{cheats.locale}|{cheats.t("heading")}</p>;
+}
+
+/** Builds a fresh cheats dictionary, as each refreshed payload would deliver it. */
+function cheatsMessages(): Dictionary {
+    return { heading: "Commands", count: { one: "{count} command", other: "{count} commands" } };
+}
+
+/** Mounts nested providers around a probe that records every cheats translator the hook hands out. */
+function mountCheatsProbe() {
+    const seen: Translator[] = [];
+    /** Records each translator the hook hands out. */
+    function TranslatorProbe() {
+        seen.push(useTranslations("cheats"));
+        return null;
+    }
+    const root = createRoot(document.createElement("div"));
+    const render = (cheats: Dictionary, outer: Messages = { common }) => act(async () => root.render(
+        <LocalizationProvider locale="en" messages={outer}>
+            <LocalizationProvider locale="en" messages={{ cheats }}><TranslatorProbe /></LocalizationProvider>
+        </LocalizationProvider>));
+    return { seen, render, unmount: () => act(async () => root.unmount()) };
 }
 
 describe("localization runtime", () => {
@@ -107,27 +128,27 @@ describe("localization runtime", () => {
         )).toContain("en|en|zh-CN|命令");
     });
 
-    it("keeps a translator across refreshed payloads with equal messages and replaces it when content changes", async () => {
-        const seen: Translator[] = [];
-        /** Records each translator the hook hands out. */
-        function TranslatorProbe() {
-            seen.push(useTranslations("cheats"));
-            return null;
-        }
-        const container = document.createElement("div");
-        const root = createRoot(container);
-        const render = (cheats: Dictionary, outer = { common }) => act(async () => root.render(
-            <LocalizationProvider locale="en" messages={outer}>
-                <LocalizationProvider locale="en" messages={{ cheats }}><TranslatorProbe /></LocalizationProvider>
-            </LocalizationProvider>));
+    it("keeps a translator across refreshed payloads with equal messages", async () => {
+        const probe = mountCheatsProbe();
         try {
-            await render({ heading: "Commands", count: { one: "{count} command", other: "{count} commands" } });
-            await render({ heading: "Commands", count: { one: "{count} command", other: "{count} commands" } }, { common: { ...common } });
-            expect(new Set(seen).size).toBe(1);
-            await render({ heading: "Console commands", count: { one: "{count} command", other: "{count} commands" } });
-            expect(new Set(seen).size).toBe(2);
-            expect(seen.at(-1)!.t("heading")).toBe("Console commands");
-        } finally { await act(async () => root.unmount()); }
+            await probe.render(cheatsMessages());
+            await probe.render(cheatsMessages(), { common: { ...common } });
+            expect(new Set(probe.seen).size).toBe(1);
+        } finally { await probe.unmount(); }
+    });
+
+    it.each([
+        { change: "a changed plain value", cheats: { ...cheatsMessages(), heading: "Console commands" }, key: "heading", params: undefined, text: "Console commands" },
+        { change: "a changed plural form", cheats: { ...cheatsMessages(), count: { one: "{count} command", other: "{count} console commands" } }, key: "count", params: { count: 2 }, text: "2 console commands" },
+        { change: "an added key", cheats: { ...cheatsMessages(), empty: "No commands" }, key: "empty", params: undefined, text: "No commands" },
+    ])("replaces the translator when a refresh delivers $change", async ({ cheats, key, params, text }) => {
+        const probe = mountCheatsProbe();
+        try {
+            await probe.render(cheatsMessages());
+            await probe.render(cheats);
+            expect(new Set(probe.seen).size).toBe(2);
+            expect(probe.seen.at(-1)!.t(key, params)).toBe(text);
+        } finally { await probe.unmount(); }
     });
 
     it("selects plurals via count and formats dates/numbers deterministically", () => {
@@ -150,7 +171,7 @@ describe("localization runtime", () => {
     });
 
     it("keeps client runtime imports separate from cookies, loaders, and dictionary payloads", () => {
-        for (const file of ["client.tsx", "translator.tsx", "types.ts", "navigation.ts"]) {
+        for (const file of ["client.tsx", "dictionary-reuse.ts", "translator.tsx", "types.ts", "navigation.ts"]) {
             const source = readFileSync(resolve("src/app/lib/localization", file), "utf8");
             expect(source).not.toMatch(/from ["'].*(?:server|registry|locales\/|dictionaries\/|next\/headers)/);
         }

@@ -688,6 +688,15 @@ it.each(["identical", "changed"] as const)("refreshes a finished Start once and 
         expect(startStatus).toHaveBeenCalledTimes(reads.start);
         expect(buildStatus).toHaveBeenCalledTimes(reads.build);
         expect(container.textContent).toContain("Your server is ready to join");
+        // Losing and regaining operate access re-runs the Start poll for the same finished job; it must not read or refresh it again.
+        for (const accessRole of ["support", "owner"] as const) {
+            await act(async () => root.render(<LocalizationProvider locale="en" messages={refreshedMessages(content, 3)}>
+                <ManagedServerControls observedGameState="stopped" {...progressProps} accessRole={accessRole} />
+            </LocalizationProvider>));
+            await act(async () => vi.advanceTimersByTimeAsync(5_000));
+        }
+        expect(router.refresh).toHaveBeenCalledOnce();
+        expect(startStatus).toHaveBeenCalledTimes(reads.start);
     } finally { await act(async () => root.unmount()); }
 });
 
