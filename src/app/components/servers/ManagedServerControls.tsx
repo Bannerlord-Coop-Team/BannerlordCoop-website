@@ -12,7 +12,7 @@ import {
     type ManagedConsoleSignal,
 } from "@/app/components/servers/ManagedServerPollingProvider";
 import { cancelManagedServerStart, operateManagedServer, readManagedServerStartStatus, setManagedServerPassword } from "@/app/servers/managed-server-actions";
-import { ServerUpdateProgress, ServerUpdateProgressError } from "./ServerUpdateProgress";
+import { ServerUpdateStatus } from "./ServerUpdateProgress";
 import { useServerUpdateProgress } from "./use-server-update-progress";
 import { readServerBuildStatus } from "@/app/servers/server-build-actions";
 import { useRouter } from "next/navigation";
@@ -529,7 +529,6 @@ export function ManagedServerControls({
     const showStart = pendingOperation === "start" || startJobId !== null || displayedStartStatus !== null;
     // With a Maintenance card, Update now reports beside its own button instead of in the console.
     const updateMessageInSlot = updateSlot !== undefined && lastOperation === "update-now" && updateJob === null;
-    const updateProgressCard = updateJob !== null ? <ServerUpdateProgress job={updateJob} /> : null;
     const showUpdateStatus = updateJob !== null || updateError !== null;
     const statusArea = showStart || showUpdateStatus || restart !== null || progressPaused || stopCheckPaused || (message && !updateMessageInSlot && updateJob === null) ? (
         <div className="flex w-full flex-col items-start gap-2">
@@ -539,8 +538,7 @@ export function ManagedServerControls({
                 disabled={isPending || moving} onClick={cancelQueuedStart}>
                 {t(cancellingStart ? "controls.cancellingStart" : "controls.cancelStart")}
             </button>}
-            {updateProgressCard}
-            {updateError !== null && <ServerUpdateProgressError error={updateError} />}
+            <ServerUpdateStatus job={updateJob} error={updateError} />
             {restart !== null && <RestartProgressCard progress={restart} />}
             {progressPaused && <div className="max-w-xl text-sm leading-6 text-foreground-muted">
                 <p>{t("controls.automaticProgressUpdatesArePausedReadinessHasNotBeenConfirmed")}</p>

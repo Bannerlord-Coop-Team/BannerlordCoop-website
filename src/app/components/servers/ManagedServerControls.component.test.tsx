@@ -11,7 +11,7 @@ import { MyServersApiError, readMyServersResponse } from "@/app/lib/hosting/my-s
 import { createMyServersHandler } from "../../../../supabase/functions/_shared/my-servers";
 import type { MyServerMove } from "@/app/lib/control-plane/types";
 import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
-import { updateJob, updateSteps } from "./ServerUpdateProgress.test-utils";
+import { finishedUpdateJob, updateJob, updateSteps } from "./ServerUpdateProgress.test-utils";
 
 const { revealAddress } = vi.hoisted(() => ({ revealAddress: vi.fn() }));
 const { backupStatus, deletionStatus } = vi.hoisted(() => ({ backupStatus: vi.fn(), deletionStatus: vi.fn() }));
@@ -212,8 +212,7 @@ it("confirms and queues an immediate update with the displayed server revision a
         outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "update",
     });
     const running = updateJob({ phase: "backup", steps: updateSteps(["done", "done", "active"]), completedSteps: 2, progress: "Creating a safe restore point" });
-    const succeeded = { ...running, state: "succeeded", phase: "done", completedSteps: 6, progress: "Now running 0.1.11.",
-        steps: running.steps.map(step => ({ ...step, state: "done" })), completedAt: "2026-09-20T12:05:00.000Z" };
+    const succeeded = finishedUpdateJob({ progress: "Now running 0.1.11." });
     buildStatus.mockReset()
         .mockResolvedValueOnce({ serverId: "22222222-2222-4222-8222-222222222222", job: null })
         .mockResolvedValueOnce({ serverId: "22222222-2222-4222-8222-222222222222", job: running })
@@ -240,6 +239,9 @@ it("confirms and queues an immediate update with the displayed server revision a
         // The next read shows the same job finished: the page follows it by id and refreshes exactly once.
         await act(async () => { await vi.advanceTimersByTimeAsync(3_100); });
         expect(container.textContent).toContain("Now running 0.1.11.");
+        expect(router.refresh).toHaveBeenCalledOnce();
+        // The settled job stops the poll, so later time passing never refreshes the page again.
+        await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
         expect(router.refresh).toHaveBeenCalledOnce();
     } finally {
         await act(async () => root.unmount());
@@ -294,8 +296,7 @@ it("picks up an update started elsewhere when the page revision changes and refr
     router.refresh.mockClear();
     const serverId = "22222222-2222-4222-8222-222222222222";
     const running = updateJob({ initiatedBy: "automatic" });
-    const succeeded = { ...running, state: "succeeded", phase: "done", completedSteps: 6, progress: "Now running 0.1.11.",
-        steps: running.steps.map(step => ({ ...step, state: "done" })), completedAt: "2026-09-20T12:05:00.000Z" };
+    const succeeded = finishedUpdateJob({ initiatedBy: "automatic", progress: "Now running 0.1.11." });
     const container = document.createElement("div");
     const root = createRoot(container);
     // Renders the controls at one server revision, as each page refresh does.

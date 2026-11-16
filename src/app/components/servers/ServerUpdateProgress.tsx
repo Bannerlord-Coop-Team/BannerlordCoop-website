@@ -34,10 +34,10 @@ export function ServerUpdateProgress({ job }: { job: BuildUpdateJob }) {
     const succeeded = job.state === "succeeded";
     const stoppedShort = job.state === "failed" || job.state === "cancelled";
     const doneCount = succeeded ? job.totalSteps : job.completedSteps;
-    const active = job.steps.find(step => step.state === "active" || step.state === "failed");
-    const valueText = succeeded ? t("serverUpdate.complete") : t("serverUpdate.stepOfTotal", { done: job.completedSteps + (active?.state === "active" ? 1 : 0), total: job.totalSteps, phase: active ? labels[active.id] : "" });
+    const currentStep = job.steps.find(step => step.state === "active" || step.state === "failed");
+    const valueText = progressValueText(job, currentStep, labels, t);
     const percent = Math.min(100, Math.round((doneCount / job.totalSteps) * 100));
-    const activeStatus = active ? `${labels[active.id]}: ${states[active.state]}` : null;
+    const activeStatus = currentStep ? `${labels[currentStep.id]}: ${states[currentStep.state]}` : null;
     return <section aria-labelledby={headingId} className="w-full space-y-3 rounded-md border border-white/10 p-4">
         <h3 id={headingId} className="text-sm font-semibold text-foreground">
             {updateHeading(job, t)}
@@ -71,10 +71,33 @@ export function ServerUpdateProgress({ job }: { job: BuildUpdateJob }) {
     </section>;
 }
 
+/** Shows the followed update's progress and/or why its progress cannot be shown; renders nothing when neither exists. */
+export function ServerUpdateStatus({ job, error }: { job: BuildUpdateJob | null; error: UpdateProgressError | null }) {
+    if (job === null && error === null) return null;
+    return <>
+        {job !== null && <ServerUpdateProgress job={job} />}
+        {error !== null && <ServerUpdateProgressError error={error} />}
+    </>;
+}
+
 /** Tells the owner why update progress cannot be shown right now, as a polite status. */
-export function ServerUpdateProgressError({ error }: { error: UpdateProgressError }) {
+function ServerUpdateProgressError({ error }: { error: UpdateProgressError }) {
     const { t } = useTranslations("managed-server");
     return <p role="status" aria-live="polite" className="max-w-xl text-sm leading-6 text-foreground-muted">{t(ERROR_KEYS[error])}</p>;
+}
+
+/** Describes the progress bar's value: completion, or the step being worked on out of the total and its name. */
+function progressValueText(
+    job: BuildUpdateJob,
+    currentStep: BuildUpdateJob["steps"][number] | undefined,
+    labels: Record<BuildStepId, string>,
+    t: Translator["t"],
+): string {
+    if (job.state === "succeeded") return t("serverUpdate.complete");
+    if (currentStep === undefined) return t("serverUpdate.stepOfTotal", { done: job.completedSteps, total: job.totalSteps, phase: "" });
+    // An active step is the one being worked on, so it counts; a failed one does not.
+    const done = job.completedSteps + (currentStep.state === "active" ? 1 : 0);
+    return t("serverUpdate.stepOfTotal", { done, total: job.totalSteps, phase: labels[currentStep.id] });
 }
 
 /** Picks the screen-reader status line: the current step and its state, completion, or the job's own progress text. */

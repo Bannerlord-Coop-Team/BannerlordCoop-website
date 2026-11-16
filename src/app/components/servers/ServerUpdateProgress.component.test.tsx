@@ -2,12 +2,11 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import type { BuildStepState, BuildUpdateJob } from "../../../../supabase/functions/_shared/server-build-contract";
-import { ServerUpdateProgress, ServerUpdateProgressError } from "./ServerUpdateProgress";
+import { ServerUpdateProgress, ServerUpdateStatus } from "./ServerUpdateProgress";
 import { TestLocalization } from "./ManagedServerLocalization.test-utils";
-import { updateJob, updateSteps } from "./ServerUpdateProgress.test-utils";
+import { finishedUpdateJob, updateJob, updateSteps } from "./ServerUpdateProgress.test-utils";
 
 const jobId = updateJob().jobId;
-const updatedAt = "2026-10-30T12:00:00.000Z";
 /** Builds an automatic update job with the given step states in display order, counting the done ones as completed. */
 function job(states: BuildStepState[], extra: Partial<BuildUpdateJob> = {}): BuildUpdateJob {
     return updateJob({ initiatedBy: "automatic", steps: updateSteps(states), completedSteps: states.filter(state => state === "done").length, ...extra });
@@ -61,7 +60,7 @@ it("names the install step without a version when the control plane reports none
 });
 
 it("reports a completed update as complete", async () => {
-    await render(job(["done", "done", "done", "done", "done", "done"], { state: "succeeded", phase: "done", progress: "Now running 0.1.11.", completedAt: updatedAt }));
+    await render(finishedUpdateJob({ initiatedBy: "automatic", progress: "Now running 0.1.11." }));
     expect(container.textContent).toContain("Now running 0.1.11.");
     expect(container.querySelector('[role="progressbar"]')!.getAttribute("aria-valuetext")).toBe("Complete");
 });
@@ -88,8 +87,17 @@ it.each([
     ["unavailable", "Progress is unavailable. The update may still be running."],
     ["paused", "Progress checks paused. Refresh the page to check again."],
 ] as const)("explains why %s update progress cannot be shown as a polite status", async (error, expected) => {
-    await act(async () => root.render(<TestLocalization><ServerUpdateProgressError error={error} /></TestLocalization>));
+    await act(async () => root.render(<TestLocalization><ServerUpdateStatus job={null} error={error} /></TestLocalization>));
     const status = container.querySelector('[role="status"]')!;
     expect(status.textContent).toBe(expected);
     expect(status.getAttribute("aria-live")).toBe("polite");
+    expect(container.querySelector('[role="progressbar"]')).toBeNull();
+});
+
+it("shows the update card beside its error, and nothing when there is neither", async () => {
+    await act(async () => root.render(<TestLocalization><ServerUpdateStatus job={job(["done", "active"])} error="paused" /></TestLocalization>));
+    expect(container.querySelector('[role="progressbar"]')).not.toBeNull();
+    expect(container.textContent).toContain("Progress checks paused. Refresh the page to check again.");
+    await act(async () => root.render(<TestLocalization><ServerUpdateStatus job={null} error={null} /></TestLocalization>));
+    expect(container.textContent).toBe("");
 });
