@@ -50,11 +50,7 @@ export function ServerUpdateProgress({ job }: { job: BuildUpdateJob }) {
             <div className={`h-full rounded-full transition-[width] motion-reduce:transition-none ${stoppedShort ? "bg-red-400" : "bg-gold"}`} style={{ width: `${percent}%` }} />
         </div>
         <ol className="space-y-1.5" aria-live="polite" aria-atomic="false">
-            {job.steps.map(step => <li key={step.id} aria-current={step.state === "active" ? "step" : undefined} className={`flex items-center gap-2 text-sm ${step.state === "pending" || step.state === "skipped" ? "text-foreground-muted" : "text-foreground"}`}>
-                <StepIcon state={step.state} />
-                <span className={step.state === "skipped" ? "line-through" : ""}>{labels[step.id]}</span>
-                <span className="sr-only">{states[step.state]}</span>
-            </li>)}
+            {job.steps.map(step => <StepRow key={step.id} step={step} label={labels[step.id]} stateText={states[step.state]} />)}
         </ol>
         <p className="sr-only" role="status" aria-live="polite">
             {liveStatusText(job, activeStatus, t)}
@@ -124,6 +120,20 @@ function updateHeading(job: BuildUpdateJob, t: Translator["t"]): string {
     }
     if (version) return t("serverUpdate.updatingToVersion", { version });
     return t("serverUpdate.updateProgress");
+}
+
+/** Shows one step with its icon and label, dimming steps not reached or not needed and striking out skipped ones. */
+function StepRow({ step, label, stateText }: { step: BuildUpdateJob["steps"][number]; label: string; stateText: string }) {
+    const muted = step.state === "pending" || step.state === "skipped";
+    const struck = step.state === "skipped";
+    return <li
+        aria-current={step.state === "active" ? "step" : undefined}
+        className={`flex items-center gap-2 text-sm ${muted ? "text-foreground-muted" : "text-foreground"}`}
+    >
+        <StepIcon state={step.state} />
+        <span className={struck ? "line-through" : ""}>{label}</span>
+        <span className="sr-only">{stateText}</span>
+    </li>;
 }
 
 /** Marks a step's state with a shape as well as a color, so progress never relies on color alone. */
