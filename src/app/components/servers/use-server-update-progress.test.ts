@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { BuildUpdateJob, BuildStatus } from "../../../../supabase/functions/_shared/server-build-contract";
-import { INITIAL_STATE, nextUpdatePollStep, updateProgressReducer, type UpdateFollow, type UpdateProgressState } from "./use-server-update-progress";
-import { updateJobInState } from "./ServerUpdateProgress.test-utils";
+import { INITIAL_UPDATE_PROGRESS_STATE, nextUpdatePollStep, updateProgressReducer, type UpdateFollow, type UpdateProgressState } from "./use-server-update-progress";
+import { updateJob, updateJobInState } from "./ServerUpdateProgress.test-utils";
 
 const serverId = "22222222-2222-4222-8222-222222222222";
-const jobId = "55555555-5555-4555-8555-555555555555";
+const jobId = updateJob().jobId;
 const otherJobId = "66666666-6666-4666-8666-666666666666";
 const now = 1_000;
 const deadline = 2_000;
@@ -100,7 +100,8 @@ test("following a new job clears the shown job and error until that job appears,
 });
 
 test("ignores a step from a poll loop of an earlier generation", () => {
-    // The loop started before the page followed a new job saw nothing followed and would hide the job.
+    // A loop that started before Update now saw nothing followed, so its step would hide the requested job; the reducer
+    // drops it because its generation is older.
     const current: UpdateProgressState = { follow: { kind: "following", jobId }, job: null, error: null, generation: 1 };
     const step = nextUpdatePollStep({ status: status("failed"), follow: idle, now, deadline });
     assert.deepEqual(updateProgressReducer(current, { type: "step", generation: 0, step }), current);
@@ -108,7 +109,7 @@ test("ignores a step from a poll loop of an earlier generation", () => {
 
 test("keeps the shown running job and reports unavailable when a read fails while following", () => {
     const follow: UpdateFollow = { kind: "following", jobId };
-    const following: UpdateProgressState = { ...INITIAL_STATE, follow, job: status("running").job, generation: 1 };
+    const following: UpdateProgressState = { ...INITIAL_UPDATE_PROGRESS_STATE, follow, job: status("running").job, generation: 1 };
     const step = nextUpdatePollStep({ status: null, follow, now, deadline });
     assert.deepEqual(updateProgressReducer(following, { type: "step", generation: 1, step }), {
         follow, job: following.job, error: "unavailable", generation: 1,

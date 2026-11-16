@@ -3,7 +3,7 @@
 import { useEffect, useEffectEvent, useReducer } from "react";
 import type { BuildUpdateJob, BuildStatus } from "../../../../supabase/functions/_shared/server-build-contract";
 
-const ACTIVE_STATES: readonly BuildUpdateJob["state"][] = ["queued", "running", "retry-wait"];
+const ACTIVE_UPDATE_JOB_STATES: readonly BuildUpdateJob["state"][] = ["queued", "running", "retry-wait"];
 const POLL_MILLISECONDS = 3_000;
 const POLL_WINDOW_MILLISECONDS = 15 * 60_000;
 
@@ -47,25 +47,32 @@ export type UpdateProgressAction =
     | { type: "follow"; jobId: string };
 
 /** The state before the first poll: nothing followed, shown or failed, in the first generation. */
-export const INITIAL_STATE: UpdateProgressState = { follow: { kind: "idle" }, job: null, error: null, generation: 0 };
+export const INITIAL_UPDATE_PROGRESS_STATE: UpdateProgressState = { follow: { kind: "idle" }, job: null, error: null, generation: 0 };
 
 /** Reads one server's update status; rejects or resolves null when the read fails. */
 export type ReadBuildStatus = (serverId: string) => Promise<BuildStatus | null>;
 
-/** Decides one poll's outcome from the latest status read (null when the read failed) and the follow state. */
+/** Decides one poll's outcome, then pauses a poll that would continue once its window has passed, keeping what it shows. */
 export function nextUpdatePollStep({ status, follow, now, deadline }: UpdatePollInput): UpdatePollStep {
+    const step = decidePollStep(status, follow);
+    if (step.poll === "continue" && now >= deadline) return { ...step, error: "paused", poll: "stop" };
+    return step;
+}
+
+/** Decides one poll's outcome from the latest status read (null when the read failed) and the follow state alone. */
+function decidePollStep(status: BuildStatus | null, follow: UpdateFollow): UpdatePollStep {
     const job = status?.job ?? null;
-    if (job !== null && isActiveJob(job)) return withinDeadline(followActiveStep(job), now, deadline);
+    if (job !== null && isActiveJob(job)) return followActiveStep(job);
     if (follow.kind !== "following") return settledOrIdleStep(job, follow);
-    if (status === null) return withinDeadline(waitStep(follow, "unavailable"), now, deadline);
+    if (status === null) return waitStep(follow, "unavailable");
     // The followed job is not visible yet, or an older finished job is still the latest: keep waiting.
-    if (job === null || job.jobId !== follow.jobId) return withinDeadline(waitStep(follow, null), now, deadline);
+    if (job === null || job.jobId !== follow.jobId) return waitStep(follow, null);
     return settleFollowedStep(job);
 }
 
 /** Tells whether a job is still in flight: queued, running or waiting to retry. */
 function isActiveJob(job: BuildUpdateJob): boolean {
-    return ACTIVE_STATES.includes(job.state);
+    return ACTIVE_UPDATE_JOB_STATES.includes(job.state);
 }
 
 /** Shows and follows an in-progress job, the server's current update, and polls again. */
@@ -74,8 +81,8 @@ function followActiveStep(job: BuildUpdateJob): UpdatePollStep {
 }
 
 /**
- * Refreshes the page once because the followed update changed the server; settling keeps the job on screen
- * and stops the poll that the refreshed revision starts from refreshing again.
+ * Refreshes the page once because the followed update changed the server. The follow becomes settled, not idle, so the
+ * poll the refresh restarts still shows this job and does not refresh again.
  */
 function settleFollowedStep(job: BuildUpdateJob): UpdatePollStep {
     return { show: { kind: "job", job }, error: null, refresh: true, poll: "stop", follow: { kind: "settled", jobId: job.jobId } };
@@ -98,23 +105,27 @@ function settledOrIdleStep(job: BuildUpdateJob | null, follow: UpdateFollow): Up
     return stopStep({ kind: "hidden" }, { kind: "idle" });
 }
 
-/** Pauses a continuing poll once its window has passed, keeping whatever it shows. */
-function withinDeadline(step: UpdatePollStep, now: number, deadline: number): UpdatePollStep {
-    if (now < deadline) return step;
-    return { ...step, error: "paused", poll: "stop" };
-}
+/** Every action except a poll step: a request from this page that changes what the hook follows. */
+type UpdateProgressRequest = Exclude<UpdateProgressAction, { type: "step" }>;
 
 /**
- * Applies one poll step to what the hook shows, or starts following a requested job in a new generation with nothing
- * shown yet. A step from a loop of an earlier generation is stale and ignored.
+ * Applies a poll step, or applies a request in a new generation so the loop still running for the old follow state
+ * becomes stale. No action other than a step can change what the loop follows without starting a new generation.
  */
 export function updateProgressReducer(state: UpdateProgressState, action: UpdateProgressAction): UpdateProgressState {
-    if (action.type === "follow") {
-        return { follow: { kind: "following", jobId: action.jobId }, job: null, error: null, generation: state.generation + 1 };
-    }
-    if (action.generation !== state.generation) return state;
-    const { step } = action;
-    return { follow: step.follow, job: shownJob(state.job, step.show), error: step.error, generation: state.generation };
+    if (action.type === "step") return applyStep(state, action.generation, action.step);
+    return { ...applyRequest(action), generation: state.generation + 1 };
+}
+
+/** Applies one poll step to what the hook shows and follows; a step from a loop of an earlier generation is ignored. */
+function applyStep(state: UpdateProgressState, generation: number, step: UpdatePollStep): UpdateProgressState {
+    if (generation !== state.generation) return state;
+    return { ...state, follow: step.follow, job: shownJob(state.job, step.show), error: step.error };
+}
+
+/** Starts following the job this page just requested, with nothing shown or failed until it appears. */
+function applyRequest(action: UpdateProgressRequest): Omit<UpdateProgressState, "generation"> {
+    return { follow: { kind: "following", jobId: action.jobId }, job: null, error: null };
 }
 
 /** Picks the job to show after a step: the step's job, none, or the one already shown. */
@@ -135,7 +146,7 @@ export function useServerUpdateProgress(
     readStatus: ReadBuildStatus,
     onFollowedUpdateEnded: () => void,
 ) {
-    const [state, dispatch] = useReducer(updateProgressReducer, INITIAL_STATE);
+    const [state, dispatch] = useReducer(updateProgressReducer, INITIAL_UPDATE_PROGRESS_STATE);
     // Effect events: a caller passing a new reader or callback on each render does not restart the poll, and each
     // loop reads the generation and follow state once when it starts instead of restarting on every step.
     const readLatest = useEffectEvent((id: string) => readStatus(id));
@@ -149,8 +160,8 @@ export function useServerUpdateProgress(
         let cancelled = false;
         let timeout: ReturnType<typeof setTimeout>;
         const deadline = Date.now() + POLL_WINDOW_MILLISECONDS;
-        // Only this loop's own steps change the follow state while it runs. followJob starts a new generation, which
-        // restarts the loop, and the reducer drops any step still tagged with this loop's older generation.
+        // Only this loop's own steps change the follow state while it runs: the reducer applies every other action in a
+        // new generation, which restarts the loop and drops any step still tagged with this loop's older generation.
         const start = stateAtStart();
         const generation = start.generation;
         let follow = start.follow;
