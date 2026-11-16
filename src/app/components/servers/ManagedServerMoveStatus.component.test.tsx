@@ -42,6 +42,10 @@ let visibility: DocumentVisibilityState = "visible";
 beforeEach(() => {
     vi.resetAllMocks();
     vi.useFakeTimers();
+    if (!globalThis.localStorage) {
+        const values = new Map<string, string>();
+        vi.stubGlobal("localStorage", { clear: () => values.clear(), getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) });
+    }
     vi.setSystemTime(NOW);
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     visibility = "visible";
@@ -55,10 +59,13 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-    await act(async () => root.unmount());
-    container.remove();
+    if (root) await act(async () => root.unmount());
+    container?.remove();
     Reflect.deleteProperty(document, "visibilityState");
     vi.useRealTimers();
+    vi.clearAllTimers();
+    vi.restoreAllMocks();
+   
 });
 
 async function render(initialMove: MyServerMove | null, notices: MyServerNotice[] = [], headerAddress: string | null = null) {
@@ -634,3 +641,4 @@ it("stops reading once the page closes", async () => {
     await advance(10 * 60_000);
     expect(mocks.read).not.toHaveBeenCalled();
 });
+

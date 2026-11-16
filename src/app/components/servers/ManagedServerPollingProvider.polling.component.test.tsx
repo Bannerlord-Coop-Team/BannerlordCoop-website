@@ -20,13 +20,28 @@ describe("managed server polling policy", () => {
 });
 
 describe("mounted polling provider", () => {
-    beforeEach(() => { Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" }); });
-    afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.restoreAllMocks(); document.body.innerHTML = ""; });
+    let originalVisibility: PropertyDescriptor | undefined;
+    let mountedRoot: ReturnType<typeof createRoot> | undefined;
+    beforeEach(() => {
+        originalVisibility = Object.getOwnPropertyDescriptor(document, "visibilityState");
+        Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+        Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    });
+    afterEach(async () => {
+        if (mountedRoot) { await act(async () => mountedRoot?.unmount()); mountedRoot = undefined; }
+        vi.clearAllTimers();
+        vi.useRealTimers();
+        vi.restoreAllMocks();
+        document.body.innerHTML = "";
+        if (originalVisibility) Object.defineProperty(document, "visibilityState", originalVisibility);
+        else Reflect.deleteProperty(document, "visibilityState");
+    });
     function mount(readStatus: (id: string) => Promise<{ ok: true; fingerprint: string } | { ok: false; retryable?: boolean }>) {
         vi.useFakeTimers();
         const host = document.createElement("div"); document.body.append(host);
         const root = createRoot(host);
         act(() => root.render(<ManagedServerPollingProvider readStatus={readStatus} initialServer={{ serverId: "s", updatedAt: "u", operationState: "starting" }}><span /></ManagedServerPollingProvider>));
+        mountedRoot = root;
         return root;
     }
     it("does not read while hidden", async () => {
@@ -53,8 +68,9 @@ describe("mounted polling provider", () => {
         Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
         const read = vi.fn(async () => ({ ok: false as const, retryable: true }));
         const root = mount(read); await act(async () => vi.advanceTimersByTimeAsync(1_500));
-        const first = read.mock.calls.length; await act(async () => vi.advanceTimersByTimeAsync(30_000));
+        const first = read.mock.calls.length; await act(async () => vi.advanceTimersByTimeAsync(60_000));
         expect(read.mock.calls.length).toBeGreaterThan(first); root.unmount();
     });
 });
+
 

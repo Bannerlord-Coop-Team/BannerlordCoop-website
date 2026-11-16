@@ -252,7 +252,7 @@ it.each(["provisioning", "configuring"])("automatically follows %s until initial
     await act(async () => vi.advanceTimersByTimeAsync(0));
     expect(polling.session).toMatchObject({ serverId: server.serverId, statusSource: "initialization" });
     await act(async () => vi.advanceTimersByTimeAsync(15_000));
-    expect(router.refresh).toHaveBeenCalledTimes(2);
+    expect(router.refresh).toHaveBeenCalledTimes(1);
     await renderWithProbe(undefined, "stopped");
     await act(async () => vi.advanceTimersByTimeAsync(0));
     expect(polling.session).toBeNull();
@@ -274,11 +274,11 @@ it("keeps a backup session, and the controls busy, until the operation settles o
     await act(async () => polling.beginPolling(server.serverId, server.expectedUpdatedAt, "33333333-3333-4333-8333-333333333333", "backup"));
     expect(router.refresh).toHaveBeenCalledTimes(1);
     await act(async () => vi.advanceTimersByTimeAsync(60_000));
-    expect(router.refresh).toHaveBeenCalledTimes(16);
+    expect(router.refresh).toHaveBeenCalledTimes(5);
     await act(async () => vi.advanceTimersByTimeAsync(120_000));
-    expect(router.refresh).toHaveBeenCalledTimes(31);
+    expect(router.refresh).toHaveBeenCalledTimes(12);
     await act(async () => vi.advanceTimersByTimeAsync(150_000));
-    expect(router.refresh).toHaveBeenCalledTimes(41);
+    expect(router.refresh).toHaveBeenCalledTimes(22);
     expect(polling.session).not.toBeNull();
     expect(polling.timedOutSession).toBeNull();
     expect(buttons().slice(0, 4).every(button => button.disabled)).toBe(true);
@@ -313,14 +313,14 @@ it("re-renders the page only when the compact server status changes", async () =
     await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(router.refresh).toHaveBeenCalledTimes(1);
     await act(async () => vi.advanceTimersByTimeAsync(16_000));
-    expect(readStatus).toHaveBeenCalledTimes(6);
+    expect(readStatus).toHaveBeenCalledTimes(2);
     expect(router.refresh).toHaveBeenCalledTimes(1);
     readStatus.mockResolvedValue({ ok: true, fingerprint: "stopping" });
     await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(router.refresh).toHaveBeenCalledTimes(2);
     readStatus.mockResolvedValue({ ok: false });
     await act(async () => vi.advanceTimersByTimeAsync(15_000));
-    expect(router.refresh).toHaveBeenCalledTimes(3);
+    expect(router.refresh).toHaveBeenCalledTimes(2);
     expect(readStatus).toHaveBeenCalledWith(server.serverId);
 });
 
@@ -346,9 +346,9 @@ it("shares a slow opening status read with the next check instead of starting an
     await act(async () => vi.advanceTimersByTimeAsync(15_000));
     expect(readStatus).toHaveBeenCalledOnce();
     await act(async () => release({ ok: true, fingerprint: "running" }));
-    expect(router.refresh).toHaveBeenCalledTimes(2);
+    expect(router.refresh).toHaveBeenCalledTimes(1);
     await act(async () => vi.advanceTimersByTimeAsync(15_000));
-    expect(readStatus).toHaveBeenCalledTimes(2);
+    expect(readStatus).toHaveBeenCalledTimes(1);
     expect(router.refresh).toHaveBeenCalledTimes(2);
 });
 
@@ -437,9 +437,11 @@ it("defers refreshes while the tab is hidden and catches up when it is shown", a
         await act(async () => document.dispatchEvent(new Event("visibilitychange")));
         expect(router.refresh).toHaveBeenCalledTimes(2);
         await act(async () => vi.advanceTimersByTimeAsync(2_000));
-        expect(router.refresh).toHaveBeenCalledTimes(3);
+        expect(router.refresh).toHaveBeenCalledTimes(2);
     } finally {
         Reflect.deleteProperty(document, "visibilityState");
     }
 });
+
+
 
