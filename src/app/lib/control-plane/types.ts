@@ -1107,8 +1107,6 @@ export type Overview = {
     controls: GlobalControls;
     servers: HostingPage<ManagedServer>;
     jobs: HostingPage<HostingJob>;
-    stableBuilds: HostingPage<ReleaseBuild>;
-    nightlyBuilds: HostingPage<ReleaseBuild>;
 };
 
 /** Current data rendered by the Overview pane, without unused detail reads. */
