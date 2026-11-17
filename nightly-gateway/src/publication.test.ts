@@ -2,12 +2,27 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { validateLegacyNightlyClientManifest, validateLegacyNightlyReleaseManifest, validateNightlyPublicationPointer } from "./core";
+import { validateLegacyNightlyClientManifest, validateLegacyNightlyReleaseManifest, validateNightlyPublicationPointer } from "./manifest-rules";
+import { CANONICAL_GATEWAY_ORIGIN } from "./origins";
 import { NIGHTLY_POINTER_URL, NightlyPublicationReadError, readNightlyPublication } from "./publication";
-import worker from "./index";
+import type { GatewayDatabase } from "./database";
+import { createGateway } from "./index";
+import { noLog } from "./test-log";
 
 const origin = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const repository = "ghcr.io/bannerlord-coop-team/bannerlord-coop-dedicated-server";
+
+// Stands in for Postgres with one live nightly download session; manifest discovery must never write.
+function nightlySessionDatabase(): GatewayDatabase {
+    return {
+        async query<T>(sql: string) {
+            if (!/^\s*SELECT/.test(sql)) throw new Error("manifest discovery must be read-only");
+            if (!sql.includes("FROM nightly_gateway.download_sessions")) return { rows: [], rowCount: 0 };
+            return { rows: [{ expires_at: Math.floor(Date.now() / 1000) + 60 }] as T[], rowCount: 1 };
+        },
+        async transaction() { throw new Error("manifest discovery must be read-only"); },
+    };
+}
 
 function fixture() {
     const clientSha = "a".repeat(40);
@@ -83,32 +98,20 @@ test("gateway reads the pointer through the public R2 binding without an HTTP re
     assert.deepEqual(value.objects, [value.pointer.manifest.key]);
 });
 
-test("both authenticated manifest routes select the same pointer and keep private JSON inaccessible", async (context) => {
+test("both authenticated manifest routes select the same pointer and keep private JSON inaccessible", async () => {
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
     const env = {
-        DB: {
-            async batch() { throw new Error("manifest discovery must be read-only"); },
-            prepare(sql: string) {
-                return { bind() {
-                    return { async first() {
-                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
-                    } };
-                } };
-            },
-        },
         RELEASES: { get: value.getObject },
-        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
-        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32),
-        DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+        LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    context.mock.method(globalThis, "fetch", value.fetcher);
+    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase(), log: noLog });
     const headers = {
         authorization: `Bearer ${"n".repeat(43)}`,
         "x-bannerlord-coop-nightly-version": "2",
     };
     for (const path of ["client", "release"]) {
-        const response = await worker.fetch(new Request(`${gateway}/v1/manifests/${path}`, { headers }), env);
+        const response = await manifestGateway.fetch(new Request(`${gateway}/v1/manifests/${path}`, { headers }), env);
         assert.equal(response.status, 200);
         const manifest = await response.json() as { version: number; client: { publicUrl: string } };
         assert.equal(manifest.version, 2);
@@ -116,14 +119,14 @@ test("both authenticated manifest routes select the same pointer and keep privat
     }
     assert.deepEqual(value.objects, [value.pointer.manifest.key, value.pointer.manifest.key]);
     assert.deepEqual(value.requests.map(({ url }) => url), [NIGHTLY_POINTER_URL, NIGHTLY_POINTER_URL]);
-    const anonymous = await worker.fetch(new Request(`${gateway}/v1/manifests/release`), env);
+    const anonymous = await manifestGateway.fetch(new Request(`${gateway}/v1/manifests/release`), env);
     assert.equal(anonymous.status, 401);
-    const privateJson = await worker.fetch(new Request(`${gateway}/v1/artifacts/${value.pointer.manifest.key}`, { headers }), env);
+    const privateJson = await manifestGateway.fetch(new Request(`${gateway}/v1/artifacts/${value.pointer.manifest.key}`, { headers }), env);
     assert.equal(privateJson.status, 400);
     assert.equal(value.requests.length, 2);
 });
 
-test("client and release routes fall back only to a validated legacy pair", async (context) => {
+test("client and release routes fall back only to a validated legacy pair", async () => {
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
     const legacy = {
@@ -178,16 +181,6 @@ test("client and release routes fall back only to a validated legacy pair", asyn
     const legacyReleaseBytes = Buffer.from(JSON.stringify(legacyRelease));
     const objects: string[] = [];
     const env = {
-        DB: {
-            async batch() { throw new Error("manifest discovery must be read-only"); },
-            prepare(sql: string) {
-                return { bind() {
-                    return { async first() {
-                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
-                    } };
-                } };
-            },
-        },
         RELEASES: { async get(key: string) {
             objects.push(key);
             if (key === "nightly/client.json") return {
@@ -208,27 +201,23 @@ test("client and release routes fall back only to a validated legacy pair", asyn
             };
             throw new Error("runtime_binding_read_failed");
         } },
-        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
-        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32),
-        DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+        LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    const logs: string[] = [];
-    context.mock.method(console, "error", (line: string) => logs.push(line));
-    context.mock.method(globalThis, "fetch", value.fetcher);
+    const logs: Array<Record<string, unknown>> = [];
+    const logged = createGateway({ fetch: value.fetcher, log: (event) => logs.push(event), openDatabase: async () => nightlySessionDatabase() });
     const headers = {
         authorization: `Bearer ${"n".repeat(43)}`,
         "x-bannerlord-coop-nightly-version": "2",
     };
-    const client = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, { headers }), env);
+    const client = await logged.fetch(new Request(`${gateway}/v1/manifests/client`, { headers }), env);
     assert.equal(client.status, 200);
     assert.equal((await client.json() as { headSha: string }).headSha, legacy.headSha);
-    const release = await worker.fetch(new Request(`${gateway}/v1/manifests/release`, { headers }), env);
-    assert.equal(release.status, 200, logs.join("\n"));
+    const release = await logged.fetch(new Request(`${gateway}/v1/manifests/release`, { headers }), env);
+    assert.equal(release.status, 200, JSON.stringify(logs));
     assert.equal((await release.json() as { headSha: string }).headSha, legacyRelease.headSha);
-    const publicationFailure = logs.find((line) => line.includes('"event":"nightly_publication_read_failed"')
-        && line.includes('"route":"release"'));
-    assert.ok(publicationFailure);
-    assert.deepEqual(JSON.parse(publicationFailure!), {
+    const publicationFailure = logs.find((event) => event.event === "nightly_publication_read_failed"
+        && event.route === "release");
+    assert.deepEqual(publicationFailure, {
         event: "nightly_publication_read_failed",
         route: "release",
         error_code: "runtime_binding_read_failed",
@@ -237,13 +226,13 @@ test("client and release routes fall back only to a validated legacy pair", asyn
         exception_class: "Error",
         fallback: false,
     });
-    assert.ok(logs.some((line) => line.includes('"event":"nightly_legacy_client_fallback_served"')));
-    assert.ok(logs.some((line) => line.includes('"event":"nightly_legacy_release_fallback_served"')));
+    assert.ok(logs.some((event) => event.event === "nightly_legacy_client_fallback_served"));
+    assert.ok(logs.some((event) => event.event === "nightly_legacy_release_fallback_served"));
     assert.deepEqual(objects, [value.pointer.manifest.key, "nightly/release.json", "nightly/client.json", value.pointer.manifest.key, "nightly/release.json", "nightly/client.json"]);
 });
 
 test("client fallback accepts the producer's null baseSha legacy shape", async () => {
-    const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+    const gateway = CANONICAL_GATEWAY_ORIGIN;
     const legacy = {
         version: 1,
         releaseDate: "2026-11-04",
@@ -259,7 +248,31 @@ test("client fallback accepts the producer's null baseSha legacy shape", async (
             publicUrl: `${gateway}/v1/artifacts/nightly/clients/${"a".repeat(40)}/${"c".repeat(64)}/Coop.7z`,
         },
     };
-    assert.doesNotThrow(() => validateLegacyNightlyClientManifest(legacy, origin, gateway));
+    assert.doesNotThrow(() => validateLegacyNightlyClientManifest(legacy, origin));
+});
+
+test("client fallback rejects a publicUrl that names another object, carries a query or fragment, or is on a foreign host", () => {
+    const key = `nightly/clients/${"a".repeat(40)}/${"c".repeat(64)}/Coop.7z`;
+    const manifest = (publicUrl: string) => ({
+        version: 1,
+        releaseDate: "2026-11-04",
+        headSha: "a".repeat(40),
+        baseSha: null,
+        workflowRunId: 42007050452,
+        builtAt: "2026-11-05T10:04:43Z",
+        client: { fileName: "Coop 11-04-2026.7z", key, bytes: 10, sha256: "c".repeat(64), publicUrl },
+    });
+    assert.doesNotThrow(() => validateLegacyNightlyClientManifest(manifest(`${origin}/${key}`), origin));
+    for (const publicUrl of [
+        `${CANONICAL_GATEWAY_ORIGIN}/v1/artifacts/${key}?x=1`,
+        `${CANONICAL_GATEWAY_ORIGIN}/v1/artifacts/${key}#f`,
+        `${origin}/nightly/other.7z`,
+        `${origin}/v1/artifacts/${key}`,
+        `${CANONICAL_GATEWAY_ORIGIN}/${key}`,
+        `https://attacker.invalid/v1/artifacts/${key}`,
+    ]) {
+        assert.throws(() => validateLegacyNightlyClientManifest(manifest(publicUrl), origin), /invalid_legacy_nightly_client_manifest/, publicUrl);
+    }
 });
 
 test("the client route requires the complete publication while release keeps the legacy default", async () => {
@@ -283,16 +296,6 @@ test("the client route requires the complete publication while release keeps the
         arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
     });
     const env = {
-        DB: {
-            async batch() { throw new Error("manifest discovery must be read-only"); },
-            prepare(sql: string) {
-                return { bind() {
-                    return { async first() {
-                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
-                    } };
-                } };
-            },
-        },
         PUBLIC_RELEASES: {
             async get() {
                 return {
@@ -307,10 +310,9 @@ test("the client route requires the complete publication while release keeps the
             if (key === "nightly/release.json") return object(legacyReleaseBytes);
             return value.getObject(key);
         } },
-        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
-        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32),
-        DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+        LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
+    const worker = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase(), log: noLog });
     const authorization = `Bearer ${"n".repeat(43)}`;
     legacyClientBytes = Buffer.from(JSON.stringify({
         version: 1,
@@ -359,60 +361,36 @@ test("the client route requires the complete publication while release keeps the
     assert.equal((await v2.json() as { version: number }).version, 2);
 });
 
-test("the headerless client route returns 503 when no complete pair exists", async (context) => {
+test("the headerless client route returns 503 when no complete pair exists", async () => {
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
     const env = {
-        DB: {
-            async batch() { throw new Error("manifest discovery must be read-only"); },
-            prepare(sql: string) {
-                return { bind() {
-                    return { async first() {
-                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
-                    } };
-                } };
-            },
-        },
         PUBLIC_RELEASES: { async get() { return object(value.pointerBytes); } },
         RELEASES: { async get() { return null; } },
-        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
-        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32),
-        DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+        LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    context.mock.method(globalThis, "fetch", value.fetcher);
-    const response = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, {
+    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase(), log: noLog });
+    const response = await manifestGateway.fetch(new Request(`${gateway}/v1/manifests/client`, {
         headers: { authorization: `Bearer ${"n".repeat(43)}` },
     }), env);
     assert.equal(response.status, 503);
 });
 
-test("the client route fails closed when the paired publication is unavailable", async (context) => {
+test("the client route fails closed when the paired publication is unavailable", async () => {
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
     const env = {
-        DB: {
-            async batch() { throw new Error("manifest discovery must be read-only"); },
-            prepare(sql: string) {
-                return { bind() {
-                    return { async first() {
-                        return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null;
-                    } };
-                } };
-            },
-        },
         RELEASES: { async get() { return null; } },
-        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
-        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32),
-        DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+        LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    context.mock.method(globalThis, "fetch", value.fetcher);
-    const response = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, {
+    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase(), log: noLog });
+    const response = await manifestGateway.fetch(new Request(`${gateway}/v1/manifests/client`, {
         headers: { authorization: `Bearer ${"n".repeat(43)}` },
     }), env);
     assert.equal(response.status, 503);
 });
 
-test("v2 client fallback never serves a legacy client ahead of the release pair", async (context) => {
+test("v2 client fallback never serves a legacy client ahead of the release pair", async () => {
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
     const legacyRelease = JSON.parse(await readFile(new URL("../fixtures/legacy-release-2026-11-04.json", import.meta.url), "utf8")) as Record<string, unknown>;
@@ -426,35 +404,31 @@ test("v2 client fallback never serves a legacy client ahead of the release pair"
         return { size: data.byteLength, body: new Response(data).body!, arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) };
     };
     const env = {
-        DB: { prepare(sql: string) { return { bind() { return { async first() { return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null; } }; } }; }, async batch() { throw new Error("read-only"); } },
         PUBLIC_RELEASES: { async get() { return bytes(value.pointerBytes); } },
         RELEASES: { async get(key: string) { if (key === value.pointer.manifest.key) return null; if (key === "nightly/release.json") return bytes(legacyRelease); if (key === "nightly/client.json") return bytes(aheadClient); return null; } },
-        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
-        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32), DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+        LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    context.mock.method(globalThis, "fetch", value.fetcher);
-    const response = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, {
+    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase(), log: noLog });
+    const response = await manifestGateway.fetch(new Request(`${gateway}/v1/manifests/client`, {
         headers: { authorization: `Bearer ${"n".repeat(43)}`, "x-bannerlord-coop-nightly-version": "2" },
     }), env);
     assert.equal(response.status, 200);
     assert.equal((await response.json() as { headSha: string }).headSha, legacyRelease.headSha);
 });
 
-test("a complete release pair remains available when the legacy client object is missing", async (context) => {
+test("a complete release pair remains available when the legacy client object is missing", async () => {
     const value = fixture();
     const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
     const legacyRelease = JSON.parse(await readFile(new URL("../fixtures/legacy-release-2026-11-04.json", import.meta.url), "utf8")) as Record<string, unknown>;
     const bytes = (data: Uint8Array) => ({ size: data.byteLength, body: new Response(data).body!, arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) });
     const releaseBytes = Buffer.from(JSON.stringify(legacyRelease));
     const env = {
-        DB: { prepare(sql: string) { return { bind() { return { async first() { return sql.includes("FROM download_sessions") ? { expires_at: Math.floor(Date.now() / 1000) + 60 } : null; } }; } }; }, async batch() { throw new Error("read-only"); } },
         PUBLIC_RELEASES: { async get() { return null; } },
         RELEASES: { async get(key: string) { return key === "nightly/release.json" ? bytes(releaseBytes) : null; } },
-        PUBLIC_ORIGIN: gateway, LEGACY_R2_ORIGIN: origin,
-        DISCORD_CLIENT_ID: "1537575576745803799", DISCORD_CLIENT_SECRET: "s".repeat(32), DISCORD_BOT_TOKEN: "B".repeat(59), TOKEN_ENCRYPTION_KEY: "A".repeat(43),
+        LEGACY_R2_ORIGIN: origin,
     } as unknown as Env;
-    context.mock.method(globalThis, "fetch", value.fetcher);
-    const response = await worker.fetch(new Request(`${gateway}/v1/manifests/client`, {
+    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase(), log: noLog });
+    const response = await manifestGateway.fetch(new Request(`${gateway}/v1/manifests/client`, {
         headers: { authorization: `Bearer ${"n".repeat(43)}` },
     }), env);
     assert.equal(response.status, 200);
@@ -465,15 +439,14 @@ test("accepts the production-shaped legacy release fixture and rejects missing a
     const fixture = JSON.parse(await readFile(new URL("../fixtures/legacy-release-2026-11-04.json", import.meta.url), "utf8")) as Record<string, unknown> & {
         server: { incremental: { base: Record<string, unknown>; update: Record<string, unknown> } };
     };
-    const gateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
-    assert.doesNotThrow(() => validateLegacyNightlyReleaseManifest(fixture, origin, gateway));
+    assert.doesNotThrow(() => validateLegacyNightlyReleaseManifest(fixture, origin));
     const withoutBaseKey = structuredClone(fixture);
     delete withoutBaseKey.server.incremental.base.key;
-    assert.throws(() => validateLegacyNightlyReleaseManifest(withoutBaseKey, origin, gateway), /invalid_legacy_nightly_release_artifact/);
+    assert.throws(() => validateLegacyNightlyReleaseManifest(withoutBaseKey, origin), /invalid_legacy_nightly_release_artifact/);
     const withoutUpdateKey = structuredClone(withoutBaseKey);
     withoutUpdateKey.server.incremental.base.key = fixture.server.incremental.base.key;
     delete withoutUpdateKey.server.incremental.update.key;
-    assert.throws(() => validateLegacyNightlyReleaseManifest(withoutUpdateKey, origin, gateway), /invalid_legacy_nightly_release_artifact/);
+    assert.throws(() => validateLegacyNightlyReleaseManifest(withoutUpdateKey, origin), /invalid_legacy_nightly_release_artifact/);
 });
 
 test("gateway rejects a private manifest whose bytes or image digest differ from the public pointer", async () => {
@@ -562,4 +535,57 @@ test("gateway bounds stalled public fetches and private reads to five seconds", 
         queueMicrotask(() => deadline.abort());
         return new Promise(() => {});
     }, value.fetcher), /timeout/);
+});
+
+test("manifest artifact URLs follow the gateway host the installer used", async () => {
+    const value = fixture();
+    const canonical = "https://nightly.bannerlordcoop.com";
+    const legacyGateway = "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev";
+    const clientKey = value.manifest.client.key;
+    // The stored v1 client names the legacy gateway host; it must still validate when served from the new host.
+    const storedClient = Buffer.from(JSON.stringify({
+        version: 1,
+        releaseDate: value.manifest.releaseDate,
+        headSha: value.manifest.headSha,
+        baseSha: null,
+        builtAt: value.manifest.builtAt,
+        client: { ...value.manifest.client, publicUrl: `${legacyGateway}/v1/artifacts/${clientKey}` },
+    }));
+    const env = {
+        RELEASES: { async get(key: string) {
+            if (key !== "nightly/client.json") return value.getObject(key);
+            return {
+                size: storedClient.byteLength,
+                arrayBuffer: async () => storedClient.buffer.slice(storedClient.byteOffset, storedClient.byteOffset + storedClient.byteLength),
+            };
+        } },
+        LEGACY_R2_ORIGIN: origin,
+    } as unknown as Env;
+    const manifestGateway = createGateway({ fetch: value.fetcher, openDatabase: async () => nightlySessionDatabase(), log: noLog });
+    const authorization = `Bearer ${"n".repeat(43)}`;
+    const cases = [
+        { host: canonical, expected: canonical },
+        { host: legacyGateway, expected: legacyGateway },
+        { host: "https://gateway.attacker.invalid", expected: canonical },
+    ];
+    for (const { host, expected } of cases) {
+        const v2 = await manifestGateway.fetch(new Request(`${host}/v1/manifests/release`, {
+            headers: { authorization, "x-bannerlord-coop-nightly-version": "2" },
+        }), env);
+        assert.equal(v2.status, 200);
+        const release = await v2.json() as {
+            client: { publicUrl: string };
+            server: { publicUrl: string; incremental: { base: { publicUrl: string }; update: { publicUrl: string } } };
+        };
+        assert.equal(release.client.publicUrl, `${expected}/v1/artifacts/${clientKey}`);
+        assert.equal(release.server.publicUrl, `${expected}/v1/artifacts/${value.manifest.server.key}`);
+        assert.equal(release.server.incremental.base.publicUrl, `${expected}/v1/artifacts/${value.manifest.server.incremental.base.key}`);
+        assert.equal(release.server.incremental.update.publicUrl, `${expected}/v1/artifacts/${value.manifest.server.incremental.update.key}`);
+
+        const headerless = await manifestGateway.fetch(new Request(`${host}/v1/manifests/client`, { headers: { authorization } }), env);
+        assert.equal(headerless.status, 200);
+        const client = await headerless.json() as { version: number; client: { publicUrl: string } };
+        assert.equal(client.version, 1);
+        assert.equal(client.client.publicUrl, `${expected}/v1/artifacts/${clientKey}`);
+    }
 });

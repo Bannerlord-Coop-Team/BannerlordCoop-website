@@ -1,5 +1,5 @@
 import { createTranslator } from "@/app/lib/localization/translator";
-import { TestLocalization, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
+import { TestLocalization, refreshedMessages, serverTestMessages } from "@/app/components/servers/ManagedServerLocalization.test-utils";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -11,6 +11,7 @@ import { MyServersApiError, readMyServersResponse } from "@/app/lib/hosting/my-s
 import { createMyServersHandler } from "../../../../supabase/functions/_shared/my-servers";
 import type { MyServerMove } from "@/app/lib/control-plane/types";
 import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
+import { finishedUpdateJob, updateJob, updateSteps } from "./ServerUpdateProgress.test-utils";
 
 const { revealAddress } = vi.hoisted(() => ({ revealAddress: vi.fn() }));
 const { backupStatus, deletionStatus } = vi.hoisted(() => ({ backupStatus: vi.fn(), deletionStatus: vi.fn() }));
@@ -203,23 +204,19 @@ it("explains in plain language that Stop/Restart disconnect players and respects
     }
 });
 
-it("confirms and queues an immediate update with the displayed server revision", async () => {
+it("confirms and queues an immediate update with the displayed server revision and follows that job to its end", async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    vi.useFakeTimers();
+    router.refresh.mockClear();
     requestUpdate.mockReset().mockResolvedValue({
         outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "update",
     });
+    const running = updateJob({ phase: "backup", steps: updateSteps(["done", "done", "active"]), completedSteps: 2, progress: "Creating a safe restore point" });
+    const succeeded = finishedUpdateJob({ progress: "Now running 0.1.11." });
     buildStatus.mockReset()
         .mockResolvedValueOnce({ serverId: "22222222-2222-4222-8222-222222222222", job: null })
-        .mockResolvedValue({ serverId: "22222222-2222-4222-8222-222222222222", job: {
-            jobId: "55555555-5555-4555-8555-555555555555", state: "running", initiatedBy: "owner", ownerSelected: false,
-            phase: "backup", steps: [
-                { id: "queued", state: "done" }, { id: "stopping", state: "done" }, { id: "backup", state: "active" },
-                { id: "installing", state: "pending" }, { id: "starting", state: "pending" }, { id: "verifying", state: "pending" },
-            ], completedSteps: 2, totalSteps: 6, targetVersion: "0.1.11", previousVersion: "0.1.10",
-            progress: "Creating a safe restore point", backup: null, rolledBack: false, failureCode: null,
-            failureMessage: null, nextStep: null, attemptCount: 1, maximumAttempts: 3, nextRetryAt: null,
-            createdAt: "2026-09-20T12:00:00.000Z", updatedAt: "2026-09-20T12:00:10.000Z", completedAt: null,
-        } });
+        .mockResolvedValueOnce({ serverId: "22222222-2222-4222-8222-222222222222", job: running })
+        .mockResolvedValue({ serverId: "22222222-2222-4222-8222-222222222222", job: succeeded });
     const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
     const container = document.createElement("div");
     const root = createRoot(container);
@@ -238,6 +235,38 @@ it("confirms and queues an immediate update with the displayed server revision",
         expect(container.textContent).toContain("Creating a backup");
         expect(container.textContent).not.toContain("55555555-5555-4555-8555-555555555555");
         expect(container.querySelector('[aria-live="polite"]')).not.toBeNull();
+        expect(router.refresh).not.toHaveBeenCalled();
+        // The next read shows the same job finished: the page follows it by id and refreshes exactly once.
+        await act(async () => { await vi.advanceTimersByTimeAsync(3_100); });
+        expect(container.textContent).toContain("Now running 0.1.11.");
+        expect(router.refresh).toHaveBeenCalledOnce();
+        // The settled job stops the poll, so later time passing never refreshes the page again.
+        await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
+        expect(router.refresh).toHaveBeenCalledOnce();
+    } finally {
+        await act(async () => root.unmount());
+        confirm.mockRestore();
+    }
+});
+
+it("shows that progress is unavailable when the requested update never appears and the read fails", async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    requestUpdate.mockReset().mockResolvedValue({
+        outcome: "enqueued", jobId: "55555555-5555-4555-8555-555555555555", action: "update",
+    });
+    buildStatus.mockReset()
+        .mockResolvedValueOnce({ serverId: "22222222-2222-4222-8222-222222222222", job: null })
+        .mockResolvedValue(null);
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls observedGameState="stopped" serverId="22222222-2222-4222-8222-222222222222"
+            displayName="Campaign" accessRole="owner" operationState="running" expectedUpdatedAt="2026-09-20T12:00:00.000Z" /></TestLocalization>));
+        await act(async () => container.querySelectorAll("button")[3].click());
+        expect(requestUpdate).toHaveBeenCalledOnce();
+        expect(container.querySelector('[role="progressbar"]')).toBeNull();
+        expect(container.textContent).toContain("Progress is unavailable. The update may still be running.");
     } finally {
         await act(async () => root.unmount());
         confirm.mockRestore();
@@ -247,16 +276,7 @@ it("confirms and queues an immediate update with the displayed server revision",
 it("reattaches to an update already running after reload and keeps owner copy free of raw ids", async () => {
     const serverId = "22222222-2222-4222-8222-222222222222";
     const durableJobId = "55555555-5555-4555-8555-555555555555";
-    buildStatus.mockReset().mockResolvedValue({ serverId, job: {
-        jobId: durableJobId, state: "running", initiatedBy: "owner", ownerSelected: false, phase: "installing",
-        steps: [
-            { id: "queued", state: "done" }, { id: "stopping", state: "done" }, { id: "backup", state: "done" },
-            { id: "installing", state: "active" }, { id: "starting", state: "pending" }, { id: "verifying", state: "pending" },
-        ], completedSteps: 3, totalSteps: 6, targetVersion: "0.1.11", previousVersion: "0.1.10",
-        progress: "Installing the selected release", backup: null, rolledBack: false, failureCode: null,
-        failureMessage: null, nextStep: null, attemptCount: 1, maximumAttempts: 3, nextRetryAt: null,
-        createdAt: "2026-09-20T12:00:00.000Z", updatedAt: "2026-09-20T12:01:00.000Z", completedAt: null,
-    } });
+    buildStatus.mockReset().mockResolvedValue({ serverId, job: updateJob({ jobId: durableJobId, progress: "Installing the selected release" }) });
     const container = document.createElement("div");
     const root = createRoot(container);
     try {
@@ -267,6 +287,36 @@ it("reattaches to an update already running after reload and keeps owner copy fr
         expect(container.textContent).toContain("Installing 0.1.11");
         expect(container.textContent).not.toContain(durableJobId);
         expect(container.querySelector('[aria-live="polite"]')).not.toBeNull();
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("picks up an update started elsewhere when the page revision changes and refreshes once when it ends", async () => {
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    vi.useFakeTimers();
+    router.refresh.mockClear();
+    const serverId = "22222222-2222-4222-8222-222222222222";
+    const running = updateJob({ initiatedBy: "automatic" });
+    const succeeded = finishedUpdateJob({ initiatedBy: "automatic", progress: "Now running 0.1.11." });
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    // Renders the controls at one server revision, as each page refresh does.
+    const render = (expectedUpdatedAt: string) => act(async () => root.render(<TestLocalization><ManagedServerControls serverId={serverId} displayName="Campaign"
+        accessRole="owner" operationState="running" observedGameState="running" expectedUpdatedAt={expectedUpdatedAt} /></TestLocalization>));
+    try {
+        await render("2026-09-20T12:00:00.000Z");
+        expect(container.textContent).not.toContain("Automatic update to 0.1.11");
+        buildStatus.mockResolvedValue({ serverId, job: running });
+        await render("2026-09-20T12:01:00.000Z");
+        expect(container.textContent).toContain("Automatic update to 0.1.11");
+        expect(router.refresh).not.toHaveBeenCalled();
+        buildStatus.mockResolvedValue({ serverId, job: succeeded });
+        await act(async () => { await vi.advanceTimersByTimeAsync(3_100); });
+        expect(container.textContent).toContain("Now running 0.1.11.");
+        expect(router.refresh).toHaveBeenCalledOnce();
+        // The refreshed page re-reads the finished job without refreshing again.
+        await render("2026-09-20T12:05:00.000Z");
+        await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+        expect(router.refresh).toHaveBeenCalledOnce();
     } finally { await act(async () => root.unmount()); }
 });
 
@@ -654,6 +704,82 @@ it("follows the accepted Start through real phases and readiness without sending
         expect(container.querySelectorAll("button")[1].disabled).toBe(false);
         await act(async () => root.render(<TestLocalization>{<ManagedServerControls observedGameState="stopped" {...progressProps} operationState="stopped" expectedUpdatedAt="2026-09-20T12:01:00.000Z" />} </TestLocalization>));
         expect(container.querySelectorAll("button")[0].disabled).toBe(false);
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("refreshes a finished Start once and stays idle when a refresh re-delivers changed messages", async () => {
+    vi.useFakeTimers();
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId));
+    startStatus.mockReset().mockResolvedValue(progress("ready", "succeeded", "Server started and ready to join."));
+    router.refresh.mockClear();
+    const container = document.createElement("div"); const root = createRoot(container);
+    const controls = <ManagedServerControls observedGameState="stopped" {...progressProps} />;
+    try {
+        await act(async () => root.render(<TestLocalization>{controls}</TestLocalization>));
+        await act(async () => container.querySelector("button")!.click());
+        await act(async () => vi.advanceTimersByTimeAsync(10));
+        expect(container.textContent).toContain("Your server is ready to join");
+        expect(router.refresh).toHaveBeenCalledOnce();
+        const reads = { start: startStatus.mock.calls.length, build: buildStatus.mock.calls.length };
+        // Each router.refresh() delivers a new messages object; none of them may restart the polls.
+        for (let refresh = 0; refresh < 3; refresh++) {
+            await act(async () => root.render(<TestLocalization messages={refreshedMessages(refresh)}>{controls}</TestLocalization>));
+            await act(async () => vi.advanceTimersByTimeAsync(5_000));
+        }
+        expect(router.refresh).toHaveBeenCalledOnce();
+        expect(startStatus).toHaveBeenCalledTimes(reads.start);
+        expect(buildStatus).toHaveBeenCalledTimes(reads.build);
+        expect(container.textContent).toContain("Your server is ready to join");
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("does not re-read or re-refresh a finished Start when operate access returns", async () => {
+    vi.useFakeTimers();
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    request.mockReset().mockRejectedValue(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId));
+    startStatus.mockReset().mockResolvedValue(progress("ready", "succeeded", "Server started and ready to join."));
+    router.refresh.mockClear();
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls observedGameState="stopped" {...progressProps} /></TestLocalization>));
+        await act(async () => container.querySelector("button")!.click());
+        await act(async () => vi.advanceTimersByTimeAsync(10));
+        expect(router.refresh).toHaveBeenCalledOnce();
+        const reads = startStatus.mock.calls.length;
+        // Losing and regaining operate access re-runs the Start poll for the same finished job; it must not read or refresh it again.
+        for (const accessRole of ["support", "owner"] as const) {
+            await act(async () => root.render(<TestLocalization><ManagedServerControls observedGameState="stopped" {...progressProps} accessRole={accessRole} /></TestLocalization>));
+            await act(async () => vi.advanceTimersByTimeAsync(5_000));
+        }
+        expect(router.refresh).toHaveBeenCalledOnce();
+        expect(startStatus).toHaveBeenCalledTimes(reads);
+    } finally { await act(async () => root.unmount()); }
+});
+
+it("follows and refreshes a later Start job after an earlier one already refreshed", async () => {
+    vi.useFakeTimers();
+    Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+    const laterJobId = "66666666-6666-4666-8666-666666666666";
+    request.mockReset().mockRejectedValueOnce(new MyServersApiError("operation_timeout", "Timed out", false, progressJobId))
+        .mockRejectedValueOnce(new MyServersApiError("operation_timeout", "Timed out", false, laterJobId));
+    startStatus.mockReset().mockImplementation(async (_token: string, _serverId: string, jobId: string) =>
+        ({ ...progress("ready", "succeeded", "Server started and ready to join."), jobId }));
+    router.refresh.mockClear();
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls observedGameState="stopped" {...progressProps} /></TestLocalization>));
+        await act(async () => container.querySelector("button")!.click());
+        await act(async () => vi.advanceTimersByTimeAsync(10));
+        expect(router.refresh).toHaveBeenCalledOnce();
+        // The refreshed page reports the server stopped again under a new revision, which offers Start once more.
+        await act(async () => root.render(<TestLocalization><ManagedServerControls observedGameState="stopped" {...progressProps} expectedUpdatedAt="2026-09-20T12:01:00.000Z" /></TestLocalization>));
+        expect(container.querySelector("button")!.disabled).toBe(false);
+        await act(async () => container.querySelector("button")!.click());
+        await act(async () => vi.advanceTimersByTimeAsync(10));
+        expect(request).toHaveBeenCalledTimes(2);
+        expect(startStatus).toHaveBeenCalledWith("token", progressServerId, laterJobId);
+        expect(router.refresh).toHaveBeenCalledTimes(2);
     } finally { await act(async () => root.unmount()); }
 });
 

@@ -14,7 +14,7 @@
   "included.official.title": "Vom Mod-Team gebaut",
   "included.official.description": "Das einzige Hosting für Bannerlord Co-op von den Entwicklern, die die Mod bauen.",
   "included.versions.title": "Public- oder Nightly-Builds",
-  "included.versions.description": "Nutze das Public-Release oder den neuesten Nightly-Build und wähle die Version auf der Website.",
+  "included.versions.description": "Nutze das Public-Release oder den neuesten Nightly-Build und wechsle den Kanal auf der Website. Dein Server läuft immer mit dem aktuellen Build seines Kanals.",
   "included.backups.title": "Automatische tägliche Backups",
   "included.backups.description": "Kampagnenspeicherstände werden täglich außerhalb des Servers gesichert.",
   "included.control.title": "Steuerung im Browser",

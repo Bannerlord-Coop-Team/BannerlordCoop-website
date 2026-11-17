@@ -1,58 +1,49 @@
 import { Client, types } from "pg";
 
-const GATEWAY_SCHEMA = "nightly_gateway";
 const QUERY_TIMEOUT_MS = 5_000;
-const TABLE_NAMES = Object.freeze([
-    "device_sessions",
-    "supporter_grants",
-    "sponsorships",
-    "download_sessions",
-    "oauth_states",
-    "sponsor_sessions",
-    "installer_pins",
-    "pin_download_sessions",
-]);
 
+// Parses Postgres BIGINT columns as numbers, refusing values JavaScript cannot hold exactly.
 types.setTypeParser(types.builtins.INT8, (value) => {
     const parsed = Number(value);
     if (!Number.isSafeInteger(parsed)) throw new Error("postgres_integer_out_of_range");
     return parsed;
 });
 
-export type GatewayRunResult = {
-    success: boolean;
-    meta: { changes: number };
+/** The outcome of one statement: the rows it returned and the number of rows it read or changed. */
+export type GatewayQueryResult<T> = {
+    rows: T[];
+    rowCount: number;
 };
 
-export interface GatewayPreparedStatement {
-    bind(...values: unknown[]): GatewayPreparedStatement;
-    first<T>(): Promise<T | null>;
-    all<T>(): Promise<{ results: T[] }>;
-    run(): Promise<GatewayRunResult>;
+/** Runs one parameterized Postgres statement ($n placeholders, schema-qualified tables). */
+export interface GatewayQuery {
+    query<T = Record<string, unknown>>(sql: string, values?: readonly unknown[]): Promise<GatewayQueryResult<T>>;
 }
 
-export interface GatewayDatabase {
-    prepare(sql: string): GatewayPreparedStatement;
-    batch(statements: GatewayPreparedStatement[]): Promise<GatewayRunResult[]>;
+/** The request's Postgres access the gateway modules depend on, opened by createGateway's openDatabase dependency. */
+export interface GatewayDatabase extends GatewayQuery {
+    transaction<T>(work: (database: GatewayQuery) => Promise<T>): Promise<T>;
 }
 
-type HyperdriveBinding = { connectionString: string };
-type DatabaseEnvironment = {
-    DB?: GatewayDatabase;
-    HYPERDRIVE?: HyperdriveBinding;
-    LEGACY_DB?: GatewayDatabase;
-    DATABASE_BACKEND?: string;
-};
+// Returns a lookup's single row, or null when the statement matched nothing.
+export function firstRow<T>(result: GatewayQueryResult<T>): T | null {
+    return result.rows[0] ?? null;
+}
 
-export async function databaseForRequest(env: DatabaseEnvironment): Promise<GatewayDatabase> {
-    if (isGatewayDatabase(env.DB)) return env.DB;
-    if (env.DATABASE_BACKEND === "legacy-d1") {
-        if (!isGatewayDatabase(env.LEGACY_DB)) throw new Error("gateway_legacy_database_configuration_invalid");
-        return env.LEGACY_DB;
-    }
-    if (env.DATABASE_BACKEND !== undefined && env.DATABASE_BACKEND !== "postgres") {
-        throw new Error("gateway_database_backend_invalid");
-    }
+/** The Worker bindings plus the request's opened database, as the Postgres-backed route handlers receive them. */
+export type RequestEnv = Env & { DB: GatewayDatabase };
+
+/** The connection slice the gateway runs statements on: a pg Client in production, any adapted driver in tests. */
+export interface PostgresConnection {
+    query(sql: string, values: unknown[]): Promise<{ rows: unknown[]; rowCount: number | null }>;
+}
+
+/** The only binding the production database opener reads: the Hyperdrive connection string. */
+type HyperdriveEnvironment = { HYPERDRIVE?: { connectionString: string } };
+
+// Opens the request's Postgres connection through Hyperdrive, the only production store since the Edge Function split.
+// A missing or malformed binding fails closed.
+export async function openHyperdriveDatabase(env: HyperdriveEnvironment): Promise<GatewayDatabase> {
     const connectionString = env.HYPERDRIVE?.connectionString;
     if (typeof connectionString !== "string" || connectionString.length < 16 || connectionString.length > 8_192) {
         throw new Error("gateway_database_configuration_invalid");
@@ -68,93 +59,35 @@ export async function databaseForRequest(env: DatabaseEnvironment): Promise<Gate
     return new PostgresGatewayDatabase(client);
 }
 
-function isGatewayDatabase(value: unknown): value is GatewayDatabase {
-    return typeof value === "object" && value !== null
-        && typeof (value as GatewayDatabase).prepare === "function"
-        && typeof (value as GatewayDatabase).batch === "function";
-}
+// Runs the gateway's statements on one request-scoped connection, wrapping transactions in BEGIN/COMMIT/ROLLBACK.
+export class PostgresGatewayDatabase implements GatewayDatabase {
+    constructor(private readonly client: PostgresConnection) {}
 
-class PostgresGatewayDatabase implements GatewayDatabase {
-    constructor(private readonly client: Client) {}
-
-    prepare(sql: string): GatewayPreparedStatement {
-        return new PostgresPreparedStatement(this.client, sql);
+    // Runs one parameterized statement and returns its rows and affected-row count.
+    async query<T = Record<string, unknown>>(sql: string, values: readonly unknown[] = []): Promise<GatewayQueryResult<T>> {
+        const result = await this.client.query(sql, [...values]);
+        return { rows: result.rows as T[], rowCount: result.rowCount ?? 0 };
     }
 
-    async batch(statements: GatewayPreparedStatement[]): Promise<GatewayRunResult[]> {
-        if (statements.length === 0 || statements.length > 16
-            || statements.some((statement) => !(statement instanceof PostgresPreparedStatement)
-                || statement.client !== this.client)) {
-            throw new Error("gateway_database_batch_invalid");
-        }
-        await this.client.query("BEGIN");
+    // Runs the work in one transaction, committing its result or rolling back on the first failure.
+    async transaction<T>(work: (database: GatewayQuery) => Promise<T>): Promise<T> {
+        await this.client.query("BEGIN", []);
         try {
-            const results: GatewayRunResult[] = [];
-            for (const statement of statements) results.push(await statement.run());
-            await this.client.query("COMMIT");
-            return results;
+            const result = await work(this);
+            await this.client.query("COMMIT", []);
+            return result;
         } catch (error) {
-            try {
-                await this.client.query("ROLLBACK");
-            } catch {
-                // Preserve the original query error; the request-scoped connection is discarded.
-            }
+            await this.rollbackQuietly();
             throw error;
         }
     }
-}
 
-class PostgresPreparedStatement implements GatewayPreparedStatement {
-    readonly client: Client;
-    private values: unknown[] = [];
-
-    constructor(client: Client, private readonly sourceSql: string) {
-        this.client = client;
+    // Rolls back the open transaction, keeping the caller's original error; the connection is discarded anyway.
+    private async rollbackQuietly(): Promise<void> {
+        try {
+            await this.client.query("ROLLBACK", []);
+        } catch {
+            // The request-scoped connection is discarded, so a failed rollback changes nothing.
+        }
     }
-
-    bind(...values: unknown[]): GatewayPreparedStatement {
-        this.values = values;
-        return this;
-    }
-
-    async first<T>(): Promise<T | null> {
-        const result = await this.execute<T>();
-        return result.rows[0] ?? null;
-    }
-
-    async all<T>(): Promise<{ results: T[] }> {
-        const result = await this.execute<T>();
-        return { results: result.rows };
-    }
-
-    async run(): Promise<GatewayRunResult> {
-        const result = await this.execute();
-        return { success: true, meta: { changes: result.rowCount ?? 0 } };
-    }
-
-    private execute<T = Record<string, unknown>>() {
-        const sql = postgresSql(this.sourceSql, this.values.length);
-        return this.client.query<T & Record<string, unknown>>(sql, this.values);
-    }
-}
-
-export function postgresSql(sourceSql: string, valueCount: number): string {
-    if (typeof sourceSql !== "string" || sourceSql.length === 0 || sourceSql.length > 16_384
-        || !Number.isSafeInteger(valueCount) || valueCount < 0 || valueCount > 32) {
-        throw new Error("gateway_database_query_invalid");
-    }
-    let sql = sourceSql;
-    for (const tableName of TABLE_NAMES) {
-        sql = sql.replace(
-            new RegExp(`(?<![A-Za-z0-9_.])${tableName}(?![A-Za-z0-9_])`, "g"),
-            `"${GATEWAY_SCHEMA}"."${tableName}"`,
-        );
-    }
-    const ignoreConflict = /\bINSERT\s+OR\s+IGNORE\s+INTO\b/i.test(sql);
-    if (ignoreConflict) sql = sql.replace(/\bINSERT\s+OR\s+IGNORE\s+INTO\b/i, "INSERT INTO");
-    let parameter = 0;
-    sql = sql.replace(/\?/g, () => `$${++parameter}`);
-    if (parameter !== valueCount) throw new Error("gateway_database_parameter_mismatch");
-    if (ignoreConflict) sql = `${sql.trimEnd()}\nON CONFLICT DO NOTHING`;
-    return sql;
 }

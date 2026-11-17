@@ -299,8 +299,8 @@ async function loadView(token: string, view: View, query: string, serverId: stri
         case "overview":
             return readControlPlaneAdmin<OverviewSummary>({ accessToken: token, signal, ...identity, operation: "overview", input: { compact: true } });
         case "operations": {
-            const [overview, inventory, selectedDashboard, releases, hostingRegions] = await Promise.all([
-                readControlPlaneAdmin<Omit<OperationsData["overview"], "stableBuilds" | "nightlyBuilds">>({
+            const [overview, inventory, selectedDashboard, hostingRegions] = await Promise.all([
+                readControlPlaneAdmin<OperationsData["overview"]>({
                     accessToken: token, signal, ...identity, operation: "overview", input: { operations: true },
                 }),
                 readOperationsVpsInventory((input) => readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input })),
@@ -311,11 +311,10 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                         input: { serverId },
                     })
                     : Promise.resolve(null),
-                loadReleaseCatalog(token, signal, identity),
                 loadHostingRegionCatalog(token, signal, identity),
             ]);
             return {
-                overview: { ...overview, stableBuilds: releases.stable, nightlyBuilds: releases.nightly },
+                overview,
                 inventory: inventory.inventory,
                 vpsProviderError: inventory.providerError,
                 selectedServer: selectedDashboard?.dashboard.server ?? null,
@@ -626,13 +625,12 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
         && !overview.servers.items.some((server) => server.serverId === selectedServer.serverId)
         ? [selectedServer, ...overview.servers.items]
         : overview.servers.items;
-    const serverOptions: AdminActionOption[] = listedServers.map((server) => ({ label: `${server.displayName} · ${server.operationState}`, value: server.serverId, updatedAt: server.updatedAt, releaseChannel: server.releaseChannel }));
+    const serverOptions: AdminActionOption[] = listedServers.map((server) => ({ label: `${server.displayName} · ${server.operationState}`, value: server.serverId, updatedAt: server.updatedAt }));
     const serverPlainOptions = serverOptions.map(({ label, value }) => ({ label, value }));
     const selectedServerOption = selectedServer === null
         ? undefined
         : serverOptions.find((option) => option.value === selectedServer.serverId);
     const jobOptions: AdminActionOption[] = overview.jobs.items.map((job) => ({ label: `${job.action} · ${job.state} · ${shortId(job.jobId)}`, value: job.jobId, updatedAt: job.updatedAt }));
-    const buildOptions = installableBuilds([...overview.stableBuilds.items, ...overview.nightlyBuilds.items]).map((build) => ({ label: `Pinned version: ${releaseVersion(build)} · ${releaseChannelLabel(build.channel)}${build.currentChannel ? " (current)" : ""}`, value: build.buildId, releaseChannel: build.channel }));
     const accountOptions: AdminActionOption[] = accounts.map(user => ({ label: user.label, value: user.accountId }));
     // Each option carries the provider the control plane listed with the host, so onboarding never guesses it.
     const availableVpsOptions: AdminActionOption[] = (Array.isArray(inventory.availableHosts) ? inventory.availableHosts : []).map((host) => ({ label: host.label, value: vpsHostSelectionValue(host) }));
@@ -668,8 +666,8 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
             { name: "nightlyRolloutsPaused", label: "Pause Nightly rollouts", kind: "checkbox", defaultValue: overview.controls.nightlyRolloutsPaused, help: "Checked means automatic Nightly rollout work is paused." }, reasonField,
         ] },
         { group: "Server lifecycle", operation: "server-operation", title: "Lifecycle operation", description: "Start, stop, restart, delete, or emergency-stop a current server generation.", destructive: true, layoutPriority: 1, fields: [serverField, { name: "action", label: "Action", kind: "select", required: true, options: enumOptions(["start", "stop", "restart-game", "delete", "force-stop"]) }, reasonField] },
-        { group: "Server lifecycle", operation: "update-server", title: "Update server", description: "Install the current selection, follow the channel, or choose a GHCR version to install and keep pinned. A backup is taken before installation.", fields: [serverField, { name: "buildId", label: "Version selection", kind: "select", required: true, defaultValue: "__keep__", options: [{ value: "__keep__", label: "Keep current selection (preserve follow/pin)" }, { value: "__latest__", label: "Follow channel (remove version pin)" }, ...buildOptions], help: "Follow channel installs the current channel release and permits automatic updates. Choosing a version installs and pins that exact version; it will not automatically follow newer releases." }, reasonField] },
-        { group: "Server lifecycle", operation: "rollback-server", title: "Reinstall previous build", description: "Install and pin the previous release in this channel, keeping the current campaign. Takes a safety backup first. To recover an older campaign instead, use Restore backup.", destructive: true, fields: [serverField, reasonField] },
+        { group: "Server lifecycle", operation: "update-server", title: "Update server", description: "Install the current build of the server's release channel. A backup is taken before installation.", fields: [serverField, reasonField] },
+        { group: "Server lifecycle", operation: "rollback-server", title: "Reinstall previous build", description: "Temporarily reinstall the previous release in this channel, keeping the current campaign. Takes a safety backup first. To recover an older campaign instead, use Restore backup.", destructive: true, fields: [serverField, reasonField] },
         { group: "Server lifecycle", operation: "restore-backup", title: "Restore backup", description: "Choose a server to browse its retained backups. Restoring replaces the current campaign and takes a safety backup first.", destructive: true, fields: [serverField, { name: "backupId", label: "Backup", kind: "backup", required: true }, reasonField] },
         { group: "Server lifecycle", operation: "collect-diagnostics", title: "Collect diagnostics", description: "Queue bounded, sanitized diagnostics. Raw secrets and arbitrary files remain inaccessible.", fields: [serverField, { name: "lookbackSeconds", label: "Lookback seconds", kind: "number", required: true, minimum: 60, maximum: 86400, defaultValue: 3600 }, reasonField] },
         { group: "Server lifecycle", operation: "update-settings", title: "Change release settings", description: "Change channel and/or maintenance slot with a stale-state guard.", fields: [serverField, { name: "patch.releaseChannel", label: "Release channel", kind: "select", options: ["stable", "nightly"].map((value) => ({ label: releaseChannelLabel(value), value })) }, { name: "patch.maintenanceSlot", label: "Maintenance slot", kind: "select", options: maintenanceOptions, help: `All maintenance windows use ${MAINTENANCE_TIME_ZONE} (Central Time and its daylight-saving changes).` }, reasonField] },

@@ -3,15 +3,20 @@ import {
     validateNightlyPublicationPointer,
     type JsonObject,
     type NightlyPublicationPointer,
-} from "./core";
+} from "./manifest-rules";
+import { type UpstreamFetch } from "./http";
+
+// Reads the selected nightly publication: the public pointer, then its hash-bound private manifest, within five seconds.
 
 export const NIGHTLY_POINTER_URL = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev/nightly/release.json";
 const ARTIFACT_ORIGIN = "https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev";
 const MAXIMUM_POINTER_BYTES = 4 * 1024;
 const MAXIMUM_MANIFEST_BYTES = 128 * 1024;
 
+/** One bounded R2 object body, as the private and public release buckets return it. */
 type PrivateManifest = { size: number; body: ReadableStream<Uint8Array> };
 
+/** The read step a publication failure happened in, logged so an operator can tell where it broke. */
 export type NightlyPublicationFailureStage = "pointer" | "private_read" | "checksum" | "manifest" | "container";
 
 /** Preserves the bounded stage and transport evidence needed to diagnose a failed publication read. */
@@ -30,6 +35,7 @@ export class NightlyPublicationReadError extends Error {
     }
 }
 
+// Builds an Error with a chosen class name, so a failure classification survives into the log.
 function namedError(name: string, message: string): Error {
     const error = new Error(message);
     error.name = name;
@@ -39,7 +45,7 @@ function namedError(name: string, message: string): Error {
 /** Resolves the same single public pointer as the CP, then verifies its private bytes. */
 export async function readNightlyPublication(
     getPrivateManifest: (key: string) => Promise<PrivateManifest | null>,
-    fetcher: typeof fetch = fetch,
+    fetcher: UpstreamFetch,
     getPublicPointer?: () => Promise<PrivateManifest | null>,
 ): Promise<JsonObject> {
     const controller = new AbortController();
@@ -51,9 +57,11 @@ export async function readNightlyPublication(
     }
 }
 
+// Reads and verifies the pointer and private manifest, giving up when the signal aborts.
+// Each failure is a NightlyPublicationReadError naming its stage.
 async function readNightlyPublicationWithSignal(
     getPrivateManifest: (key: string) => Promise<PrivateManifest | null>,
-    fetcher: typeof fetch,
+    fetcher: UpstreamFetch,
     signal: AbortSignal,
     getPublicPointer?: () => Promise<PrivateManifest | null>,
 ): Promise<JsonObject> {
@@ -81,7 +89,7 @@ async function readNightlyPublicationWithSignal(
     } else {
         let response: Response;
         try {
-            response = await fetcher.call(globalThis, NIGHTLY_POINTER_URL, {
+            response = await fetcher(NIGHTLY_POINTER_URL, {
                 method: "GET", redirect: "manual", signal, headers: { "Cache-Control": "no-cache" },
             });
         } catch (error) {
@@ -143,10 +151,12 @@ async function readNightlyPublicationWithSignal(
     return manifest;
 }
 
+// Parses strict UTF-8 bytes as JSON.
 function decodeJson(bytes: Uint8Array): unknown {
     return JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes)) as unknown;
 }
 
+// Settles with the pending value, or rejects with a timeout once the signal aborts first.
 async function beforeDeadline<T>(pending: Promise<T>, signal: AbortSignal): Promise<T> {
     signal.throwIfAborted();
     return new Promise<T>((resolve, reject) => {
@@ -156,6 +166,7 @@ async function beforeDeadline<T>(pending: Promise<T>, signal: AbortSignal): Prom
     });
 }
 
+// Reads a stream up to a byte limit before the deadline, always cancelling the reader afterwards.
 async function readBounded(body: ReadableStream<Uint8Array>, maximum: number, signal: AbortSignal): Promise<Uint8Array> {
     const reader = body.getReader();
     const chunks: Uint8Array[] = [];

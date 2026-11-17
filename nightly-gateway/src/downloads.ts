@@ -1,0 +1,55 @@
+import { firstRow, type GatewayQuery } from "./database";
+import { GatewayError } from "./http";
+import { isBearerToken, nowSeconds, sha256 } from "./primitives";
+
+// Authorizes artifact and manifest downloads from a bearer download session, nightly or create-build pin.
+
+/** What a download session grants: the latest nightly, or one pinned create-build. */
+export type DownloadAuthorization = { kind: "nightly" } | PinAuthorization;
+/** A download session bound to one create-build pin's build. */
+export type PinAuthorization = { kind: "pin"; buildId: string };
+
+// Requires a nightly download session, refusing pin sessions.
+export async function requireNightlyDownloadSession(request: Request, database: GatewayQuery): Promise<void> {
+    const authorization = await authorizeDownload(request, database);
+    if (authorization.kind !== "nightly") throw new GatewayError(403, "access_denied");
+}
+
+// Requires a create-build pin download session and returns the build it unlocks.
+export async function requirePinDownloadSession(request: Request, database: GatewayQuery): Promise<PinAuthorization> {
+    const authorization = await authorizeDownload(request, database);
+    if (authorization.kind !== "pin") throw new GatewayError(403, "access_denied");
+    return authorization;
+}
+
+// Resolves a bearer token to a live pin or nightly download session, or throws 401.
+export async function authorizeDownload(request: Request, database: GatewayQuery): Promise<DownloadAuthorization> {
+    const authorization = request.headers.get("authorization");
+    if (!authorization?.startsWith("Bearer ")) throw new GatewayError(401, "authorization_required");
+    const token = authorization.slice(7);
+    if (!isBearerToken(token)) throw new GatewayError(401, "authorization_invalid");
+    const tokenHash = await sha256(token);
+    const now = nowSeconds();
+    const pinSession = firstRow(await database.query<{
+        build_id: string;
+        session_expires_at: number;
+        pin_expires_at: number;
+    }>(`
+        SELECT pin.build_id, session.expires_at AS session_expires_at, pin.expires_at AS pin_expires_at
+        FROM nightly_gateway.pin_download_sessions AS session
+        JOIN nightly_gateway.installer_pins AS pin ON pin.token_hash = session.pin_token_hash
+        WHERE session.token_hash = $1
+    `, [tokenHash]));
+    if (pinSession !== null) {
+        if (pinSession.session_expires_at < now || pinSession.pin_expires_at < now) {
+            throw new GatewayError(401, "authorization_expired");
+        }
+        return { kind: "pin", buildId: pinSession.build_id };
+    }
+    const row = firstRow(await database.query<{ expires_at: number }>(
+        "SELECT expires_at FROM nightly_gateway.download_sessions WHERE token_hash = $1",
+        [tokenHash],
+    ));
+    if (row === null || row.expires_at < now) throw new GatewayError(401, "authorization_expired");
+    return { kind: "nightly" };
+}

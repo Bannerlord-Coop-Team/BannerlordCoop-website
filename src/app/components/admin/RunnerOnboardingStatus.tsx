@@ -45,8 +45,13 @@ export function RunnerOnboardingStatus({
 
     useEffect(() => {
         if (!pending || onRefresh) return;
-        const interval = window.setInterval(() => router.refresh(), 4_000);
-        return () => window.clearInterval(interval);
+        let timer: number | undefined;
+        const refresh = () => {
+            if (document.visibilityState === "visible") router.refresh();
+            timer = window.setTimeout(refresh, 15_000);
+        };
+        timer = window.setTimeout(refresh, 15_000);
+        return () => window.clearTimeout(timer);
     }, [pending, router, onRefresh]);
 
     async function requestUpdate() {

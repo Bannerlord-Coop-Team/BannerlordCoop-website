@@ -99,12 +99,6 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
         if (!confirming && dialog?.open) dialog.close();
     }, [confirming]);
 
-    useEffect(() => {
-        if (!resetting || resetting.serverId !== serverId || resetting.userId !== userId) return;
-        const timer = window.setInterval(() => { setVersion((value) => value + 1); router.refresh(); }, 5_000);
-        return () => window.clearInterval(timer);
-    }, [resetting, router, serverId, userId]);
-
     function requestId(key: string) {
         if (requests.current?.key === key) return requests.current.requestId;
         const next = { key, requestId: crypto.randomUUID() };

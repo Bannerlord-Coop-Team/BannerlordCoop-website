@@ -3,7 +3,10 @@
   "name": "bannerlordcoop-website",
   "keep_vars": true,
   "vars": {
-    "ADMIN_IMPERSONATION_ENABLED": "true"
+    "ADMIN_IMPERSONATION_ENABLED": "true",
+    // Server-only base URL of the nightly-gateway Edge Function used by /nightly/*. Its shared
+    // secret NIGHTLY_WEBSITE_KEY is a Worker secret: `npx wrangler secret put NIGHTLY_WEBSITE_KEY`.
+    "NIGHTLY_FUNCTION_URL": "https://wfvqnijwuyqjibhlcrhz.supabase.co/functions/v1/nightly-gateway"
   },
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-08-31",

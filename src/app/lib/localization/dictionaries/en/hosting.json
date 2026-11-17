@@ -14,7 +14,7 @@
   "included.official.title": "Built by the mod team",
   "included.official.description": "The only hosting made for Bannerlord Co-op by the developers who build it.",
   "included.versions.title": "Public or Nightly builds",
-  "included.versions.description": "Run the Public release or the latest Nightly, and choose the version from the website.",
+  "included.versions.description": "Run the Public release or the latest Nightly, and switch channels from the website. Your server always runs its channel's current build.",
   "included.backups.title": "Automatic daily backups",
   "included.backups.description": "Campaign saves are backed up off the server every day.",
   "included.control.title": "Control it from your browser",

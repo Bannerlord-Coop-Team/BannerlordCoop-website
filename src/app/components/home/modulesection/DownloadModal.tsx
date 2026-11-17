@@ -9,7 +9,7 @@ const downloadSources = [
     {
         name: "download.installer.name",
         description: "download.installer.description",
-        href: "https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/",
+        href: "/nightly",
         recommended: true,
         supporterOnly: true,
     },

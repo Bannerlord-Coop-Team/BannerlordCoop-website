@@ -81,7 +81,8 @@ export function maintenanceSlotOptions() {
     }));
 }
 
-/** Fills Create's default release channel, which the administrator card never asks for. */
+/** Fills values the administrator card never asks for: Create's channel, and Update's follow-channel buildId
+ *  (null, not omitted, so an older control plane also clears a legacy pin). */
 export function applyControlPlaneOperationDefaults(
     operation: string,
     input: Record<string, unknown>,
@@ -89,6 +90,7 @@ export function applyControlPlaneOperationDefaults(
     if (operation === "create-server" && input.releaseChannel === undefined) {
         input.releaseChannel = "stable";
     }
+    if (operation === "update-server") input.buildId = null;
 }
 
 type HostPlacement = Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region">;
