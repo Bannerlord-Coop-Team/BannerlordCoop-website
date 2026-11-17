@@ -1,4 +1,30 @@
-import catalog from './managed-config-catalog-generated.ts';
+import rawCatalog from './managed-config-catalog-generated.ts';
+
+type CatalogOption = { key: string; type: string; stable: boolean; default: unknown; min?: number; max?: number;
+  itemPattern?: string; maxItems?: number; uniqueItems?: boolean; omitForOldAgents?: boolean;
+  availableSince?: string; values?: readonly string[]; forbiddenRanges?: readonly (readonly [number?, number?])[] };
+type Catalog = { schemaVersion: number; catalogRevision: string; contentDigest: string; sourceCommit: string; options: readonly CatalogOption[] };
+const catalog = rawCatalog as unknown as Catalog;
+
+function validateCatalogStructure(): void {
+  if (catalog.schemaVersion !== 2 || catalog.catalogRevision !== catalog.contentDigest
+    || !/^[0-9a-f]{64}$/u.test(catalog.catalogRevision) || !/^[0-9a-f]{40}$/u.test(catalog.sourceCommit)
+    || catalog.options.length === 0) throw new Error('Managed configuration catalog is malformed');
+  const keys = new Set<string>();
+  for (const option of catalog.options) {
+    if (!/^[a-z][A-Za-z0-9]*$/u.test(option.key) || keys.has(option.key)
+      || !['boolean', 'integer', 'number', 'enum', 'steamIdList'].includes(option.type)
+      || option.default === undefined) throw new Error(`Managed configuration catalog option is malformed: ${option.key}`);
+    keys.add(option.key);
+    if (option.type === 'boolean' && typeof option.default !== 'boolean') throw new Error(`Managed configuration catalog default is malformed: ${option.key}`);
+    if (option.type === 'integer' && !Number.isSafeInteger(option.default)) throw new Error(`Managed configuration catalog default is malformed: ${option.key}`);
+    if (option.type === 'number' && (typeof option.default !== 'number' || !Number.isFinite(option.default))) throw new Error(`Managed configuration catalog default is malformed: ${option.key}`);
+    if (option.min !== undefined && (option.default as number) < option.min || option.max !== undefined && (option.default as number) > option.max) throw new Error(`Managed configuration catalog bounds are malformed: ${option.key}`);
+    if (option.type === 'enum' && (option.values === undefined || !option.values.includes(String(option.default)))) throw new Error(`Managed configuration catalog enum is malformed: ${option.key}`);
+  }
+}
+
+validateCatalogStructure();
 
 export const MANAGED_DIFFICULTY_LEVELS = ['VeryEasy', 'Easy', 'Realistic'] as const;
 export type ManagedDifficultyLevel = (typeof MANAGED_DIFFICULTY_LEVELS)[number];
@@ -6,17 +32,19 @@ export type ManagedDifficultyLevel = (typeof MANAGED_DIFFICULTY_LEVELS)[number];
 export const MANAGED_GOLD_FOOD_CHANGE_MODES = ['Disabled', 'OneDayMax', 'Enabled'] as const;
 export type ManagedGoldFoodChangeMode = (typeof MANAGED_GOLD_FOOD_CHANGE_MODES)[number];
 
-export const MANAGED_LORD_DEFECTION_RETRY_MODES = [
-  'Vanilla',
-  'NeverExpire',
-  'AlwaysRetry',
-] as const;
+export const MANAGED_LORD_DEFECTION_RETRY_MODES = ['Vanilla', 'NeverExpire', 'AlwaysRetry'] as const;
 export type ManagedLordDefectionRetryMode =
   (typeof MANAGED_LORD_DEFECTION_RETRY_MODES)[number];
 
 export const MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES = ['Vanilla', 'KeepClans'] as const;
 export type ManagedClansAfterKingdomDestructionMode =
   (typeof MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES)[number];
+
+if (JSON.stringify(MANAGED_GOLD_FOOD_CHANGE_MODES) !== JSON.stringify(catalogOption('goldFoodInfluenceChangeInBattles').values)
+  || JSON.stringify(MANAGED_LORD_DEFECTION_RETRY_MODES) !== JSON.stringify(catalogOption('lordDefectionRetries').values)
+  || JSON.stringify(MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES) !== JSON.stringify(catalogOption('clansAfterKingdomDestruction').values)) {
+  throw new Error('Managed configuration enum definitions differ from the catalog');
+}
 
 export interface ManagedServerProcessConfiguration {
   autosaveMinutes: number;
@@ -96,6 +124,16 @@ export interface ManagedServerConfiguration {
   };
 }
 
+const CATALOG_DEFAULT_MOD_OPTIONS = Object.freeze(Object.fromEntries(
+  catalog.options.map((option) => [option.key, option.default]),
+)) as unknown as ManagedModOptionsConfiguration;
+const CATALOG_ADDED_MOD_OPTION_DEFAULTS = Object.freeze(Object.fromEntries(
+  catalog.options.filter((option) => option.omitForOldAgents === true).map((option) => [option.key, option.default]),
+));
+const CATALOG_LEGACY_MOD_OPTION_KEYS = catalog.options
+  .filter((option) => option.omitForOldAgents !== true)
+  .map((option) => option.key);
+
 export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfiguration> =
   deepFreeze({
     schemaVersion: 1,
@@ -127,43 +165,7 @@ export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfigu
         birthAndDeath: false,
         autoAllocateClanMemberPerks: false,
       },
-      modOptions: {
-        voiceEnabled: true,
-        battleSize: 1000,
-        fastForwardEnabled: true,
-        autoPauseEnabled: true,
-        allowClientTimeControls: true,
-        clientsCanUseCheats: false,
-        goldFoodInfluenceChangeInSettlements: true,
-        goldFoodInfluenceChangeInBattles: 'OneDayMax',
-        goldFoodInfluenceChangeForDisconnectedPlayers: false,
-        blockAiWarDeclarationsOnOfflinePlayers: false,
-        playerBattleAiJoinWindowHours: 24,
-        postBattleAiAmnestySeconds: 0,
-        speedLimitWhilePlayersInBattle: true,
-        ensureUnaffiliatedWanderers: true,
-        wandererLimit: 32,
-        spawnRateWanderers: 1,
-        wandererLimitScalesWithPlayers: false,
-        playerKingdomClanTierRequired: 4,
-        coopClansEnabled: true,
-        smithingStaminaRecoveryOutsideSettlements: true,
-        smithingStaminaRecoveryMultiplier: 0.1,
-        maximumLootersMultiplier: 1,
-        looterPartySizeMultiplier: 1,
-        lordDefectionRetries: 'Vanilla',
-        enableHeroExecutions: true,
-        enablePlayerClanMemberExecutions: false,
-        enablePlayerExecutions: false,
-        playerWoundedBattleEntry: true,
-        showPlayerNameplates: true,
-        kingdomDecisionVoteTimeoutSeconds: 60,
-        clansAfterKingdomDestruction: 'Vanilla',
-        preferredBattleHosts: [],
-        pvpBlockLeave: false,
-        pvpResponseTimerSeconds: 0,
-        warSails: false,
-      },
+      modOptions: CATALOG_DEFAULT_MOD_OPTIONS,
     },
   });
 
@@ -171,11 +173,29 @@ export function assertManagedConfigurationAvailableForChannel(
   modOptions: object,
   channel: 'stable' | 'nightly',
 ): void {
-  if (channel !== 'stable') return;
+  assertManagedConfigurationAvailableForInstalledBuild(modOptions, channel === 'stable' ? '0.1.7' : '0.1.8', channel);
+}
+
+export function assertManagedConfigurationAvailableForInstalledBuild(
+  modOptions: object,
+  installedBuildVersion: string | null,
+  channel: 'stable' | 'nightly',
+): void {
+  const parseVersion = (value: string) => value.match(/(?:^|[^0-9])v?(\d+)\.(\d+)\.(\d+)(?:$|[^0-9])/u);
   for (const [key, value] of Object.entries(modOptions)) {
     const option = catalog.options.find(candidate => candidate.key === key);
-    if (option?.stable === false && JSON.stringify(value) !== JSON.stringify(option.default)) {
-      throw new Error(`${key} is available on Nightly only; switch this server to Nightly before changing it`);
+    if (option === undefined || JSON.stringify(value) === JSON.stringify(option.default)) continue;
+    if (channel === 'stable' && option.stable === false) throw new Error(`${key} is available on Nightly only; switch this server to Nightly before changing it`);
+    if (installedBuildVersion === null) throw new Error(`${key} is unavailable until the installed build version is known`);
+    const installed = parseVersion(installedBuildVersion);
+    const required = option.availableSince === undefined ? null : parseVersion(option.availableSince);
+    const installedParts = installed?.slice(1).map(Number);
+    const requiredParts = required?.slice(1).map(Number);
+    const older = installedParts === undefined || requiredParts === undefined
+      || installedParts.some((part, index) => part < (requiredParts[index] ?? part)
+        || part > (requiredParts[index] ?? part) && installedParts.slice(0, index).every((previous, previousIndex) => previous === requiredParts[previousIndex]));
+    if (older) {
+      throw new Error(`${key} is unavailable in the installed build`);
     }
   }
 }
@@ -183,7 +203,7 @@ export function assertManagedConfigurationAvailableForChannel(
 function catalogOption(key: string) {
   const option = catalog.options.find(candidate => candidate.key === key);
   if (option === undefined) throw new Error(`Managed configuration catalog option is missing: ${key}`);
-  return option;
+  return option as CatalogOption;
 }
 
 export type ManagedConfigurationMessages = {
@@ -239,44 +259,8 @@ export function parseManagedServerConfiguration(
     'birthAndDeath',
     'autoAllocateClanMemberPerks',
   ], messages);
-  const modOptions = requireCompatibleRecord(modConfig.modOptions, [
-    'fastForwardEnabled',
-    'autoPauseEnabled',
-    'clientsCanUseCheats',
-    'goldFoodInfluenceChangeInSettlements',
-    'goldFoodInfluenceChangeInBattles',
-    'goldFoodInfluenceChangeForDisconnectedPlayers',
-    'playerBattleAiJoinWindowHours',
-    'speedLimitWhilePlayersInBattle',
-    'wandererLimit',
-    'wandererLimitScalesWithPlayers',
-    'playerKingdomClanTierRequired',
-    'smithingStaminaRecoveryOutsideSettlements',
-    'smithingStaminaRecoveryMultiplier',
-    'maximumLootersMultiplier',
-    'looterPartySizeMultiplier',
-    'lordDefectionRetries',
-    'enableHeroExecutions',
-    'enablePlayerClanMemberExecutions',
-  ], {
-    voiceEnabled: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.voiceEnabled,
-    blockAiWarDeclarationsOnOfflinePlayers: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.blockAiWarDeclarationsOnOfflinePlayers,
-    ensureUnaffiliatedWanderers: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.ensureUnaffiliatedWanderers,
-    coopClansEnabled: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.coopClansEnabled,
-    enablePlayerExecutions: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.enablePlayerExecutions,
-    battleSize: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.battleSize,
-    allowClientTimeControls: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.allowClientTimeControls,
-    postBattleAiAmnestySeconds: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.postBattleAiAmnestySeconds,
-    spawnRateWanderers: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.spawnRateWanderers,
-    playerWoundedBattleEntry: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.playerWoundedBattleEntry,
-    showPlayerNameplates: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.showPlayerNameplates,
-    kingdomDecisionVoteTimeoutSeconds: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.kingdomDecisionVoteTimeoutSeconds,
-    clansAfterKingdomDestruction: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.clansAfterKingdomDestruction,
-    preferredBattleHosts: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.preferredBattleHosts,
-    pvpBlockLeave: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.pvpBlockLeave,
-    pvpResponseTimerSeconds: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.pvpResponseTimerSeconds,
-    warSails: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.warSails,
-  }, messages);
+  const modOptions = requireCompatibleRecord(modConfig.modOptions, CATALOG_LEGACY_MOD_OPTION_KEYS, CATALOG_ADDED_MOD_OPTION_DEFAULTS, messages);
+  validateCatalogManagedOptions(modOptions, messages);
   return deepFreeze({
     schemaVersion: 1,
     serverConfig: {
@@ -378,6 +362,27 @@ export function parseManagedServerConfiguration(
       },
     },
   });
+}
+
+function validateCatalogManagedOptions(value: Record<string, unknown>, messages: ManagedConfigurationMessages): void {
+  for (const option of catalog.options) {
+    const actual = value[option.key];
+    if (actual === undefined) throw new Error(messages.shape);
+    if (option.type === 'boolean' && typeof actual !== 'boolean') throw new Error(messages.boolean);
+    if (option.type === 'integer' && !Number.isSafeInteger(actual)) throw new Error(messages.integer);
+    if (option.type === 'number' && (typeof actual !== 'number' || !Number.isFinite(actual))) throw new Error(messages.number);
+    if (option.type === 'enum' && (typeof actual !== 'string' || option.values?.includes(actual) !== true)) throw new Error(messages.choice);
+    if (option.type === 'steamIdList' && (!Array.isArray(actual) || actual.some((entry) => typeof entry !== 'string'))) throw new Error(messages.shape);
+    if (option.min !== undefined && (actual as number) < option.min) throw new Error(option.type === 'integer' ? messages.integer : messages.number);
+    if (option.max !== undefined && (actual as number) > option.max) throw new Error(option.type === 'integer' ? messages.integer : messages.number);
+    if (option.type === 'steamIdList') {
+      const list = actual as string[];
+      if (option.maxItems !== undefined && list.length > option.maxItems) throw new Error(messages.shape);
+      if (option.uniqueItems === true && new Set(list).size !== list.length) throw new Error(messages.shape);
+      if (option.itemPattern !== undefined && list.some((entry) => !new RegExp(option.itemPattern as string, 'u').test(entry))) throw new Error(messages.shape);
+    }
+    if (option.forbiddenRanges?.some(([from, to]) => typeof actual === 'number' && actual >= (from ?? Number.NEGATIVE_INFINITY) && actual <= (to ?? Number.POSITIVE_INFINITY))) throw new Error(option.type === 'integer' ? messages.integer : messages.number);
+  }
 }
 
 export function cloneManagedServerConfiguration(

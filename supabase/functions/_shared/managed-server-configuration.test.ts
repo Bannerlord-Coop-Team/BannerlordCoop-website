@@ -83,7 +83,8 @@ test('the website schema matches the generated build catalog and round-trips all
     Object.keys(DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions).sort(),
     catalog.options.map(option => option.key).sort(),
   );
-  assert.equal(catalog.catalogRevision, '2a9c5212a9ce674ad9961c5d85d595bd9bdaec725117a6082a59701dd864fb2f');
+  assert.equal(catalog.catalogRevision, 'd1261866e62085cfec1b837a201b4ada90b873668cb409f61650c17d393f1771');
+  assert.equal(catalog.sourceCommit, 'd8a3c6dcce1d9b452f4af9262f5a16da01ddf13a');
   assert.deepEqual(generatedCatalog, catalog);
   const value = configuration();
   Object.assign(value.modConfig.modOptions, {
@@ -118,4 +119,16 @@ test('stable rejects Nightly-only values while Nightly accepts them and game coe
   const invalid = configuration();
   invalid.modConfig.modOptions.pvpResponseTimerSeconds = 9;
   assert.throws(() => parseManagedServerConfiguration(invalid), { message: 'Managed server configuration integer is invalid' });
+});
+
+test('validates every catalog option through the same table used by the editor', () => {
+  for (const option of catalog.options) {
+    const value = { ...configuration().modConfig.modOptions } as Record<string, unknown>;
+    if (option.type === 'enum') value[option.key] = option.values?.[0];
+    if (option.type === 'steamIdList') value[option.key] = ['76561198000000001'];
+    assert.doesNotThrow(() => parseManagedServerConfiguration({
+      ...configuration(),
+      modConfig: { ...configuration().modConfig, modOptions: value },
+    }));
+  }
 });
