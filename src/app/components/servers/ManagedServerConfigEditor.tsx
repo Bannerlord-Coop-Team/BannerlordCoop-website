@@ -14,6 +14,7 @@ import { workspaceNoticeClass } from "./server-workspace-ui";
 import { useServerWorkspaceSectionShown } from "./ServerManagementWorkspace";
 import {
     MANAGED_DIFFICULTY_LEVELS, MANAGED_GOLD_FOOD_CHANGE_MODES, MANAGED_LORD_DEFECTION_RETRY_MODES,
+    MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES,
     parseManagedServerConfiguration, type ManagedServerConfiguration,
 } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { RunnerConfigurationFile, RunnerConfigurationPart } from "../../../../supabase/functions/_shared/server-configuration-contract";
@@ -26,6 +27,7 @@ type Field = { key: string; label: string; help?: string } & (
     | { kind: "boolean" }
     | { kind: "integer"; min: number; max: number }
     | { kind: "number"; min: number; max: number; step: number }
+    | { kind: "steamIdList" }
     | { kind: "choice"; options: readonly string[] });
 
 const inputClass = "mt-2 block w-full min-w-0 rounded-md border border-white/15 bg-background px-3 py-2 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-red-400";
@@ -142,13 +144,16 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         { key: "battleSize", label: t("configuration.field.battleSize"), kind: "integer", min: 200, max: battleSizeLimit, help: t("configEditor.battleSizeHelp") },
         { key: "fastForwardEnabled", label: t("configuration.field.fastForwardEnabled"), kind: "boolean" },
         { key: "autoPauseEnabled", label: t("configuration.field.autoPauseEnabled"), kind: "boolean" },
+        { key: "allowClientTimeControls", label: t("configuration.field.allowClientTimeControls"), kind: "boolean" },
         { key: "clientsCanUseCheats", label: t("configuration.field.clientsCanUseCheats"), kind: "boolean" },
         { key: "goldFoodInfluenceChangeInSettlements", label: t("configuration.field.goldFoodInfluenceChangeInSettlements"), kind: "boolean" },
         { key: "goldFoodInfluenceChangeInBattles", label: t("configuration.field.goldFoodInfluenceChangeInBattles"), kind: "choice", options: MANAGED_GOLD_FOOD_CHANGE_MODES },
         { key: "goldFoodInfluenceChangeForDisconnectedPlayers", label: t("configuration.field.goldFoodInfluenceChangeForDisconnectedPlayers"), kind: "boolean" },
         { key: "playerBattleAiJoinWindowHours", label: t("configuration.field.playerBattleAiJoinWindowHours"), kind: "integer", min: 0, max: 8760 },
+        { key: "postBattleAiAmnestySeconds", label: t("configuration.field.postBattleAiAmnestySeconds"), kind: "integer", min: 0, max: 86400 },
         { key: "speedLimitWhilePlayersInBattle", label: t("configuration.field.speedLimitWhilePlayersInBattle"), kind: "boolean" },
         { key: "wandererLimit", label: t("configuration.field.wandererLimit"), kind: "integer", min: 0, max: 1000 },
+        { key: "spawnRateWanderers", label: t("configuration.field.spawnRateWanderers"), kind: "integer", min: 0, max: 100 },
         { key: "wandererLimitScalesWithPlayers", label: t("configuration.field.wandererLimitScalesWithPlayers"), kind: "boolean" },
         { key: "playerKingdomClanTierRequired", label: t("configuration.field.playerKingdomClanTierRequired"), kind: "integer", min: 0, max: 6 },
         { key: "smithingStaminaRecoveryOutsideSettlements", label: t("configuration.field.smithingStaminaRecoveryOutsideSettlements"), kind: "boolean" },
@@ -158,6 +163,14 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         { key: "lordDefectionRetries", label: t("configuration.field.lordDefectionRetries"), kind: "choice", options: MANAGED_LORD_DEFECTION_RETRY_MODES },
         { key: "enableHeroExecutions", label: t("configuration.field.enableHeroExecutions"), kind: "boolean" },
         { key: "enablePlayerClanMemberExecutions", label: t("configuration.field.enablePlayerClanMemberExecutions"), kind: "boolean" },
+        { key: "enablePlayerExecutions", label: t("configuration.field.enablePlayerExecutions"), kind: "boolean" },
+        { key: "playerWoundedBattleEntry", label: t("configuration.field.playerWoundedBattleEntry"), kind: "boolean" },
+        { key: "showPlayerNameplates", label: t("configuration.field.showPlayerNameplates"), kind: "boolean" },
+        { key: "kingdomDecisionVoteTimeoutSeconds", label: t("configuration.field.kingdomDecisionVoteTimeoutSeconds"), kind: "integer", min: 0, max: 86400 },
+        { key: "clansAfterKingdomDestruction", label: t("configuration.field.clansAfterKingdomDestruction"), kind: "choice", options: MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES },
+        { key: "preferredBattleHosts", label: t("configuration.field.preferredBattleHosts"), kind: "steamIdList" },
+        { key: "pvpBlockLeave", label: t("configuration.field.pvpBlockLeave"), kind: "boolean" },
+        { key: "pvpResponseTimerSeconds", label: t("configuration.field.pvpResponseTimerSeconds"), kind: "integer", min: 0, max: 86400 },
     ];
     const GROUPS: { group: Group; title: string; fields: Field[] }[] = [
         { group: "serverConfig", title: t("configEditor.serverSettings"), fields: SERVER_FIELDS },
@@ -314,6 +327,11 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
             <select id={id} className={inputClass} value={typeof value === "string" ? value : ""} onChange={(event) => update(event.target.value)}>
                 {field.options.map((option) => <option key={option} value={option}>{configurationChoiceLabel(option, t)}</option>)}
             </select>
+        </div>;
+        if (field.kind === "steamIdList") return <div key={field.key}>
+            <label htmlFor={id} className="text-sm">{field.label}</label>
+            <textarea id={id} className={inputClass} rows={3} value={Array.isArray(value) ? value.join("\n") : ""}
+                onChange={(event) => update(event.target.value.split(/[\s,]+/u).filter(Boolean))} />
         </div>;
         const problem = numberProblem(field, value, t, number);
         return <div key={field.key}>

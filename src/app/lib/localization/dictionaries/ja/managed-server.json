@@ -467,7 +467,7 @@
   "configuration.option.OneDayMax": "最大1日",
   "configuration.option.Enabled": "有効",
   "configuration.option.Vanilla": "標準（バニラ）",
-  "configuration.option.NeverExpire": "無期限",
+  "configuration.option.KeepClans": "Keep clans",  "configuration.option.NeverExpire": "無期限",
   "configuration.option.AlwaysRetry": "常に再試行",
   "commands.sendShortcut": "{key}で送信",
   "commands.historyShortcut": "{up} {down} で最近のコマンド",

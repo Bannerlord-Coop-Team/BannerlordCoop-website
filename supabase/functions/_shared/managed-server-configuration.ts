@@ -12,6 +12,10 @@ export const MANAGED_LORD_DEFECTION_RETRY_MODES = [
 export type ManagedLordDefectionRetryMode =
   (typeof MANAGED_LORD_DEFECTION_RETRY_MODES)[number];
 
+export const MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES = ['Vanilla', 'KeepClans'] as const;
+export type ManagedClansAfterKingdomDestructionMode =
+  (typeof MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES)[number];
+
 export interface ManagedServerProcessConfiguration {
   autosaveMinutes: number;
   logFile: boolean;
@@ -45,6 +49,7 @@ export interface ManagedVoiceConfiguration {
 export interface ManagedModOptionsConfiguration {
   fastForwardEnabled: boolean;
   autoPauseEnabled: boolean;
+  allowClientTimeControls: boolean;
   clientsCanUseCheats: boolean;
   goldFoodInfluenceChangeInSettlements: boolean;
   goldFoodInfluenceChangeInBattles: ManagedGoldFoodChangeMode;
@@ -53,9 +58,11 @@ export interface ManagedModOptionsConfiguration {
   battleSize: number;
   blockAiWarDeclarationsOnOfflinePlayers: boolean;
   playerBattleAiJoinWindowHours: number;
+  postBattleAiAmnestySeconds: number;
   speedLimitWhilePlayersInBattle: boolean;
   ensureUnaffiliatedWanderers: boolean;
   wandererLimit: number;
+  spawnRateWanderers: number;
   wandererLimitScalesWithPlayers: boolean;
   playerKingdomClanTierRequired: number;
   coopClansEnabled: boolean;
@@ -67,6 +74,13 @@ export interface ManagedModOptionsConfiguration {
   enableHeroExecutions: boolean;
   enablePlayerClanMemberExecutions: boolean;
   enablePlayerExecutions: boolean;
+  playerWoundedBattleEntry: boolean;
+  showPlayerNameplates: boolean;
+  kingdomDecisionVoteTimeoutSeconds: number;
+  clansAfterKingdomDestruction: ManagedClansAfterKingdomDestructionMode;
+  preferredBattleHosts: readonly string[];
+  pvpBlockLeave: boolean;
+  pvpResponseTimerSeconds: number;
   /** Coop's War Sails (NavalDLC) mode; the dedicated server reads it from mod-config.json. */
   warSails: boolean;
 }
@@ -117,15 +131,18 @@ export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfigu
         battleSize: 1000,
         fastForwardEnabled: true,
         autoPauseEnabled: true,
+        allowClientTimeControls: true,
         clientsCanUseCheats: false,
         goldFoodInfluenceChangeInSettlements: true,
         goldFoodInfluenceChangeInBattles: 'OneDayMax',
         goldFoodInfluenceChangeForDisconnectedPlayers: false,
         blockAiWarDeclarationsOnOfflinePlayers: false,
         playerBattleAiJoinWindowHours: 24,
+        postBattleAiAmnestySeconds: 0,
         speedLimitWhilePlayersInBattle: true,
         ensureUnaffiliatedWanderers: true,
         wandererLimit: 32,
+        spawnRateWanderers: 1,
         wandererLimitScalesWithPlayers: false,
         playerKingdomClanTierRequired: 4,
         coopClansEnabled: true,
@@ -137,6 +154,13 @@ export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfigu
         enableHeroExecutions: true,
         enablePlayerClanMemberExecutions: false,
         enablePlayerExecutions: false,
+        playerWoundedBattleEntry: true,
+        showPlayerNameplates: true,
+        kingdomDecisionVoteTimeoutSeconds: 60,
+        clansAfterKingdomDestruction: 'Vanilla',
+        preferredBattleHosts: [],
+        pvpBlockLeave: false,
+        pvpResponseTimerSeconds: 0,
         warSails: false,
       },
     },
@@ -221,6 +245,16 @@ export function parseManagedServerConfiguration(
     coopClansEnabled: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.coopClansEnabled,
     enablePlayerExecutions: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.enablePlayerExecutions,
     battleSize: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.battleSize,
+    allowClientTimeControls: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.allowClientTimeControls,
+    postBattleAiAmnestySeconds: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.postBattleAiAmnestySeconds,
+    spawnRateWanderers: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.spawnRateWanderers,
+    playerWoundedBattleEntry: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.playerWoundedBattleEntry,
+    showPlayerNameplates: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.showPlayerNameplates,
+    kingdomDecisionVoteTimeoutSeconds: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.kingdomDecisionVoteTimeoutSeconds,
+    clansAfterKingdomDestruction: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.clansAfterKingdomDestruction,
+    preferredBattleHosts: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.preferredBattleHosts,
+    pvpBlockLeave: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.pvpBlockLeave,
+    pvpResponseTimerSeconds: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.pvpResponseTimerSeconds,
     warSails: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.warSails,
   }, messages);
   return deepFreeze({
@@ -259,6 +293,7 @@ export function parseManagedServerConfiguration(
         battleSize: requireInteger(modOptions.battleSize, 200, 12_000, messages),
         fastForwardEnabled: requireBoolean(modOptions.fastForwardEnabled, messages),
         autoPauseEnabled: requireBoolean(modOptions.autoPauseEnabled, messages),
+        allowClientTimeControls: requireBoolean(modOptions.allowClientTimeControls, messages),
         clientsCanUseCheats: requireBoolean(modOptions.clientsCanUseCheats, messages),
         goldFoodInfluenceChangeInSettlements: requireBoolean(
           modOptions.goldFoodInfluenceChangeInSettlements, messages,
@@ -278,9 +313,11 @@ export function parseManagedServerConfiguration(
           0,
           8_760, messages,
         ),
+        postBattleAiAmnestySeconds: requireInteger(modOptions.postBattleAiAmnestySeconds, 0, 86_400, messages),
         speedLimitWhilePlayersInBattle: requireBoolean(modOptions.speedLimitWhilePlayersInBattle, messages),
         ensureUnaffiliatedWanderers: requireBoolean(modOptions.ensureUnaffiliatedWanderers, messages),
         wandererLimit: requireInteger(modOptions.wandererLimit, 0, 1_000, messages),
+        spawnRateWanderers: requireInteger(modOptions.spawnRateWanderers, 0, 100, messages),
         wandererLimitScalesWithPlayers: requireBoolean(modOptions.wandererLimitScalesWithPlayers, messages),
         playerKingdomClanTierRequired: requireInteger(
           modOptions.playerKingdomClanTierRequired,
@@ -307,6 +344,16 @@ export function parseManagedServerConfiguration(
           modOptions.enablePlayerClanMemberExecutions, messages,
         ),
         enablePlayerExecutions: requireBoolean(modOptions.enablePlayerExecutions, messages),
+        playerWoundedBattleEntry: requireBoolean(modOptions.playerWoundedBattleEntry, messages),
+        showPlayerNameplates: requireBoolean(modOptions.showPlayerNameplates, messages),
+        kingdomDecisionVoteTimeoutSeconds: requireInteger(modOptions.kingdomDecisionVoteTimeoutSeconds, 0, 86_400, messages),
+        clansAfterKingdomDestruction: requireEnum(
+          modOptions.clansAfterKingdomDestruction,
+          MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES, messages,
+        ),
+        preferredBattleHosts: requireSteamIdList(modOptions.preferredBattleHosts, messages),
+        pvpBlockLeave: requireBoolean(modOptions.pvpBlockLeave, messages),
+        pvpResponseTimerSeconds: requireInteger(modOptions.pvpResponseTimerSeconds, 0, 86_400, messages),
         warSails: requireBoolean(modOptions.warSails, messages),
       },
     },
@@ -407,6 +454,16 @@ function requireEnum<const T extends readonly string[]>(value: unknown, values: 
     throw new Error(messages.choice);
   }
   return value;
+}
+
+function requireSteamIdList(value: unknown, messages: ManagedConfigurationMessages): readonly string[] {
+  if (!Array.isArray(value) || value.length > 32) throw new Error(messages.shape);
+  const ids = value.map((entry) => {
+    if (typeof entry !== 'string' || !/^\d{17}$/u.test(entry)) throw new Error(messages.shape);
+    return entry;
+  });
+  if (new Set(ids).size !== ids.length) throw new Error(messages.shape);
+  return ids;
 }
 
 function deepFreeze<T>(value: T): T {

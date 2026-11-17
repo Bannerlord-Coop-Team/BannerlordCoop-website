@@ -467,7 +467,7 @@
   "configuration.option.OneDayMax": "Máximo de um dia",
   "configuration.option.Enabled": "Ativado",
   "configuration.option.Vanilla": "Jogo base",
-  "configuration.option.NeverExpire": "Nunca expirar",
+  "configuration.option.KeepClans": "Keep clans",  "configuration.option.NeverExpire": "Nunca expirar",
   "configuration.option.AlwaysRetry": "Tentar sempre novamente",
   "commands.sendShortcut": "{key} para enviar",
   "commands.historyShortcut": "{up} {down} para comandos recentes",

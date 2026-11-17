@@ -467,7 +467,7 @@
   "configuration.option.OneDayMax": "En fazla bir gün",
   "configuration.option.Enabled": "Etkin",
   "configuration.option.Vanilla": "Orijinal",
-  "configuration.option.NeverExpire": "Asla sona ermez",
+  "configuration.option.KeepClans": "Keep clans",  "configuration.option.NeverExpire": "Asla sona ermez",
   "configuration.option.AlwaysRetry": "Her zaman yeniden dene",
   "commands.sendShortcut": "{key} ile gönder",
   "commands.historyShortcut": "Son komutlar için {up} {down}",

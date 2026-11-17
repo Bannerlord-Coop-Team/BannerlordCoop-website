@@ -467,7 +467,7 @@
   "configuration.option.OneDayMax": "Не более одного дня",
   "configuration.option.Enabled": "Включено",
   "configuration.option.Vanilla": "Как в оригинальной игре",
-  "configuration.option.NeverExpire": "Без ограничения срока",
+  "configuration.option.KeepClans": "Keep clans",  "configuration.option.NeverExpire": "Без ограничения срока",
   "configuration.option.AlwaysRetry": "Всегда повторять попытку",
   "commands.sendShortcut": "{key} — отправить",
   "commands.historyShortcut": "{up} {down} — недавние команды",

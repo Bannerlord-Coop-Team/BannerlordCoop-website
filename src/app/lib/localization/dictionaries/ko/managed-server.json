@@ -467,7 +467,7 @@
   "configuration.option.OneDayMax": "최대 하루",
   "configuration.option.Enabled": "활성화",
   "configuration.option.Vanilla": "기본 게임",
-  "configuration.option.NeverExpire": "만료 없음",
+  "configuration.option.KeepClans": "Keep clans",  "configuration.option.NeverExpire": "만료 없음",
   "configuration.option.AlwaysRetry": "항상 재시도",
   "commands.sendShortcut": "{key} 키로 전송",
   "commands.historyShortcut": "{up} {down} 키로 최근 명령",

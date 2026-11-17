@@ -467,7 +467,7 @@
   "configuration.option.OneDayMax": "最多一天",
   "configuration.option.Enabled": "启用",
   "configuration.option.Vanilla": "原版",
-  "configuration.option.NeverExpire": "永不过期",
+  "configuration.option.KeepClans": "Keep clans",  "configuration.option.NeverExpire": "永不过期",
   "configuration.option.AlwaysRetry": "始终重试",
   "commands.sendShortcut": "按 {key} 发送",
   "commands.historyShortcut": "按 {up} {down} 查看最近的命令",

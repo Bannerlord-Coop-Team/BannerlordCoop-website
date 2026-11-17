@@ -467,7 +467,7 @@
   "configuration.option.OneDayMax": "Maximal ein Tag",
   "configuration.option.Enabled": "Aktiviert",
   "configuration.option.Vanilla": "Vanilla",
-  "configuration.option.NeverExpire": "Läuft nie ab",
+  "configuration.option.KeepClans": "Keep clans",  "configuration.option.NeverExpire": "Läuft nie ab",
   "configuration.option.AlwaysRetry": "Immer wiederholen",
   "commands.sendShortcut": "{key} zum Senden",
   "commands.historyShortcut": "{up} {down} für letzte Befehle",

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import catalog from './managed-config-catalog.json' with { type: 'json' };
 import {
   DEFAULT_MANAGED_SERVER_CONFIGURATION,
   parseManagedServerConfiguration,
@@ -73,4 +74,30 @@ test('War Sails defaults to off when omitted and accepts only a boolean', () => 
   const invalid = configuration();
   Object.assign(invalid.modConfig.modOptions, { warSails: 'true' });
   assert.throws(() => parseManagedServerConfiguration(invalid, messages), { message: messages.boolean });
+});
+
+test('the website schema matches the generated build catalog and round-trips all drifted options', () => {
+  assert.deepEqual(
+    Object.keys(DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions).sort(),
+    catalog.options.map(option => option.key).sort(),
+  );
+  const value = configuration();
+  Object.assign(value.modConfig.modOptions, {
+    allowClientTimeControls: false,
+    postBattleAiAmnestySeconds: 90,
+    spawnRateWanderers: 2,
+    playerWoundedBattleEntry: false,
+    showPlayerNameplates: false,
+    kingdomDecisionVoteTimeoutSeconds: 120,
+    clansAfterKingdomDestruction: 'KeepClans',
+    preferredBattleHosts: ['76561198000000001'],
+    pvpBlockLeave: true,
+    pvpResponseTimerSeconds: 30,
+  });
+  const parsed = parseManagedServerConfiguration(value);
+  assert.equal(parsed.modConfig.modOptions.clansAfterKingdomDestruction, 'KeepClans');
+  assert.deepEqual(parsed.modConfig.modOptions.preferredBattleHosts, ['76561198000000001']);
+  const unknown = configuration();
+  Object.assign(unknown.modConfig.modOptions as unknown as Record<string, unknown>, { futureOption: true });
+  assert.throws(() => parseManagedServerConfiguration(unknown, messages), { message: messages.shape });
 });
