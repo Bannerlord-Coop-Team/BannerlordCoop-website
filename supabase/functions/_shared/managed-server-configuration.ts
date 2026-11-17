@@ -1,4 +1,4 @@
-import catalog from './managed-config-catalog.json' with { type: 'json' };
+import catalog from './managed-config-catalog-generated.ts';
 
 export const MANAGED_DIFFICULTY_LEVELS = ['VeryEasy', 'Easy', 'Realistic'] as const;
 export type ManagedDifficultyLevel = (typeof MANAGED_DIFFICULTY_LEVELS)[number];
@@ -500,4 +500,5 @@ function deepFreeze<T>(value: T): T {
   for (const child of Object.values(value)) deepFreeze(child);
   return Object.freeze(value);
 }
+
 
