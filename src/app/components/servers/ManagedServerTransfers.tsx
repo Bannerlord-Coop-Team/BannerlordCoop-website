@@ -69,7 +69,7 @@ function saveDownload(bytes: BlobPart, fileName: string) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
-type TransferProps = { userId: string; serverId: string; serverName?: string; status: OwnerFileStatus | null; canImportConfig: boolean; canEditConfig?: boolean; canExportSave: boolean; subscriptionRescue?: boolean; campaigns?: ReactNode };
+type TransferProps = { userId: string; serverId: string; serverName?: string; releaseChannel?: "stable" | "nightly"; status: OwnerFileStatus | null; canImportConfig: boolean; canEditConfig?: boolean; canExportSave: boolean; subscriptionRescue?: boolean; campaigns?: ReactNode };
 
 // Keys transfer state to the current account and server.
 export function ManagedServerTransfers(props: TransferProps) {
@@ -77,7 +77,7 @@ export function ManagedServerTransfers(props: TransferProps) {
 }
 
 // Presents file imports and durable transfer progress with localized diagnostics.
-function TransferSession({ userId, serverId, serverName, status, canImportConfig, canEditConfig = false, canExportSave, subscriptionRescue = false, campaigns }: TransferProps) {
+function TransferSession({ userId, serverId, serverName, releaseChannel, status, canImportConfig, canEditConfig = false, canExportSave, subscriptionRescue = false, campaigns }: TransferProps) {
     const { t, rich, number, locale } = useTranslations("managed-server");
     const router = useRouter();
     const storageKey = `managed-file-transfer:v1:${userId}:${serverId}`;
@@ -399,7 +399,7 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
             saveName={status ? status.activeSave?.displayName ?? t("transfers.noActiveCampaignSave") : undefined}
             campaigns={campaigns}
             configuration={status?.managedConfig}
-            configAccess={canEditConfig ? { serverId, userId, canEdit: true } : undefined}
+             configAccess={canEditConfig ? { serverId, userId, canEdit: true, releaseChannel } : undefined}
             saveActions={<>
                 <DisabledControlHint disabled={importSaveDisabled} message={importSaveHint}>
                     <button className={buttonClass} disabled={importSaveDisabled} onClick={() => openImport("import-save")}><Upload aria-hidden className="size-4" />{t("transfers.importSave")}</button>

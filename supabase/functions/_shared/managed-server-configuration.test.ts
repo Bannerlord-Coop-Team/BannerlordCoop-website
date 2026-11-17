@@ -3,6 +3,7 @@ import test from 'node:test';
 import catalog from './managed-config-catalog.json' with { type: 'json' };
 import {
   DEFAULT_MANAGED_SERVER_CONFIGURATION,
+  assertManagedConfigurationAvailableForChannel,
   parseManagedServerConfiguration,
   type ManagedConfigurationMessages,
 } from './managed-server-configuration';
@@ -81,6 +82,7 @@ test('the website schema matches the generated build catalog and round-trips all
     Object.keys(DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions).sort(),
     catalog.options.map(option => option.key).sort(),
   );
+  assert.equal(catalog.catalogRevision, '2a9c5212a9ce674ad9961c5d85d595bd9bdaec725117a6082a59701dd864fb2f');
   const value = configuration();
   Object.assign(value.modConfig.modOptions, {
     allowClientTimeControls: false,
@@ -100,4 +102,18 @@ test('the website schema matches the generated build catalog and round-trips all
   const unknown = configuration();
   Object.assign(unknown.modConfig.modOptions as unknown as Record<string, unknown>, { futureOption: true });
   assert.throws(() => parseManagedServerConfiguration(unknown, messages), { message: messages.shape });
+});
+
+test('stable rejects Nightly-only values while Nightly accepts them and game coercions stay rejected', () => {
+  const value = configuration();
+  value.modConfig.modOptions.clansAfterKingdomDestruction = 'KeepClans';
+  assert.throws(() => {
+    const parsed = parseManagedServerConfiguration(value);
+    assertManagedConfigurationAvailableForChannel(parsed.modConfig.modOptions, 'stable');
+  }, /available on Nightly only/u);
+  const parsed = parseManagedServerConfiguration(value);
+  assert.doesNotThrow(() => assertManagedConfigurationAvailableForChannel(parsed.modConfig.modOptions, 'nightly'));
+  const invalid = configuration();
+  invalid.modConfig.modOptions.pvpResponseTimerSeconds = 9;
+  assert.throws(() => parseManagedServerConfiguration(invalid), { message: 'Managed server configuration integer is invalid' });
 });

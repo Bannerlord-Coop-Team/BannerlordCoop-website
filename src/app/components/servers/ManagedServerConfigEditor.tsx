@@ -15,11 +15,12 @@ import { useServerWorkspaceSectionShown } from "./ServerManagementWorkspace";
 import {
     MANAGED_DIFFICULTY_LEVELS, MANAGED_GOLD_FOOD_CHANGE_MODES, MANAGED_LORD_DEFECTION_RETRY_MODES,
     MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES,
-    parseManagedServerConfiguration, type ManagedServerConfiguration,
+    assertManagedConfigurationAvailableForChannel, parseManagedServerConfiguration, type ManagedServerConfiguration,
 } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { RunnerConfigurationFile, RunnerConfigurationPart } from "../../../../supabase/functions/_shared/server-configuration-contract";
+import catalog from "../../../../supabase/functions/_shared/managed-config-catalog.json";
 
-export type ConfigAccess = { serverId: string; userId: string; canEdit: boolean };
+export type ConfigAccess = { serverId: string; userId: string; canEdit: boolean; releaseChannel?: "stable" | "nightly" };
 type Settings = { serverConfig: ManagedServerConfiguration["serverConfig"]; modConfig: ManagedServerConfiguration["modConfig"] };
 type Live = { server: RunnerConfigurationFile | null; mod: RunnerConfigurationFile | null };
 type Group = "serverConfig" | "difficulty" | "modOptions";
@@ -56,11 +57,12 @@ function numberProblem(field: Field, value: unknown, t: Translator["t"], number:
 // Serializes editable configuration without translating its payload.
 function pretty(settings: Settings) { return JSON.stringify({ serverConfig: settings.serverConfig, modConfig: settings.modConfig }, null, 2); }
 // Validates configuration shape and injects detailed parser diagnostics.
-function parseSettings(value: unknown, t: Translator["t"], maximumBattleSize: number): Settings {
+function parseSettings(value: unknown, t: Translator["t"], maximumBattleSize: number, releaseChannel?: "stable" | "nightly"): Settings {
     if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(t("configEditor.expectedAnObjectWithServerconfigAndModconfig"));
     const keys = Object.keys(value);
     if (keys.length !== 2 || !("serverConfig" in value) || !("modConfig" in value)) throw new Error(t("configEditor.expectedExactlyServerconfigAndModconfig"));
     const parsed = parseManagedServerConfiguration({ schemaVersion: 1, ...(value as object) }, configurationMessages(t));
+    if (releaseChannel) assertManagedConfigurationAvailableForChannel(parsed.modConfig.modOptions, releaseChannel);
     if (parsed.modConfig.modOptions.battleSize > maximumBattleSize) throw new Error(t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe"));
     return { serverConfig: parsed.serverConfig, modConfig: parsed.modConfig };
 }
@@ -140,7 +142,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         { key: "birthAndDeath", label: t("configuration.field.birthAndDeath"), kind: "boolean" },
         { key: "autoAllocateClanMemberPerks", label: t("configuration.field.autoAllocateClanMemberPerks"), kind: "boolean" },
     ];
-    const MOD_OPTION_FIELDS: Field[] = [
+    const MOD_OPTION_FIELDS_ALL: Field[] = [
         { key: "battleSize", label: t("configuration.field.battleSize"), kind: "integer", min: 200, max: battleSizeLimit, help: t("configEditor.battleSizeHelp") },
         { key: "fastForwardEnabled", label: t("configuration.field.fastForwardEnabled"), kind: "boolean" },
         { key: "autoPauseEnabled", label: t("configuration.field.autoPauseEnabled"), kind: "boolean" },
@@ -172,6 +174,8 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         { key: "pvpBlockLeave", label: t("configuration.field.pvpBlockLeave"), kind: "boolean" },
         { key: "pvpResponseTimerSeconds", label: t("configuration.field.pvpResponseTimerSeconds"), kind: "integer", min: 0, max: 86400 },
     ];
+    const MOD_OPTION_FIELDS = MOD_OPTION_FIELDS_ALL.filter((field) => access?.releaseChannel !== "stable"
+        || catalog.options.find((option) => option.key === field.key)?.stable !== false);
     const GROUPS: { group: Group; title: string; fields: Field[] }[] = [
         { group: "serverConfig", title: t("configEditor.serverSettings"), fields: SERVER_FIELDS },
         { group: "difficulty", title: t("configEditor.difficulty"), fields: DIFFICULTY_FIELDS },
@@ -260,7 +264,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     // Parses a JSON draft and reports validation without changing saved settings.
     function editJson(text: string) {
         setJsonText(text); setMessage("");
-        try { setDraft(withReadWarSails(parseSettings(JSON.parse(text), t, battleSizeLimit), baseline)); setJsonError(""); }
+        try { setDraft(withReadWarSails(parseSettings(JSON.parse(text), t, battleSizeLimit, access?.releaseChannel), baseline)); setJsonError(""); }
         catch (error) { setJsonError(error instanceof SyntaxError ? jsonSyntaxMessage(text, error, t) : error instanceof Error ? error.message : t("configEditor.unsupportedSettings")); }
     }
     // Restores the draft from the last confirmed configuration.
@@ -272,7 +276,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     function save() {
         if (!access || !editable || !draft || !dirty || jsonError) return;
         let parsed: Settings;
-        try { parsed = withReadWarSails(parseSettings({ serverConfig: draft.serverConfig, modConfig: draft.modConfig }, t, battleSizeLimit), baseline); }
+        try { parsed = withReadWarSails(parseSettings({ serverConfig: draft.serverConfig, modConfig: draft.modConfig }, t, battleSizeLimit, access?.releaseChannel), baseline); }
         catch { setMessage(t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe")); return; }
         setMessage("");
         startTransition(async () => {

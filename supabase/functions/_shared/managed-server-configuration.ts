@@ -1,3 +1,5 @@
+import catalog from './managed-config-catalog.json' with { type: 'json' };
+
 export const MANAGED_DIFFICULTY_LEVELS = ['VeryEasy', 'Easy', 'Realistic'] as const;
 export type ManagedDifficultyLevel = (typeof MANAGED_DIFFICULTY_LEVELS)[number];
 
@@ -24,7 +26,6 @@ export interface ManagedServerProcessConfiguration {
   tracePublish: boolean;
   traceBandits: boolean;
 }
-
 export interface ManagedDifficultyConfiguration {
   playerReceivedDamage: ManagedDifficultyLevel;
   playerTroopsReceivedDamage: ManagedDifficultyLevel;
@@ -165,6 +166,25 @@ export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfigu
       },
     },
   });
+
+export function assertManagedConfigurationAvailableForChannel(
+  modOptions: object,
+  channel: 'stable' | 'nightly',
+): void {
+  if (channel !== 'stable') return;
+  for (const [key, value] of Object.entries(modOptions)) {
+    const option = catalog.options.find(candidate => candidate.key === key);
+    if (option?.stable === false && JSON.stringify(value) !== JSON.stringify(option.default)) {
+      throw new Error(`${key} is available on Nightly only; switch this server to Nightly before changing it`);
+    }
+  }
+}
+
+function catalogOption(key: string) {
+  const option = catalog.options.find(candidate => candidate.key === key);
+  if (option === undefined) throw new Error(`Managed configuration catalog option is missing: ${key}`);
+  return option;
+}
 
 export type ManagedConfigurationMessages = {
   root: string;
@@ -313,11 +333,11 @@ export function parseManagedServerConfiguration(
           0,
           8_760, messages,
         ),
-        postBattleAiAmnestySeconds: requireInteger(modOptions.postBattleAiAmnestySeconds, 0, 86_400, messages),
+        postBattleAiAmnestySeconds: requireInteger(modOptions.postBattleAiAmnestySeconds, catalogOption('postBattleAiAmnestySeconds').min ?? 0, catalogOption('postBattleAiAmnestySeconds').max ?? 86_400, messages),
         speedLimitWhilePlayersInBattle: requireBoolean(modOptions.speedLimitWhilePlayersInBattle, messages),
         ensureUnaffiliatedWanderers: requireBoolean(modOptions.ensureUnaffiliatedWanderers, messages),
         wandererLimit: requireInteger(modOptions.wandererLimit, 0, 1_000, messages),
-        spawnRateWanderers: requireInteger(modOptions.spawnRateWanderers, 0, 100, messages),
+        spawnRateWanderers: requireInteger(modOptions.spawnRateWanderers, catalogOption('spawnRateWanderers').min ?? 0, catalogOption('spawnRateWanderers').max ?? 100, messages),
         wandererLimitScalesWithPlayers: requireBoolean(modOptions.wandererLimitScalesWithPlayers, messages),
         playerKingdomClanTierRequired: requireInteger(
           modOptions.playerKingdomClanTierRequired,
@@ -346,14 +366,14 @@ export function parseManagedServerConfiguration(
         enablePlayerExecutions: requireBoolean(modOptions.enablePlayerExecutions, messages),
         playerWoundedBattleEntry: requireBoolean(modOptions.playerWoundedBattleEntry, messages),
         showPlayerNameplates: requireBoolean(modOptions.showPlayerNameplates, messages),
-        kingdomDecisionVoteTimeoutSeconds: requireInteger(modOptions.kingdomDecisionVoteTimeoutSeconds, 0, 86_400, messages),
+        kingdomDecisionVoteTimeoutSeconds: requireInteger(modOptions.kingdomDecisionVoteTimeoutSeconds, catalogOption('kingdomDecisionVoteTimeoutSeconds').min ?? 1, catalogOption('kingdomDecisionVoteTimeoutSeconds').max ?? 86_400, messages),
         clansAfterKingdomDestruction: requireEnum(
           modOptions.clansAfterKingdomDestruction,
           MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES, messages,
         ),
         preferredBattleHosts: requireSteamIdList(modOptions.preferredBattleHosts, messages),
         pvpBlockLeave: requireBoolean(modOptions.pvpBlockLeave, messages),
-        pvpResponseTimerSeconds: requireInteger(modOptions.pvpResponseTimerSeconds, 0, 86_400, messages),
+        pvpResponseTimerSeconds: requirePvpResponseTimer(modOptions.pvpResponseTimerSeconds, messages),
         warSails: requireBoolean(modOptions.warSails, messages),
       },
     },
@@ -457,13 +477,22 @@ function requireEnum<const T extends readonly string[]>(value: unknown, values: 
 }
 
 function requireSteamIdList(value: unknown, messages: ManagedConfigurationMessages): readonly string[] {
-  if (!Array.isArray(value) || value.length > 32) throw new Error(messages.shape);
+  const catalog = catalogOption('preferredBattleHosts');
+  const pattern = new RegExp(catalog.itemPattern ?? '^[0-9]{17}$', 'u');
+  if (!Array.isArray(value) || value.length > (catalog.maxItems ?? 32)) throw new Error(messages.shape);
   const ids = value.map((entry) => {
-    if (typeof entry !== 'string' || !/^\d{17}$/u.test(entry)) throw new Error(messages.shape);
+    if (typeof entry !== 'string' || !pattern.test(entry)) throw new Error(messages.shape);
     return entry;
   });
   if (new Set(ids).size !== ids.length) throw new Error(messages.shape);
   return ids;
+}
+
+function requirePvpResponseTimer(value: unknown, messages: ManagedConfigurationMessages): number {
+  const catalog = catalogOption('pvpResponseTimerSeconds');
+  const seconds = requireInteger(value, catalog.min ?? 0, catalog.max ?? 86_400, messages);
+  if ((catalog.forbiddenRanges ?? []).some(([minimum, maximum]) => seconds >= (minimum ?? 0) && seconds <= (maximum ?? 86_400))) throw new Error(messages.integer);
+  return seconds;
 }
 
 function deepFreeze<T>(value: T): T {
@@ -471,3 +500,4 @@ function deepFreeze<T>(value: T): T {
   for (const child of Object.values(value)) deepFreeze(child);
   return Object.freeze(value);
 }
+
