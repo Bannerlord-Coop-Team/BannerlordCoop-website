@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import catalog from './managed-config-catalog.json' with { type: 'json' };
+import generatedCatalog from './managed-config-catalog-generated.ts';
 import {
   DEFAULT_MANAGED_SERVER_CONFIGURATION,
   assertManagedConfigurationAvailableForChannel,
@@ -83,6 +84,7 @@ test('the website schema matches the generated build catalog and round-trips all
     catalog.options.map(option => option.key).sort(),
   );
   assert.equal(catalog.catalogRevision, '2a9c5212a9ce674ad9961c5d85d595bd9bdaec725117a6082a59701dd864fb2f');
+  assert.deepEqual(generatedCatalog, catalog);
   const value = configuration();
   Object.assign(value.modConfig.modOptions, {
     allowClientTimeControls: false,
