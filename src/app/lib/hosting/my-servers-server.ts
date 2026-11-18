@@ -63,6 +63,9 @@ export async function getMyServerSummary(accessToken: string, serverId: string, 
         const { runtimeInsight: _runtimeInsight, ...core } = value;
         return { ...core, runtimeInsightWarning: issue } as MyServerSummary;
     }
+    if (!hasRuntimeInsight) {
+        return { ...value, runtimeInsightWarning: { fieldPath: "runtimeInsight", reason: "not provided" } } as MyServerSummary;
+    }
     return value as MyServerSummary;
 }
 

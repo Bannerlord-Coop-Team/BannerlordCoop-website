@@ -89,7 +89,7 @@ export function ownerRuntimeInsightValidationIssue(value: unknown, context?: { o
     const keys = Object.keys(value);
     const expected = [...RUNTIME_KEYS, ...(Object.hasOwn(value, "modLoadFailure") ? ["modLoadFailure"] : [])];
     const unknown = keys.find(key => !expected.includes(key));
-    if (unknown) return { fieldPath: ("runtimeInsight." + unknown).slice(0, 128), reason: "unknown field" };
+    if (unknown) return { fieldPath: "runtimeInsight", reason: "unknown field" };
     const missing = expected.find(key => !Object.hasOwn(value, key));
     if (missing) return { fieldPath: "runtimeInsight." + missing, reason: "required field is missing" };
     if (!["running", "stopped", "deleted"].includes(value.desiredState as string)) return { fieldPath: "runtimeInsight.desiredState", reason: "unknown enum value" };
@@ -109,9 +109,8 @@ export function ownerRuntimeInsightValidationIssue(value: unknown, context?: { o
         const start = value.start;
         if (!isRecord(start)) return { fieldPath: "runtimeInsight.start", reason: "must be an object or null" };
         if (!hasExactKeys(start, START_INSIGHT_KEYS)) {
-            const missingStart = START_INSIGHT_KEYS.find(key => !Object.hasOwn(start, key));
             const unknownStart = Object.keys(start).find(key => !START_INSIGHT_KEYS.includes(key));
-            return { fieldPath: ("runtimeInsight.start." + (unknownStart ?? missingStart ?? "shape")).slice(0, 128), reason: unknownStart ? "unknown field" : "required field is missing" };
+            return { fieldPath: "runtimeInsight.start", reason: unknownStart ? "unknown field" : "required field is missing" };
         }
         if (!text(start.progress)) return { fieldPath: "runtimeInsight.start.progress", reason: "must be a bounded string" };
         if (!Number.isSafeInteger(start.maximumAttempts) || (start.maximumAttempts as number) < 1 || (start.maximumAttempts as number) > 100) return { fieldPath: "runtimeInsight.start.maximumAttempts", reason: "must be an integer from 1 to 100" };

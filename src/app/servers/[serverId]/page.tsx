@@ -107,7 +107,7 @@ async function AuthorizedServerPage({ params, searchParams }: ServerPageProps) {
                 && (error.retryable || ["server_api_unavailable", "control_plane_unavailable"].includes(error.code));
             if (retryable) {
                 return <ServerManagementWorkspace
-                    name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{t("action.actions.thisServerIsUnavailableOrYourAccessWasRemoved")}</h1>}
+                    name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{t("page.serverTemporarilyUnavailableRetry")}</h1>}
                     summary={t("action.config.theHostingServiceCouldNotBeReachedTryAgain")}
                     banner={<ManagedServerUnavailable />}
                     initialSection={rememberedSection}

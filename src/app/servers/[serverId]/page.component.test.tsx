@@ -437,6 +437,8 @@ it("degrades a transient single-server read failure and offers a refresh", async
         const tree = await page();
         const workspace = await findServerElement(tree, "ServerManagementWorkspace");
         expect((workspace?.props as { banner?: ReactElement }).banner?.type).toBe(ManagedServerUnavailable);
+        expect(renderToStaticMarkup(<>{workspace?.props.name}</>)).toContain("This server is temporarily unavailable. Try again.");
+        expect(renderToStaticMarkup(<>{workspace?.props.name}</>)).not.toContain("your access was removed");
         expect(error).toHaveBeenCalledExactlyOnceWith("Managed server detail failed to load", failure);
     } finally { error.mockRestore(); }
     expect(mocks.backups).not.toHaveBeenCalled();
@@ -444,14 +446,33 @@ it("degrades a transient single-server read failure and offers a refresh", async
 });
 
 it("shows the validated server while omitting a rejected optional runtime insight", async () => {
-    mocks.managedServers.mockResolvedValue({ ...managedSummary, runtimeInsightWarning: { fieldPath: "runtimeInsight.start.attemptCount", reason: "counter exceeds maximum" } });
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, connectionIp: "198.51.100.10", gamePorts: [4203], runtimeInsightWarning: { fieldPath: "runtimeInsight.start.attemptCount", reason: "counter exceeds maximum" } });
     const tree = await page();
     const workspace = await findServerElement(tree, "ServerManagementWorkspace");
-    expect(workspace?.props.notice).toBe("Live status details are temporarily unavailable.");
+    expect(workspace?.props.notice).toBe("Live status is temporarily unavailable. Reload the page. If it persists, contact support.");
+    expect(workspace?.props.address).toBe("198.51.100.10:4203");
     const commands = await findServerElement(tree, "ManagedServerCommands");
     const controls = await findServerElement(commands?.props.controls, "ManagedServerControls");
     expect((controls as ReactElement<{ runtimeInsight?: unknown; runtimeInsightUnavailable?: boolean }> | null)?.props.runtimeInsight).toBeUndefined();
     expect((controls as ReactElement<{ runtimeInsightUnavailable?: boolean }> | null)?.props.runtimeInsightUnavailable).toBe(true);
+});
+
+it("degrades an absent runtime insight and disables guessed lifecycle actions", async () => {
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, runtimeInsightWarning: { fieldPath: "runtimeInsight", reason: "not provided" } });
+    const tree = await page();
+    const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+    expect(workspace?.props.notice).toBe("Live status is temporarily unavailable. Reload the page. If it persists, contact support.");
+    const commands = await findServerElement(tree, "ManagedServerCommands");
+    const controls = await findServerElement(commands?.props.controls, "ManagedServerControls") as ReactElement<{ runtimeInsightUnavailable?: boolean }> | null;
+    expect(controls?.props.runtimeInsightUnavailable).toBe(true);
+});
+
+it("keeps the access-removed state when authorization refuses a malformed optional insight", async () => {
+    mocks.managedServers.mockRejectedValueOnce(new MyServersApiError("forbidden", "Unavailable", false));
+    const tree = await page();
+    const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+    expect(renderToStaticMarkup(<>{workspace?.props.name}</>)).toContain("This server is unavailable or your access changed.");
+    expect(workspace?.props.notice).toBeUndefined();
 });
 
 it("shows an explicit load error for malformed core server data", async () => {
