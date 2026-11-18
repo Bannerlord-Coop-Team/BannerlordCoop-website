@@ -211,7 +211,13 @@ export type AuditEvent = {
     occurredAt: string;
 };
 
-export type HostingPage<T> = { items: T[]; nextCursor: string | null };
+export type HostingPage<T> = {
+    items: T[];
+    nextCursor: string | null;
+    /** Set by bounded website reads when the server stopped at its page budget. */
+    partial?: boolean;
+    pagesRead?: number;
+};
 
 export type HostingAdminHostResources = {
     observedAt: string;

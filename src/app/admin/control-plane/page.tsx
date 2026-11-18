@@ -25,6 +25,7 @@ import { readControlPlaneAdmin } from "@/app/lib/control-plane/server-read";
 import { readOperationsVpsInventory } from "@/app/lib/control-plane/operations-inventory";
 import { readHostingRegionCatalog } from "@/app/lib/control-plane/hosting-region-catalog";
 import { recordReleaseFirstObservations } from "@/app/lib/control-plane/release-observations";
+import { ADMIN_READ_PAGE_LIMIT, readBoundedHostingPage, type BoundedHostingPage } from "@/app/lib/control-plane/pagination";
 import { vpsHostSelectionValue, vpsProviderLabel } from "@/app/lib/control-plane/vps-providers";
 import { MANUAL_VPS_OPERATION, manualEntryProviders } from "@/app/lib/control-plane/manual-vps";
 import {
@@ -299,10 +300,16 @@ async function loadView(token: string, view: View, query: string, serverId: stri
         case "overview":
             return readControlPlaneAdmin<OverviewSummary>({ accessToken: token, signal, ...identity, operation: "overview", input: { compact: true } });
         case "operations": {
-            const [overview, inventory, selectedDashboard, hostingRegions] = await Promise.all([
+            const [overview, servers, jobs, inventory, selectedDashboard, hostingRegions] = await Promise.all([
                 readControlPlaneAdmin<OperationsData["overview"]>({
                     accessToken: token, signal, ...identity, operation: "overview", input: { operations: true },
                 }),
+                readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<ManagedServer>>({
+                    accessToken: token, signal, ...identity, operation: "servers", input: { filter: {}, cursor, limit: ADMIN_READ_PAGE_LIMIT },
+                })),
+                readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<HostingJob>>({
+                    accessToken: token, signal, ...identity, operation: "jobs", input: { filter: {}, cursor, limit: ADMIN_READ_PAGE_LIMIT },
+                })),
                 readOperationsVpsInventory((input) => readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input })),
                 serverId
                     ? readControlPlaneAdmin<ServerDashboardResult>({
@@ -314,7 +321,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                 loadHostingRegionCatalog(token, signal, identity),
             ]);
             return {
-                overview,
+                overview: { ...overview, servers, jobs },
                 inventory: inventory.inventory,
                 vpsProviderError: inventory.providerError,
                 selectedServer: selectedDashboard?.dashboard.server ?? null,
@@ -330,11 +337,11 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             return { inventory, regionCatalog: hostingRegions.regions } satisfies VpsViewData;
         }
         case "servers":
-            return readControlPlaneAdmin<HostingPage<ManagedServer>>({
+            return readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<ManagedServer>>({
                 accessToken: token, signal, ...identity,
                 operation: "servers",
-                input: { filter: query ? { query } : {}, cursor: null, limit: 100 },
-            });
+                input: { filter: query ? { query } : {}, cursor, limit: ADMIN_READ_PAGE_LIMIT },
+            }), jobCursor);
         case "server":
             if (!serverId) throw new ControlPlaneAdminError("server_required", "Select a server first.");
             return readControlPlaneAdmin<ServerDashboardResult>({
@@ -343,37 +350,37 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                 input: { serverId },
             });
         case "jobs":
-            return readControlPlaneAdmin<HostingPage<HostingJob>>({
+            return readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<HostingJob>>({
                 accessToken: token, signal, ...identity,
                 operation: "jobs",
                 input: {
                     filter: jobState === "failed"
                         ? { state: "failed", ...(jobAction ? { action: jobAction } : {}), ...(serverId ? { serverId } : {}), ...(unacknowledgedOnly ? { failureAcknowledged: false } : {}) }
                         : jobState === "active" ? { activeOnly: true } : {},
-                    cursor: jobCursor,
-                    limit: 100,
+                    cursor,
+                    limit: ADMIN_READ_PAGE_LIMIT,
                 },
-            });
+            }), jobCursor);
         case "releases": {
             const catalog = await loadReleaseCatalog(token, signal, identity);
             const builds = await recordReleaseFirstObservations([...catalog.stable.items, ...catalog.nightly.items], signal);
             return {
-                stable: { ...catalog.stable, items: builds.slice(0, catalog.stable.items.length) },
-                nightly: { ...catalog.nightly, items: builds.slice(catalog.stable.items.length) },
+                stable: { ...catalog.stable, items: builds.slice(0, catalog.stable.items.length), partial: catalog.stable.partial || builds.partial },
+                nightly: { ...catalog.nightly, items: builds.slice(catalog.stable.items.length), partial: catalog.nightly.partial || builds.partial },
             };
         }
         case "audit":
-            return readControlPlaneAdmin<HostingPage<AuditEvent>>({ accessToken: token, signal, ...identity, operation: "audit", input: { cursor: null, limit: 100 } });
+            return readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<AuditEvent>>({ accessToken: token, signal, ...identity, operation: "audit", input: { cursor, limit: ADMIN_READ_PAGE_LIMIT } }), jobCursor);
         case "relocate": {
             const [servers, inventory, hostingRegions, activeJobs] = await Promise.all([
-                readControlPlaneAdmin<HostingPage<ManagedServer>>({
+                readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<ManagedServer>>({
                     accessToken: token, signal, ...identity,
                     operation: "servers",
-                    input: { filter: query ? { query } : {}, cursor: null, limit: 100 },
-                }),
+                    input: { filter: query ? { query } : {}, cursor, limit: ADMIN_READ_PAGE_LIMIT },
+                }), jobCursor),
                 readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false } }),
                 loadHostingRegionCatalog(token, signal, identity),
-                readControlPlaneAdmin<HostingPage<HostingJob>>({ accessToken: token, signal, ...identity, operation: "jobs", input: { filter: { activeOnly: true }, cursor: null, limit: 100 } }),
+                readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<HostingJob>>({ accessToken: token, signal, ...identity, operation: "jobs", input: { filter: { activeOnly: true }, cursor, limit: ADMIN_READ_PAGE_LIMIT } })),
             ]);
             // Without the catalog, hosts are placed by their legacy region only.
             return { servers, inventory, regionCatalog: hostingRegions.regions, activeJobs: activeJobs.items } satisfies RelocateViewData;
@@ -384,7 +391,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             const [inventory, hostingRegions, activeJobs] = await Promise.all([
                 readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false } }),
                 loadHostingRegionCatalog(token, signal, identity),
-                readControlPlaneAdmin<HostingPage<HostingJob>>({ accessToken: token, signal, ...identity, operation: "jobs", input: { filter: { activeOnly: true }, cursor: null, limit: 100 } }),
+                readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<HostingJob>>({ accessToken: token, signal, ...identity, operation: "jobs", input: { filter: { activeOnly: true }, cursor, limit: ADMIN_READ_PAGE_LIMIT } })),
             ]);
             return { inventory, regionCatalog: hostingRegions.regions, activeJobs: activeJobs.items } satisfies PlacementViewData;
         }
@@ -394,12 +401,12 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             await readControlPlaneAdmin<unknown>({ accessToken: token, signal, ...identity, operation: "hosting-regions", input: {} });
             return null;
         case "notices": {
-            // The first page of servers a notice can target; searching and the notice list load in the browser.
-            const servers = await readControlPlaneAdmin<HostingPage<ManagedServer>>({
+            // A bounded server window a notice can target; searching and the notice list load in the browser.
+            const servers = await readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<ManagedServer>>({
                 accessToken: token, signal, ...identity,
                 operation: "servers",
-                input: { filter: {}, cursor: null, limit: 100 },
-            });
+                input: { filter: {}, cursor, limit: ADMIN_READ_PAGE_LIMIT },
+            }));
             return { servers } satisfies NoticesViewData;
         }
     }
@@ -410,12 +417,32 @@ function loadHostingRegionCatalog(token: string, signal: AbortSignal, identity: 
     return readHostingRegionCatalog(() => readControlPlaneAdmin<unknown>({ accessToken: token, signal, ...identity, operation: "hosting-regions", input: {} }));
 }
 
-/** Reads both complete channel pages from one fresh authorized catalog observation. */
+/** Reads both channel cursor streams under the fixed render budget. */
 async function loadReleaseCatalog(token: string, signal: AbortSignal, identity: ReadIdentity) {
-    // Discovery considers at most 100 versions globally; aliases only mark matching versions.
-    return readControlPlaneAdmin<{ stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> }>({
-        accessToken: token, signal, ...identity, operation: "release-catalog", input: { stableCursor: null, nightlyCursor: null, limit: 100 },
-    });
+    const stable: ReleaseBuild[] = [];
+    const nightly: ReleaseBuild[] = [];
+    let stableCursor: string | null = null;
+    let nightlyCursor: string | null = null;
+    let pagesRead = 0;
+    const seen = new Set<string>();
+    for (let page = 0; page < 5; page += 1) {
+        const result: { stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> } = await readControlPlaneAdmin<{ stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> }>({
+            accessToken: token, signal, ...identity, operation: "release-catalog", input: { stableCursor, nightlyCursor, limit: ADMIN_READ_PAGE_LIMIT },
+        });
+        pagesRead += 1;
+        stable.push(...result.stable.items);
+        nightly.push(...result.nightly.items);
+        stableCursor = result.stable.nextCursor;
+        nightlyCursor = result.nightly.nextCursor;
+        if (stableCursor === null && nightlyCursor === null) break;
+        const key = `${stableCursor ?? ""}:${nightlyCursor ?? ""}`;
+        if (seen.has(key)) throw new Error("Repeated release catalog cursor.");
+        seen.add(key);
+    }
+    return {
+        stable: { items: stable, nextCursor: stableCursor, pagesRead, partial: stableCursor !== null },
+        nightly: { items: nightly, nextCursor: nightlyCursor, pagesRead, partial: nightlyCursor !== null },
+    } satisfies { stable: BoundedHostingPage<ReleaseBuild>; nightly: BoundedHostingPage<ReleaseBuild> };
 }
 
 function ViewTabs({ active }: { active: View }) {
@@ -503,6 +530,7 @@ function OverviewView({ overview }: { overview: OverviewSummary }) {
 
 function ServersView({ page, query, accounts }: { page: HostingPage<ManagedServer>; query: string; accounts: WebsiteAccountSummary[] }) {
     const ownerLabels = accountLabelMap(accounts);
+    const older = page.nextCursor ? new URLSearchParams({ view: "servers", ...(query ? { q: query } : {}), cursor: page.nextCursor }) : null;
     return (
         <section className="mt-8">
             <form method="get" className="flex max-w-xl gap-2">
@@ -531,6 +559,7 @@ function ServersView({ page, query, accounts }: { page: HostingPage<ManagedServe
                 </table>
                 {page.items.length === 0 && <Empty>No managed servers match this filter.</Empty>}
             </div>
+            <BoundedPageNotice page={page} href={older ? `/admin/control-plane?${older.toString()}` : null} label="Older servers" />
         </section>
     );
 }
@@ -602,7 +631,10 @@ function JobsView({
         </section>
     );
 }
-function AuditView({ page }: { page: HostingPage<AuditEvent> }) { return <section className="mt-8"><SectionHeading eyebrow="Hash-chained history" title="Audit events" count={page.items.length} /><AuditTable events={page.items} /></section>; }
+function AuditView({ page }: { page: HostingPage<AuditEvent> }) {
+    const older = page.nextCursor ? `/admin/control-plane?view=audit&cursor=${encodeURIComponent(page.nextCursor)}` : null;
+    return <section className="mt-8"><SectionHeading eyebrow="Hash-chained history" title="Audit events" count={page.items.length} /><AuditTable events={page.items} /><BoundedPageNotice page={page} href={older} label="Older audit events" /></section>;
+}
 
 /** Lists only registry-verified releases, with explicit channel alias markers. */
 function ReleasesView({ data }: { data: { stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> } }) {
@@ -611,10 +643,19 @@ function ReleasesView({ data }: { data: { stable: HostingPage<ReleaseBuild>; nig
             <p className="max-w-3xl text-sm leading-6 text-foreground-muted">Available versions come from GHCR images with verified release labels. Reload verifies the current catalog. It does not install a version or move a channel alias. Historical installed versions remain visible on the server detail page.</p>
             <RefreshReleaseCatalog />
         </section>
+        {(data.stable.partial || data.nightly.partial) && <p role="status" className="border-l-2 border-amber-400 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">The release catalog reached the five-page read budget. Older releases remain available after another page request.</p>}
         <div className="grid gap-8 xl:grid-cols-2">{(["stable", "nightly"] as const).map(channel => <section key={channel}>
             <SectionHeading eyebrow="GHCR release channel" title={releaseChannelLabel(channel)} count={installableBuilds(data[channel].items).length} />
             <BuildTable builds={installableBuilds(data[channel].items)} />
         </section>)}</div>
+    </div>;
+}
+
+function BoundedPageNotice({ page, href, label }: { page: HostingPage<unknown>; href: string | null; label: string }) {
+    if (!page.partial && page.nextCursor === null) return null;
+    return <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-l-2 border-amber-400 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">
+        <span>{page.partial ? "This view reached its bounded read budget; more rows are available." : "More rows are available."}</span>
+        {href && <Link href={href} className="font-semibold underline underline-offset-2">{label}</Link>}
     </div>;
 }
 
@@ -686,7 +727,9 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
         { group: "Maintenance", operation: "batch-maintenance", title: "Batch maintenance", description: "Queue updates for a bounded fleet snapshot, optionally limited to one channel.", fields: [{ name: "releaseChannel", label: "Channel", kind: "select", valueType: "nullable", options: ["stable", "nightly"].map((value) => ({ label: releaseChannelLabel(value), value })) }, reasonField] },
     ];
     const groups = [...new Set(cards.map((card) => card.group))];
-    return <div className="mt-8 space-y-12">{vpsProviderError && <div role="status" className="border-l-2 border-gold bg-gold/10 px-4 py-3 text-sm text-foreground">
+    const serverOlder = overview.servers.nextCursor ? `/admin/control-plane?view=servers&cursor=${encodeURIComponent(overview.servers.nextCursor)}` : null;
+    const jobOlder = overview.jobs.nextCursor ? `/admin/control-plane?view=jobs&cursor=${encodeURIComponent(overview.jobs.nextCursor)}` : null;
+    return <div className="mt-8 space-y-12">{(overview.servers.partial || overview.jobs.partial) && <div role="status" className="border-l-2 border-amber-400 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">Server and job choices reached the bounded read budget. Open the full Servers or Jobs view to continue through older rows. <span className="ml-2 inline-flex gap-3 font-semibold underline underline-offset-2">{serverOlder && <Link href={serverOlder}>Older servers</Link>}{jobOlder && <Link href={jobOlder}>Older jobs</Link>}</span></div>}{vpsProviderError && <div role="status" className="border-l-2 border-gold bg-gold/10 px-4 py-3 text-sm text-foreground">
         <p>Provider account inventory is unavailable, so unregistered VPS products cannot be listed for onboarding. Other operations, including Add manual VPS, still work.</p>
         <p className="mt-1 text-xs text-foreground-muted">{vpsProviderError}</p>
     </div>}{groups.map((group) => {

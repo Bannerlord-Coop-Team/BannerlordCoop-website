@@ -70,10 +70,25 @@ it("keeps the same digest in distinct channels separate and leaves publisher dat
     expect((await recordReleaseFirstObservations([{ ...build, buildId: "v0.1.6", channel: "stable" }]))[0].firstObservedAt).toBe(LATER);
 });
 
-it("rejects invalid identities and oversized catalogs before accessing privileged storage", async () => {
+it("rejects invalid identities and bounds oversized catalogs without throwing", async () => {
     await expect(recordReleaseFirstObservations([{ ...build, container: { manifestDigest: "unverified" } }])).rejects.toThrow("identity");
-    await expect(recordReleaseFirstObservations(Array(101).fill(build))).rejects.toThrow("Too many");
-    expect(mocks.admin).not.toHaveBeenCalled();
+    const result = await recordReleaseFirstObservations(Array(101).fill(build));
+    expect(result).toHaveLength(101);
+    expect(result.partial).toBe(false);
+    expect(mocks.admin).toHaveBeenCalled();
+});
+
+it("returns a typed partial result after the observation batch budget", async () => {
+    const many = Array.from({ length: 1_001 }, (_, index) => ({ ...build,
+        buildId: `nightly-${index}`,
+        container: { manifestDigest: `sha256:${index.toString(16).padStart(64, "0")}` },
+    }));
+    const result = await recordReleaseFirstObservations(many);
+    expect(result).toHaveLength(1_001);
+    expect(result.partial).toBe(true);
+    expect(result[0]?.firstObservedAt).toBe(FIRST);
+    expect(result[1_000]?.firstObservedAt).toBeUndefined();
+    expect(read.mock.calls.length).toBeLessThanOrEqual(20);
 });
 
 it("fails closed on storage failures or missing dates instead of displaying the current time", async () => {
