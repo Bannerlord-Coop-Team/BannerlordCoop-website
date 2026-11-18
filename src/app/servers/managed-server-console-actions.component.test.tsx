@@ -60,7 +60,7 @@ it("recovers one confirmed stale rejection in the background with the same comma
     mocks.submit.mockRejectedValueOnce(stale()).mockResolvedValueOnce({ outcome: "enqueued", jobId });
     mocks.inventory.mockResolvedValue(current);
     expect(await submitManagedConsoleCommand(input, requestId, "owner")).toEqual({ ok: true, result: { outcome: "enqueued", jobId } });
-    expect(mocks.inventory).toHaveBeenCalledExactlyOnceWith("token", serverId);
+    expect(mocks.inventory).toHaveBeenCalledExactlyOnceWith("token", serverId, undefined, { includeRuntimeInsight: false });
     expect(mocks.submit.mock.calls).toEqual([
         ["token", requestId, input],
         ["token", requestId, { ...input, expectedUpdatedAt: current.updatedAt }],
@@ -122,6 +122,6 @@ it.each(["server_not_found", "forbidden", "invalid_response"])("does not retry a
     mocks.submit.mockRejectedValueOnce(stale());
     mocks.inventory.mockRejectedValueOnce(new MyServersApiError(code, "Unavailable"));
     expect(await submitManagedConsoleCommand(input, requestId, "owner")).toMatchObject({ ok: false, notSubmitted: true, uncertain: false });
-    expect(mocks.inventory).toHaveBeenCalledExactlyOnceWith("token", serverId);
+    expect(mocks.inventory).toHaveBeenCalledExactlyOnceWith("token", serverId, undefined, { includeRuntimeInsight: false });
     expect(mocks.submit).toHaveBeenCalledOnce();
 });
