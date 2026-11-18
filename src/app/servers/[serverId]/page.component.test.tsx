@@ -195,7 +195,7 @@ it.each([
 });
 
 // Resolve the page's server components, leaving client components for React to render.
-function findServerElement(node: ReactNode, name: "ServerManagementWorkspace"): Promise<ReactElement<{ name?: ReactNode; notice?: string; banner?: ReactNode; visibility: ReactElement<ComponentProps<typeof ServerVisibilitySetting>> }> | null>;
+function findServerElement(node: ReactNode, name: "ServerManagementWorkspace"): Promise<ReactElement<{ name?: ReactNode; address?: string | null; notice?: string; banner?: ReactNode; visibility: ReactElement<ComponentProps<typeof ServerVisibilitySetting>> }> | null>;
 function findServerElement(node: ReactNode, name: "ServerSettingsPanel"): Promise<ReactElement<ComponentProps<typeof ServerSettingsPanel>> | null>;
 function findServerElement(node: ReactNode, name: "ServerWorkspacePanel"): Promise<ReactElement<ComponentProps<typeof ServerWorkspacePanel>> | null>;
 function findServerElement(node: ReactNode, name: "ManagedServerConsole"): Promise<ReactElement<ComponentProps<typeof ManagedServerConsole>> | null>;
