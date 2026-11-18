@@ -63,7 +63,7 @@ async function asOwner(t: Translate, serverId: string, change: (owner: OwnerSess
         if (!user || !accessToken || sessionData.session?.user.id !== user.id) {
             return { ok: false, message: t("managerAccess.signInAgain") };
         }
-        const server = await getMyServerSummary(accessToken, serverId);
+        const server = await getMyServerSummary(accessToken, serverId, undefined, { includeRuntimeInsight: false });
         if (!server || server.accessRole !== "owner") return { ok: false, message: t("managerAccess.ownerOnly") };
         const result = await change({ accessToken, updatedAt: server.updatedAt });
         if (!result.ok) return result;

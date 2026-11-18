@@ -43,6 +43,8 @@ export type MyServerSummary = Pick<
 > & {
     subscriptionHold?: { state: "held" | "removal-pending"; reason: "subscription-funding-lapsed"; removalDueAt: string; canExportSave: boolean } | null;
     runtimeInsight?: import("../hosting/owner-runtime-insight").OwnerRuntimeInsight;
+    /** Present only when the optional insight was rejected, so the page can explain the degraded view. */
+    runtimeInsightWarning?: import("../hosting/owner-runtime-insight").OwnerRuntimeInsightValidationIssue;
     accessRole: "owner" | "manager" | "support" | "admin";
     // Client mod version of the installed build; null before the first install, missing from older control planes.
     installedVersion?: string | null;

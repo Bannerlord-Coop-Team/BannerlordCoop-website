@@ -88,6 +88,9 @@ vi.mock("./ManagedServerPollingProvider", () => ({
 }));
 
 it("refreshes the polling fingerprint when lifecycle hints unlock without another server revision", async () => {
+    summary.mockReset();
+    backupStatus.mockReset();
+    deletionStatus.mockReset();
     const serverId = "22222222-2222-4222-8222-222222222222";
     const status = { updatedAt: "2026-10-02T16:00:03.000Z", operationState: "stopped", observedGameState: "stopped", job: null };
     backupStatus.mockResolvedValue(status);
@@ -95,10 +98,16 @@ it("refreshes the polling fingerprint when lifecycle hints unlock without anothe
     summary.mockResolvedValue({ ...status, runtimeInsight: { desiredState: "stopped", allowedActions: [] } });
     const blocked = await serverActions.readManagedServerStatusFingerprint(serverId);
     expect(blocked.ok).toBe(true);
+    expect(summary).toHaveBeenNthCalledWith(1, "token", serverId, undefined, { includeRuntimeInsight: true });
+    summary.mockResolvedValue({ ...status, runtimeInsightWarning: { fieldPath: "runtimeInsight", reason: "not provided" } });
+    const degraded = await serverActions.readManagedServerStatusFingerprint(serverId);
+    expect(degraded.ok).toBe(true);
+    expect(degraded).not.toEqual(blocked);
     summary.mockResolvedValue({ ...status, runtimeInsight: { desiredState: "stopped", allowedActions: ["start"] } });
     const ready = await serverActions.readManagedServerStatusFingerprint(serverId);
     expect(ready.ok).toBe(true);
-    expect(ready).not.toEqual(blocked);
+    expect(summary).toHaveBeenNthCalledWith(3, "token", serverId, undefined, { includeRuntimeInsight: true });
+    expect(ready).not.toEqual(degraded);
 });
 
 it.each([

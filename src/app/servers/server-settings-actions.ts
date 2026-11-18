@@ -100,7 +100,7 @@ function parsePrevious(value: unknown): ServerSettingsPrevious | null {
  */
 async function retryAtCurrentRevision(accessToken: string, input: OwnerSettingsMutation, previous: ServerSettingsPrevious):
     Promise<{ outcome: "saved"; updatedAt: string } | { outcome: "changed"; field: ServerSettingsField } | { outcome: "unavailable" }> {
-    const server = await getMyServerSummary(accessToken, input.serverId);
+    const server = await getMyServerSummary(accessToken, input.serverId, undefined, { includeRuntimeInsight: false });
     if (!server || server.accessRole !== "owner") return { outcome: "unavailable" };
     const current: Record<ServerSettingsField, string | undefined> = { displayName: server.displayName, maintenanceSlot: server.maintenanceSlot };
     const remaining: OwnerSettingsMutation["patch"] = {};

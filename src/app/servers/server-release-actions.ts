@@ -52,7 +52,7 @@ export async function changeServerRelease(value: unknown): Promise<{ ok: boolean
         // A revision conflict from an unrelated write is retried once, only while the channel is still the one shown.
         if ((code === "request_conflict" || code === "stale_interaction") && token !== null && input !== null && previousChannel !== null) {
             try {
-                const server = await getMyServerSummary(token, input.serverId);
+                const server = await getMyServerSummary(token, input.serverId, undefined, { includeRuntimeInsight: false });
                 if (server?.accessRole === "owner" && server.releaseChannel === input.releaseChannel) {
                     return { ok: false, rejected: true, message: t("server-release.thisChannelIsAlreadySelected") };
                 }
