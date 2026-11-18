@@ -6,6 +6,12 @@ type CatalogOption = { key: string; type: string; stable: boolean; default: unkn
 type Catalog = { schemaVersion: number; catalogRevision: string; contentDigest: string; sourceCommit: string; options: readonly CatalogOption[] };
 const catalog = rawCatalog as unknown as Catalog;
 
+function catalogEnumValues<const T extends readonly string[]>(key: string): T {
+  const option = catalog.options.find(candidate => candidate.key === key);
+  if (option?.type !== 'enum' || option.values === undefined) throw new Error(`Managed configuration enum is missing: ${key}`);
+  return option.values as T;
+}
+
 function validateCatalogStructure(): void {
   if (catalog.schemaVersion !== 2 || catalog.catalogRevision !== catalog.contentDigest
     || !/^[0-9a-f]{64}$/u.test(catalog.catalogRevision) || !/^[0-9a-f]{40}$/u.test(catalog.sourceCommit)
@@ -29,22 +35,16 @@ validateCatalogStructure();
 export const MANAGED_DIFFICULTY_LEVELS = ['VeryEasy', 'Easy', 'Realistic'] as const;
 export type ManagedDifficultyLevel = (typeof MANAGED_DIFFICULTY_LEVELS)[number];
 
-export const MANAGED_GOLD_FOOD_CHANGE_MODES = ['Disabled', 'OneDayMax', 'Enabled'] as const;
+export const MANAGED_GOLD_FOOD_CHANGE_MODES = catalogEnumValues<readonly ['Disabled', 'OneDayMax', 'Enabled']>('goldFoodInfluenceChangeInBattles');
 export type ManagedGoldFoodChangeMode = (typeof MANAGED_GOLD_FOOD_CHANGE_MODES)[number];
 
-export const MANAGED_LORD_DEFECTION_RETRY_MODES = ['Vanilla', 'NeverExpire', 'AlwaysRetry'] as const;
+export const MANAGED_LORD_DEFECTION_RETRY_MODES = catalogEnumValues<readonly ['Vanilla', 'NeverExpire', 'AlwaysRetry']>('lordDefectionRetries');
 export type ManagedLordDefectionRetryMode =
   (typeof MANAGED_LORD_DEFECTION_RETRY_MODES)[number];
 
-export const MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES = ['Vanilla', 'KeepClans'] as const;
+export const MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES = catalogEnumValues<readonly ['Vanilla', 'KeepClans']>('clansAfterKingdomDestruction');
 export type ManagedClansAfterKingdomDestructionMode =
   (typeof MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES)[number];
-
-if (JSON.stringify(MANAGED_GOLD_FOOD_CHANGE_MODES) !== JSON.stringify(catalogOption('goldFoodInfluenceChangeInBattles').values)
-  || JSON.stringify(MANAGED_LORD_DEFECTION_RETRY_MODES) !== JSON.stringify(catalogOption('lordDefectionRetries').values)
-  || JSON.stringify(MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES) !== JSON.stringify(catalogOption('clansAfterKingdomDestruction').values)) {
-  throw new Error('Managed configuration enum definitions differ from the catalog');
-}
 
 export interface ManagedServerProcessConfiguration {
   autosaveMinutes: number;
@@ -200,12 +200,6 @@ export function assertManagedConfigurationAvailableForInstalledBuild(
   }
 }
 
-function catalogOption(key: string) {
-  const option = catalog.options.find(candidate => candidate.key === key);
-  if (option === undefined) throw new Error(`Managed configuration catalog option is missing: ${key}`);
-  return option as CatalogOption;
-}
-
 export type ManagedConfigurationMessages = {
   root: string;
   version: string;
@@ -260,7 +254,7 @@ export function parseManagedServerConfiguration(
     'autoAllocateClanMemberPerks',
   ], messages);
   const modOptions = requireCompatibleRecord(modConfig.modOptions, CATALOG_LEGACY_MOD_OPTION_KEYS, CATALOG_ADDED_MOD_OPTION_DEFAULTS, messages);
-  validateCatalogManagedOptions(modOptions, messages);
+  const validatedModOptions = validateCatalogManagedOptions(modOptions, messages);
   return deepFreeze({
     schemaVersion: 1,
     serverConfig: {
@@ -291,81 +285,18 @@ export function parseManagedServerConfiguration(
         birthAndDeath: requireBoolean(difficulty.birthAndDeath, messages),
         autoAllocateClanMemberPerks: requireBoolean(difficulty.autoAllocateClanMemberPerks, messages),
       },
-      modOptions: {
-        voiceEnabled: requireBoolean(modOptions.voiceEnabled, messages),
-        // The game clamps battle size to this range.
-        battleSize: requireInteger(modOptions.battleSize, 200, 12_000, messages),
-        fastForwardEnabled: requireBoolean(modOptions.fastForwardEnabled, messages),
-        autoPauseEnabled: requireBoolean(modOptions.autoPauseEnabled, messages),
-        allowClientTimeControls: requireBoolean(modOptions.allowClientTimeControls, messages),
-        clientsCanUseCheats: requireBoolean(modOptions.clientsCanUseCheats, messages),
-        goldFoodInfluenceChangeInSettlements: requireBoolean(
-          modOptions.goldFoodInfluenceChangeInSettlements, messages,
-        ),
-        goldFoodInfluenceChangeInBattles: requireEnum(
-          modOptions.goldFoodInfluenceChangeInBattles,
-          MANAGED_GOLD_FOOD_CHANGE_MODES, messages,
-        ),
-        goldFoodInfluenceChangeForDisconnectedPlayers: requireBoolean(
-          modOptions.goldFoodInfluenceChangeForDisconnectedPlayers, messages,
-        ),
-        blockAiWarDeclarationsOnOfflinePlayers: requireBoolean(
-          modOptions.blockAiWarDeclarationsOnOfflinePlayers, messages,
-        ),
-        playerBattleAiJoinWindowHours: requireInteger(
-          modOptions.playerBattleAiJoinWindowHours,
-          0,
-          8_760, messages,
-        ),
-        postBattleAiAmnestySeconds: requireInteger(modOptions.postBattleAiAmnestySeconds, catalogOption('postBattleAiAmnestySeconds').min ?? 0, catalogOption('postBattleAiAmnestySeconds').max ?? 86_400, messages),
-        speedLimitWhilePlayersInBattle: requireBoolean(modOptions.speedLimitWhilePlayersInBattle, messages),
-        ensureUnaffiliatedWanderers: requireBoolean(modOptions.ensureUnaffiliatedWanderers, messages),
-        wandererLimit: requireInteger(modOptions.wandererLimit, 0, 1_000, messages),
-        spawnRateWanderers: requireInteger(modOptions.spawnRateWanderers, catalogOption('spawnRateWanderers').min ?? 0, catalogOption('spawnRateWanderers').max ?? 100, messages),
-        wandererLimitScalesWithPlayers: requireBoolean(modOptions.wandererLimitScalesWithPlayers, messages),
-        playerKingdomClanTierRequired: requireInteger(
-          modOptions.playerKingdomClanTierRequired,
-          0,
-          6, messages,
-        ),
-        coopClansEnabled: requireBoolean(modOptions.coopClansEnabled, messages),
-        smithingStaminaRecoveryOutsideSettlements: requireBoolean(
-          modOptions.smithingStaminaRecoveryOutsideSettlements, messages,
-        ),
-        smithingStaminaRecoveryMultiplier: requireNumber(
-          modOptions.smithingStaminaRecoveryMultiplier,
-          0,
-          100, messages,
-        ),
-        maximumLootersMultiplier: requireNumber(modOptions.maximumLootersMultiplier, 0, 100, messages),
-        looterPartySizeMultiplier: requireNumber(modOptions.looterPartySizeMultiplier, 0, 100, messages),
-        lordDefectionRetries: requireEnum(
-          modOptions.lordDefectionRetries,
-          MANAGED_LORD_DEFECTION_RETRY_MODES, messages,
-        ),
-        enableHeroExecutions: requireBoolean(modOptions.enableHeroExecutions, messages),
-        enablePlayerClanMemberExecutions: requireBoolean(
-          modOptions.enablePlayerClanMemberExecutions, messages,
-        ),
-        enablePlayerExecutions: requireBoolean(modOptions.enablePlayerExecutions, messages),
-        playerWoundedBattleEntry: requireBoolean(modOptions.playerWoundedBattleEntry, messages),
-        showPlayerNameplates: requireBoolean(modOptions.showPlayerNameplates, messages),
-        kingdomDecisionVoteTimeoutSeconds: requireInteger(modOptions.kingdomDecisionVoteTimeoutSeconds, catalogOption('kingdomDecisionVoteTimeoutSeconds').min ?? 1, catalogOption('kingdomDecisionVoteTimeoutSeconds').max ?? 86_400, messages),
-        clansAfterKingdomDestruction: requireEnum(
-          modOptions.clansAfterKingdomDestruction,
-          MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES, messages,
-        ),
-        preferredBattleHosts: requireSteamIdList(modOptions.preferredBattleHosts, messages),
-        pvpBlockLeave: requireBoolean(modOptions.pvpBlockLeave, messages),
-        pvpResponseTimerSeconds: requirePvpResponseTimer(modOptions.pvpResponseTimerSeconds, messages),
-        warSails: requireBoolean(modOptions.warSails, messages),
-      },
+      modOptions: validatedModOptions,
     },
   });
 }
 
-function validateCatalogManagedOptions(value: Record<string, unknown>, messages: ManagedConfigurationMessages): void {
-  for (const option of catalog.options) {
+export function validateCatalogManagedOptions(
+  value: Record<string, unknown>,
+  messages: ManagedConfigurationMessages,
+  options: readonly CatalogOption[] = catalog.options,
+): ManagedModOptionsConfiguration {
+  const validated: Record<string, unknown> = {};
+  for (const option of options) {
     const actual = value[option.key];
     if (actual === undefined) throw new Error(messages.shape);
     if (option.type === 'boolean' && typeof actual !== 'boolean') throw new Error(messages.boolean);
@@ -382,7 +313,9 @@ function validateCatalogManagedOptions(value: Record<string, unknown>, messages:
       if (option.itemPattern !== undefined && list.some((entry) => !new RegExp(option.itemPattern as string, 'u').test(entry))) throw new Error(messages.shape);
     }
     if (option.forbiddenRanges?.some(([from, to]) => typeof actual === 'number' && actual >= (from ?? Number.NEGATIVE_INFINITY) && actual <= (to ?? Number.POSITIVE_INFINITY))) throw new Error(option.type === 'integer' ? messages.integer : messages.number);
+    validated[option.key] = actual;
   }
+  return validated as unknown as ManagedModOptionsConfiguration;
 }
 
 export function cloneManagedServerConfiguration(
@@ -479,25 +412,6 @@ function requireEnum<const T extends readonly string[]>(value: unknown, values: 
     throw new Error(messages.choice);
   }
   return value;
-}
-
-function requireSteamIdList(value: unknown, messages: ManagedConfigurationMessages): readonly string[] {
-  const catalog = catalogOption('preferredBattleHosts');
-  const pattern = new RegExp(catalog.itemPattern ?? '^[0-9]{17}$', 'u');
-  if (!Array.isArray(value) || value.length > (catalog.maxItems ?? 32)) throw new Error(messages.shape);
-  const ids = value.map((entry) => {
-    if (typeof entry !== 'string' || !pattern.test(entry)) throw new Error(messages.shape);
-    return entry;
-  });
-  if (new Set(ids).size !== ids.length) throw new Error(messages.shape);
-  return ids;
-}
-
-function requirePvpResponseTimer(value: unknown, messages: ManagedConfigurationMessages): number {
-  const catalog = catalogOption('pvpResponseTimerSeconds');
-  const seconds = requireInteger(value, catalog.min ?? 0, catalog.max ?? 86_400, messages);
-  if ((catalog.forbiddenRanges ?? []).some(([minimum, maximum]) => seconds >= (minimum ?? 0) && seconds <= (maximum ?? 86_400))) throw new Error(messages.integer);
-  return seconds;
 }
 
 function deepFreeze<T>(value: T): T {

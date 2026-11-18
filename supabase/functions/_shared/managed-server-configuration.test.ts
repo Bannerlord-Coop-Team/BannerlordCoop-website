@@ -6,6 +6,7 @@ import {
   DEFAULT_MANAGED_SERVER_CONFIGURATION,
   assertManagedConfigurationAvailableForChannel,
   parseManagedServerConfiguration,
+  validateCatalogManagedOptions,
   type ManagedConfigurationMessages,
 } from './managed-server-configuration';
 
@@ -83,7 +84,7 @@ test('the website schema matches the generated build catalog and round-trips all
     Object.keys(DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions).sort(),
     catalog.options.map(option => option.key).sort(),
   );
-  assert.equal(catalog.catalogRevision, 'd1261866e62085cfec1b837a201b4ada90b873668cb409f61650c17d393f1771');
+  assert.equal(catalog.catalogRevision, 'e7b67121ffb256d0f5417e3ed488c22ed2b35f7d3e0d314f42c7f02691789b69');
   assert.equal(catalog.sourceCommit, 'd8a3c6dcce1d9b452f4af9262f5a16da01ddf13a');
   assert.deepEqual(generatedCatalog, catalog);
   const value = configuration();
@@ -121,6 +122,14 @@ test('stable rejects Nightly-only values while Nightly accepts them and game coe
   assert.throws(() => parseManagedServerConfiguration(invalid), { message: 'Managed server configuration integer is invalid' });
 });
 
+test('accepts the game-coerced kingdom vote timeout values', () => {
+  for (const timeout of [0, -1]) {
+    const value = configuration();
+    value.modConfig.modOptions.kingdomDecisionVoteTimeoutSeconds = timeout;
+    assert.equal(parseManagedServerConfiguration(value).modConfig.modOptions.kingdomDecisionVoteTimeoutSeconds, timeout);
+  }
+});
+
 test('validates every catalog option through the same table used by the editor', () => {
   for (const option of catalog.options) {
     const value = { ...configuration().modConfig.modOptions } as Record<string, unknown>;
@@ -131,4 +140,20 @@ test('validates every catalog option through the same table used by the editor',
       modConfig: { ...configuration().modConfig, modOptions: value },
     }));
   }
+});
+
+test('follows catalog mutations for new options, bounds, and enum members', () => {
+  const base = { ...configuration().modConfig.modOptions } as Record<string, unknown>;
+  const changedBound = structuredClone(catalog.options) as unknown as NonNullable<Parameters<typeof validateCatalogManagedOptions>[2]>;
+  const timeout = changedBound.find(option => option.key === 'kingdomDecisionVoteTimeoutSeconds');
+  if (!timeout) throw new Error('timeout option missing');
+  timeout.min = 10;
+  assert.throws(() => validateCatalogManagedOptions({ ...base, kingdomDecisionVoteTimeoutSeconds: 5 }, messages, changedBound), { message: messages.integer });
+  const newOption = [...catalog.options, { key: 'futureInteger', type: 'integer', stable: true, availableSince: '0.1.7', min: 1, max: 3, default: 2 }] as unknown as Parameters<typeof validateCatalogManagedOptions>[2];
+  assert.equal((validateCatalogManagedOptions({ ...base, futureInteger: 2 }, messages, newOption) as unknown as Record<string, unknown>).futureInteger, 2);
+  const enumChanged = structuredClone(catalog.options) as unknown as NonNullable<Parameters<typeof validateCatalogManagedOptions>[2]>;
+  const mode = enumChanged.find(option => option.key === 'clansAfterKingdomDestruction');
+  if (!mode) throw new Error('clans option missing');
+  mode.values = ['Vanilla', 'KeepClans', 'RetireClans'];
+  assert.equal(validateCatalogManagedOptions({ ...base, clansAfterKingdomDestruction: 'RetireClans' }, messages, enumChanged).clansAfterKingdomDestruction, 'RetireClans');
 });

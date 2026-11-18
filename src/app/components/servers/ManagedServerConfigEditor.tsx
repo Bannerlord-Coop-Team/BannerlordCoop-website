@@ -25,8 +25,8 @@ type Live = { server: RunnerConfigurationFile | null; mod: RunnerConfigurationFi
 type Group = "serverConfig" | "difficulty" | "modOptions";
 type Field = { key: string; label: string; help?: string } & (
     | { kind: "boolean" }
-    | { kind: "integer"; min: number; max: number }
-    | { kind: "number"; min: number; max: number; step: number }
+    | { kind: "integer"; min?: number; max?: number }
+    | { kind: "number"; min?: number; max?: number; step: number }
     | { kind: "steamIdList" }
     | { kind: "choice"; options: readonly string[] });
 
@@ -50,7 +50,10 @@ function numberProblem(field: Field, value: unknown, t: Translator["t"], number:
     if (field.kind !== "integer" && field.kind !== "number") return null;
     if (typeof value !== "number" || Number.isNaN(value)) return t("configEditor.enterANumber");
     if (field.kind === "integer" && !Number.isInteger(value)) return t("configEditor.enterAWholeNumber");
-    if (value < field.min || value > field.max) return t("configEditor.enterAValueFromMinToMax", { min: number(field.min), max: number(field.max) });
+    if ((field.min !== undefined && value < field.min) || (field.max !== undefined && value > field.max)) {
+        if (field.min !== undefined && field.max !== undefined) return t("configEditor.enterAValueFromMinToMax", { min: number(field.min), max: number(field.max) });
+        return t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe");
+    }
     return null;
 }
 // Serializes editable configuration without translating its payload.
@@ -146,8 +149,8 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         if (option.type === "boolean") return { key: option.key, label, kind: "boolean" };
         if (option.type === "enum") return { key: option.key, label, kind: "choice", options: option.values ?? [] };
         if (option.type === "steamIdList") return { key: option.key, label, kind: "steamIdList" };
-        const min = option.min ?? 0;
-        const max = option.key === "battleSize" ? battleSizeLimit : option.max ?? min;
+        const min = option.min;
+        const max = option.key === "battleSize" ? battleSizeLimit : option.max;
         return option.type === "integer"
             ? { key: option.key, label, kind: "integer", min, max, ...(option.key === "battleSize" ? { help: t("configEditor.battleSizeHelp") } : {}) }
             : { key: option.key, label, kind: "number", min, max, step: 0.01 };
