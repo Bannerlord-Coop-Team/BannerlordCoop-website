@@ -49,12 +49,13 @@ identifiers remain shortened in the props; failure acknowledgement keeps the exa
 job ID and current `updatedAt`. Reads, pagination, viewer validation and mutation
 requests retain the same paths and freshness requirements.
 
-The Releases view requests one `release-catalog` result with separate
-Stable/Nightly pages, rather than authenticate two `builds` reads.
-Both pages use one freshly verified and mapped registry observation, retaining
-independent null cursors, current-first ordering and limit100 per channel. GHCR
-discovery has a global100-version bound; aliases mark matching versions without
-adding rows, so these pages cover the full current catalog. Errors remain visible.
+The Releases view requests the `release-catalog` result with separate
+Stable/Nightly pages, rather than authenticate two `builds` reads. It follows
+both channel cursors for at most five requests, retaining current-first ordering
+and limit100 per channel. If either cursor remains, the page shows that the
+bounded catalog is partial and retains the continuation for another request.
+Each verified channel/image digest receives one freshly mapped observation.
+Errors remain visible.
 The Releases view records each verified channel/image digest's first observation in
 `public.release_observations` after its authorized catalog read. The Releases page
 shows **First observed** from that immutable display timestamp, rather than the
@@ -72,9 +73,10 @@ older backends reject it without a fallback. Browser `builds` reads and all
 mutations retain their existing Edge contract.
 
 Operations requests Overview with `input: { operations: true }` for its current
-global controls, 100 server choices and 100 job choices, retaining cursors and
-the `updatedAt` values used by mutations. It omits the unused health snapshot and
-fleet summary, while fresh provider service names and an optional
+global controls, then follows the independent server and job cursors for at most
+five 100-item pages. A bounded result is marked partial and the page links to the
+full Servers or Jobs view for the continuation. It omits the unused health
+snapshot and fleet summary, while fresh provider service names and an optional
 selected-server dashboard keep their existing reads. The page still
 requires fresh protected administrator/session authority before rendering data.
 Deploy [ControlPlane #280](https://github.com/Bannerlord-Coop-Team/BannerlordCoop.ControlPlane/pull/280) before the website change; an
@@ -1544,9 +1546,10 @@ administrator withdraws it. It is not email or a Discord message; the retired
 owner announcements have no website form. See the control-plane repository's
 `docs/managed-hosting/server-notices.md`.
 
-The **Notices** tab renders the first 100 servers from the existing `servers`
-read on the server, so the page keeps its fresh administrator authority. The
-search box re-reads `servers` with its query filter from the browser, and
+The **Notices** tab follows the server cursor for at most five 100-item pages on
+the server, so the page keeps its fresh administrator authority while exposing a
+bounded partial state. The search box re-reads `servers` with its query filter
+from the browser, and
 **Load more servers** follows its cursor, so selections survive searches. An
 administrator can tick servers one by one or **Select all shown**, sees the
 selected count and can remove each one; a notice targets at most 500 servers.

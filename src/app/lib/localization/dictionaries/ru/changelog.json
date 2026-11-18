@@ -10,6 +10,7 @@
   "history.eyebrow": "История релизов",
   "history.title": "Что изменилось?",
   "history.description": "Информация о релизах загружается напрямую из открытого репозитория проекта на GitHub и обновляется каждый час.",
+  "history.olderOnGitHub": "Более старые версии доступны на GitHub.",
   "history.count": {
     "one": "Показан {formattedCount} релиз",
     "few": "Показано {formattedCount} релиза",
