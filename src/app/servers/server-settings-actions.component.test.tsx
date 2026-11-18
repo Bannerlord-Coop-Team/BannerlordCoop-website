@@ -107,6 +107,6 @@ it("stops recovery when the single-server read reports revoked access", async ()
     mocks.save.mockRejectedValueOnce(new MyServersApiError("stale_interaction", "Stale"));
     mocks.list.mockRejectedValueOnce(new MyServersApiError("server_not_found", "Unavailable"));
     expect(await saveServerSettings({ ...input, previous })).toMatchObject({ ok: false });
-    expect(mocks.list).toHaveBeenCalledExactlyOnceWith("verified-token", serverId);
+    expect(mocks.list).toHaveBeenCalledExactlyOnceWith("verified-token", serverId, undefined, { includeRuntimeInsight: false });
     expect(mocks.save).toHaveBeenCalledOnce();
 });
