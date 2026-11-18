@@ -93,10 +93,10 @@ const handlers: [string, () => Promise<Result>, Partial<Result>][] = [
     ["dismiss-notice", () => dismissManagedServerNotice({ serverId: id, noticeId: id }), {}],
 ];
 
-async function envelopeError(code: string, retryable = false, operationId?: string) {
+async function envelopeError(code: string, retryable = false, operationId?: string, message = "The request was refused.") {
     try {
         await readMyServersResponse(Response.json({ version: 1, requestId: id, ok: false,
-            error: { code, message: "The request was refused.", retryable, ...(operationId ? { operationId } : {}) } }, { status: 409 }), id);
+            error: { code, message, retryable, ...(operationId ? { operationId } : {}) } }, { status: 409 }), id);
     } catch (error) { return error; }
     throw new Error("Expected refusal");
 }
@@ -151,6 +151,12 @@ it("does not classify retryable, accepted-job, local, future or pre-replay autho
         await envelopeError("server_not_found"), await envelopeError("future_error"),
         new MyServersApiError("server_suspended", "Local error"), new Error("Network"),
     ]) expect(ownerRefusalMessage(error, t)).toBeNull();
+});
+
+it("shows the server-side update guidance for an unsupported configuration agent", async () => {
+    const t = createTranslator("en", messages).t;
+    const guidance = "Server-side update required before changing clansAfterKingdomDestruction. Support will roll this update out; there is nothing you need to do.";
+    expect(ownerRefusalMessage(await envelopeError("configuration_agent_unsupported", false, undefined, guidance), t)).toBe(guidance);
 });
 
 it.each(["import-config", "import-save", "export-save"])("retains the exact %s request after a parsed same-ID operation_in_progress", async action => {

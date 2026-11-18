@@ -2,9 +2,16 @@ import rawCatalog from './managed-config-catalog-generated.ts';
 
 type CatalogOption = { key: string; type: string; stable: boolean; default: unknown; min?: number; max?: number;
   itemPattern?: string; maxItems?: number; uniqueItems?: boolean; omitForOldAgents?: boolean;
-  availableSince?: string; values?: readonly string[]; forbiddenRanges?: readonly (readonly [number?, number?])[] };
-type Catalog = { schemaVersion: number; catalogRevision: string; contentDigest: string; sourceCommit: string; options: readonly CatalogOption[] };
+  availableSince?: string; values?: readonly string[]; coerceRanges?: readonly (readonly [number, number, number])[] };
+type Catalog = { schemaVersion: number; catalogRevision: string; contentDigest: string; sourceCommit: string; source: string; oldAgentOmittedKeys: readonly string[]; options: readonly CatalogOption[] };
 const catalog = rawCatalog as unknown as Catalog;
+const CATALOG_MAX_OPTIONS = 128;
+const CATALOG_MAX_KEY_LENGTH = 64;
+const CATALOG_MAX_STRING_LENGTH = 128;
+const CATALOG_MAX_ENUM_VALUES = 32;
+const CATALOG_MAX_RULES = 8;
+const CATALOG_MAX_LIST_ITEMS = 32;
+const CATALOG_MAX_NUMERIC_BOUND = 1_000_000_000;
 
 function catalogEnumValues<const T extends readonly string[]>(key: string): T {
   const option = catalog.options.find(candidate => candidate.key === key);
@@ -12,25 +19,49 @@ function catalogEnumValues<const T extends readonly string[]>(key: string): T {
   return option.values as T;
 }
 
-function validateCatalogStructure(): void {
-  if (catalog.schemaVersion !== 2 || catalog.catalogRevision !== catalog.contentDigest
-    || !/^[0-9a-f]{64}$/u.test(catalog.catalogRevision) || !/^[0-9a-f]{40}$/u.test(catalog.sourceCommit)
-    || catalog.options.length === 0) throw new Error('Managed configuration catalog is malformed');
+export function validateManagedConfigCatalog(value: unknown): asserts value is Catalog {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Managed configuration catalog is malformed');
+  const candidate = value as Catalog;
+  if (candidate.schemaVersion !== 2 || candidate.catalogRevision !== candidate.contentDigest
+    || !/^[0-9a-f]{64}$/u.test(candidate.catalogRevision) || !/^[0-9a-f]{40}$/u.test(candidate.sourceCommit)
+    || typeof candidate.source !== 'string' || candidate.source.length === 0 || candidate.source.length > 256
+    || !Array.isArray(candidate.oldAgentOmittedKeys) || candidate.oldAgentOmittedKeys.length > CATALOG_MAX_OPTIONS
+    || !Array.isArray(candidate.options) || candidate.options.length === 0 || candidate.options.length > CATALOG_MAX_OPTIONS) throw new Error('Managed configuration catalog is malformed');
   const keys = new Set<string>();
-  for (const option of catalog.options) {
-    if (!/^[a-z][A-Za-z0-9]*$/u.test(option.key) || keys.has(option.key)
+  for (const option of candidate.options) {
+    if (typeof option !== 'object' || option === null || Array.isArray(option)
+      || typeof option.key !== 'string' || option.key.length > CATALOG_MAX_KEY_LENGTH || !/^[a-z][A-Za-z0-9]*$/u.test(option.key) || keys.has(option.key)
       || !['boolean', 'integer', 'number', 'enum', 'steamIdList'].includes(option.type)
+      || typeof option.stable !== 'boolean' || typeof option.availableSince !== 'string' || !/^\d+\.\d+\.\d+$/u.test(option.availableSince)
       || option.default === undefined) throw new Error(`Managed configuration catalog option is malformed: ${option.key}`);
     keys.add(option.key);
     if (option.type === 'boolean' && typeof option.default !== 'boolean') throw new Error(`Managed configuration catalog default is malformed: ${option.key}`);
     if (option.type === 'integer' && !Number.isSafeInteger(option.default)) throw new Error(`Managed configuration catalog default is malformed: ${option.key}`);
     if (option.type === 'number' && (typeof option.default !== 'number' || !Number.isFinite(option.default))) throw new Error(`Managed configuration catalog default is malformed: ${option.key}`);
+    if (option.type === 'enum' && (!Array.isArray(option.values) || option.values.length === 0 || option.values.length > CATALOG_MAX_ENUM_VALUES
+      || option.values.some((candidate: unknown) => typeof candidate !== 'string' || candidate.length === 0 || candidate.length > CATALOG_MAX_STRING_LENGTH)
+      || new Set(option.values).size !== option.values.length || !option.values.includes(String(option.default)))) throw new Error(`Managed configuration catalog enum is malformed: ${option.key}`);
+    if (option.type !== 'enum' && option.values !== undefined) throw new Error(`Managed configuration catalog enum is malformed: ${option.key}`);
+    if (option.min !== undefined && (typeof option.min !== 'number' || !Number.isFinite(option.min) || Math.abs(option.min) > CATALOG_MAX_NUMERIC_BOUND || option.type === 'integer' && !Number.isSafeInteger(option.min))) throw new Error(`Managed configuration catalog bounds are malformed: ${option.key}`);
+    if (option.max !== undefined && (typeof option.max !== 'number' || !Number.isFinite(option.max) || Math.abs(option.max) > CATALOG_MAX_NUMERIC_BOUND || option.type === 'integer' && !Number.isSafeInteger(option.max))) throw new Error(`Managed configuration catalog bounds are malformed: ${option.key}`);
+    if (option.min !== undefined && option.max !== undefined && option.min > option.max) throw new Error(`Managed configuration catalog bounds are malformed: ${option.key}`);
+    if (option.type === 'steamIdList' && (option.maxItems === undefined || !Number.isSafeInteger(option.maxItems) || option.maxItems < 1 || option.maxItems > CATALOG_MAX_LIST_ITEMS || typeof option.itemPattern !== 'string' || option.itemPattern.length === 0 || option.itemPattern.length > CATALOG_MAX_STRING_LENGTH || option.uniqueItems !== true)) throw new Error(`Managed configuration catalog list rules are malformed: ${option.key}`);
+    if (option.itemPattern !== undefined) {
+      if (typeof option.itemPattern !== 'string' || option.itemPattern.length === 0 || option.itemPattern.length > CATALOG_MAX_STRING_LENGTH) throw new Error(`Managed configuration catalog pattern is malformed: ${option.key}`);
+      try { new RegExp(option.itemPattern, 'u'); } catch { throw new Error(`Managed configuration catalog pattern is malformed: ${option.key}`); }
+    }
+    if (option.uniqueItems !== undefined && typeof option.uniqueItems !== 'boolean') throw new Error(`Managed configuration catalog list rules are malformed: ${option.key}`);
+    if (option.maxItems !== undefined && (option.type !== 'steamIdList' || !Number.isSafeInteger(option.maxItems) || option.maxItems < 1 || option.maxItems > CATALOG_MAX_LIST_ITEMS)) throw new Error(`Managed configuration catalog list rules are malformed: ${option.key}`);
+    if (option.coerceRanges !== undefined && ((option.type !== 'integer' && option.type !== 'number') || !Array.isArray(option.coerceRanges) || option.coerceRanges.length > CATALOG_MAX_RULES || option.coerceRanges.some((range: unknown) => !Array.isArray(range) || range.length !== 3 || range.some(part => typeof part !== 'number' || !Number.isFinite(part)) || !Number.isSafeInteger(range[0]) || !Number.isSafeInteger(range[1]) || range[0] > range[1]))) throw new Error(`Managed configuration catalog coercion rules are malformed: ${option.key}`);
+    if (option.omitForOldAgents !== undefined && typeof option.omitForOldAgents !== 'boolean') throw new Error(`Managed configuration catalog compatibility marker is malformed: ${option.key}`);
     if (option.min !== undefined && (option.default as number) < option.min || option.max !== undefined && (option.default as number) > option.max) throw new Error(`Managed configuration catalog bounds are malformed: ${option.key}`);
-    if (option.type === 'enum' && (option.values === undefined || !option.values.includes(String(option.default)))) throw new Error(`Managed configuration catalog enum is malformed: ${option.key}`);
   }
+  if (candidate.oldAgentOmittedKeys.some(key => typeof key !== 'string' || !keys.has(key))
+    || new Set(candidate.oldAgentOmittedKeys).size !== candidate.oldAgentOmittedKeys.length
+    || JSON.stringify(candidate.oldAgentOmittedKeys) !== JSON.stringify(candidate.options.filter(option => option.omitForOldAgents === true).map(option => option.key))) throw new Error('Managed configuration catalog compatibility key set is malformed');
 }
 
-validateCatalogStructure();
+validateManagedConfigCatalog(catalog);
 
 export const MANAGED_DIFFICULTY_LEVELS = ['VeryEasy', 'Easy', 'Realistic'] as const;
 export type ManagedDifficultyLevel = (typeof MANAGED_DIFFICULTY_LEVELS)[number];
@@ -297,8 +328,10 @@ export function validateCatalogManagedOptions(
 ): ManagedModOptionsConfiguration {
   const validated: Record<string, unknown> = {};
   for (const option of options) {
-    const actual = value[option.key];
-    if (actual === undefined) throw new Error(messages.shape);
+    const raw = value[option.key];
+    if (raw === undefined) throw new Error(messages.shape);
+    const coercion = option.coerceRanges?.find(([from, to]) => typeof raw === 'number' && raw >= from && raw <= to);
+    const actual = coercion === undefined ? raw : coercion[2];
     if (option.type === 'boolean' && typeof actual !== 'boolean') throw new Error(messages.boolean);
     if (option.type === 'integer' && !Number.isSafeInteger(actual)) throw new Error(messages.integer);
     if (option.type === 'number' && (typeof actual !== 'number' || !Number.isFinite(actual))) throw new Error(messages.number);
@@ -312,7 +345,6 @@ export function validateCatalogManagedOptions(
       if (option.uniqueItems === true && new Set(list).size !== list.length) throw new Error(messages.shape);
       if (option.itemPattern !== undefined && list.some((entry) => !new RegExp(option.itemPattern as string, 'u').test(entry))) throw new Error(messages.shape);
     }
-    if (option.forbiddenRanges?.some(([from, to]) => typeof actual === 'number' && actual >= (from ?? Number.NEGATIVE_INFINITY) && actual <= (to ?? Number.POSITIVE_INFINITY))) throw new Error(option.type === 'integer' ? messages.integer : messages.number);
     validated[option.key] = actual;
   }
   return validated as unknown as ManagedModOptionsConfiguration;

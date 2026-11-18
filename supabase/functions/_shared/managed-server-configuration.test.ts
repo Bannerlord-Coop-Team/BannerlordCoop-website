@@ -7,6 +7,7 @@ import {
   assertManagedConfigurationAvailableForChannel,
   parseManagedServerConfiguration,
   validateCatalogManagedOptions,
+  validateManagedConfigCatalog,
   type ManagedConfigurationMessages,
 } from './managed-server-configuration';
 
@@ -84,7 +85,7 @@ test('the website schema matches the generated build catalog and round-trips all
     Object.keys(DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions).sort(),
     catalog.options.map(option => option.key).sort(),
   );
-  assert.equal(catalog.catalogRevision, 'e7b67121ffb256d0f5417e3ed488c22ed2b35f7d3e0d314f42c7f02691789b69');
+  assert.equal(catalog.catalogRevision, 'f92d6ab74369914f3284fe54bc5233e12a0e7488651d97e8420726b3ae9b084f');
   assert.equal(catalog.sourceCommit, 'd8a3c6dcce1d9b452f4af9262f5a16da01ddf13a');
   assert.deepEqual(generatedCatalog, catalog);
   const value = configuration();
@@ -119,7 +120,7 @@ test('stable rejects Nightly-only values while Nightly accepts them and game coe
   assert.doesNotThrow(() => assertManagedConfigurationAvailableForChannel(parsed.modConfig.modOptions, 'nightly'));
   const invalid = configuration();
   invalid.modConfig.modOptions.pvpResponseTimerSeconds = 9;
-  assert.throws(() => parseManagedServerConfiguration(invalid), { message: 'Managed server configuration integer is invalid' });
+  assert.equal(parseManagedServerConfiguration(invalid).modConfig.modOptions.pvpResponseTimerSeconds, 10);
 });
 
 test('accepts the game-coerced kingdom vote timeout values', () => {
@@ -156,4 +157,13 @@ test('follows catalog mutations for new options, bounds, and enum members', () =
   if (!mode) throw new Error('clans option missing');
   mode.values = ['Vanilla', 'KeepClans', 'RetireClans'];
   assert.equal(validateCatalogManagedOptions({ ...base, clansAfterKingdomDestruction: 'RetireClans' }, messages, enumChanged).clansAfterKingdomDestruction, 'RetireClans');
+});
+
+test('rejects oversized and malformed catalog structures before parsing settings', () => {
+  const oversized = structuredClone(catalog) as { options: unknown[] };
+  oversized.options = Array.from({ length: 129 }, () => structuredClone(catalog.options[0]));
+  assert.throws(() => validateManagedConfigCatalog(oversized), /malformed/u);
+  const malformed = structuredClone(catalog) as { options: Array<Record<string, unknown>> };
+  malformed.options[0] = { ...malformed.options[0], itemPattern: '[' };
+  assert.throws(() => validateManagedConfigCatalog(malformed), /pattern is malformed/u);
 });
