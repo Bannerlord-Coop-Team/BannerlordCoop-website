@@ -87,7 +87,7 @@ async function AuthorizedServerPage({ params, searchParams }: ServerPageProps) {
 
     let managedServer: MyServerSummary | null = null;
     try {
-        managedServer = await getMyServerSummary(accessToken, serverId);
+        managedServer = await getMyServerSummary(accessToken, serverId, undefined, { includeRuntimeInsight: true });
     } catch (error) {
         const accessRemoved = error instanceof MyServersApiError && ["invalid_request", "server_not_found", "forbidden"].includes(error.code);
         if (!accessRemoved) {

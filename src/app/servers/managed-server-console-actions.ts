@@ -61,7 +61,7 @@ export async function submitManagedConsoleCommand(input: unknown, requestId: str
             // This rejection happens before enqueue; uncertain deliveries must never take this retry path.
             if (!(error instanceof MyServersApiError) || error.code !== "stale_interaction" || error.operationId !== undefined) throw error;
             submissionStarted = false;
-            const current = await getMyServerSummary(token, parsed.serverId);
+            const current = await getMyServerSummary(token, parsed.serverId, undefined, { includeRuntimeInsight: false });
             if (!current) throw new MyServersApiError("server_not_found", "Managed server is unavailable.");
             if (current.operationState !== "running" || current.observedGameState !== "running") {
                 throw new MyServersApiError("operation_unavailable", "The server is not running.");

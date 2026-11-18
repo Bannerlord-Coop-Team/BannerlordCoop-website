@@ -56,7 +56,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
             let expectedUpdatedAt = parsed.expectedUpdatedAt;
             if (parsed.expectedReleaseChannel !== undefined) {
                 let current;
-                try { current = await getMyServerSummary(accessToken, parsed.serverId); }
+                try { current = await getMyServerSummary(accessToken, parsed.serverId, undefined, { includeRuntimeInsight: false }); }
                 catch {
                     return { ok: false, refresh: true, message: t("action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent") };
                 }
@@ -280,7 +280,7 @@ export async function readManagedServerStatusFingerprint(serverId: string): Prom
         const [status, deletion, summary] = await Promise.all([
             getMyServerBackupStatus(session.access_token, serverId),
             getMyServerDeletionStatus(session.access_token, serverId).catch(() => null),
-            getMyServerSummary(session.access_token, serverId),
+            getMyServerSummary(session.access_token, serverId, undefined, { includeRuntimeInsight: false }),
         ]);
         const job = status.job;
         const deletionJob = deletion?.job;

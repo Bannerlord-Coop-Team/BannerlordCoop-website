@@ -19,10 +19,10 @@ const accepted = (request: Input, result: unknown = page) => Response.json({ ver
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-function expectSummary(actual: unknown, expected: Record<string, unknown>) {
+function expectSummary(actual: unknown, expected: Record<string, unknown>, insightRequested = true) {
     expect(actual).toMatchObject(expected);
     const parsed = actual as { runtimeInsightWarning?: unknown };
-    if (Object.hasOwn(expected, "runtimeInsight")) expect(parsed.runtimeInsightWarning).toBeUndefined();
+    if (Object.hasOwn(expected, "runtimeInsight") || !insightRequested) expect(parsed.runtimeInsightWarning).toBeUndefined();
     else expect(parsed.runtimeInsightWarning).toEqual({ fieldPath: "runtimeInsight", reason: "not provided" });
 }
 
@@ -292,6 +292,32 @@ const failedStartInsight = { action: "start", jobId: startJobId, state: "failed"
 const runtimeInsight = { desiredState: "running", observedAt: server.updatedAt, allowedActions: ["start"], crashLoopDetected: false,
     failureCode: "game_crashed_during_load", recommendedAction: "review-backups", failureMessage: "The game crashed while loading.", recommendation: "Review backups before choosing recovery.", start: failedStartInsight };
 
+it("preserves the pre-PR summary model when insight was not requested", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const request = input(init);
+        expect(request.input).toEqual({ serverId: server.serverId });
+        return accepted(request, summary);
+    });
+    vi.stubGlobal("fetch", fetch);
+    expectSummary(await getMyServerSummary(TOKEN, server.serverId, undefined, { includeRuntimeInsight: false }), summary, false);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(warning).not.toHaveBeenCalled();
+});
+
+it("degrades a requested summary that omits runtime insight", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const request = input(init);
+        expect(request.input).toEqual({ serverId: server.serverId, includeRuntimeInsight: true });
+        return accepted(request, summary);
+    });
+    const result = await getMyServerSummary(TOKEN, server.serverId, undefined, { includeRuntimeInsight: true });
+    expect(result.runtimeInsightWarning).toEqual({ fieldPath: "runtimeInsight", reason: "not provided" });
+    expect(warning).toHaveBeenCalledOnce();
+    expect(warning).toHaveBeenCalledWith("Managed server runtime insight unavailable", { fieldPath: "runtimeInsight", reason: "not provided" });
+});
+
 it("reads the opt-in failure and attempt receipt through both owner reads", async () => {
     vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => {
         const request = input(init);
@@ -311,7 +337,7 @@ it.each(["server-summary", "server-start-status"])("falls back only after an old
         expect(request.input).not.toHaveProperty("includeRuntimeInsight");
         return accepted(request, operation === "server-summary" ? summary : startStatus);
     });
-    if (operation === "server-summary") expectSummary(await getMyServerSummary(TOKEN, server.serverId), summary);
+    if (operation === "server-summary") expectSummary(await getMyServerSummary(TOKEN, server.serverId), summary, false);
     else expect(await getMyServerStartStatus(TOKEN, server.serverId, startJobId)).toEqual(startStatus);
     expect(inputs).toHaveLength(operation === "server-summary" ? 2 : 3);
     expect(inputs[0]).toHaveProperty("includeRuntimeInsight", true);

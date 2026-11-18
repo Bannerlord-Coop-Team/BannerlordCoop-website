@@ -71,7 +71,7 @@ export async function setServerVisibility(value: unknown): Promise<{ ok: boolean
  * once at the current revision. Returns the acknowledged revision, or null when the owner can no longer act.
  */
 async function retryAtCurrentRevision(accessToken: string, input: VisibilityMutation): Promise<string | null> {
-    const server = await getMyServerSummary(accessToken, input.serverId);
+    const server = await getMyServerSummary(accessToken, input.serverId, undefined, { includeRuntimeInsight: false });
     if (!server || server.accessRole !== "owner") return null;
     if ((server.visibility ?? "private") === input.visibility) return server.updatedAt;
     const result = await requestServerVisibility(accessToken, { ...input, expectedUpdatedAt: server.updatedAt }, crypto.randomUUID());

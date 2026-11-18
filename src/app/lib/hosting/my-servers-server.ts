@@ -23,13 +23,15 @@ export async function listAllMyServers(accessToken: string, callerSignal?: Abort
 }
 
 /** Reads one freshly authorized summary without collecting inventory or hydrating a dashboard. */
-export async function getMyServerSummary(accessToken: string, serverId: string, callerSignal?: AbortSignal): Promise<MyServerSummary> {
+export async function getMyServerSummary(accessToken: string, serverId: string, callerSignal?: AbortSignal, options: { includeRuntimeInsight?: boolean } = { includeRuntimeInsight: true }): Promise<MyServerSummary> {
     if (!REQUEST_ID.test(serverId)) throw new MyServersApiError("invalid_request", "Invalid managed server ID.");
     const signal = ownerReadSignal(accessToken, callerSignal);
+    let insightRequested = options.includeRuntimeInsight === true;
     let value: unknown;
-    try { value = await readOwner(accessToken, { operation: "server-summary", input: { serverId, includeRuntimeInsight: true } }, signal); }
+    try { value = await readOwner(accessToken, { operation: "server-summary", input: { serverId, ...(insightRequested ? { includeRuntimeInsight: true } : {}) } }, signal); }
     catch (error) {
-        if (!(error instanceof MyServersApiError) || error.code !== "invalid_request") throw error;
+        if (!insightRequested || !(error instanceof MyServersApiError) || error.code !== "invalid_request") throw error;
+        insightRequested = false;
         value = await readOwner(accessToken, { operation: "server-summary", input: { serverId } }, signal);
     }
     const hasRuntimeInsight = isRecord(value) && Object.hasOwn(value, "runtimeInsight");
@@ -63,8 +65,10 @@ export async function getMyServerSummary(accessToken: string, serverId: string, 
         const { runtimeInsight: _runtimeInsight, ...core } = value;
         return { ...core, runtimeInsightWarning: issue } as MyServerSummary;
     }
-    if (!hasRuntimeInsight) {
-        return { ...value, runtimeInsightWarning: { fieldPath: "runtimeInsight", reason: "not provided" } } as MyServerSummary;
+    if (!hasRuntimeInsight && insightRequested) {
+        const issue = { fieldPath: "runtimeInsight", reason: "not provided" };
+        console.warn("Managed server runtime insight unavailable", issue);
+        return { ...value, runtimeInsightWarning: issue } as MyServerSummary;
     }
     return value as MyServerSummary;
 }

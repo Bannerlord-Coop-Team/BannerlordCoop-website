@@ -109,7 +109,7 @@ it.each([true, false])("renders access removed for a retired external server ID 
         const tree = await page("legacy-server");
         const workspace = await findServerElement(tree, "ServerManagementWorkspace");
         expect(renderToStaticMarkup(<>{workspace?.props.name}</>)).toContain("This server is unavailable or your access changed.");
-        expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", "legacy-server");
+        expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", "legacy-server", undefined, { includeRuntimeInsight: true });
         expect(mocks.backups).not.toHaveBeenCalled();
         expect(mocks.files).not.toHaveBeenCalled();
     } finally { vi.unstubAllEnvs(); }
@@ -117,7 +117,7 @@ it.each([true, false])("renders access removed for a retired external server ID 
 
 it("renders managed pages from the requested registered server identity", async () => {
     const result = await page(managedId);
-    expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", managedId);
+    expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", managedId, undefined, { includeRuntimeInsight: true });
     expect(result.props.server.serverId).toBe(managedId);
 });
 
@@ -513,7 +513,7 @@ it.each(["server_not_found", "forbidden"])("renders access-removed state when th
         const tree = await page();
         const workspace = await findServerElement(tree, "ServerManagementWorkspace");
         expect(renderToStaticMarkup(<>{workspace?.props.name}</>)).toContain("This server is unavailable or your access changed.");
-        expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", managedId);
+        expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", managedId, undefined, { includeRuntimeInsight: true });
         // An expected unknown-server answer is not logged as a failure.
         expect(error).not.toHaveBeenCalled();
     } finally { error.mockRestore(); }
