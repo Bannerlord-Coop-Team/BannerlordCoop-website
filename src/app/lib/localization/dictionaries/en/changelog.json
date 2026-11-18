@@ -10,6 +10,7 @@
   "history.eyebrow": "Release history",
   "history.title": "What changed?",
   "history.description": "Release information is loaded directly from the project's public GitHub repository and refreshed every hour.",
+  "history.olderOnGitHub": "Older releases are available on GitHub.",
   "history.count": {
     "one": "Showing {formattedCount} release",
     "other": "Showing {formattedCount} releases"
