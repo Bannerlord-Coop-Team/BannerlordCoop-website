@@ -40,6 +40,7 @@ const spanish: Dictionary = {
     "history.eyebrow": "Historial",
     "history.title": "¿Qué cambió?",
     "history.description": "Información de GitHub actualizada cada hora.",
+    "history.olderOnGitHub": "Hay versiones anteriores disponibles en GitHub.",
     "history.count": { one: "{formattedCount} versión disponible", other: "{formattedCount} versiones disponibles" },
     "release.latest": "Última versión",
     "release.label": "Versión",
@@ -128,11 +129,13 @@ it("localizes missing release notes and invalid dates as whole messages", async 
     expect(container.textContent).not.toContain("Published");
 });
 
-it("shows the GitHub archive when the bounded release history has more pages", async () => {
+it("shows the translated GitHub archive notice when the bounded release history has more pages", async () => {
+    selectSpanish();
     request.releases.mockResolvedValue({ releases: [release], isAvailable: true, hasMore: true });
     const { container } = await renderPage();
     const notice = container.querySelector('[role="status"]');
-    expect(notice?.textContent).toContain("Older releases are available on GitHub.");
+    expect(notice?.textContent).toContain(spanish["history.olderOnGitHub"]);
+    expect(notice?.textContent).not.toContain("Older releases are available on GitHub.");
     expect(notice?.querySelector('a[href="https://github.com/Bannerlord-Coop-Team/BannerlordCoop/releases"]')).not.toBeNull();
 });
 

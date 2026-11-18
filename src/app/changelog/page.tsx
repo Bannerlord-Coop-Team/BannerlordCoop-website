@@ -106,7 +106,7 @@ export default async function ChangelogPage() {
 
                                     {hasMore && (
                                         <p role="status" className="mt-5 border-l-2 border-gold/60 bg-gold/5 px-3 py-2 text-xs leading-5 text-foreground-muted">
-                                            Older releases are available on GitHub. <a href={GITHUB_RELEASES_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-gold underline underline-offset-2">{t("links.githubReleases")}</a>
+                                            {t("history.olderOnGitHub")} <a href={GITHUB_RELEASES_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-gold underline underline-offset-2">{t("links.githubReleases")}</a>
                                         </p>
                                     )}
 

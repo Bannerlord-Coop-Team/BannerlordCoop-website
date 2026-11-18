@@ -10,6 +10,7 @@
   "history.eyebrow": "リリース履歴",
   "history.title": "変更点",
   "history.description": "リリース情報はプロジェクトの公開 GitHub リポジトリから直接読み込まれ、1時間ごとに更新されます。",
+  "history.olderOnGitHub": "過去のリリースはGitHubで確認できます。",
   "history.count": {
     "other": "{formattedCount}件のリリースを表示中"
   },

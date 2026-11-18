@@ -10,6 +10,7 @@
   "history.eyebrow": "Historique des versions",
   "history.title": "Qu’est-ce qui a changé ?",
   "history.description": "Les informations sur les versions sont chargées directement depuis le dépôt GitHub public du projet et actualisées toutes les heures.",
+  "history.olderOnGitHub": "Des versions plus anciennes sont disponibles sur GitHub.",
   "history.count": {
     "one": "Affichage de {formattedCount} version",
     "many": "Affichage de {formattedCount} de versions",

@@ -10,6 +10,7 @@
   "history.eyebrow": "Sürüm geçmişi",
   "history.title": "Neler değişti?",
   "history.description": "Sürüm bilgileri doğrudan projenin herkese açık GitHub deposundan yüklenir ve her saat yenilenir.",
+  "history.olderOnGitHub": "Daha eski sürümler GitHub’da mevcut.",
   "history.count": {
     "one": "{formattedCount} sürüm gösteriliyor",
     "other": "{formattedCount} sürüm gösteriliyor"
