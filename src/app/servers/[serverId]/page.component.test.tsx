@@ -10,6 +10,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
 import { ManagedServerUnavailable } from "@/app/components/servers/ManagedServerUnavailable";
+import { ManagedServerLoadError } from "@/app/components/servers/ManagedServerLoadError";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import ServerPage, { generateMetadata } from "./page";
 import { createTranslator } from "@/app/lib/localization/translator";
@@ -99,13 +100,15 @@ it("redirects a verified user without a session token before loading server data
     expect(mocks.preview).not.toHaveBeenCalled();
 });
 
-// Retired external IDs reach no managed record or preview, so every viewer returns to discovery.
-it.each([true, false])("returns a retired external server ID to discovery with hosted access %s", async hostedAccess => {
+// Retired external IDs are explicit access refusals, so the page does not guess at a preview.
+it.each([true, false])("renders access removed for a retired external server ID with hosted access %s", async hostedAccess => {
     vi.stubEnv("CONSOLE_SERVER_CATALOG", JSON.stringify([{ id: "legacy-server", name: "Legacy", address: "203.0.113.10", nodeId: "node", provider: "External VPS" }]));
     try {
         mocks.hostedAccess.mockReturnValue(hostedAccess);
         mocks.managedServers.mockRejectedValue(new MyServersApiError("server_not_found", "Gone"));
-        await expect(page("legacy-server")).rejects.toThrow("redirect:/servers");
+        const tree = await page("legacy-server");
+        const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+        expect(renderToStaticMarkup(<>{workspace?.props.name}</>)).toContain("This server is unavailable or your access changed.");
         expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", "legacy-server");
         expect(mocks.backups).not.toHaveBeenCalled();
         expect(mocks.files).not.toHaveBeenCalled();
@@ -192,7 +195,7 @@ it.each([
 });
 
 // Resolve the page's server components, leaving client components for React to render.
-function findServerElement(node: ReactNode, name: "ServerManagementWorkspace"): Promise<ReactElement<{ visibility: ReactElement<ComponentProps<typeof ServerVisibilitySetting>> }> | null>;
+function findServerElement(node: ReactNode, name: "ServerManagementWorkspace"): Promise<ReactElement<{ name?: ReactNode; notice?: string; banner?: ReactNode; visibility: ReactElement<ComponentProps<typeof ServerVisibilitySetting>> }> | null>;
 function findServerElement(node: ReactNode, name: "ServerSettingsPanel"): Promise<ReactElement<ComponentProps<typeof ServerSettingsPanel>> | null>;
 function findServerElement(node: ReactNode, name: "ServerWorkspacePanel"): Promise<ReactElement<ComponentProps<typeof ServerWorkspacePanel>> | null>;
 function findServerElement(node: ReactNode, name: "ManagedServerConsole"): Promise<ReactElement<ComponentProps<typeof ManagedServerConsole>> | null>;
@@ -440,6 +443,25 @@ it("degrades a transient single-server read failure and offers a refresh", async
     expect(mocks.files).not.toHaveBeenCalled();
 });
 
+it("shows the validated server while omitting a rejected optional runtime insight", async () => {
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, runtimeInsightWarning: { fieldPath: "runtimeInsight.start.attemptCount", reason: "counter exceeds maximum" } });
+    const tree = await page();
+    const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+    expect(workspace?.props.notice).toBe("Live status details are temporarily unavailable.");
+    const commands = await findServerElement(tree, "ManagedServerCommands");
+    const controls = await findServerElement(commands?.props.controls, "ManagedServerControls");
+    expect((controls as ReactElement<{ runtimeInsight?: unknown; runtimeInsightUnavailable?: boolean }> | null)?.props.runtimeInsight).toBeUndefined();
+    expect((controls as ReactElement<{ runtimeInsightUnavailable?: boolean }> | null)?.props.runtimeInsightUnavailable).toBe(true);
+});
+
+it("shows an explicit load error for malformed core server data", async () => {
+    mocks.managedServers.mockRejectedValueOnce(new MyServersApiError("invalid_response", "Malformed", true));
+    const tree = await page();
+    const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+    expect((workspace?.props as { banner?: ReactElement }).banner?.type).toBe(ManagedServerLoadError);
+    expect(renderToStaticMarkup(<>{workspace?.props.name}</>)).toContain("This server page could not load. Try again.");
+});
+
 it("refreshes the server page when the temporary-unavailable retry is pressed", async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     const container = document.createElement("div");
@@ -463,11 +485,13 @@ it("still surfaces an unclassified single-server read failure", async () => {
     } finally { error.mockRestore(); }
 });
 
-it.each(["server_not_found", "forbidden"])("returns to discovery without managed controls when the single-server read returns %s", async code => {
+it.each(["server_not_found", "forbidden"])("renders access-removed state when the single-server read returns %s", async code => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
         mocks.managedServers.mockRejectedValueOnce(new MyServersApiError(code, "Unavailable"));
-        await expect(page()).rejects.toThrow("redirect:/servers");
+        const tree = await page();
+        const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+        expect(renderToStaticMarkup(<>{workspace?.props.name}</>)).toContain("This server is unavailable or your access changed.");
         expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", managedId);
         // An expected unknown-server answer is not logged as a failure.
         expect(error).not.toHaveBeenCalled();

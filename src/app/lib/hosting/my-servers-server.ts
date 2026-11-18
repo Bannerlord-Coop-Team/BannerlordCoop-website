@@ -1,6 +1,6 @@
 import "server-only";
 import { isStartQueueDetails, type StartQueueDetails } from "../../../../supabase/functions/_shared/server-start-queue-contract";
-import { isOwnerRuntimeInsight, isOwnerStartInsight, START_INSIGHT_KEYS, type OwnerStartInsight } from "./owner-runtime-insight";
+import { isOwnerRuntimeInsight, isOwnerStartInsight, ownerRuntimeInsightValidationIssue, START_INSIGHT_KEYS, type OwnerStartInsight } from "./owner-runtime-insight";
 import { isIP } from "node:net";
 import type { MyServerMove, MyServerNotice, MyServerSummary } from "@/app/lib/control-plane/types";
 import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
@@ -32,16 +32,16 @@ export async function getMyServerSummary(accessToken: string, serverId: string, 
         if (!(error instanceof MyServersApiError) || error.code !== "invalid_request") throw error;
         value = await readOwner(accessToken, { operation: "server-summary", input: { serverId } }, signal);
     }
+    const hasRuntimeInsight = isRecord(value) && Object.hasOwn(value, "runtimeInsight");
     if (!isRecord(value) || !hasExactKeys(value, ["serverId", "displayName", "accessRole", "friendlyRegion", "operationState",
         "observedGameState", "releaseChannel", "maintenanceSlot", "timezone", "visibility", "connectionIp", "gamePorts", "updatedAt",
         ...(Object.hasOwn(value, "subscriptionHold") ? ["subscriptionHold"] : []),
         ...(Object.hasOwn(value, "installedVersion") ? ["installedVersion"] : []),
-        ...(Object.hasOwn(value, "runtimeInsight") ? ["runtimeInsight"] : []),
+        ...(hasRuntimeInsight ? ["runtimeInsight"] : []),
         ...(Object.hasOwn(value, "warSailsCapable") ? ["warSailsCapable"] : [])])
         || (Object.hasOwn(value, "warSailsCapable") && typeof value.warSailsCapable !== "boolean")
         || (Object.hasOwn(value, "installedVersion") && !isInstalledVersion(value.installedVersion))
         || (Object.hasOwn(value, "subscriptionHold") && !isSubscriptionHold(value.subscriptionHold))
-        || (Object.hasOwn(value, "runtimeInsight") && !isOwnerRuntimeInsight(value.runtimeInsight, { operationState: value.operationState, observedGameState: value.observedGameState, subscriptionHold: value.subscriptionHold }))
         || value.serverId !== serverId || !timestamp(value.updatedAt)
         || typeof value.displayName !== "string" || value.displayName.length < 1 || value.displayName.length > 48 || /[\p{Cc}]/u.test(value.displayName)
         || !["owner", "manager", "support", "admin"].includes(value.accessRole as string)
@@ -56,6 +56,12 @@ export async function getMyServerSummary(accessToken: string, serverId: string, 
         || !Array.isArray(value.gamePorts) || value.gamePorts.length > 32
         || value.gamePorts.some(port => !Number.isInteger(port) || port < 1 || port > 65535)) {
         throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid summary.", true);
+    }
+    if (hasRuntimeInsight && !isOwnerRuntimeInsight(value.runtimeInsight, { operationState: value.operationState, observedGameState: value.observedGameState, subscriptionHold: value.subscriptionHold })) {
+        const issue = ownerRuntimeInsightValidationIssue(value.runtimeInsight, { operationState: value.operationState, observedGameState: value.observedGameState, subscriptionHold: value.subscriptionHold });
+        console.warn("Managed server runtime insight rejected", issue);
+        const { runtimeInsight: _runtimeInsight, ...core } = value;
+        return { ...core, runtimeInsightWarning: issue } as MyServerSummary;
     }
     return value as MyServerSummary;
 }

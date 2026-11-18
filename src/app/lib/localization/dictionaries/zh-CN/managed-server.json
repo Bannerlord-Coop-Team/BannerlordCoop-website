@@ -457,6 +457,8 @@
   "log.invalidUrl": "Supabase URL 无效。",
   "log.invalidKey": "Supabase 可发布密钥无效。",
   "log.authentication": "尚未配置身份验证。请添加 Supabase 环境变量并重启服务器。",
+  "page.liveStatusDetailsUnavailable": "实时状态详情暂时不可用。",
+  "page.serverCouldNotLoadRetry": "无法加载此服务器页面。请重试。",
   "page.metadataTitle": "管理服务器",
   "page.metadataDescription": "管理 Bannerlord Co-op 服务器。",
   "configEditor.unsavedChanges": "{settings}有未保存的更改",

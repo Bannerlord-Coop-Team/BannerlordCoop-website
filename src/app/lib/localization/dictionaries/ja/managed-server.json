@@ -457,6 +457,8 @@
   "log.invalidUrl": "SupabaseのURLが無効です。",
   "log.invalidKey": "Supabaseの公開可能キーが無効です。",
   "log.authentication": "認証が設定されていません。Supabaseの環境変数を追加して、サーバーを再起動してください。",
+  "page.liveStatusDetailsUnavailable": "ライブステータスの詳細は一時的に利用できません。",
+  "page.serverCouldNotLoadRetry": "このサーバーページを読み込めませんでした。もう一度お試しください。",
   "page.metadataTitle": "サーバー管理",
   "page.metadataDescription": "Bannerlord Co-opサーバーを管理します。",
   "configEditor.unsavedChanges": "{settings}に未保存の変更あり",

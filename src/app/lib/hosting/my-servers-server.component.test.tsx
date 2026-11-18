@@ -343,13 +343,52 @@ it("accepts only closed queue details and never falls back on malformed admissio
 
 it.each([{ ...runtimeInsight, allowedActions: ["start", "stop"] }, { ...runtimeInsight, privatePath: "extra" },
     { ...runtimeInsight, desiredState: "suspended" }, { ...runtimeInsight, start: { ...failedStartInsight, nextRetryAt: server.updatedAt } },
-    { ...runtimeInsight, start: { ...failedStartInsight, attemptCount: 6 } },
-    { ...runtimeInsight, start: { ...failedStartInsight, phase: "preparing" } },
-    { ...runtimeInsight, crashLoopDetected: true }, { ...runtimeInsight, desiredState: "deleted" }])("rejects malformed runtime insight without legacy fallback: %j", async runtimeInsight => {
-    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...summary, runtimeInsight }));
+    { ...runtimeInsight, start: { ...failedStartInsight, attemptCount: 6 } }, { ...runtimeInsight, start: { ...failedStartInsight, phase: "preparing" } },
+    { ...runtimeInsight, crashLoopDetected: true }, { ...runtimeInsight, desiredState: "deleted" }])("omits malformed runtime insight without legacy fallback: %j", async runtimeInsight => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+        const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...summary, runtimeInsight }));
+        vi.stubGlobal("fetch", fetch);
+        const result = await getMyServerSummary(TOKEN, server.serverId);
+        expect(result.runtimeInsight).toBeUndefined();
+        expect(result.runtimeInsightWarning).toMatchObject({ fieldPath: expect.stringMatching(/^runtimeInsight/) });
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(warning).toHaveBeenCalledOnce();
+    } finally { warning.mockRestore(); }
+});
+
+// Control-plane owner projection, 2026-11-18 incident. Customer identifiers are intentionally omitted.
+const INCIDENT_RETRY_WAIT_PROJECTION = { attemptCount: 104, maximumAttempts: 5, state: "retry-wait", errorCode: "game_maintenance_state_unknown" } as const;
+it("degrades the exact retry-wait counter regression to the validated core page", async () => {
+    const incidentInsight = { ...runtimeInsight, failureCode: "operation_failed", recommendedAction: "wait", start: {
+        ...failedStartInsight, action: "restart-game", state: INCIDENT_RETRY_WAIT_PROJECTION.state, phase: "retry-wait", attemptCount: INCIDENT_RETRY_WAIT_PROJECTION.attemptCount, maximumAttempts: INCIDENT_RETRY_WAIT_PROJECTION.maximumAttempts,
+        nextRetryAt: server.updatedAt, stoppedRetrying: false, failureCode: null, recommendedAction: null,
+        progress: "Waiting to retry",
+    } };
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+        const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...summary, runtimeInsight: incidentInsight }));
+        vi.stubGlobal("fetch", fetch);
+        const result = await getMyServerSummary(TOKEN, server.serverId);
+        expect(result.serverId).toBe(server.serverId);
+        expect(result.runtimeInsight).toBeUndefined();
+        expect(result.runtimeInsightWarning).toEqual({ fieldPath: "runtimeInsight.start.attemptCount", reason: "must be less than or equal to maximumAttempts" });
+    } finally { warning.mockRestore(); }
+});
+
+it.each([
+    ["attemptCount exceeds maximumAttempts", { ...failedStartInsight, attemptCount: 104, maximumAttempts: 5 }],
+    ["maximumAttempts is out of bounds", { ...failedStartInsight, maximumAttempts: 999 }],
+    ["unknown enum value", { ...failedStartInsight, state: "retrying" }],
+    ["missing required key", (() => { const { progress: _progress, ...missing } = failedStartInsight; return missing; })()],
+    ["oversized string", { ...failedStartInsight, progress: "x".repeat(257) }],
+] as const)("shows the server and omits invalid insight for %s", async (_name, start) => {
+    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...summary, runtimeInsight: { ...runtimeInsight, start } }));
     vi.stubGlobal("fetch", fetch);
-    await expect(getMyServerSummary(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
-    expect(fetch).toHaveBeenCalledOnce();
+    const result = await getMyServerSummary(TOKEN, server.serverId);
+    expect(result.serverId).toBe(server.serverId);
+    expect(result.runtimeInsight).toBeUndefined();
+    expect(result.runtimeInsightWarning).toBeDefined();
 });
 
 it.each([0, 999])("reads fleet target %s with one request rather than ten inventory pages", async index => {
@@ -410,7 +449,6 @@ it.each(["war_sails_save_mismatch", "war_sails_unsupported"])("accepts the %s la
 
 it.each([
     { ...summary, warSailsCapable: null }, { ...summary, warSailsCapable: "true" }, { ...summary, warSailsCapable: 1 },
-    { ...summary, runtimeInsight: { ...runtimeInsight, failureCode: "war_sails_unknown" } },
     { ...summary, serverId: "22222222-2222-4222-8222-222222222222" },
     { ...summary, updatedAt: "yesterday" }, { ...summary, accessRole: "administrator" },
     { ...summary, operationState: "unbounded".repeat(20) }, { ...summary, observedGameState: "invalid" },
@@ -665,7 +703,9 @@ it.each([
     vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), {
         ...summary, operationState: "suspended", observedGameState: "stopped", runtimeInsight: { ...runtimeInsight, ...insight },
     }));
-    await expect(getMyServerSummary(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
+    const parsed = await getMyServerSummary(TOKEN, server.serverId);
+    expect(parsed.runtimeInsight).toBeUndefined();
+    expect(parsed.runtimeInsightWarning).toBeDefined();
 });
 
 it.each([
@@ -690,5 +730,7 @@ it.each([
         ...summary, operationState: "suspended", ...context,
         runtimeInsight: { ...runtimeInsight, allowedActions: ["start", "stop"] },
     }));
-    await expect(getMyServerSummary(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
+    const parsed = await getMyServerSummary(TOKEN, server.serverId);
+    expect(parsed.runtimeInsight).toBeUndefined();
+    expect(parsed.runtimeInsightWarning).toBeDefined();
 });

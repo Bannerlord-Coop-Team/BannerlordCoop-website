@@ -474,6 +474,8 @@
   "log.invalidUrl": "The Supabase URL is invalid.",
   "log.invalidKey": "The Supabase publishable key is invalid.",
   "log.authentication": "Authentication is not configured. Add the Supabase environment variables and restart the server.",
+  "page.liveStatusDetailsUnavailable": "Live status details are temporarily unavailable.",
+  "page.serverCouldNotLoadRetry": "This server page could not load. Try again.",
   "page.metadataTitle": "Manage Server",
   "page.metadataDescription": "Manage a Bannerlord Co-op server.",
   "configEditor.unsavedChanges": "Unsaved changes to {settings}",

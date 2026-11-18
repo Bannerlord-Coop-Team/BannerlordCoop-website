@@ -457,6 +457,8 @@
   "log.invalidUrl": "La URL de Supabase no es válida.",
   "log.invalidKey": "La clave publicable de Supabase no es válida.",
   "log.authentication": "La autenticación no está configurada. Añade las variables de entorno de Supabase y reinicia el servidor.",
+  "page.liveStatusDetailsUnavailable": "Los detalles del estado en directo no están disponibles temporalmente.",
+  "page.serverCouldNotLoadRetry": "No se pudo cargar esta página del servidor. Inténtalo de nuevo.",
   "page.metadataTitle": "Gestionar servidor",
   "page.metadataDescription": "Gestiona un servidor de Bannerlord Co-op.",
   "configEditor.unsavedChanges": "Cambios sin guardar en {settings}",
