@@ -12,6 +12,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${SITE_URL}/hosting`, changeFrequency: "monthly", priority: 0.9 },
         { url: `${SITE_URL}/servers`, changeFrequency: "daily", priority: 0.7 },
         { url: `${SITE_URL}/changelog`, changeFrequency: "weekly", priority: 0.6 },
+        { url: `${SITE_URL}/linux`, changeFrequency: "monthly", priority: 0.6 },
         { url: `${SITE_URL}/support`, changeFrequency: "monthly", priority: 0.5 },
         ...getEnabledLocales().map(({ locale }) => ({
             url: `${SITE_URL}/cheats?lang=${locale}`,
