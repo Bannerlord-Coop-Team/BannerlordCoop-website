@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { relocationRows, relocationTargets } from "@/app/lib/control-plane/relocation";
 import type { HostingAdminVpsHost, HostingJob, ManagedServer, RelocateViewData } from "@/app/lib/control-plane/types";
 import { RelocateView } from "./RelocateView";
+import regionChangeContract from "../../../../test/fixtures/admin-region-change/v1.json";
 
 const mocks = vi.hoisted(() => ({ request: vi.fn(), session: vi.fn(), refresh: vi.fn() }));
 vi.mock("@/app/lib/control-plane/client", () => ({ requestControlPlaneAdmin: mocks.request, ControlPlaneAdminError: class extends Error {} }));
@@ -55,6 +56,9 @@ const data: RelocateViewData = {
     inventory: { hosts, controlPlaneHost: null, availableHosts: [] },
     regionCatalog: catalog,
     activeJobs: [job("knights", "migrate-region"), job("boys", "backup")],
+};
+const sameRegionData: RelocateViewData = {
+    ...data, inventory: { ...data.inventory, hosts: [...hosts, host("vps-uk-b", "GB", 1, []), host("vps-uk-c", "GB", 0, [])] },
 };
 
 let container: HTMLDivElement;
@@ -119,7 +123,7 @@ it("disables Relocate while a server is already relocating or another job is run
 });
 
 it("queues a relocation from the pop-up and keeps the table on the page", async () => {
-    await act(async () => root.render(<RelocateView data={data} query="" accounts={[]} />));
+    await act(async () => root.render(<RelocateView data={sameRegionData} query="" accounts={[]} />));
     await act(async () => button(row("The Gang"), "Relocate").click());
 
     const dialog = container.querySelector("dialog")!;
@@ -127,10 +131,10 @@ it("queues a relocation from the pop-up and keeps the table on the page", async 
     expect(dialog.textContent).toContain("vps-uk-a · slot 1");
     expect(dialog.textContent).toContain("The server will be stopped and moved. Its IP address will change.");
     const [regionSelect, hostSelect] = dialog.querySelectorAll("select");
-    expect(regionSelect!.value).toBe("france");
-    expect([...regionSelect!.options].find((option) => option.value === "germany")!.disabled).toBe(true);
-    expect([...hostSelect!.options].find((option) => option.value === "vps-fr-b")!.disabled).toBe(true);
-    await select(hostSelect!, "vps-fr-a");
+    expect(regionSelect!.value).toBe("united-kingdom");
+    expect([...regionSelect!.options].map(option => option.value)).toEqual(["united-kingdom"]);
+    expect([...hostSelect!.options].find((option) => option.value === "vps-uk-c")!.disabled).toBe(true);
+    await select(hostSelect!, "vps-uk-b");
 
     await act(async () => button(dialog, "Relocate").click());
 
@@ -138,7 +142,7 @@ it("queues a relocation from the pop-up and keeps the table on the page", async 
     expect(mocks.request.mock.calls[0]?.[0]).toMatchObject({
         accessToken: "test-only",
         operation: "relocate-server",
-        input: { serverId: "gang", expectedUpdatedAt: "2026-10-16T12:00:00.000Z", targetRegion: "france", targetServiceName: "vps-fr-a" },
+        input: { serverId: "gang", expectedUpdatedAt: "2026-10-16T12:00:00.000Z", targetRegion: "united-kingdom", targetServiceName: "vps-uk-b" },
     });
     expect(container.querySelector("dialog")).toBeNull();
     expect(row("The Gang").textContent).toContain("Relocating");
@@ -147,8 +151,8 @@ it("queues a relocation from the pop-up and keeps the table on the page", async 
 });
 
 it("sends a null VPS for any free slot and keeps the pop-up open with the error on failure", async () => {
-    mocks.request.mockRejectedValueOnce(new Error("No free slot is available in France."));
-    await act(async () => root.render(<RelocateView data={data} query="" accounts={[]} />));
+    mocks.request.mockRejectedValueOnce(new Error("No free slot is available in the United Kingdom."));
+    await act(async () => root.render(<RelocateView data={sameRegionData} query="" accounts={[]} />));
     await act(async () => button(row("The Gang"), "Relocate").click());
     const dialog = container.querySelector("dialog")!;
 
@@ -156,7 +160,69 @@ it("sends a null VPS for any free slot and keeps the pop-up open with the error 
 
     expect(mocks.request.mock.calls[0]?.[0].input.targetServiceName).toBeNull();
     expect(container.querySelector("dialog")).not.toBeNull();
-    expect(dialog.querySelector('[role="alert"]')?.textContent).toBe("No free slot is available in France.");
+    expect(dialog.querySelector('[role="alert"]')?.textContent).toBe("No free slot is available in the United Kingdom.");
+});
+
+it("keeps the region change form disabled until the server enables it", async () => {
+    await act(async () => root.render(<RelocateView data={data} query="" accounts={[]} />));
+    expect(button(row("The Gang"), "Change region")).toBeUndefined();
+});
+
+it("submits a confirmed VPS.TC Türkiye to OVHcloud Warsaw move under the shared request contract", async () => {
+    const { input, operation } = regionChangeContract.request;
+    const source = { ...server(input.serverId, "Region QA", "turkiye"), updatedAt: input.expectedUpdatedAt, provider: "vpstc-vps" };
+    const available: RelocateViewData = {
+        servers: { items: [source], nextCursor: null },
+        inventory: { ...data.inventory, hosts: [
+            { ...host("turkiye.example", "TR", 1, [[input.serverId, 0]]), provider: "vpstc-vps" },
+            host(input.targetServiceName, "PL", 1, []),
+            { ...host("contabo-pl.example", "PL", 1, []), provider: "contabo-vps" },
+            { ...host("old-poland.example", "PL", 1, []), region: "poland", locationId: "pl-retired" },
+            host("never-published.example", "NL", 1, []),
+        ] },
+        regionCatalog: [
+            { region: "turkiye", placement: { countryCodes: ["TR"] } },
+            { region: "poland", placement: { countryCodes: ["PL"], locationIds: ["pl-1"] } },
+        ],
+        activeJobs: [],
+    };
+    await act(async () => root.render(<RelocateView data={available} query="" accounts={[]} allowRegionChange />));
+    await act(async () => button(row("Region QA"), "Change region").click());
+    const dialog = container.querySelector("dialog")!;
+    expect(dialog.textContent).toContain("VPS.TC");
+    expect(dialog.textContent).toContain("one hour’s notice");
+    expect(dialog.textContent).toContain("new join address and port");
+    const [region, provider, target] = dialog.querySelectorAll("select");
+    expect([...region!.options].map(option => option.value)).toEqual(["", "poland"]);
+    await select(region!, "poland");
+    expect([...provider!.options].map(option => option.value)).toEqual(["", "ovhcloud-vps", "contabo-vps"]);
+    await select(provider!, input.targetProvider);
+    expect([...target!.options].map(option => option.value)).toEqual(["", input.targetServiceName]);
+    await select(target!, input.targetServiceName);
+    const confirm = button(dialog, "Confirm region change");
+    expect(confirm.disabled).toBe(true);
+    const reason = dialog.querySelector("textarea")!;
+    await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(reason, input.reason);
+        reason.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(confirm.disabled).toBe(false);
+    mocks.request.mockRejectedValueOnce(new Error("The control plane could not be reached."));
+    await act(async () => confirm.click());
+    expect(dialog.querySelector('[role="alert"]')?.textContent).toBe("The control plane could not be reached.");
+    await act(async () => confirm.click());
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(mocks.request.mock.calls[0]?.[0]).toMatchObject({ operation, accessToken: "test-only", input });
+    expect(mocks.request.mock.calls[1]).toEqual(mocks.request.mock.calls[0]);
+    expect(container.querySelector("dialog")).toBeNull();
+    expect(row("Region QA").textContent).toContain("Relocating");
+    await act(async () => root.render(<RelocateView data={{ ...available, activeJobs: [job(input.serverId, "migrate-region", "queued")] }}
+        query="" accounts={[]} allowRegionChange />));
+    expect(button(row("Region QA"), "Change region").disabled).toBe(true);
+    await act(async () => root.render(<RelocateView data={available} query="" accounts={[]} allowRegionChange />));
+    expect(row("Region QA").textContent).not.toContain("Relocating");
+    expect(button(row("Region QA"), "Change region").disabled).toBe(false);
+    expect(button(row("Region QA"), "Relocate").disabled).toBe(false);
 });
 
 it.each(["running", "stopped"])("labels suspended relocation rows with %s intent", async desiredState => {

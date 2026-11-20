@@ -284,7 +284,8 @@ async function ControlPlaneViewContent({
             {!error && view === "releases" && <ReleasesView data={data as { stable: HostingPage<ReleaseBuild>; nightly: HostingPage<ReleaseBuild> }} />}
             {!error && view === "audit" && <AuditView page={data as HostingPage<AuditEvent>} />}
             {!error && view === "operations" && <OperationsView data={data as OperationsData} accounts={accounts} />}
-            {!error && view === "relocate" && <RelocateView data={data as RelocateViewData} query={query} accounts={accounts} />}
+            {!error && view === "relocate" && <RelocateView data={data as RelocateViewData} query={query} accounts={accounts}
+                allowRegionChange={process.env.HOSTING_ADMIN_REGION_CHANGE_ENABLED === "true"} />}
             {!error && view === "placement" && <PlacementView data={data as PlacementViewData} />}
             {!error && view === "capacity" && <FleetCapacityView />}
             {!error && view === "notices" && <NoticesView data={data as NoticesViewData} />}

@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import test from "node:test";
+import { ControlPlaneAdminError, decodeControlPlaneAdminResponse } from "../../../src/app/lib/control-plane/client.ts";
 import {
     CONTROL_PLANE_ADMIN_UPSTREAM_TIMEOUT_MILLISECONDS,
     createControlPlaneAdminHandler,
@@ -61,6 +64,65 @@ test("reauthenticates a Discord Admin and forwards the closed envelope", async (
     assert.equal(calls[1]?.url, "https://control-plane.example.test/v1/admin/control-plane");
     assert.equal(calls[1]?.authorization, `Bearer ${TOKEN}`);
     assert.match(calls[1]?.body ?? "", new RegExp(REQUEST_ID, "u"));
+});
+
+test("replays the shared region-change fixture through the Edge handler and browser decoder", async () => {
+    const root = new URL("../../../test/fixtures/admin-region-change/", import.meta.url);
+    const fixtureBytes = readFileSync(new URL("v1.json", root));
+    const captureBytes = readFileSync(new URL("capture-v1.json", root));
+    const provenance = JSON.parse(readFileSync(new URL("provenance.json", root), "utf8")) as {
+        fixtureVersion: number; fixtureSha256: string; captureSha256: string;
+    };
+    const fixture = JSON.parse(fixtureBytes.toString("utf8")) as {
+        fixtureVersion: number;
+        request: { requestId: string; operation: string; input: Record<string, unknown> };
+        acceptedResponse: { result: { outcome: string; job: Record<string, unknown> } };
+    };
+    const capture = JSON.parse(captureBytes.toString("utf8")) as {
+        request: typeof fixture.request;
+        response: { status: number; body: { result: { outcome: string; job: Record<string, unknown> } } };
+    };
+    assert.equal(provenance.fixtureVersion, fixture.fixtureVersion);
+    assert.equal(createHash("sha256").update(fixtureBytes).digest("hex"), provenance.fixtureSha256);
+    assert.equal(createHash("sha256").update(captureBytes).digest("hex"), provenance.captureSha256);
+    assert.equal(capture.request.operation, fixture.request.operation);
+    assert.equal(capture.response.status, 200);
+    const upstreamUrl = "https://control-plane.example.test/v1/admin/control-plane";
+    const oldControlPlane = {
+        version: 1, requestId: capture.request.requestId, ok: false,
+        error: { code: "invalid_request", message: "The request is invalid.", retryable: false },
+    };
+    for (const reply of [capture.response, { status: 400, body: oldControlPlane }]) {
+        let forwarded = 0;
+        const handler = createHandler(async (input, init) => {
+            const url = String(input);
+            if (url.endsWith("/auth/v1/user")) {
+                assert.equal(init?.method, "GET");
+                return Response.json(ADMIN);
+            }
+            assert.equal(url, upstreamUrl);
+            assert.equal(init?.method, "POST");
+            assert.equal(init?.redirect, "error");
+            assert.deepEqual(Object.fromEntries(new Headers(init?.headers)), {
+                authorization: `Bearer ${TOKEN}`, "content-type": "application/json",
+            });
+            assert.equal(init?.body, JSON.stringify(capture.request));
+            forwarded++;
+            return Response.json(reply.body, { status: reply.status });
+        });
+        const response = await handler(adminRequest(JSON.stringify(capture.request)));
+        assert.equal(response.status, reply.status);
+        const text = await response.text();
+        if (reply.status === 200) {
+            const result = decodeControlPlaneAdminResponse<typeof fixture.acceptedResponse.result>(text, capture.request.requestId, true);
+            assert.equal(result.outcome, fixture.acceptedResponse.result.outcome);
+            for (const [key, value] of Object.entries(fixture.acceptedResponse.result.job)) assert.equal(result.job[key], value);
+        } else {
+            assert.throws(() => decodeControlPlaneAdminResponse(text, capture.request.requestId, false),
+                (error: unknown) => error instanceof ControlPlaneAdminError && error.code === "invalid_request" && !error.retryable);
+        }
+        assert.equal(forwarded, 1);
+    }
 });
 
 test("reports only its measured authentication and complete upstream durations", async (context) => {
