@@ -5,7 +5,7 @@ import os from "node:os";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { FUNCTIONS, sources, sourceDigest, checkAuthentication, matchesDeployment, ensureDeployment, boundedJson } from "./deploy-hosting-functions.mjs";
+import { FUNCTIONS, sources, sourceDigest, checkAuthentication, auditedFunctions, matchesDeployment, ensureDeployment, boundedJson } from "./deploy-hosting-functions.mjs";
 
 async function fixture(t, extra = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "hosting-edge-test-"));
@@ -134,6 +134,21 @@ test("repository graph captures the live bug's configuration module and JWT poli
   assert.ok(files.get("_shared/managed-server-configuration.ts").includes("ManagedVoiceConfiguration"));
   assert.ok(files.get("_shared/managed-server-configuration.ts").includes("coopClansEnabled"));
   checkAuthentication(await readFile(path.join(root, "supabase/config.toml"), "utf8"));
+});
+
+test("the audit covers all website Edge functions and compares runtime dependencies", async (t) => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const policies = await auditedFunctions(root, await readFile(path.join(root, "supabase/config.toml"), "utf8"));
+  for (const name of ["patreon-start", "patreon-complete", "create-github-issue-bug-report", "vps-renewal-alert", "nightly-gateway"]) {
+    assert.equal(policies.get(name), false);
+  }
+  assert.equal(policies.has("admin-servers"), false);
+  for (const name of policies.keys()) assert.ok((await sources(root, name, { audit: true })).has(name + "/index.ts"));
+  const nightly = await sources(root, "nightly-gateway", { audit: true });
+  assert.ok(nightly.has("_shared/nightly/gateway.ts"));
+  assert.equal(nightly.has("_shared/nightly/context.ts"), false);
+  const upload = await fixture(t, { "patreon-start/index.ts": 'import("npm:unreviewed");' });
+  await assert.rejects(sources(upload, "patreon-start", { audit: true }), /External function imports/u);
 });
 
 test("the CLI fails the release when used off main or without the deployment credential", () => {

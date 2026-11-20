@@ -24,6 +24,13 @@ Membership/OAuth functions, alert schedulers, database migrations, runtime
 secrets, and control-plane/runner deployments remain outside this workflow.
 Their documented commissioning and coordinated-release requirements still apply.
 
+After deployment, the main workflow audits every website Edge entry point against
+its live version, runtime source graph and gateway JWT policy. A missing or
+drifted function fails the workflow and reports its name. Deployed functions
+outside website main are listed for operator review. The audit only downloads
+source. A type-only dependency may be omitted by Supabase's unbundler, and the
+check covers local runtime sources and their import specifiers.
+
 The workflow uses the pinned Supabase CLI 2.120.0 and `--use-api` for both
 deployment and download; it does not launch Docker. Deployment runs are serialized
 and an active run is never cancelled by a newer commit. Every run keeps its own
@@ -59,10 +66,11 @@ node scripts/deploy-hosting-functions.mjs plan
 ```
 
 With the pinned native CLI available on PATH and the management token already
-in the process environment, this read-only command checks all three deployed APIs:
+in the process environment, these read-only commands verify the three deployment-managed APIs or audit every website Edge function:
 
 ```sh
 node scripts/deploy-hosting-functions.mjs verify
+node scripts/deploy-hosting-functions.mjs audit
 ```
 
 The `deploy` command refuses to run outside the main GitHub workflow. Ordinary
