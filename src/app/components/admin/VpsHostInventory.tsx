@@ -7,6 +7,7 @@ import { VpsSlotDecommission } from "@/app/components/admin/VpsSlotDecommission"
 import { formatAccountOwner, hostPlacementLabel } from "@/app/lib/control-plane/presentation";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
 import { vpsProviderLabel } from "@/app/lib/control-plane/vps-providers";
+import { parseSlotAvailability, SLOT_ADMISSION_REASON } from "@/app/lib/control-plane/slot-availability";
 import type {
     HostingAdminHostResources,
     HostingAdminVpsHost,
@@ -152,11 +153,16 @@ function HostIdentity({ host, regionCatalog }: { host: HostingAdminVpsHost; regi
 }
 
 function CapacitySummary({ host }: { host: HostingAdminVpsHost }) {
-    return <dl aria-label={`${host.totalSlots} total slots, ${host.runningServers} running, ${host.availableServers} free`} className="grid max-w-28 grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs">
+    const availability = parseSlotAvailability(host.slotAvailability);
+    return <div><dl aria-label={`${host.totalSlots} total slots, ${host.runningServers} running, ${host.availableServers} admissible`} className="grid max-w-36 grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-xs">
         <dt className="text-foreground-muted">Slots</dt><dd className="font-semibold text-foreground">{host.totalSlots}</dd>
         <dt className="text-foreground-muted">Running</dt><dd className="font-semibold text-foreground">{host.runningServers}</dd>
-        <dt className="text-foreground-muted">Free</dt><dd className="font-semibold text-foreground">{host.availableServers}</dd>
-    </dl>;
+        {availability && <><dt className="text-foreground-muted">Ready</dt><dd className="font-semibold text-foreground">{availability.ready}</dd></>}
+        <dt className="text-foreground-muted" title="Slots new servers can take now; admission is rechecked on submission.">Admissible</dt><dd className="font-semibold text-foreground">{host.availableServers}</dd>
+    </dl>
+        {availability && <p className="mt-2 max-w-56 text-xs text-foreground-muted">{availability.launchProven} launch-proven; {host.provenServers ?? 0} relocation candidates. Source storage is checked per move.</p>}
+        {availability?.reasons.map(reason => <p key={reason} className="mt-1 max-w-56 text-xs text-gold">{SLOT_ADMISSION_REASON[reason]}</p>)}
+    </div>;
 }
 
 function SlotSummary({ host, ownerLabels }: { host: HostingAdminVpsHost; ownerLabels: Record<string, string> }) {
@@ -167,7 +173,7 @@ function SlotSummary({ host, ownerLabels }: { host: HostingAdminVpsHost; ownerLa
             const label = `${ownerName} (${slot.displayName})`;
             return <li key={`${slot.slotIndex}:${slot.serverId}`} className="flex min-w-0 items-center gap-2"><span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${slot.operationState === "running" ? "bg-emerald-400" : "bg-white/30"}`} /><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="min-w-0 break-words font-medium text-foreground hover:text-gold hover:underline" title={label}>{label}</Link></li>;
         })}
-        {host.availableServers > 0 && <li className="flex items-center gap-2 text-foreground-dim"><span aria-hidden="true" className="size-2 rounded-full bg-white/20" />{host.availableServers} available</li>}
+        {host.availableServers > 0 && <li className="flex items-center gap-2 text-foreground-dim"><span aria-hidden="true" className="size-2 rounded-full bg-white/20" />{host.availableServers} admissible</li>}
     </ul>;
 }
 
