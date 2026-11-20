@@ -155,6 +155,7 @@
   "backups.saveRestoreCompleted": "Restauração do jogo salvo concluída.",
   "backups.theBackupDidNotComplete": "O backup não foi concluído.",
   "backups.theSaveRestoreDidNotComplete": "A restauração do jogo salvo não foi concluída.",
+  "backups.queuedWhileRunning": "O backup está na fila. Seu servidor continua em execução até o backup começar.",
   "backups.waitingToRetrySafelyProgress": "Aguardando para tentar novamente com segurança. {progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "Digite um comando coop.* (até 4096 caracteres), sem caracteres de controle nem separadores de comandos.",
   "commands.gameConsole": "Console do jogo",

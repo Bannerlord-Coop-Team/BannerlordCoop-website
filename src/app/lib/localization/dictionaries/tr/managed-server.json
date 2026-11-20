@@ -155,6 +155,7 @@
   "backups.saveRestoreCompleted": "Kayıt dosyası geri yükleme tamamlandı.",
   "backups.theBackupDidNotComplete": "Yedekleme tamamlanmadı.",
   "backups.theSaveRestoreDidNotComplete": "Kayıt dosyası geri yükleme tamamlanmadı.",
+  "backups.queuedWhileRunning": "Yedekleme sırada. Yedekleme başlayana kadar sunucunuz çalışmaya devam eder.",
   "backups.waitingToRetrySafelyProgress": "Güvenli şekilde yeniden denemek için bekleniyor. {progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "Denetim karakterleri veya komut ayırıcıları içermeyen tek bir coop.* komutu girin (en fazla 4096 karakter).",
   "commands.gameConsole": "Oyun konsolu",

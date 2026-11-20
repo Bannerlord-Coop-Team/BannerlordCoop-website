@@ -40,6 +40,7 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition
 /** Backup history that failed to load is re-read this many times, this far apart, before the notice stays. */
 const MAXIMUM_LOAD_RETRIES = 5;
 const LOAD_RETRY_MILLISECONDS = 10_000;
+const GAME_OBSERVATION_MAX_AGE_MILLISECONDS = 6 * 60_000;
 
 const TERMINAL_JOB_STATES = new Set(["succeeded", "failed", "cancelled"]);
 const TRANSITIONAL_SERVER_STATES = new Set([
@@ -146,7 +147,6 @@ function ManagedServerBackupsSession({
     const [retainedIntent, setRetainedIntent] = useState<ManagedServerBackupInput | null>(null);
     const [feedback, setFeedback] = useState<{ target: string; text: string; jobId?: string } | null>(null);
     const [watchedJobIds, setWatchedJobIds] = useState<ReadonlySet<string>>(() => new Set());
-    const [interruptingJobIds, setInterruptingJobIds] = useState<ReadonlySet<string>>(() => new Set());
     const [showExpired, setShowExpired] = useState(false);
     const retainedIntentRef = useRef<ManagedServerBackupInput | null>(null);
     const polledJobIds = useRef(new Set<string>());
@@ -198,6 +198,24 @@ function ManagedServerBackupsSession({
         && !(status?.job != null
             && status.job.jobId === timedOutSession.jobId
             && TERMINAL_JOB_STATES.has(status.job.state));
+    const observedAt = Date.parse(server.runtimeInsight?.observedAt ?? "");
+    // The observation timestamp belongs to the server summary, so require both reads to agree.
+    const freshStop = !statusIsStale
+        && server.runtimeInsight?.desiredState === "running"
+        && server.observedGameState === "stopped"
+        && status?.observedGameState === "stopped"
+        && status.updatedAt === server.updatedAt
+        && now !== null
+        && observedAt >= now - GAME_OBSERVATION_MAX_AGE_MILLISECONDS
+        && observedAt < now + 60_000;
+    let backupStatusDetail: string | null = null;
+    if (activeJob?.action === "backup") {
+        if (activeJob.state === "queued" && status?.observedGameState === "running") {
+            backupStatusDetail = t("backups.queuedWhileRunning");
+        } else if (activeJob.state === "running" && freshStop && observedAt >= Date.parse(activeJob.createdAt)) {
+            backupStatusDetail = t("backups.theServerIsTemporarilyStoppedForThisBackup");
+        }
+    }
 
     useEffect(() => {
         const timeout = window.setTimeout(() => {
@@ -317,7 +335,7 @@ function ManagedServerBackupsSession({
     function submitIntent(
         intent: ManagedServerBackupInput,
         pendingId: string,
-        { retry = false, interruptsPlayers = false }: { retry?: boolean; interruptsPlayers?: boolean } = {},
+        { retry = false }: { retry?: boolean } = {},
     ) {
         if (!canManage || loadError || !intentReady || storageError || isPending) return;
         // Persist before dispatch: the response or polling refresh can remove this component.
@@ -336,7 +354,6 @@ function ManagedServerBackupsSession({
                     rememberIntent(null, intent);
                     watchJob(result.jobId);
                     if (intent.action === "restore-save-generation") autosaveJobs.current.set(result.jobId, intent.generation);
-                    if (interruptsPlayers) setInterruptingJobIds((current) => new Set(current).add(result.jobId));
                     polledJobIds.current.add(result.jobId);
                     beginPolling(server.serverId, intent.expectedUpdatedAt, result.jobId, "backup");
                 } else if (result.retrySameRequest) {
@@ -356,8 +373,7 @@ function ManagedServerBackupsSession({
     // Confirms the brief interruption of a running server before creating a backup intent.
     function submitCreateBackup() {
         if (retainedIntentRef.current !== null) return;
-        const interruptsPlayers = serverIsRunning;
-        if (interruptsPlayers && !window.confirm([
+        if (serverIsRunning && !window.confirm([
             t("backups.createABackupNow"),
             t("backups.theServerIsRunningItWillSaveStopBrieflyAndStartAgain"),
         ].join("\n\n"))) return;
@@ -370,7 +386,6 @@ function ManagedServerBackupsSession({
         submitIntent(
             retainManagedServerBackupIntent(retainedIntentRef.current, candidate),
             "create",
-            { interruptsPlayers },
         );
     }
 
@@ -591,7 +606,7 @@ function ManagedServerBackupsSession({
                     </p>
                 )}
 
-                {shownJob !== null && <BackupJobStatus job={shownJob} interruptsPlayers={interruptingJobIds.has(shownJob.jobId) || serverIsRunning} />}
+                {shownJob !== null && <BackupJobStatus job={shownJob} detail={backupStatusDetail} />}
 
                 {statusIsStale && (
                     <div className={`flex flex-wrap items-center justify-between gap-3 ${workspaceNoticeClass}`}>
@@ -727,7 +742,7 @@ function formatRelativeTime(value: string, now: number, locale: string) {
 }
 
 // Presents durable backup progress without translating external job output.
-function BackupJobStatus({ job, interruptsPlayers }: { job: MyServerBackupJob; interruptsPlayers: boolean }) {
+function BackupJobStatus({ job, detail }: { job: MyServerBackupJob; detail: string | null }) {
     const { t } = useTranslations("managed-server");
     const active = ACTIVE_BACKUP_JOB_STATES.has(job.state);
     const failed = job.state === "failed" || job.state === "cancelled";
@@ -744,9 +759,7 @@ function BackupJobStatus({ job, interruptsPlayers }: { job: MyServerBackupJob; i
             {active && <LoaderCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 animate-spin text-gold" />}
             <span>
                 {message}
-                {active && job.action === "backup" && interruptsPlayers && (
-                    <span className="mt-1 block text-xs">{t("backups.theServerIsTemporarilyStoppedForThisBackup")}</span>
-                )}
+                {detail !== null && <span className="mt-1 block text-xs">{detail}</span>}
             </span>
         </div>
     );

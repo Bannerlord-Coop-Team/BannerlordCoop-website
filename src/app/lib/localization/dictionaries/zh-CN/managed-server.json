@@ -155,6 +155,7 @@
   "backups.saveRestoreCompleted": "存档恢复已完成。",
   "backups.theBackupDidNotComplete": "备份未完成。",
   "backups.theSaveRestoreDidNotComplete": "存档恢复未完成。",
+  "backups.queuedWhileRunning": "备份已排队。备份开始前，你的服务器会继续运行。",
   "backups.waitingToRetrySafelyProgress": "正在等待安全重试。{progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "请输入一条 coop.* 命令（最多 4096 个字符），不得包含控制字符或命令分隔符。",
   "commands.gameConsole": "游戏控制台",

@@ -155,6 +155,7 @@
   "backups.saveRestoreCompleted": "セーブデータの復元が完了しました。",
   "backups.theBackupDidNotComplete": "バックアップは完了しませんでした。",
   "backups.theSaveRestoreDidNotComplete": "セーブデータの復元は完了しませんでした。",
+  "backups.queuedWhileRunning": "バックアップは順番待ちです。バックアップが始まるまでサーバーは稼働し続けます。",
   "backups.waitingToRetrySafelyProgress": "安全に再試行できるよう待機しています。{progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "制御文字やコマンド区切りを含めずに、coop.*コマンドを1つ入力してください（4096文字以内）。",
   "commands.gameConsole": "ゲームコンソール",

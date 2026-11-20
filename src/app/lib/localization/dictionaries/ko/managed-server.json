@@ -155,6 +155,7 @@
   "backups.saveRestoreCompleted": "저장 파일 복원이 완료되었습니다.",
   "backups.theBackupDidNotComplete": "백업이 완료되지 않았습니다.",
   "backups.theSaveRestoreDidNotComplete": "저장 파일 복원이 완료되지 않았습니다.",
+  "backups.queuedWhileRunning": "백업이 대기 중입니다. 백업이 시작될 때까지 서버는 계속 실행됩니다.",
   "backups.waitingToRetrySafelyProgress": "안전하게 다시 시도할 수 있도록 대기 중입니다. {progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "제어 문자나 명령어 구분자 없이 coop.* 명령어 하나를 입력하세요(최대 4096자).",
   "commands.gameConsole": "게임 콘솔",

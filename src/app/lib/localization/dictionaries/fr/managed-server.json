@@ -155,6 +155,7 @@
   "backups.saveRestoreCompleted": "Restauration de la sauvegarde terminée.",
   "backups.theBackupDidNotComplete": "La copie de sauvegarde ne s’est pas terminée.",
   "backups.theSaveRestoreDidNotComplete": "La restauration de la sauvegarde ne s’est pas terminée.",
+  "backups.queuedWhileRunning": "La sauvegarde est en attente. Votre serveur reste en ligne jusqu’au début de la sauvegarde.",
   "backups.waitingToRetrySafelyProgress": "En attente d’une nouvelle tentative sécurisée. {progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "Saisissez une seule commande coop.* (jusqu’à 4096 caractères), sans caractères de contrôle ni séparateurs de commandes.",
   "commands.gameConsole": "Console du jeu",

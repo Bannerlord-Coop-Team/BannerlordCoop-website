@@ -155,6 +155,7 @@
   "backups.saveRestoreCompleted": "Save restore completed.",
   "backups.theBackupDidNotComplete": "The backup did not complete.",
   "backups.theSaveRestoreDidNotComplete": "The save restore did not complete.",
+  "backups.queuedWhileRunning": "Backup queued — your server keeps running until the backup starts.",
   "backups.waitingToRetrySafelyProgress": "Waiting to retry safely. {progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "Enter one coop.* command (up to 4096 characters), without control characters or command separators.",
   "commands.gameConsole": "Game console",

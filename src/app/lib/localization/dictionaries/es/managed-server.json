@@ -155,6 +155,7 @@
   "backups.saveRestoreCompleted": "Restauración de partida guardada completada.",
   "backups.theBackupDidNotComplete": "La copia de seguridad no se completó.",
   "backups.theSaveRestoreDidNotComplete": "La restauración de la partida guardada no se completó.",
+  "backups.queuedWhileRunning": "La copia de seguridad está en cola. Tu servidor sigue funcionando hasta que comience la copia.",
   "backups.waitingToRetrySafelyProgress": "Esperando para reintentar de forma segura. {progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "Introduce un comando coop.* (hasta 4096 caracteres), sin caracteres de control ni separadores de comandos.",
   "commands.gameConsole": "Consola del juego",

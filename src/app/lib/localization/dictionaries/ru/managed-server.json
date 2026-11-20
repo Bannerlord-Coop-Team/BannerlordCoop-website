@@ -155,6 +155,7 @@
   "backups.saveRestoreCompleted": "Восстановление сохранения завершено.",
   "backups.theBackupDidNotComplete": "Резервное копирование не завершено.",
   "backups.theSaveRestoreDidNotComplete": "Восстановление сохранения не завершено.",
+  "backups.queuedWhileRunning": "Резервная копия в очереди. Сервер продолжит работать до начала резервного копирования.",
   "backups.waitingToRetrySafelyProgress": "Ожидание безопасного повтора. {progress}",
   "commands.enterOneCoopCommandUpTo4096CharactersWithoutControl": "Введите одну команду coop.* длиной до 4096 символов, без управляющих символов и разделителей команд.",
   "commands.gameConsole": "Игровая консоль",
