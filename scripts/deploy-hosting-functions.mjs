@@ -6,6 +6,7 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import ts from "typescript";
+import { auditEdgeFunctions } from "./audit-edge-functions.mjs";
 
 export const PROJECT_REF = "wfvqnijwuyqjibhlcrhz";
 export const FUNCTIONS = Object.freeze({ "my-servers": true, "control-plane-admin": true, "public-servers": false });
@@ -15,7 +16,7 @@ const reviewedEdgeImports = new Set(["node:crypto", "node:buffer", "npm:pg@8.16.
 const canonical = (source) => source.replace(/\r\n/gu, "\n").trimEnd() + "\n";
 
 // Include transitive shared modules, not just each function's entrypoint.
-export async function sources(root, name, { audit = false } = {}) {
+export async function sources(root, name, { audit = false, includeTypes = !audit } = {}) {
   if (audit ? !edgeName.test(name) : !Object.hasOwn(FUNCTIONS, name)) throw new Error("Unsupported hosting function");
   const directory = await realpath(path.join(root, "supabase/functions"));
   for (const config of ["deno.json", "deno.jsonc", name + "/deno.json", name + "/deno.jsonc"]) {
@@ -35,14 +36,14 @@ export async function sources(root, name, { audit = false } = {}) {
     if (!absolute.startsWith(directory + path.sep)) throw new Error("Function dependency leaves its source directory");
     const source = await readFile(absolute, "utf8");
     if (Buffer.byteLength(source) > 1_048_576) throw new Error("Function source is too large");
-    files.set(relative, canonical(source));
+    files.set(relative, audit ? source.replace(/\r\n/gu, "\n") : canonical(source));
     const ast = ts.createSourceFile(relative, source, ts.ScriptTarget.Latest, true);
     const dependencies = [];
     function inspect(node) {
       if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier) {
         if (!ts.isStringLiteral(node.moduleSpecifier)) throw new Error("Unsupported function import");
         const typeOnly = ts.isImportDeclaration(node) ? node.importClause?.isTypeOnly : node.isTypeOnly;
-        if (!audit || !typeOnly) dependencies.push(node.moduleSpecifier.text);
+        if (includeTypes || !typeOnly) dependencies.push(node.moduleSpecifier.text);
       }
       if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword
         || ts.isIdentifier(node.expression) && node.expression.text === "require")) {
@@ -94,8 +95,8 @@ export async function auditedFunctions(root, config) {
   return policies;
 }
 
-export function matchesDeployment(expected, uploaded, metadata, name, jwt = FUNCTIONS[name]) {
-  return metadata?.slug === name && metadata.status === "ACTIVE" && metadata.verify_jwt === jwt
+export function matchesDeployment(expected, uploaded, metadata, name) {
+  return metadata?.slug === name && metadata.status === "ACTIVE" && metadata.verify_jwt === FUNCTIONS[name]
     && Number.isSafeInteger(metadata.version) && metadata.version > 0 && sourceDigest(expected) === sourceDigest(uploaded);
 }
 
@@ -130,13 +131,13 @@ async function cli(args, root) {
   }
 }
 
-async function uploadedSources(name, options) {
+async function uploadedSources(name) {
   const temporary = await mkdtemp(path.join(os.tmpdir(), "bannerlord-hosting-edge-"));
   try {
     await mkdir(path.join(temporary, "supabase"));
     await writeFile(path.join(temporary, "supabase/config.toml"), 'project_id = "hosting-source-verification"\n');
     await cli(["download", name], temporary);
-    return await sources(temporary, name, options);
+    return await sources(temporary, name);
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
@@ -185,43 +186,33 @@ async function main() {
     return;
   }
   if (mode === "deploy" && process.env.GITHUB_REF !== "refs/heads/main") throw new Error("Production deployment requires the main GitHub workflow");
-  const token = process.env.SUPABASE_ACCESS_TOKEN;
-  if (!token || token.length > 8192 || /\s/u.test(token)) throw new Error("SUPABASE_ACCESS_TOKEN deployment secret is missing or invalid");
   const commit = (await exec("git", ["rev-parse", "HEAD"], { cwd: root, windowsHide: true })).stdout.trim();
   if (process.env.GITHUB_SHA && process.env.GITHUB_SHA !== commit) throw new Error("Checkout does not match the workflow source commit");
-  async function read(name, options) {
+  if (mode === "audit") {
+    const token = process.env.SUPABASE_EDGE_READ_TOKEN;
+    if (token && token === process.env.SUPABASE_ACCESS_TOKEN) throw new Error("Edge audit requires a separate read-only token");
+    await auditEdgeFunctions({
+      projectRef: PROJECT_REF,
+      token,
+      policies: await auditedFunctions(root, config),
+      expectedSources: async (name) => ({
+        runtime: await sources(root, name, { audit: true }),
+        all: await sources(root, name, { audit: true, includeTypes: true }),
+      }),
+    });
+    return;
+  }
+  const token = process.env.SUPABASE_ACCESS_TOKEN;
+  if (!token || token.length > 8192 || /\s/u.test(token)) throw new Error("SUPABASE_ACCESS_TOKEN deployment secret is missing or invalid");
+  async function read(name) {
     const before = (await metadata(token)).find((item) => item.slug === name);
     if (!before) throw new Error("Function is absent from the live inventory");
-    const files = await uploadedSources(name, options);
+    const files = await uploadedSources(name);
     const after = (await metadata(token)).find((item) => item.slug === name);
     if (!after || before.version !== after.version || before.ezbr_sha256 !== after.ezbr_sha256) {
       throw new Error("Live function changed during source verification");
     }
     return { metadata: after, files };
-  }
-  if (mode === "audit") {
-    const policies = await auditedFunctions(root, config);
-    const inventory = await metadata(token);
-    const outside = inventory.map((item) => item.slug)
-      .filter((name) => typeof name === "string" && edgeName.test(name) && !policies.has(name)).sort();
-    if (outside.length) console.warn("Deployed outside website main: " + outside.join(", "));
-    const options = { audit: true };
-    let failed = 0;
-    for (const [name, jwt] of policies) {
-      try {
-        const expected = await sources(root, name, options);
-        const live = await read(name, options);
-        if (!matchesDeployment(expected, live.files, live.metadata, name, jwt)) {
-          throw new Error("Deployed source or JWT policy differs from main");
-        }
-        console.log(name + ": v" + live.metadata.version + ", runtime source and JWT policy verified");
-      } catch (error) {
-        failed++;
-        console.error(name + ": " + error.message);
-      }
-    }
-    if (failed) throw new Error(failed + " Edge function(s) could not be verified");
-    return;
   }
   const receipt = { projectRef: PROJECT_REF, sourceCommit: commit, status: "failed", functions: [] };
   try {

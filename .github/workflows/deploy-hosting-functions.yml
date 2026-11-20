@@ -7,6 +7,7 @@ on:
       - 'supabase/functions/**'
       - 'supabase/config.toml'
       - 'scripts/deploy-hosting-functions*'
+      - 'scripts/audit-edge-functions*'
       - '.github/workflows/deploy-hosting-functions.yml'
       - 'package.json'
       - 'package-lock.json'
@@ -15,6 +16,7 @@ on:
       - 'supabase/functions/**'
       - 'supabase/config.toml'
       - 'scripts/deploy-hosting-functions*'
+      - 'scripts/audit-edge-functions*'
       - '.github/workflows/deploy-hosting-functions.yml'
       - 'package.json'
       - 'package-lock.json'
@@ -80,10 +82,6 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: node scripts/deploy-hosting-functions.mjs deploy
-      - name: Check deployed Edge runtime source against main
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: node scripts/deploy-hosting-functions.mjs audit
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -91,3 +89,20 @@ jobs:
           path: supabase-hosting-deployment.json
           if-no-files-found: ignore
           retention-days: 30
+
+  audit:
+    needs: deploy
+    if: ${{ !cancelled() && github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Check deployed Edge source against main
+        env:
+          SUPABASE_EDGE_READ_TOKEN: ${{ secrets.SUPABASE_EDGE_READ_TOKEN }}
+        run: node scripts/deploy-hosting-functions.mjs audit

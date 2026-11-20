@@ -24,12 +24,19 @@ Membership/OAuth functions, alert schedulers, database migrations, runtime
 secrets, and control-plane/runner deployments remain outside this workflow.
 Their documented commissioning and coordinated-release requirements still apply.
 
-After deployment, the main workflow audits every website Edge entry point against
-its live version, runtime source graph and gateway JWT policy. A missing or
-drifted function fails the workflow and reports its name. Deployed functions
-outside website main are listed for operator review. The audit only downloads
-source. A type-only dependency may be omitted by Supabase's unbundler, and the
-check covers local runtime sources and their import specifiers.
+A separate main-only audit runs after the deploy job, including a failed or
+skipped deploy. It reports functions deployed outside website main and fails
+for missing tracked functions, a different entry point, source drift or a JWT
+mismatch. It compares every file Supabase returns and permits omitted modules
+only when the website references them exclusively through type-only imports.
+The audit limits each response to 8 MiB, each source to 1 MiB and each bundle to
+100 source files. It checks at most 100 functions within a four-minute budget
+and limits each request to 15 seconds.
+
+Configure the GitHub Actions secret `SUPABASE_EDGE_READ_TOKEN` with a separate
+credential restricted to `edge_functions_read` on the production project.
+The audit makes only Management API GET requests, and requires this credential
+independently of the deployment token.
 
 The workflow uses the pinned Supabase CLI 2.120.0 and `--use-api` for both
 deployment and download; it does not launch Docker. Deployment runs are serialized
@@ -65,8 +72,9 @@ npm run test:supabase:deployment
 node scripts/deploy-hosting-functions.mjs plan
 ```
 
-With the pinned native CLI available on PATH and the management token already
-in the process environment, these read-only commands verify the three deployment-managed APIs or audit every website Edge function:
+These read-only commands verify the three deployment-managed APIs or audit every
+website Edge function. The first uses the pinned CLI and the deployment token.
+The second uses `SUPABASE_EDGE_READ_TOKEN` and the Management API directly:
 
 ```sh
 node scripts/deploy-hosting-functions.mjs verify
