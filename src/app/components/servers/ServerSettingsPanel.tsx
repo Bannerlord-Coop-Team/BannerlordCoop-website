@@ -1,5 +1,6 @@
 "use client";
 
+import { discordSupportSlots, DiscordSupportText } from "@/app/components/ui/DiscordSupportLink";
 import { useTranslations } from "@/app/lib/localization/client";
 
 import { useEffect, useRef, useState, useTransition, type FormEvent, type ReactNode } from "react";
@@ -34,7 +35,7 @@ export function ServerSettingsPanel({ name, visibility, visibilityAccess, releas
     managerAccess?: { serverId: string; expectedUpdatedAt: string; canEdit: boolean; managers?: readonly ServerManager[] | null };
     name: string; visibility?: Visibility; visibilityAccess?: VisibilityAccess;
 }) {
-    const { t } = useTranslations("managed-server");
+    const { rich, t } = useTranslations("managed-server");
     const router = useRouter();
     const [saving, setSaving] = useState(false);
     const [refreshing, startRefresh] = useTransition();
@@ -263,7 +264,7 @@ export function ServerSettingsPanel({ name, visibility, visibilityAccess, releas
                     {HOSTING_MAINTENANCE_SLOTS.map(slot => <option key={slot} value={slot}>{t("settingsPanel.maintenanceSlot", { slot: slot.replace("-", "–") })}</option>)}
                 </select>
                 {fieldErrors.maintenanceSlot && <p id="maintenance-window-error" role="alert" className="mt-2 text-sm text-red-200">{fieldErrors.maintenanceSlot}</p>}
-                {!hasMaintenance && <p role="status" className="mt-2 text-sm text-foreground-muted">{t("settingsPanel.maintenanceSettingsCouldNotBeLoadedRefreshOrContactHosting")}</p>}
+                {!hasMaintenance && <p role="status" className="mt-2 text-sm text-foreground-muted">{rich("settingsPanel.maintenanceSettingsCouldNotBeLoadedRefreshOrContactHosting", discordSupportSlots(t))}</p>}
                 {hasMaintenance && !settingsAccess.canEdit && <p className="mt-2 text-xs text-foreground-muted">{t("settingsPanel.onlyTheServerOwnerCanChangeHostingSettings")}</p>}
             </SettingRow>}
             {showRelease && releaseAccess && <SettingRow label={<label htmlFor="settings-release-channel">{t("settingsPanel.releaseChannel")}</label>}>
@@ -299,7 +300,7 @@ export function ServerSettingsPanel({ name, visibility, visibilityAccess, releas
                         <div role="status" aria-atomic="true">
                             {dirty ? <><p className="flex items-center gap-2 font-semibold text-gold"><CircleAlert className="size-5 shrink-0" aria-hidden="true" />{t("settingsPanel.unsavedChanges")}</p><p className="mt-1 text-foreground">{t("settingsPanel.saveSettingsToApplyYourChanges")}</p></> : <p className="text-foreground-muted">{t("settingsPanel.noPendingChanges")}</p>}
                         </div>
-                        <p role="status" className={message ? "mt-2 text-foreground" : ""}>{message}</p>
+                        <p role="status" className={message ? "mt-2 text-foreground" : ""}>{message && <DiscordSupportText message={message} label={t("support.discord")} />}</p>
                     </div>
                     {dirty && <div className="ml-auto flex gap-2"><button type="button" disabled={pending} className={button} onClick={discard}>{t("settingsPanel.discard")}</button><button type="submit" disabled={pending || updateBusy} className={`${button} !border-gold !bg-gold !font-semibold !text-background hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold`}>{pending ? t("settingsPanel.saving") : t("settingsPanel.saveSettings")}</button></div>}
                 </div>

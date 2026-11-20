@@ -1,3 +1,5 @@
+import { DISCORD_SUPPORT_URL } from "../../supabase/functions/_shared/discord-support";
+
 // Renders the gateway's few remaining HTML pages: the create-build install page and the error page.
 
 const SITE_HERO_IMAGE = "https://raw.githubusercontent.com/Bannerlord-Coop-Team/BannerlordCoop-website/07491ba62e3b038b16458402b4cc92dccf71b985/public/images/singleleader.png";
@@ -14,27 +16,27 @@ export function page(title: string, eyebrow: string, content: string, pageClass 
 
 // Renders the branded error page for one user-facing message.
 export function errorPage(message: string): string {
-    return page("Access unavailable", "Nightly access", `<div class="status-icon error" aria-hidden="true"><span>!</span></div><h1>Access <span>unavailable.</span></h1><p class="lede">${escapeHtml(message)}</p><div class="support-note"><strong>Need a hand?</strong><span><a href="https://discord.gg/bannerlordcoop">Ask in the Bannerlord Co-op Discord</a> and include the message shown above.</span></div>`, "status-page");
+    return page("Access unavailable", "Nightly access", `<div class="status-icon error" aria-hidden="true"><span>!</span></div><h1>Access <span>unavailable.</span></h1><p class="lede">${escapeHtml(message)}</p><div class="support-note"><strong>Need a hand?</strong><span>Create a General Help support ticket in <a href="${DISCORD_SUPPORT_URL}" target="_blank" rel="noopener noreferrer">our Discord</a> and include the message shown above.</span></div>`, "status-page");
 }
 
 // Maps a gateway error code to the message shown on the HTML error page.
 export function gatewayErrorMessage(code: string): string {
     if (code === "already_used") {
-        return "That create-build installer link was already used. Ask staff for a new /create-build link.";
+        return "That create-build installer link was already used. You need a new /create-build link. Include that in your ticket.";
     }
     if (code === "expired_token") {
         return "That create-build installer link has expired.";
     }
     if (code === "pin_incomplete") {
-        return "That create-build installer is not ready yet. Ask staff to run /create-build again.";
+        return "That create-build installer is not ready yet. It needs to be regenerated with /create-build. Include that in your ticket.";
     }
     if (code === "pin_identity_conflict") {
-        return "That create-build installer no longer matches this build. Ask staff for a new /create-build link.";
+        return "That create-build installer no longer matches this build. You need a new /create-build link. Include that in your ticket.";
     }
     if (code === "pin_mint_unavailable") {
         return "Create-build installer links are not configured on this gateway.";
     }
-    return "Access could not be verified. Run the installer again or ask in the Bannerlord Co-op Discord.";
+    return "Access could not be verified. Run the installer again.";
 }
 
 const GATEWAY_CSS = `

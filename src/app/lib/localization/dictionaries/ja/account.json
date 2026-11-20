@@ -1,4 +1,5 @@
 {
+  "support.discord": "公式Discord",
   "metadata.title": "アカウント | Bannerlord Co-op",
   "heading": "アカウント",
   "defaultName": "あなたのアカウント",
@@ -7,7 +8,7 @@
   "error.rateLimited": "アカウントの変更回数が多すぎるか、同期がまだ完了していません。状態が更新されるまで待ってから、もう一度お試しください。認可は10分以内に期限切れになります。連携解除と既存のサーバーの管理は引き続き利用できます。",
   "error.retry": "アカウントは処理中です。更新された連携状態を確認してから、もう一度お試しください。新たに認可すると、未完了の試行は置き換えられます。",
   "error.lastIdentity": "現在、サインイン方法はDiscordのみです。連携を解除する前に、別のサインイン方法を連携してください。",
-  "error.discordDisconnect": "Discordの連携を解除できませんでした。状態は自動で更新されます。確認できるようになってから、もう一度お試しください。問題が続く場合は、サポートにお問い合わせください。",
+  "error.discordDisconnect": "Discordの連携を解除できませんでした。状態は自動で更新されます。確認できるようになってから、もう一度お試しください。問題が続く場合は、{supportLink}で「General Help」のサポートチケットを作成してください。",
   "error.patreonDisconnect": "Patreonの連携を解除できませんでした。状態は自動で更新されます。現在の状態が表示されるまで待ってから、もう一度お試しください。",
   "error.discordRepair": "Discordの連携を完了できませんでした。以下で現在の連携状態を確認してから、もう一度お試しください。セッションの変更、リクエストの期限切れ、またはDiscordが別のアカウントに連携されている可能性があります。連携の代わりにサインインを行うことはありません。",
   "error.patreonAuthorization": "Patreonの認可がキャンセルされたか、完了できませんでした。以下で現在の連携状態を確認し、必要に応じて再度連携または確認を行ってください。Patreonアカウントを連携できるのは、1つのウェブサイトアカウントのみです。",
@@ -25,7 +26,7 @@
   "membership.verified": "メンバーシップは確認済みです。",
   "membership.nonqualifying": "{installer}。このほかにもさまざまな特典があります。",
   "membership.nightlyInstaller": "Patreon支援者はナイトリー版インストーラーを利用できます（使い方はこちら）",
-  "membership.reviewRequired": "メンバーシップの審査が必要です。再試行する前に、サポートにお問い合わせください。",
+  "membership.reviewRequired": "メンバーシップの審査が必要です。再試行する前に、{supportLink}で「General Help」のサポートチケットを作成してください。",
   "membership.verifyRequired": "新しいサーバーを作成する前に、メンバーシップを確認してください。",
   "membership.syncPending": "利用可能なサーバー枠を更新しています。通常は数秒で完了し、状態は自動的に更新されます。",
   "membership.syncUnavailable": "利用可能なサーバー枠を確認できませんでした。",

@@ -1,5 +1,7 @@
 "use client";
 
+import { DiscordSupportText } from "@/app/components/ui/DiscordSupportLink";
+import { DISCORD_SUPPORT_URL } from "../../../../supabase/functions/_shared/discord-support";
 import { useTranslations } from "@/app/lib/localization/client";
 import type { Translator } from "@/app/lib/localization/types";
 
@@ -139,7 +141,7 @@ function ManagedServerBackupsSession({
     const expiredListId = useId();
     const autosaveHeadingId = useId();
     const backupListHeadingId = useId();
-    const restoreMessages = { expired: t("backupReason.expired"), inProgress: t("backupReason.inProgress"), installedBuildUnknown: t("backupReason.installedBuildUnknown"), backupBuildUnknown: t("backupReason.backupBuildUnknown"), buildMismatch: t("backupReason.buildMismatch"), unknown: t("backupReason.unknown") };
+    const restoreMessages = { expired: t("backupReason.expired"), inProgress: t("backupReason.inProgress"), installedBuildUnknown: t("backupReason.installedBuildUnknown"), backupBuildUnknown: t("backupReason.backupBuildUnknown"), buildMismatch: t("backupReason.buildMismatch"), unknown: t("backupReason.unknown", { supportLink: DISCORD_SUPPORT_URL }) };
     const [intentReady, setIntentReady] = useState(false);
     const [storageError, setStorageError] = useState(false);
     const [isPending, startTransition] = useTransition();
@@ -537,7 +539,7 @@ function ManagedServerBackupsSession({
                     )}
                     {reason && (
                         <p className="mt-1 text-xs text-foreground-dim">
-                            {reason}
+                            <DiscordSupportText message={reason} label={t("support.discord")} />
                         </p>
                     )}
                     {rowFeedback?.target === backup.backupId && (

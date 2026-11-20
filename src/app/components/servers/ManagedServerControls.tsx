@@ -1,5 +1,6 @@
 "use client";
 
+import { DiscordSupportText } from "@/app/components/ui/DiscordSupportLink";
 import { isColdSleeping } from "@/app/lib/hosting/cold-sleep";
 
 import { useTranslations } from "@/app/lib/localization/client";
@@ -363,10 +364,10 @@ export function ManagedServerControls({
         || (showInsightDetails && (modLoadFailed || !!runtimeInsight.failureMessage || !!runtimeInsight.recommendation)));
     const insightPanel = runtimeInsight && hasInsight && <div className="max-w-xl space-y-2 text-sm leading-6 text-foreground-muted">
         {showInsightDetails && (runtimeInsight.modLoadFailure && ["stopped", "failed"].includes(observedGameState)
-            ? <p className="text-red-200">{modLoadFailureMessage(runtimeInsight.modLoadFailure, t)}</p>
+            ? <p className="text-red-200"><DiscordSupportText message={modLoadFailureMessage(runtimeInsight.modLoadFailure, t)} label={t("support.discord")} /></p>
             : isWarSailsFailureCode(runtimeInsight.failureCode) ? <p className="text-red-200">{warSailsFailureMessage(runtimeInsight.failureCode, t)}</p>
-            : <>{runtimeInsight.failureMessage && <p className="text-red-200">{runtimeInsight.failureMessage}</p>}
-                {runtimeInsight.recommendation && <p>{runtimeInsight.recommendation}</p>}</>)}
+            : <>{runtimeInsight.failureMessage && <p className="text-red-200"><DiscordSupportText message={runtimeInsight.failureMessage} /></p>}
+                {runtimeInsight.recommendation && <p><DiscordSupportText message={runtimeInsight.recommendation} /></p>}</>)}
         {runtimeInsight.failureCode && <button type="button" className="min-h-10 rounded-md border border-gold/40 px-3 text-gold focus-visible:outline-2 focus-visible:outline-gold" onClick={() => startTransition(() => router.refresh())} disabled={isPending}>{t("controls.checkNow")}</button>}
     </div>;
 
@@ -571,7 +572,7 @@ export function ManagedServerControls({
                     aria-live="polite"
                     className="max-w-xl text-left text-xs leading-5 text-foreground-muted"
                 >
-                    {message}
+                    <DiscordSupportText message={message} />
                 </p>
             )}
         </div>
@@ -588,7 +589,7 @@ export function ManagedServerControls({
     />;
     const updateInSlot = <>
         <DisabledControlHint disabled={moving} message={t("move.controlsUnavailable")}>{updateAction}</DisabledControlHint>
-        {updateMessageInSlot && message && <p aria-live="polite" className="text-xs leading-5 text-foreground-muted sm:text-right">{message}</p>}
+        {updateMessageInSlot && message && <p aria-live="polite" className="text-xs leading-5 text-foreground-muted sm:text-right"><DiscordSupportText message={message} /></p>}
     </>;
     const alreadyStopped = !busy && canStart && operationState === "stopped" && observedGameState === "stopped"
         && <p className="max-w-sm text-xs text-foreground-muted">{t("controls.alreadyStopped")}</p>;
@@ -690,9 +691,9 @@ function StartProgress({ status, paused }: { status: StartProgressStatus | null;
         current={status?.state === "retry-wait" || (failed && ["game_crashed_during_load", "mod_load_failed", "war_sails_save_mismatch", "war_sails_unsupported"].includes(status.failureCode ?? "")) ? 2
             : Math.max(0, phases.findIndex(phase => phase === status?.phase))}
         outcome={outcome}
-        footer={failed && status.modLoadFailure ? modLoadFailureMessage(status.modLoadFailure, t)
+        footer={failed && status.modLoadFailure ? <DiscordSupportText message={modLoadFailureMessage(status.modLoadFailure, t)} label={t("support.discord")} />
             : failed && isWarSailsFailureCode(status.failureCode) ? warSailsFailureMessage(status.failureCode, t)
-            : failed ? status.progress
+            : failed ? <DiscordSupportText message={status.progress} />
             : status?.state === "retry-wait" ? t("controls.waitingToRetrySafelyProgress", { progress: status.progress })
                 : status?.state === "succeeded" ? <>{status.progress ?? t("controls.yourServerIsReadyToJoin")} <span className="mt-1 block">{t("controls.connectWithIpAddress")}</span></>
                     : status?.queue?.waitingReason ? <>{status.progress}<span className="mt-1 block">{t(`controls.startWaiting.${status.queue.waitingReason}`)}</span></>

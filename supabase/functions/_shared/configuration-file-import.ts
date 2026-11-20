@@ -1,3 +1,4 @@
+import { GENERAL_HELP_TICKET } from "./discord-support.ts";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION as defaults, parseManagedServerConfiguration, type ManagedServerConfiguration, type ManagedConfigurationMessages } from "./managed-server-configuration.ts";
 
 export type ConfigurationImportMessages = {
@@ -32,9 +33,9 @@ const defaultImportMessages: ConfigurationImportMessages = {
   "expectedMod": "This looks like mod-config.json. Choose “mod-config.json — gameplay settings” above.",
   "expectedServer": "This looks like server-config.json. Choose “server-config.json — server settings” above.",
   "duplicateNames": "This file contains duplicate or unrecognised setting names. Choose the original configuration file.",
-  "unknownSettings": "This file contains settings this website does not recognise. Please contact support with the name of the file.",
-  "unknownSettingsWithNames": (names) => `This file contains settings this website does not recognise. Unrecognised settings: ${names.join(", ")}. Please contact support with the name of the file.`,
-  "unsupportedValues": "Some settings in this file are missing or are not supported. Choose the original configuration file, or contact support. Nothing has been changed.",
+  "unknownSettings": "This file contains settings this website does not recognise. " + GENERAL_HELP_TICKET + " and include the file name.",
+  "unknownSettingsWithNames": (names) => `This file contains settings this website does not recognise. Unrecognised settings: ${names.join(", ")}. ${GENERAL_HELP_TICKET} and include the file name.`,
+  "unsupportedValues": "Some settings in this file are missing or are not supported. Choose the original configuration file. " + GENERAL_HELP_TICKET + " if you need help. Nothing has been changed.",
   "invalidObject": "Invalid configuration object",
   "unsupportedSetting": "Unsupported configuration setting"
 };

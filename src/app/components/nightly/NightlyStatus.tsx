@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { DiscordHelpNote } from "./NightlyNotes";
+import { DiscordHelpNote } from "./NightlySupport";
 import { finePrintClass, headingClass, ledeClass } from "./styles";
 
 /** The colours and glyph of each status tone. */

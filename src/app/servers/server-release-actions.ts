@@ -1,5 +1,6 @@
 "use server";
 
+import { DISCORD_SUPPORT_URL } from "../../../supabase/functions/_shared/discord-support";
 import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
@@ -46,7 +47,7 @@ export async function changeServerRelease(value: unknown): Promise<{ ok: boolean
             stale_interaction: t("server-release.theServerChangedRefreshBeforeSavingTheReleaseChannelAgain"),
             nightly_unavailable: t("server-release.nightlyReleasesAreCurrentlyUnavailable"),
             validated_build_unavailable: t("server-release.noValidatedBuildIsAvailableForThatChannel"),
-            release_compatibility_unknown: t("server-release.campaignCompatibilityIsNotValidatedForThisReleaseContactHosting"),
+            release_compatibility_unknown: t("server-release.campaignCompatibilityIsNotValidatedForThisReleaseContactHosting", { supportLink: DISCORD_SUPPORT_URL }),
             release_compatibility_unsafe: t("server-release.thatReleaseCannotSafelyReadThisCampaignTheChannelWas"),
             settings_unchanged: t("server-release.thisChannelIsAlreadySelected"),
         };

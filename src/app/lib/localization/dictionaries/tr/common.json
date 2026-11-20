@@ -1,4 +1,8 @@
 {
+  "support.discord": "Discord sunucumuzda",
+  "nightly.support.title": "Yardıma mı ihtiyacınız var?",
+  "nightly.support.ticket": "{supportLink} “General Help” kategorisinde bir destek talebi açın.",
+  "nightly.support.includeMessage": "{supportLink} “General Help” kategorisinde bir destek talebi açın ve yukarıda gösterilen mesajı ekleyin.",
   "metadata.description": "Mount & Blade II: Bannerlord seferini arkadaşlarınızla ortak bir çok oyunculu dünyada oynayın.",
   "nav.homeLabel": "Bannerlord Co-op ana sayfası",
   "nav.primary": "Ana gezinme",

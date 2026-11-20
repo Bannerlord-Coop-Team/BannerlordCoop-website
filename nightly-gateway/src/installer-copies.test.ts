@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { DISCORD_SUPPORT_URL } from "../../supabase/functions/_shared/discord-support";
 
 test("the PowerShell installer is synchronized with the gateway copy", () => {
     const canonical = readFileSync(new URL("../../installer/install.ps1", import.meta.url), "utf8");
     const served = readFileSync(new URL("../public/install.ps1", import.meta.url), "utf8");
     assert.equal(served, canonical);
+    assert.ok(served.includes("General Help support ticket in our Discord (" + DISCORD_SUPPORT_URL + ")"));
 });
 
 test("the Windows launcher is synchronized, falls back safely, and keeps failures visible", () => {
@@ -70,6 +72,7 @@ test("the Linux installer matches Windows nightly policy and ships Windows artif
     const served = readFileSync(new URL("../public/install-linux.sh", import.meta.url), "utf8");
 
     assert.equal(served, installer);
+    assert.ok(served.includes("General Help support ticket in our Discord (" + DISCORD_SUPPORT_URL + ")"));
     assert.equal(installer.includes("\r"), false);
     assert.match(installer, /BannerlordCoop-DedicatedServer-Win64\.7z/);
     assert.match(installer, /Win64_Shipping_Client/);

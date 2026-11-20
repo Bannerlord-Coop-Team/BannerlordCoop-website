@@ -30,7 +30,7 @@ pause_at_end() {
 die() {
     printf '\nInstallation failed: %s\n' "$1" >&2
     [ -n "${2:-}" ] && printf '%s\n' "$2" >&2
-    printf 'If you need help, copy this message and ask in the Bannerlord Co-op Discord.\n' >&2
+    printf 'If you need help, create a General Help support ticket in our Discord (https://discord.gg/5vJzfz5Zzy) and include this message.\n' >&2
     pause_at_end
     exit 1
 }

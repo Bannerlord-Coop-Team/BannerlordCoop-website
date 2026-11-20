@@ -195,7 +195,7 @@ it.each([
 });
 
 // Resolve the page's server components, leaving client components for React to render.
-function findServerElement(node: ReactNode, name: "ServerManagementWorkspace"): Promise<ReactElement<{ name?: ReactNode; summary?: string; address?: string | null; notice?: string; banner?: ReactNode; visibility: ReactElement<ComponentProps<typeof ServerVisibilitySetting>> }> | null>;
+function findServerElement(node: ReactNode, name: "ServerManagementWorkspace"): Promise<ReactElement<{ name?: ReactNode; summary?: string; address?: string | null; notice?: ReactNode; banner?: ReactNode; visibility: ReactElement<ComponentProps<typeof ServerVisibilitySetting>> }> | null>;
 function findServerElement(node: ReactNode, name: "ServerSettingsPanel"): Promise<ReactElement<ComponentProps<typeof ServerSettingsPanel>> | null>;
 function findServerElement(node: ReactNode, name: "ServerWorkspacePanel"): Promise<ReactElement<ComponentProps<typeof ServerWorkspacePanel>> | null>;
 function findServerElement(node: ReactNode, name: "ManagedServerConsole"): Promise<ReactElement<ComponentProps<typeof ManagedServerConsole>> | null>;
@@ -455,7 +455,7 @@ it("shows the validated server while omitting a rejected optional runtime insigh
     mocks.managedServers.mockResolvedValue({ ...managedSummary, connectionIp: "198.51.100.10", gamePorts: [4203], runtimeInsightWarning: { fieldPath: "runtimeInsight.start.attemptCount", reason: "counter exceeds maximum" } });
     const tree = await page();
     const workspace = await findServerElement(tree, "ServerManagementWorkspace");
-    expect(workspace?.props.notice).toBe("Live status is temporarily unavailable. Reload the page. If it persists, contact support.");
+    expect(renderToStaticMarkup(<>{workspace?.props.notice}</>)).toContain('href="https://discord.gg/5vJzfz5Zzy"');
     expect(workspace?.props.address).toBe("198.51.100.10:4203");
     const commands = await findServerElement(tree, "ManagedServerCommands");
     const controls = await findServerElement(commands?.props.controls, "ManagedServerControls");
@@ -467,7 +467,7 @@ it("degrades an absent runtime insight and disables guessed lifecycle actions", 
     mocks.managedServers.mockResolvedValue({ ...managedSummary, runtimeInsightWarning: { fieldPath: "runtimeInsight", reason: "not provided" } });
     const tree = await page();
     const workspace = await findServerElement(tree, "ServerManagementWorkspace");
-    expect(workspace?.props.notice).toBe("Live status is temporarily unavailable. Reload the page. If it persists, contact support.");
+    expect(renderToStaticMarkup(<>{workspace?.props.notice}</>)).toContain('href="https://discord.gg/5vJzfz5Zzy"');
     const commands = await findServerElement(tree, "ManagedServerCommands");
     const controls = await findServerElement(commands?.props.controls, "ManagedServerControls") as ReactElement<{ runtimeInsightUnavailable?: boolean }> | null;
     expect(controls?.props.runtimeInsightUnavailable).toBe(true);

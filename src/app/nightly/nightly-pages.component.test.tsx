@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { LocalizationProvider } from "@/app/lib/localization/client";
+import common from "@/app/lib/localization/dictionaries/en/common.json";
+import { locales, type Locale } from "@/app/lib/localization/types";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
 import type { NightlyClient } from "@/app/lib/nightly/client";
@@ -37,9 +41,9 @@ afterEach(() => {
 });
 
 /** Renders a server page element into a detached DOM node. */
-function render(element: React.ReactElement): HTMLDivElement {
+function render(element: React.ReactElement, locale: Locale = "en", dictionary = common): HTMLDivElement {
     const container = document.createElement("div");
-    container.innerHTML = renderToStaticMarkup(element);
+    container.innerHTML = renderToStaticMarkup(<LocalizationProvider locale={locale} messages={{ common: dictionary }}>{element}</LocalizationProvider>);
     return container;
 }
 
@@ -66,7 +70,26 @@ it("error page renders only canned copy for the context and code", async () => {
     expect(role.textContent).toContain("Have a sponsor code?");
     const forged = render(await NightlyErrorPage(params({ context: "<script>", code: "<img src=x onerror=alert(1)>" })));
     expect(forged.querySelector("img, script")).toBeNull();
-    expect(forged.querySelector('[role="alert"]')?.textContent).toBe("Access could not be verified. Run the installer again or ask in the Bannerlord Co-op Discord.");
+    expect(forged.querySelector('[role="alert"]')?.textContent).toBe("Access could not be verified. Run the installer again.");
+    for (const page of [expired, role, forged]) {
+        const link = page.querySelector('a[href="https://discord.gg/5vJzfz5Zzy"]');
+        expect(link?.textContent).toBe("our Discord");
+        expect(link?.getAttribute("target")).toBe("_blank");
+        expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+        expect(page.textContent).toContain("Create a General Help support ticket");
+    }
+});
+
+it.each(locales)("uses the selected %s ticket guidance and link label on the error page", async locale => {
+    const dictionary = JSON.parse(readFileSync(`src/app/lib/localization/dictionaries/${locale}/common.json`, "utf8")) as typeof common;
+    const view = render(await NightlyErrorPage(params({ context: "activate", code: "expired" })), locale, dictionary);
+    const link = view.querySelector('a[href="https://discord.gg/5vJzfz5Zzy"]');
+    expect(view.textContent).toContain(dictionary["nightly.support.title"]);
+    expect(dictionary["nightly.support.includeMessage"]).toContain("{supportLink}");
+    expect(view.textContent).toContain(dictionary["nightly.support.includeMessage"].replace("{supportLink}", dictionary["support.discord"]));
+    expect(link?.textContent).toBe(dictionary["support.discord"]);
+    expect(link?.getAttribute("target")).toBe("_blank");
+    expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
 });
 
 it("claim page shows the form for the pending device and escapes the Discord username", async () => {
