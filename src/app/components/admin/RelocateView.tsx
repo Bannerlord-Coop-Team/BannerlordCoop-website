@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Empty, State } from "@/app/components/admin/ControlPlanePresentation";
+import { ChangeRegionDialog } from "@/app/components/admin/ChangeRegionDialog";
 import { formatAccountOwner } from "@/app/lib/control-plane/presentation";
 import {
     RELOCATION_JOB_ACTION,
@@ -14,6 +15,7 @@ import {
     type RelocationRow,
 } from "@/app/lib/control-plane/relocation";
 import { requestControlPlaneAdminWithRefresh } from "@/app/lib/control-plane/stale-request";
+import { regionChangeTargets } from "@/app/lib/control-plane/region-change";
 import type { RelocateViewData } from "@/app/lib/control-plane/types";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
@@ -22,12 +24,15 @@ const ANY_HOST = "";
 const buttonClass = "inline-flex min-h-9 items-center gap-1.5 border px-3 font-label text-[0.62rem] font-semibold uppercase tracking-[0.12em] disabled:cursor-not-allowed disabled:opacity-40";
 
 /** Lists every server with the VPS slot it occupies; Relocate opens a pop-up so several moves can be queued from one page. */
-export function RelocateView({ data, query, accounts }: { data: RelocateViewData; query: string; accounts: WebsiteAccountSummary[] }) {
+export function RelocateView({ data, query, accounts, allowRegionChange = false }: {
+    data: RelocateViewData; query: string; accounts: WebsiteAccountSummary[]; allowRegionChange?: boolean;
+}) {
     const { servers, inventory, regionCatalog, activeJobs } = data;
     const hosts = useMemo(() => Array.isArray(inventory.hosts) ? inventory.hosts : [], [inventory.hosts]);
     const rows = useMemo(() => relocationRows(servers.items, hosts, activeJobs), [servers.items, hosts, activeJobs]);
     const ownerLabels = useMemo(() => Object.fromEntries(accounts.map((user) => [user.accountId, user.label])), [accounts]);
     const [selected, setSelected] = useState<RelocationRow | null>(null);
+    const [regionChange, setRegionChange] = useState<RelocationRow | null>(null);
     // Queued moves read as relocating straight away; the refreshed job list takes over once it arrives.
     const [queued, setQueued] = useState<ReadonlySet<string>>(new Set());
 
@@ -64,6 +69,13 @@ export function RelocateView({ data, query, accounts }: { data: RelocateViewData
                                     >
                                         <ArrowLeftRight aria-hidden="true" className="size-3.5" /> Relocate
                                     </button>
+                                    {allowRegionChange && (
+                                        <button type="button" disabled={relocating || blockedReason !== undefined} title={blockedReason}
+                                            onClick={() => setRegionChange(row)}
+                                            className={`${buttonClass} ml-2 border-gold/40 text-gold hover:bg-gold/10`}>
+                                            Change region
+                                        </button>
+                                    )}
                                 </td>
                             </tr>
                         );
@@ -76,13 +88,23 @@ export function RelocateView({ data, query, accounts }: { data: RelocateViewData
                 <RelocateDialog
                     key={selected.server.serverId}
                     row={selected}
-                    targets={relocationTargets(hosts, regionCatalog, selected.hostName)}
+                    targets={relocationTargets(hosts.filter(host => host.provider === selected.server.provider), regionCatalog, selected.hostName)
+                        .filter(target => target.region === selected.server.friendlyRegion)}
                     onClose={() => setSelected(null)}
                     onQueued={(serverId) => {
                         setQueued((current) => new Set(current).add(serverId));
                         setSelected(null);
                     }}
                 />
+            )}
+            {allowRegionChange && regionChange !== null && (
+                <ChangeRegionDialog key={regionChange.server.serverId} row={regionChange}
+                    targets={regionChangeTargets(hosts, regionCatalog, regionChange.server, regionChange.hostName)}
+                    onClose={() => setRegionChange(null)}
+                    onQueued={serverId => {
+                        setQueued(current => new Set(current).add(serverId));
+                        setRegionChange(null);
+                    }} />
             )}
         </section>
     );

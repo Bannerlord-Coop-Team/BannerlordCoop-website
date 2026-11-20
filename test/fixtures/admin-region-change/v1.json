@@ -1,0 +1,29 @@
+{
+  "fixtureVersion": 1,
+  "request": {
+    "version": 1,
+    "requestId": "41000000-0000-4000-8000-000000000001",
+    "operation": "change-server-region",
+    "input": {
+      "serverId": "41000000-0000-4000-8000-000000000002",
+      "expectedUpdatedAt": "2026-11-19T10:00:00.000Z",
+      "targetRegion": "poland",
+      "targetProvider": "ovhcloud-vps",
+      "targetServiceName": "vps-warsaw.vps.ovh.net",
+      "reason": "Move closer to Warsaw players"
+    }
+  },
+  "acceptedResponse": {
+    "version": 1,
+    "requestId": "41000000-0000-4000-8000-000000000001",
+    "ok": true,
+    "result": {
+      "outcome": "enqueued",
+      "job": {
+        "action": "migrate-region",
+        "authority": "administrator",
+        "state": "queued"
+      }
+    }
+  }
+}

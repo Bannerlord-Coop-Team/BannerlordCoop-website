@@ -1,0 +1,10 @@
+{
+  "fixtureVersion": 1,
+  "fixtureSha256": "0fb561865adc648bbbc0b370a2d8b81373c5839921b18addce496aefe9e39a4d",
+  "captureSha256": "67bbfefbcd031a3abf2e191504d5bfb2cbb1afcc871aa0fd5ee13d7f52239a45",
+  "controlPlaneCaptureCommit": "b7f938d8dacc04330a69e8ce5134850201c4ef16",
+  "captureCommand": "REGIONMOVE_CAPTURE=1 npm run test:hosting:api -- test/hosting-api/admin-region-change.test.ts test/hosting-api/contract.test.ts test/hosting-vps-relocation-part-2.test.ts",
+  "captureBoundary": "Authenticated loopback POST through ControlPlane's local admin HTTP adapter, owner-only Unix socket, and PGlite-backed administrator workflow on Ubuntu WSL. The captured HTTP request was accepted with status 200. The test assertion was subsequently corrected to check the private job payload in persistence.",
+  "sanitization": "All identifiers, source state and hostnames are synthetic. No authorization token or internal object reference is captured. v1.json replaces the generated server ID and revision with fixed values and projects the stable acceptance fields.",
+  "limits": "The capture establishes the ControlPlane HTTP acceptance boundary. Paired Website evidence, real runner execution, R2 access, and deployment require separate evidence."
+}

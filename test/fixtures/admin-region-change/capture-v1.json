@@ -1,0 +1,49 @@
+{
+  "method": "POST",
+  "path": "/v1/admin/control-plane",
+  "request": {
+    "version": 1,
+    "operation": "change-server-region",
+    "requestId": "41000000-0000-4000-8000-000000000001",
+    "input": {
+      "serverId": "fa82cfe7-3baf-539a-8f54-f5eab74a8c0c",
+      "expectedUpdatedAt": "2026-11-20T03:08:59.986Z",
+      "targetRegion": "poland",
+      "targetProvider": "ovhcloud-vps",
+      "targetServiceName": "vps-warsaw.vps.ovh.net",
+      "reason": "Move closer to Warsaw players"
+    }
+  },
+  "response": {
+    "status": 200,
+    "body": {
+      "version": 1,
+      "requestId": "41000000-0000-4000-8000-000000000001",
+      "ok": true,
+      "result": {
+        "outcome": "enqueued",
+        "job": {
+          "jobId": "32ef2b99-fca1-4355-83d2-69e79525ca93",
+          "serverId": "fa82cfe7-3baf-539a-8f54-f5eab74a8c0c",
+          "action": "migrate-region",
+          "requestedBy": "supabase:11111111-1111-4111-8111-111111111111",
+          "authority": "administrator",
+          "correlationId": "41000000-0000-4000-8000-000000000001",
+          "requestedDesiredState": "stopped",
+          "state": "queued",
+          "attemptCount": 0,
+          "maximumAttempts": 60,
+          "progressStage": "request-accepted",
+          "errorCode": null,
+          "runAt": "2026-11-20T03:09:00.272Z",
+          "timeoutAt": "2026-11-20T09:09:00.272Z",
+          "cancellationRequestedAt": null,
+          "createdAt": "2026-11-20T03:09:00.272Z",
+          "updatedAt": "2026-11-20T03:09:00.272Z",
+          "startedAt": null,
+          "completedAt": null
+        }
+      }
+    }
+  }
+}
