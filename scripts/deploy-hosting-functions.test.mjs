@@ -5,7 +5,8 @@ import os from "node:os";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { FUNCTIONS, sources, sourceDigest, checkAuthentication, matchesDeployment, ensureDeployment, boundedJson } from "./deploy-hosting-functions.mjs";
+import { FUNCTIONS, sources, sourceDigest, checkAuthentication, auditedFunctions, matchesDeployment, ensureDeployment, boundedJson } from "./deploy-hosting-functions.mjs";
+import { auditEdgeFunctions } from "./audit-edge-functions.mjs";
 
 async function fixture(t, extra = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "hosting-edge-test-"));
@@ -136,6 +137,21 @@ test("repository graph captures the live bug's configuration module and JWT poli
   checkAuthentication(await readFile(path.join(root, "supabase/config.toml"), "utf8"));
 });
 
+test("the audit covers all website Edge functions and compares runtime dependencies", async (t) => {
+  const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const policies = await auditedFunctions(root, await readFile(path.join(root, "supabase/config.toml"), "utf8"));
+  for (const name of ["patreon-start", "patreon-complete", "create-github-issue-bug-report", "vps-renewal-alert", "nightly-gateway"]) {
+    assert.equal(policies.get(name), false);
+  }
+  assert.equal(policies.has("admin-servers"), false);
+  for (const name of policies.keys()) assert.ok((await sources(root, name, { audit: true })).has(name + "/index.ts"));
+  const nightly = await sources(root, "nightly-gateway", { audit: true });
+  assert.ok(nightly.has("_shared/nightly/gateway.ts"));
+  assert.equal(nightly.has("_shared/nightly/context.ts"), false);
+  const upload = await fixture(t, { "patreon-start/index.ts": 'import("npm:unreviewed");' });
+  await assert.rejects(sources(upload, "patreon-start", { audit: true }), /External function imports/u);
+});
+
 test("the CLI fails the release when used off main or without the deployment credential", () => {
   const script = fileURLToPath(new URL("./deploy-hosting-functions.mjs", import.meta.url));
   const env = { ...process.env, GITHUB_REF: "refs/heads/feature" };
@@ -146,4 +162,232 @@ test("the CLI fails the release when used off main or without the deployment cre
   const credential = spawnSync(process.execPath, [script, "verify"], { env, encoding: "utf8", windowsHide: true });
   assert.equal(credential.status, 1);
   assert.match(credential.stderr, /deployment secret is missing/u);
+});
+
+const auditSlug = "patreon-callback";
+const auditBase = "https://api.supabase.com/v1/projects/test-project/functions";
+const readToken = "readonly-test-token";
+const auditMetadata = {
+  slug: auditSlug, status: "ACTIVE", verify_jwt: false, id: "test-function", version: 52, ezbr_sha256: "example-digest",
+  entrypoint_path: "file:///source/supabase/functions/patreon-callback/index.ts",
+};
+const auditGraph = new Map([
+  [auditSlug + "/index.ts", 'import "../_shared/runtime.ts";\n'],
+  ["_shared/runtime.ts", "export const value = 1;\n"],
+]);
+const typeFile = "_shared/types.ts";
+const allAuditFiles = new Map([...auditGraph, [typeFile, "export type Result = string;\n"]]);
+
+// Supabase CLI v2.120.0's download fixtures use a metadata part and file paths
+// in Content-Disposition or Supabase-Path. Keep those headers in the fixture.
+function multipart(entrypoint, files) {
+  const boundary = "audit-fixture-boundary";
+  const parts = [
+    "Content-Disposition: form-data; name=\"metadata\"\r\n\r\n" + JSON.stringify({ deno2_entrypoint_path: entrypoint }),
+    ...files.map(([file, source]) => "Content-Disposition: form-data; name=\"file\"; filename=\"ignored.ts\"\r\n" +
+      "Supabase-Path: " + file + "\r\n\r\n" + source),
+  ];
+  return new Response(parts.map((part) => "--" + boundary + "\r\n" + part + "\r\n").join("") + "--" + boundary + "--\r\n", {
+    headers: { "content-type": 'multipart/form-data; boundary="' + boundary + '"' },
+  });
+}
+
+function auditFixture({
+  files = [...auditGraph].map(([file, source]) => ["source/" + file, source]),
+  entrypoint = "source/patreon-callback/index.ts", metadata = auditMetadata,
+  inventory = [metadata], body, stop = "after", deadline,
+  expected = { runtime: auditGraph, all: allAuditFiles },
+} = {}) {
+  const slug = metadata.slug;
+  const path = "/" + slug;
+  const calls = [["", "application/json", () => Response.json(inventory)]];
+  if (stop !== "inventory") calls.push([path, "application/json", () => Response.json(metadata)]);
+  if (stop === "body" || stop === "after") calls.push([path + "/body", "multipart/form-data", body ?? (() => multipart(entrypoint, files))]);
+  if (stop === "after") calls.push([path, "application/json", () => Response.json(metadata)]);
+
+  const lines = { log: [], warn: [], error: [] };
+  return {
+    lines,
+    assertRequests: () => assert.equal(calls.length, 0),
+    run: () => auditEdgeFunctions({
+      projectRef: "test-project", token: readToken, policies: new Map([[slug, false]]), deadline,
+      expectedSources: async (name) => {
+        assert.equal(name, slug);
+        return expected;
+      },
+      request: async (url, options) => {
+        const expected = calls.shift();
+        assert.ok(expected, "Unexpected Management API request");
+        const [resource, accept, respond] = expected;
+        assert.equal(url, auditBase + resource);
+        assert.deepEqual({ ...options, signal: options.signal instanceof AbortSignal }, {
+          method: "GET", headers: { authorization: "Bearer " + readToken, accept }, redirect: "error", signal: true,
+        });
+        return respond(options.signal);
+      },
+      log: Object.fromEntries(Object.entries(lines).map(([level, messages]) => [level, (line) => messages.push(line)])),
+    }),
+  };
+}
+
+test("audit accepts the pinned Supabase root-relative download fixture and rejects a different root entry point", async () => {
+  // supabase/cli v2.120.0, apps/cli-e2e/fixtures/scenarios/functions-download-downloads-function-successfully/interactions.json
+  const boundary = "test-boundary-0001";
+  const source = "console.log('hello from hello-world');\n";
+  const metadata = { ...auditMetadata, slug: "hello-world", entrypoint_path: "index.ts" };
+  const graph = new Map([["hello-world/index.ts", source]]);
+  const headers = { "content-type": "multipart/form-data; boundary=" + boundary };
+  function response(entrypoint, extra = "") {
+    return new Response([
+      "--" + boundary,
+      'Content-Disposition: form-data; name="metadata"',
+      "",
+      '{"deno2_entrypoint_path": "' + entrypoint + '"}',
+      "--" + boundary,
+      'Content-Disposition: form-data; name="index.ts"; filename="index.ts"',
+      "Content-Type: text/plain",
+      "",
+      source,
+      extra + "--" + boundary + "--",
+      "",
+    ].join("\r\n"), { headers });
+  }
+
+  const expected = { runtime: graph, all: graph };
+  const pinned = auditFixture({ metadata, expected, body: () => response("index.ts") });
+  await pinned.run();
+  pinned.assertRequests();
+  assert.deepEqual(pinned.lines.log, ["hello-world: v52, entry point, source bundle and JWT policy verified"]);
+
+  const different = auditFixture({
+    metadata, expected, stop: "body",
+    body: () => response("legacy.ts", "--" + boundary + "\r\n" +
+      'Content-Disposition: form-data; name="legacy.ts"; filename="legacy.ts"\r\n\r\nimport "./index.ts";\r\n'),
+  });
+  await assert.rejects(different.run(), /1 Edge function/u);
+  different.assertRequests();
+  assert.deepEqual(different.lines.error, ["hello-world: Deployed entry point differs from main"]);
+});
+
+test("audit accepts the selected main entry point and checks all source files supplied by Supabase", async () => {
+  const good = auditFixture({ files: [...allAuditFiles].map(([file, bytes]) => ["source/" + file, bytes]) });
+  await good.run();
+  good.assertRequests();
+  assert.deepEqual(good.lines.log, ["patreon-callback: v52, entry point, source bundle and JWT policy verified"]);
+
+  const wrongEntrypoint = auditFixture({
+    entrypoint: "source/patreon-callback/legacy.ts", stop: "body",
+    files: [["source/patreon-callback/legacy.ts", 'import "./index.ts";'], ...[...auditGraph].map(([file, bytes]) => ["source/" + file, bytes])],
+  });
+  await assert.rejects(wrongEntrypoint.run(), /1 Edge function/u);
+  wrongEntrypoint.assertRequests();
+  assert.deepEqual(wrongEntrypoint.lines.error, ["patreon-callback: Deployed entry point differs from main"]);
+
+  const inconsistentEntrypoint = auditFixture({
+    metadata: { ...auditMetadata, entrypoint_path: "file:///source/patreon-callback/legacy.ts" }, stop: "body",
+  });
+  await assert.rejects(inconsistentEntrypoint.run(), /1 Edge function/u);
+  inconsistentEntrypoint.assertRequests();
+  assert.deepEqual(inconsistentEntrypoint.lines.error, wrongEntrypoint.lines.error);
+
+  for (const files of [
+    [["source/patreon-callback/unreachable.ts", "export {};"], ...[...auditGraph].map(([file, bytes]) => ["source/" + file, bytes])],
+    [["source/" + typeFile, "export type Result = number;\n"], ...[...auditGraph].map(([file, bytes]) => ["source/" + file, bytes])],
+    [["source/patreon-callback/index.ts", auditGraph.get("patreon-callback/index.ts")]],
+  ]) {
+    const drift = auditFixture({ files });
+    await assert.rejects(drift.run(), /1 Edge function/u);
+    drift.assertRequests();
+    assert.deepEqual(drift.lines.error, ["patreon-callback: Deployed source bundle differs from main"]);
+  }
+});
+
+test("audit reports each valid live-only slug, including names with underscores and capitals", async () => {
+  const fixture = auditFixture({ inventory: [auditMetadata, { slug: "external-audit" }, { slug: "external_audit" }, { slug: "External_2" }] });
+  await fixture.run();
+  fixture.assertRequests();
+  assert.deepEqual(fixture.lines.warn, ["Deployed outside website main: External_2, external-audit, external_audit"]);
+  assert.equal(fixture.lines.error.length, 0);
+});
+
+test("audit fails on a missing tracked function or changed gateway policy", async () => {
+  const missing = auditFixture({ inventory: [], stop: "inventory" });
+  await assert.rejects(missing.run(), /Edge function/u);
+  missing.assertRequests();
+  assert.deepEqual(missing.lines.error, ["patreon-callback: Function is absent from the live inventory"]);
+
+  const wrongJwt = auditFixture({ metadata: { ...auditMetadata, verify_jwt: true }, stop: "metadata" });
+  await assert.rejects(wrongJwt.run(), /Edge function/u);
+  wrongJwt.assertRequests();
+  assert.deepEqual(wrongJwt.lines.error, ["patreon-callback: Deployed identity, status or JWT policy differs from main"]);
+});
+
+test("audit rejects the deploy token as a fallback and accepts only its own workflow secret", async () => {
+  const script = fileURLToPath(new URL("./deploy-hosting-functions.mjs", import.meta.url));
+  const env = { ...process.env, SUPABASE_ACCESS_TOKEN: "deployment-test-token" };
+  delete env.SUPABASE_EDGE_READ_TOKEN;
+  delete env.GITHUB_SHA;
+  const missing = spawnSync(process.execPath, [script, "audit"], { env, encoding: "utf8", windowsHide: true });
+  assert.equal(missing.status, 1);
+  assert.match(missing.stderr, /SUPABASE_EDGE_READ_TOKEN read-only secret is missing/u);
+  const reused = spawnSync(process.execPath, [script, "audit"], {
+    env: { ...env, SUPABASE_EDGE_READ_TOKEN: env.SUPABASE_ACCESS_TOKEN }, encoding: "utf8", windowsHide: true,
+  });
+  assert.equal(reused.status, 1);
+  assert.match(reused.stderr, /requires a separate read-only token/u);
+
+  const workflow = (await readFile(new URL("../.github/workflows/deploy-hosting-functions.yml", import.meta.url), "utf8")).replace(/\r\n/gu, "\n");
+  const auditJob = workflow.split("\n  audit:\n")[1];
+  assert.match(auditJob, /SUPABASE_EDGE_READ_TOKEN: \$\{\{ secrets\.SUPABASE_EDGE_READ_TOKEN \}\}/u);
+  assert.doesNotMatch(auditJob, /SUPABASE_ACCESS_TOKEN/u);
+  assert.match(workflow.split("\n  audit:\n")[0], /SUPABASE_ACCESS_TOKEN: \$\{\{ secrets\.SUPABASE_ACCESS_TOKEN \}\}/u);
+});
+
+test("audit bounds streamed bytes, source parts and the function inventory", async () => {
+  const oversized = auditFixture({
+    stop: "body",
+    body: () => new Response(new ReadableStream({ start(stream) {
+      stream.enqueue(new Uint8Array(8 * 1024 * 1024));
+      stream.enqueue(new Uint8Array(1));
+      stream.close();
+    } })),
+  });
+  await assert.rejects(oversized.run(), /Edge function/u);
+  oversized.assertRequests();
+  assert.deepEqual(oversized.lines.error, ["patreon-callback: Supabase response exceeds its byte limit"]);
+
+  const tooManyParts = auditFixture({
+    stop: "body", files: Array.from({ length: 101 }, (_, index) => ["source/patreon-callback/file-" + index + ".ts", ""]),
+  });
+  await assert.rejects(tooManyParts.run(), /Edge function/u);
+  tooManyParts.assertRequests();
+  assert.deepEqual(tooManyParts.lines.error, ["patreon-callback: Supabase bundle exceeds its part limit"]);
+
+  const tooManyFunctions = auditFixture({
+    stop: "inventory", inventory: Array.from({ length: 101 }, (_, index) => ({ slug: "external_" + index })),
+  });
+  await assert.rejects(tooManyFunctions.run(), /oversized Supabase function inventory/u);
+  tooManyFunctions.assertRequests();
+});
+
+test("audit aborts a stalled source stream when the overall time budget expires", async () => {
+  const abort = new AbortController();
+  const stalled = auditFixture({
+    stop: "body", deadline: abort.signal,
+    body: (signal) => new Response(new ReadableStream({ start(stream) {
+      signal.addEventListener("abort", () => stream.error(signal.reason), { once: true });
+      queueMicrotask(() => abort.abort());
+    } })),
+  });
+  await assert.rejects(stalled.run(), /Edge function/u);
+  stalled.assertRequests();
+  assert.deepEqual(stalled.lines.error, ["patreon-callback: Edge audit time limit exceeded"]);
+});
+
+test("the independent main-only audit job runs after a failed deploy", async () => {
+  const workflow = (await readFile(new URL("../.github/workflows/deploy-hosting-functions.yml", import.meta.url), "utf8")).replace(/\r\n/gu, "\n");
+  const auditJob = workflow.split("\n  audit:\n")[1];
+  assert.match(auditJob, /^    needs: deploy\n    if: \$\{\{ !cancelled\(\) && github\.ref == 'refs\/heads\/main'/u);
+  assert.match(auditJob, /run: node scripts\/deploy-hosting-functions\.mjs audit/u);
+  assert.doesNotMatch(auditJob, /success\(\)|needs\.deploy\.result/u);
 });

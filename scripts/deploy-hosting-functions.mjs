@@ -1,20 +1,23 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
-import { readFile, writeFile, mkdtemp, mkdir, rm, realpath, stat } from "node:fs/promises";
+import { readFile, writeFile, mkdtemp, mkdir, rm, realpath, stat, readdir } from "node:fs/promises";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import ts from "typescript";
+import { auditEdgeFunctions } from "./audit-edge-functions.mjs";
 
 export const PROJECT_REF = "wfvqnijwuyqjibhlcrhz";
 export const FUNCTIONS = Object.freeze({ "my-servers": true, "control-plane-admin": true, "public-servers": false });
 const exec = promisify(execFile);
+const edgeName = /^[a-z][a-z0-9-]{1,60}$/u;
+const reviewedEdgeImports = new Set(["node:crypto", "node:buffer", "npm:pg@8.16.3", "npm:@aws-sdk/client-s3"]);
 const canonical = (source) => source.replace(/\r\n/gu, "\n").trimEnd() + "\n";
 
 // Include transitive shared modules, not just each function's entrypoint.
-export async function sources(root, name) {
-  if (!Object.hasOwn(FUNCTIONS, name)) throw new Error("Unsupported hosting function");
+export async function sources(root, name, { audit = false, includeTypes = !audit } = {}) {
+  if (audit ? !edgeName.test(name) : !Object.hasOwn(FUNCTIONS, name)) throw new Error("Unsupported hosting function");
   const directory = await realpath(path.join(root, "supabase/functions"));
   for (const config of ["deno.json", "deno.jsonc", name + "/deno.json", name + "/deno.jsonc"]) {
     try { await stat(path.join(directory, config)); } catch (error) {
@@ -33,13 +36,14 @@ export async function sources(root, name) {
     if (!absolute.startsWith(directory + path.sep)) throw new Error("Function dependency leaves its source directory");
     const source = await readFile(absolute, "utf8");
     if (Buffer.byteLength(source) > 1_048_576) throw new Error("Function source is too large");
-    files.set(relative, canonical(source));
+    files.set(relative, audit ? source.replace(/\r\n/gu, "\n") : canonical(source));
     const ast = ts.createSourceFile(relative, source, ts.ScriptTarget.Latest, true);
     const dependencies = [];
     function inspect(node) {
       if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier) {
         if (!ts.isStringLiteral(node.moduleSpecifier)) throw new Error("Unsupported function import");
-        dependencies.push(node.moduleSpecifier.text);
+        const typeOnly = ts.isImportDeclaration(node) ? node.importClause?.isTypeOnly : node.isTypeOnly;
+        if (includeTypes || !typeOnly) dependencies.push(node.moduleSpecifier.text);
       }
       if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword
         || ts.isIdentifier(node.expression) && node.expression.text === "require")) {
@@ -50,6 +54,7 @@ export async function sources(root, name) {
     }
     inspect(ast);
     for (const dependency of dependencies) {
+      if (audit && reviewedEdgeImports.has(dependency)) continue;
       if (!dependency.startsWith(".")) throw new Error("External function imports require a deployment recipe update");
       await visit(path.posix.normalize(path.posix.join(path.posix.dirname(relative), dependency)));
     }
@@ -62,14 +67,32 @@ export function sourceDigest(files) {
   return createHash("sha256").update(JSON.stringify([...files].sort(([a], [b]) => a.localeCompare(b)))).digest("hex");
 }
 
+function configuredJwt(config, name) {
+  const sections = [...config.matchAll(/\[functions\.([a-z0-9-]+)\]([^[]*)/gu)].filter((match) => match[1] === name);
+  const settings = sections[0]?.[2].split("\n").map((line) => line.replace(/#.*/u, "").trim()).filter(Boolean) ?? [];
+  const setting = settings[0]?.match(/^verify_jwt\s*=\s*(true|false)$/u);
+  if (sections.length !== 1 || settings.length !== 1 || !setting) {
+    throw new Error(name + ": JWT policy differs from the reviewed hosting policy");
+  }
+  return setting[1] === "true";
+}
+
 export function checkAuthentication(config) {
   for (const [name, jwt] of Object.entries(FUNCTIONS)) {
-    const sections = [...config.matchAll(/\[functions\.([a-z0-9-]+)\]([^[]*)/gu)].filter((match) => match[1] === name);
-    const settings = sections[0]?.[2].split("\n").map((line) => line.replace(/#.*/u, "").trim()).filter(Boolean) ?? [];
-    if (sections.length !== 1 || settings.length !== 1 || !new RegExp("^verify_jwt\\s*=\\s*" + jwt + "$", "u").test(settings[0])) {
-      throw new Error(name + ": JWT policy differs from the reviewed hosting policy");
-    }
+    if (configuredJwt(config, name) !== jwt) throw new Error(name + ": JWT policy differs from the reviewed hosting policy");
   }
+}
+
+export async function auditedFunctions(root, config) {
+  const entries = await readdir(path.join(root, "supabase/functions"), { withFileTypes: true });
+  const policies = new Map();
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    if (entry.name === "_shared") continue;
+    if (!entry.isDirectory() || !edgeName.test(entry.name)) throw new Error("Unsupported Edge function directory");
+    policies.set(entry.name, configuredJwt(config, entry.name));
+  }
+  if (policies.size === 0) throw new Error("No website Edge functions found");
+  return policies;
 }
 
 export function matchesDeployment(expected, uploaded, metadata, name) {
@@ -152,34 +175,51 @@ async function smoke(name) {
 
 async function main() {
   const [mode, ...extra] = process.argv.slice(2);
-  if (!["plan", "deploy", "verify"].includes(mode) || extra.length) throw new Error("Use plan|deploy|verify");
+  if (!["plan", "deploy", "verify", "audit"].includes(mode) || extra.length) throw new Error("Use plan|deploy|verify|audit");
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
   // Check all hosting APIs against live source; queued runs can skip intermediate commits.
   const names = Object.keys(FUNCTIONS);
-  checkAuthentication(await readFile(path.join(root, "supabase/config.toml"), "utf8"));
+  const config = await readFile(path.join(root, "supabase/config.toml"), "utf8");
+  checkAuthentication(config);
   if (mode === "plan") {
     console.log(JSON.stringify(await Promise.all(names.map(async (name) => ({ name, sourceSha256: sourceDigest(await sources(root, name)) })))));
     return;
   }
   if (mode === "deploy" && process.env.GITHUB_REF !== "refs/heads/main") throw new Error("Production deployment requires the main GitHub workflow");
-  const token = process.env.SUPABASE_ACCESS_TOKEN;
-  if (!token || token.length > 8192 || /\s/u.test(token)) throw new Error("SUPABASE_ACCESS_TOKEN deployment secret is missing or invalid");
   const commit = (await exec("git", ["rev-parse", "HEAD"], { cwd: root, windowsHide: true })).stdout.trim();
   if (process.env.GITHUB_SHA && process.env.GITHUB_SHA !== commit) throw new Error("Checkout does not match the workflow source commit");
+  if (mode === "audit") {
+    const token = process.env.SUPABASE_EDGE_READ_TOKEN;
+    if (token && token === process.env.SUPABASE_ACCESS_TOKEN) throw new Error("Edge audit requires a separate read-only token");
+    await auditEdgeFunctions({
+      projectRef: PROJECT_REF,
+      token,
+      policies: await auditedFunctions(root, config),
+      expectedSources: async (name) => ({
+        runtime: await sources(root, name, { audit: true }),
+        all: await sources(root, name, { audit: true, includeTypes: true }),
+      }),
+    });
+    return;
+  }
+  const token = process.env.SUPABASE_ACCESS_TOKEN;
+  if (!token || token.length > 8192 || /\s/u.test(token)) throw new Error("SUPABASE_ACCESS_TOKEN deployment secret is missing or invalid");
+  async function read(name) {
+    const before = (await metadata(token)).find((item) => item.slug === name);
+    if (!before) throw new Error("Function is absent from the live inventory");
+    const files = await uploadedSources(name);
+    const after = (await metadata(token)).find((item) => item.slug === name);
+    if (!after || before.version !== after.version || before.ezbr_sha256 !== after.ezbr_sha256) {
+      throw new Error("Live function changed during source verification");
+    }
+    return { metadata: after, files };
+  }
   const receipt = { projectRef: PROJECT_REF, sourceCommit: commit, status: "failed", functions: [] };
   try {
     for (const name of names) {
       const expected = await sources(root, name);
-      const read = async () => {
-        const before = (await metadata(token)).find((item) => item.slug === name);
-        const files = await uploadedSources(name);
-        const after = (await metadata(token)).find((item) => item.slug === name);
-        if (!before || !after || before.version !== after.version || before.ezbr_sha256 !== after.ezbr_sha256) {
-          throw new Error(name + ": live function changed during source verification");
-        }
-        return { metadata: after, files };
-      };
-      const result = await ensureDeployment({ name, expected, mode, read, deploy: () => cli(["deploy", name], root) });
+      const result = await ensureDeployment({ name, expected, mode, read: () => read(name),
+        deploy: () => cli(["deploy", name], root) });
       await smoke(name);
       receipt.functions.push({ name, version: result.version, verifyJwt: result.verify_jwt,
         sourceSha256: sourceDigest(expected), outcome: result.outcome, smoke: "passed" });
