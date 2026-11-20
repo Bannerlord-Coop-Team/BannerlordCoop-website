@@ -33,8 +33,12 @@ export function RelocateView({ data, query, accounts, allowRegionChange = false 
     const ownerLabels = useMemo(() => Object.fromEntries(accounts.map((user) => [user.accountId, user.label])), [accounts]);
     const [selected, setSelected] = useState<RelocationRow | null>(null);
     const [regionChange, setRegionChange] = useState<RelocationRow | null>(null);
-    // Queued moves read as relocating straight away; the refreshed job list takes over once it arrives.
-    const [queued, setQueued] = useState<ReadonlySet<string>>(new Set());
+    // A locally queued move is visible until the next authoritative job list arrives.
+    const [optimistic, setOptimistic] = useState({ activeJobs, queued: new Set<string>() });
+    if (optimistic.activeJobs !== activeJobs) setOptimistic({ activeJobs, queued: new Set() });
+    function markQueued(serverId: string) {
+        setOptimistic(current => ({ ...current, queued: new Set(current.queued).add(serverId) }));
+    }
 
     return (
         <section className="mt-8">
@@ -49,7 +53,7 @@ export function RelocateView({ data, query, accounts, allowRegionChange = false 
                         <tr><th className="p-4">Server</th><th className="p-4">State</th><th className="p-4">Region</th><th className="p-4">VPS</th><th className="p-4"><span className="sr-only">Relocate</span></th></tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">{rows.map((row) => {
-                        const relocating = queued.has(row.server.serverId) || row.activeJob?.action === RELOCATION_JOB_ACTION;
+                        const relocating = optimistic.queued.has(row.server.serverId) || row.activeJob?.action === RELOCATION_JOB_ACTION;
                         const blockedBy = relocating ? null : row.activeJob;
                         const blockedReason = row.hostName === null ? "This server does not occupy a VPS slot."
                             : blockedBy !== null ? `Waiting for the ${blockedBy.action} job to finish.` : undefined;
@@ -92,7 +96,7 @@ export function RelocateView({ data, query, accounts, allowRegionChange = false 
                         .filter(target => target.region === selected.server.friendlyRegion)}
                     onClose={() => setSelected(null)}
                     onQueued={(serverId) => {
-                        setQueued((current) => new Set(current).add(serverId));
+                        markQueued(serverId);
                         setSelected(null);
                     }}
                 />
@@ -102,7 +106,7 @@ export function RelocateView({ data, query, accounts, allowRegionChange = false 
                     targets={regionChangeTargets(hosts, regionCatalog, regionChange.server, regionChange.hostName)}
                     onClose={() => setRegionChange(null)}
                     onQueued={serverId => {
-                        setQueued(current => new Set(current).add(serverId));
+                        markQueued(serverId);
                         setRegionChange(null);
                     }} />
             )}

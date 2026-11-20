@@ -75,12 +75,13 @@ export function relocationTargets(
     hosts: readonly RelocationHost[],
     catalog: readonly HostingRegionPayload[] | null,
     currentHostName: string | null,
+    options: { includeLegacyRegion?: boolean } = {},
 ): RelocationRegionOption[] {
     const byRegion = new Map<string, RelocationHostOption[]>();
     for (const host of hosts) {
         if (host.name === currentHostName) continue;
         const freeSlots = Number.isSafeInteger(host.availableServers) && host.availableServers > 0 ? host.availableServers : 0;
-        for (const region of hostServedRegionKeys(host, catalog)) {
+        for (const region of hostServedRegionKeys(host, catalog, options.includeLegacyRegion)) {
             const regionHosts = byRegion.get(region) ?? [];
             regionHosts.push({ name: host.name, freeSlots });
             byRegion.set(region, regionHosts);

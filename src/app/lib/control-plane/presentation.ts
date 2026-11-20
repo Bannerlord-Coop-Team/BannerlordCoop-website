@@ -101,9 +101,9 @@ export function hostPlacementLabel(host: HostPlacement, catalog: readonly Hostin
 }
 
 /** Region keys a host serves: every stored placement it satisfies, else its legacy region. */
-export function hostServedRegionKeys(host: HostPlacement, catalog: readonly HostingRegionPayload[] | null): string[] {
+export function hostServedRegionKeys(host: HostPlacement, catalog: readonly HostingRegionPayload[] | null, includeLegacyRegion = true): string[] {
     const matched = matchedCatalogRegions(host, catalog).map((entry) => entry.region);
-    if (matched.length > 0) return matched;
+    if (matched.length > 0 || !includeLegacyRegion) return matched;
     return host.region !== null && host.region.length > 0 ? [host.region] : [];
 }
 

@@ -26,6 +26,7 @@ export function regionChangeTargets(
     if (catalog === null) return [];
     const destinations = VPS_PROVIDERS.flatMap(provider => relocationTargets(
         hosts.filter(host => host.provider === provider && host.availableServers > 0), catalog, currentHostName,
+        { includeLegacyRegion: false },
     ).map(target => ({ ...target, provider })));
     return catalog.filter(({ region }) => region !== server.friendlyRegion)
         .flatMap(({ region }) => destinations.filter(target => target.region === region));

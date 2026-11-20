@@ -177,11 +177,12 @@ it("submits a confirmed VPS.TC Türkiye to OVHcloud Warsaw move under the shared
             { ...host("turkiye.example", "TR", 1, [[input.serverId, 0]]), provider: "vpstc-vps" },
             host(input.targetServiceName, "PL", 1, []),
             { ...host("contabo-pl.example", "PL", 1, []), provider: "contabo-vps" },
+            { ...host("old-poland.example", "PL", 1, []), region: "poland", locationId: "pl-retired" },
             host("never-published.example", "NL", 1, []),
         ] },
         regionCatalog: [
             { region: "turkiye", placement: { countryCodes: ["TR"] } },
-            { region: "poland", placement: { countryCodes: ["PL"] } },
+            { region: "poland", placement: { countryCodes: ["PL"], locationIds: ["pl-1"] } },
         ],
         activeJobs: [],
     };
@@ -214,6 +215,14 @@ it("submits a confirmed VPS.TC Türkiye to OVHcloud Warsaw move under the shared
     expect(mocks.request.mock.calls[0]?.[0]).toMatchObject({ operation, accessToken: "test-only", input });
     expect(mocks.request.mock.calls[1]).toEqual(mocks.request.mock.calls[0]);
     expect(container.querySelector("dialog")).toBeNull();
+    expect(row("Region QA").textContent).toContain("Relocating");
+    await act(async () => root.render(<RelocateView data={{ ...available, activeJobs: [job(input.serverId, "migrate-region", "queued")] }}
+        query="" accounts={[]} allowRegionChange />));
+    expect(button(row("Region QA"), "Change region").disabled).toBe(true);
+    await act(async () => root.render(<RelocateView data={available} query="" accounts={[]} allowRegionChange />));
+    expect(row("Region QA").textContent).not.toContain("Relocating");
+    expect(button(row("Region QA"), "Change region").disabled).toBe(false);
+    expect(button(row("Region QA"), "Relocate").disabled).toBe(false);
 });
 
 it.each(["running", "stopped"])("labels suspended relocation rows with %s intent", async desiredState => {
