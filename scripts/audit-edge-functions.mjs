@@ -139,7 +139,7 @@ function bundle(bytes, contentType, metadata, name) {
   const directory = path.posix.dirname(entrypoint);
   function isMainEntrypoint(file) {
     const mount = path.posix.basename(path.posix.dirname(file));
-    return path.posix.basename(file) === "index.ts" && [name, "source", "src"].includes(mount);
+    return file === "/index.ts" || (path.posix.basename(file) === "index.ts" && [name, "source", "src"].includes(mount));
   }
   if (!isMainEntrypoint(entrypoint) || !files.has(entrypoint) ||
       (metadata.entrypoint_path && !isMainEntrypoint(rawPath(metadata.entrypoint_path)))) {

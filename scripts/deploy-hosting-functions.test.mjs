@@ -195,9 +195,11 @@ function multipart(entrypoint, files) {
 function auditFixture({
   files = [...auditGraph].map(([file, source]) => ["source/" + file, source]),
   entrypoint = "source/patreon-callback/index.ts", metadata = auditMetadata,
-  inventory = [auditMetadata], body, stop = "after", deadline,
+  inventory = [metadata], body, stop = "after", deadline,
+  expected = { runtime: auditGraph, all: allAuditFiles },
 } = {}) {
-  const path = "/" + auditSlug;
+  const slug = metadata.slug;
+  const path = "/" + slug;
   const calls = [["", "application/json", () => Response.json(inventory)]];
   if (stop !== "inventory") calls.push([path, "application/json", () => Response.json(metadata)]);
   if (stop === "body" || stop === "after") calls.push([path + "/body", "multipart/form-data", body ?? (() => multipart(entrypoint, files))]);
@@ -208,10 +210,10 @@ function auditFixture({
     lines,
     assertRequests: () => assert.equal(calls.length, 0),
     run: () => auditEdgeFunctions({
-      projectRef: "test-project", token: readToken, policies: new Map([[auditSlug, false]]), deadline,
+      projectRef: "test-project", token: readToken, policies: new Map([[slug, false]]), deadline,
       expectedSources: async (name) => {
-        assert.equal(name, auditSlug);
-        return { runtime: auditGraph, all: allAuditFiles };
+        assert.equal(name, slug);
+        return expected;
       },
       request: async (url, options) => {
         const expected = calls.shift();
@@ -227,6 +229,45 @@ function auditFixture({
     }),
   };
 }
+
+test("audit accepts the pinned Supabase root-relative download fixture and rejects a different root entry point", async () => {
+  // supabase/cli v2.120.0, apps/cli-e2e/fixtures/scenarios/functions-download-downloads-function-successfully/interactions.json
+  const boundary = "test-boundary-0001";
+  const source = "console.log('hello from hello-world');\n";
+  const metadata = { ...auditMetadata, slug: "hello-world", entrypoint_path: "index.ts" };
+  const graph = new Map([["hello-world/index.ts", source]]);
+  const headers = { "content-type": "multipart/form-data; boundary=" + boundary };
+  function response(entrypoint, extra = "") {
+    return new Response([
+      "--" + boundary,
+      'Content-Disposition: form-data; name="metadata"',
+      "",
+      '{"deno2_entrypoint_path": "' + entrypoint + '"}',
+      "--" + boundary,
+      'Content-Disposition: form-data; name="index.ts"; filename="index.ts"',
+      "Content-Type: text/plain",
+      "",
+      source,
+      extra + "--" + boundary + "--",
+      "",
+    ].join("\r\n"), { headers });
+  }
+
+  const expected = { runtime: graph, all: graph };
+  const pinned = auditFixture({ metadata, expected, body: () => response("index.ts") });
+  await pinned.run();
+  pinned.assertRequests();
+  assert.deepEqual(pinned.lines.log, ["hello-world: v52, entry point, source bundle and JWT policy verified"]);
+
+  const different = auditFixture({
+    metadata, expected, stop: "body",
+    body: () => response("legacy.ts", "--" + boundary + "\r\n" +
+      'Content-Disposition: form-data; name="legacy.ts"; filename="legacy.ts"\r\n\r\nimport "./index.ts";\r\n'),
+  });
+  await assert.rejects(different.run(), /1 Edge function/u);
+  different.assertRequests();
+  assert.deepEqual(different.lines.error, ["hello-world: Deployed entry point differs from main"]);
+});
 
 test("audit accepts the selected main entry point and checks all source files supplied by Supabase", async () => {
   const good = auditFixture({ files: [...allAuditFiles].map(([file, bytes]) => ["source/" + file, bytes]) });
