@@ -31,5 +31,10 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules", "nightly-gateway"]
+  "exclude": [
+    "node_modules",
+    "nightly-gateway",
+    "supabase/functions/network-stats-cached/index.ts",
+    "supabase/functions/sync-platform-statistics/index.ts"
+  ]
 }

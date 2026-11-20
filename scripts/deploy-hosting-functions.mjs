@@ -12,7 +12,9 @@ export const PROJECT_REF = "wfvqnijwuyqjibhlcrhz";
 export const FUNCTIONS = Object.freeze({ "my-servers": true, "control-plane-admin": true, "public-servers": false });
 const exec = promisify(execFile);
 const edgeName = /^[a-z][a-z0-9-]{1,60}$/u;
-const reviewedEdgeImports = new Set(["node:crypto", "node:buffer", "npm:pg@8.16.3", "npm:@aws-sdk/client-s3"]);
+const reviewedEdgeImports = new Set([
+  "node:crypto", "node:buffer", "npm:pg@8.16.3", "npm:@aws-sdk/client-s3", "npm:@supabase/supabase-js@2.45.4",
+]);
 const canonical = (source) => source.replace(/\r\n/gu, "\n").trimEnd() + "\n";
 
 // Include transitive shared modules, not just each function's entrypoint.

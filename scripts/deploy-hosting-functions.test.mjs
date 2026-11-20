@@ -143,7 +143,10 @@ test("the audit covers all website Edge functions and compares runtime dependenc
   for (const name of ["patreon-start", "patreon-complete", "create-github-issue-bug-report", "vps-renewal-alert", "nightly-gateway"]) {
     assert.equal(policies.get(name), false);
   }
-  assert.equal(policies.has("admin-servers"), false);
+  for (const [name, jwt] of [["admin-servers", true], ["network-stats-cached", true], ["sync-platform-statistics", false]]) {
+    assert.equal(policies.get(name), jwt);
+    assert.equal(Object.hasOwn(FUNCTIONS, name), false);
+  }
   for (const name of policies.keys()) assert.ok((await sources(root, name, { audit: true })).has(name + "/index.ts"));
   const nightly = await sources(root, "nightly-gateway", { audit: true });
   assert.ok(nightly.has("_shared/nightly/gateway.ts"));

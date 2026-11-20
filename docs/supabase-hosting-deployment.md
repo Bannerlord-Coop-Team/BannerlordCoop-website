@@ -38,6 +38,14 @@ credential restricted to `edge_functions_read` on the production project.
 The audit makes only Management API GET requests, and requires this credential
 independently of the deployment token.
 
+The audit also tracks the captured legacy functions. Direct callers can still use
+`admin-servers`, and the website's current admin flows use `control-plane-admin`.
+The homepage calls `network-stats-cached`, and an existing database schedule
+calls `sync-platform-statistics`. The three functions stay outside automatic
+deployment. The two captured statistics entry points use Deno globals and stay
+outside the website's Node TypeScript program. The audit compares their source
+with the versions running on Supabase.
+
 The workflow uses the pinned Supabase CLI 2.120.0 and `--use-api` for both
 deployment and download; it does not launch Docker. Deployment runs are serialized
 and an active run is never cancelled by a newer commit. Every run keeps its own
