@@ -1,5 +1,6 @@
 "use client";
 
+import { discordSupportSlots } from "@/app/components/ui/DiscordSupportLink";
 import { ArrowRightLeft, CalendarClock, Check, CircleCheck, Copy, Info, LoaderCircle, TriangleAlert, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useContext, useEffect, useEffectEvent, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
@@ -185,7 +186,7 @@ export function ManagedServerMoveProvider({ serverId, initialMove, headerAddress
  */
 export function ManagedServerMoveStatus({ notices }: { notices: readonly MyServerNotice[] }) {
     const context = useContext(ManagedServerMoveContext);
-    const { t, date } = useTranslations("managed-server");
+    const { rich, t, date } = useTranslations("managed-server");
     const timeZone = useViewerTimeZone();
     const revealAddress = useRevealServerAddress();
     const headerAddress = useServerAddress();
@@ -323,7 +324,7 @@ export function ManagedServerMoveStatus({ notices }: { notices: readonly MyServe
                     {copyState === "failed" && <p className="mt-2 text-xs text-foreground-muted">{t("move.copyFailed")}</p>}
                 </> : <p className="mt-1 leading-6 text-foreground-muted">{t("move.movedBodyNoAddress")}</p>)}
                 {shown.state === "failed" && <p className="mt-1 leading-6 text-foreground-muted">
-                    {t(shown.stayedOnOriginal === true ? "move.failedStayedBody" : "move.failedAttentionBody")}</p>}
+                    {rich(shown.stayedOnOriginal === true ? "move.failedStayedBody" : "move.failedAttentionBody", discordSupportSlots(t))}</p>}
             </div>
             {finished && <button type="button" onClick={dismiss} aria-label={t("notices.dismissNamed", { title: title! })} className={dismissButtonClass}>
                 <X aria-hidden="true" className="size-3.5" />{t("notices.dismiss")}</button>}

@@ -1,3 +1,4 @@
+import { discordSupportSlots } from "@/app/components/ui/DiscordSupportLink";
 import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { isColdSleeping } from "@/app/lib/hosting/cold-sleep";
 import type { Translator } from "@/app/lib/localization/types";
@@ -180,7 +181,7 @@ async function UnavailableFileWorkspaces() {
 async function ManagedServerManagementPage({ userId, accessToken, server, initialSection }: {
     userId: string; accessToken: string; server: MyServerSummary; initialSection?: ServerWorkspaceSection;
 }) {
-    const { t } = await getTranslations("managed-server");
+    const { rich, t } = await getTranslations("managed-server");
     // Region names live with onboarding in the servers namespace, so both pages share one translation.
     const { t: tServers } = await getTranslations("servers");
     const [deletionStatus, notices, move, managers] = await Promise.all([
@@ -209,7 +210,7 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
         interactionLocked={initializing}
         address={address}
         visibility={<ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} disabled={initializing} />}
-        notice={server.runtimeInsightWarning ? t("page.liveStatusDetailsUnavailable") : undefined}
+        notice={server.runtimeInsightWarning ? rich("page.liveStatusDetailsUnavailable", discordSupportSlots(t)) : undefined}
         summary={t("page.managedSummary", { region: localizedRegionLabel(tServers, server.friendlyRegion), access: managedAccessLabels[server.accessRole] })}
         status={<Suspense fallback={<ManagedServerStatus accessToken={accessToken} server={server} move={move} checkBackup={false} />}>
             <ManagedServerStatus accessToken={accessToken} server={server} move={move} checkBackup={server.accessRole === "owner" || server.accessRole === "manager"} />

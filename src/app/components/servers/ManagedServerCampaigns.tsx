@@ -1,5 +1,7 @@
 "use client";
 
+import { DiscordSupportText } from "@/app/components/ui/DiscordSupportLink";
+import { GENERAL_HELP_TICKET } from "../../../../supabase/functions/_shared/discord-support";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Sparkles, Trash2 } from "lucide-react";
@@ -17,7 +19,9 @@ type Campaigns = Omit<CampaignPage, "nextCursor">;
 type CampaignMode = "classic" | "warSails";
 type ResetReceipt = { serverId: string; userId: string; jobId: string; previousSaveId: string | null; since: number };
 
-/** Lists, selects, deletes and resets campaigns; `warSailsCapable` offers a War Sails mode for a new campaign. */
+const unconfirmedResetMessage = "The campaign reset outcome could not be confirmed. Check your campaigns before trying again. " + GENERAL_HELP_TICKET + " if you need help.";
+
+/** Lists, selects, deletes and resets campaigns, with War Sails available when supported. */
 export function ManagedServerCampaigns({ userId, serverId, status, canDelete = false, warSailsCapable = false }: { userId: string; serverId: string; status: OwnerFileStatus | null; canDelete?: boolean; warSailsCapable?: boolean }) {
     const { t } = useTranslations("managed-server");
     const router = useRouter();
@@ -70,7 +74,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
         async function poll() {
             if (cancelled || resettingRef.current !== receipt) return;
             if (Date.now() - receipt.since >= 10 * 60_000) {
-                finish("The campaign reset outcome could not be confirmed. Check your campaigns or contact support before trying again.");
+                finish(unconfirmedResetMessage);
                 return;
             }
             let response: Awaited<ReturnType<typeof readManagedServerCampaignReset>> | null = null;
@@ -88,7 +92,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
             // One read at a time, with a fixed ten-minute bound and no mutation/retry of Reset.
             timer = setTimeout(() => void poll(), 5_000);
         }
-        const deadline = setTimeout(() => finish("The campaign reset outcome could not be confirmed. Check your campaigns or contact support before trying again."), Math.max(0, receipt.since + 10 * 60_000 - Date.now()));
+        const deadline = setTimeout(() => finish(unconfirmedResetMessage), Math.max(0, receipt.since + 10 * 60_000 - Date.now()));
         void poll();
         return () => { cancelled = true; clearTimeout(deadline); if (timer !== undefined) clearTimeout(timer); };
     }, [resetting, serverId, userId, router]);
@@ -188,8 +192,8 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
                 </DisabledControlHint>
             </div>
         </div>
-        {message && <p role="status" className="mt-3 text-sm text-foreground-muted">{message}</p>}
-        {deletion.message && <p role="status" className="mt-3 text-sm text-foreground-muted">{deletion.message}</p>}
+        {message && <p role="status" className="mt-3 text-sm text-foreground-muted"><DiscordSupportText message={message} /></p>}
+        {deletion.message && <p role="status" className="mt-3 text-sm text-foreground-muted"><DiscordSupportText message={deletion.message} label={t("support.discord")} /></p>}
         {deletion.canRecover && canDelete && <button type="button" className={fileButtonClass} onClick={deletion.recover}>Recover deletion request</button>}
         {deletion.statusUnknown && canDelete && <button type="button" className={fileButtonClass} onClick={() => void deletion.checkUnknown()}>Check campaigns to recover</button>}
         {deletion.canRetryUnknown && canDelete && <button type="button" className={fileButtonClass} onClick={deletion.retryUnknown}>Try again</button>}

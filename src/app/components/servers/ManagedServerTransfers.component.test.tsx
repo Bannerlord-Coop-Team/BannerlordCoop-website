@@ -156,7 +156,7 @@ it.each(["storage-unavailable", "save-rejected", "stop-required", "server-change
         action: "import-save", fingerprints: ["a".repeat(64)], displayName: "Campaign", saveId: status.activeSave!.saveId }));
     mocks.check.mockResolvedValue({ ok: true, result: { ...job, action: "import-save", state: "failed", failureReason } });
     await render(); await click("Check status");
-    expect(container.textContent).toContain(serverTestMessages["managed-server"][`transfers.failure.${failureReason}` as keyof typeof serverTestMessages["managed-server"]]);
+    expect(container.textContent).toContain(createTranslator("en", serverTestMessages["managed-server"]).t(`transfers.failure.${failureReason}`, { supportLink: "our Discord" }));
     expect(container.textContent).toContain("will not retry");
     expect(container.textContent).toContain(status.serverId);
     expect([...container.querySelectorAll("button")].some((el) => el.textContent === "Retry same request")).toBe(false);
@@ -170,7 +170,7 @@ it.each([undefined, ...OWNER_FILE_REJECTION_REASONS])("shows descriptive pre-job
     mocks.check.mockResolvedValue({ ok: true, result: { kind: "rejected", ...(failureReason ? { failureReason } : {}) } });
     await render(); await click("Check status");
     const messageKey = failureReason ? `transfers.rejection.${failureReason}` : "transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck";
-    expect(container.textContent).toContain(serverTestMessages["managed-server"][messageKey as keyof typeof serverTestMessages["managed-server"]]);
+    expect(container.textContent).toContain(createTranslator("en", serverTestMessages["managed-server"]).t(messageKey, { supportLink: "our Discord" }));
     expect(container.textContent).toContain(`Support reference: ${status.serverId}`);
     expect(sessionStorage.getItem(key)).toBeNull();
     expect(button("Import save").disabled).toBe(false);

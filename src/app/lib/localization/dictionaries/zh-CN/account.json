@@ -1,4 +1,5 @@
 {
+  "support.discord": "我们的 Discord 服务器",
   "metadata.title": "账户 | Bannerlord Co-op",
   "heading": "账户",
   "defaultName": "您的账户",
@@ -7,7 +8,7 @@
   "error.rateLimited": "账户更改过于频繁，或同步尚未完成。请等待状态更新后再试。授权将在十分钟内过期。您仍可解除关联并管理现有服务器。",
   "error.retry": "账户正忙。请查看更新后的关联状态，然后再试。新的授权会取代尚未完成的尝试。",
   "error.lastIdentity": "Discord 是您唯一的登录方式。请先关联其他登录方式，再解除关联。",
-  "error.discordDisconnect": "无法解除与 Discord 的关联。状态会自动更新，请在状态可用后重试。如果问题持续存在，请联系支持团队。",
+  "error.discordDisconnect": "无法解除与 Discord 的关联。状态会自动更新，请在状态可用后重试。如果问题持续存在，请在{supportLink}的“General Help”类别中创建支持工单。",
   "error.patreonDisconnect": "无法解除与 Patreon 的关联。状态会自动更新，请等待获取最新状态后再试。",
   "error.discordRepair": "无法完成 Discord 关联。请先查看下方当前的关联状态，然后再试。您的会话可能已变更、请求可能已过期，或此 Discord 账户可能已关联到其他账户。我们绝不会以登录操作代替关联操作。",
   "error.patreonAuthorization": "Patreon 授权已取消或无法完成。请查看下方当前的关联状态，然后根据需要重新关联或验证。一个 Patreon 账户只能关联到一个网站账户。",
@@ -25,7 +26,7 @@
   "membership.verified": "会员资格已验证。",
   "membership.nonqualifying": "{installer}，还可享受其他权益。",
   "membership.nightlyInstaller": "Patreon 支持者可以使用每夜版安装程序（使用方法见此处）",
-  "membership.reviewRequired": "您的会员资格需要审核。请先联系支持团队，再尝试操作。",
+  "membership.reviewRequired": "您的会员资格需要审核。请先在{supportLink}的“General Help”类别中创建支持工单，再尝试操作。",
   "membership.verifyRequired": "请先验证会员资格，再创建新服务器。",
   "membership.syncPending": "正在更新您的服务器配额。通常只需几秒钟，状态会自动刷新。",
   "membership.syncUnavailable": "无法查询您的服务器配额。",

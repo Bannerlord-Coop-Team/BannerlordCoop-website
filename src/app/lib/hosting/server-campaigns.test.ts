@@ -80,7 +80,7 @@ test("real Website client and Edge consume the fixed refusal without submitting 
     const check = wire(requestId => Response.json({ version: 1, requestId, ok: true, result }));
     const status = await getMyServerCampaignResetStatus("synthetic-owner-token", serverId, jobId);
     assert.deepEqual(status, result);
-    assert.equal(campaignResetStatusMessage(status), failure.instruction);
+    assert.equal(campaignResetStatusMessage(status), "Create a General Help support ticket in https://discord.gg/5vJzfz5Zzy to request a runner update, then request Reset Campaign again.");
     check();
 });
 

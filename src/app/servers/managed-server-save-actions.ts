@@ -1,5 +1,6 @@
 "use server";
 
+import { DISCORD_SUPPORT_URL } from "../../../supabase/functions/_shared/discord-support";
 import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
@@ -89,7 +90,7 @@ export async function readManagedServerSaveDeletion(serverId: string, jobId: str
             : status.state === "retry-wait" ? "campaigns.deletePending"
             : status.errorCode === "save_still_loaded" ? "campaigns.saveStillLoaded"
             : status.errorCode === "queue_timeout" ? "campaigns.deleteQueueTimeout" : "campaigns.deleteOutcomeFailed";
-        return { ok: true, status, message: t(key) };
+        return { ok: true, status, message: t(key, { supportLink: DISCORD_SUPPORT_URL }) };
     } catch (error) {
         return { ok: false, message: await ownerMaintenanceMessage(error) ?? t("campaigns.deleteStatusUnavailable") };
     }

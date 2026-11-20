@@ -20,7 +20,7 @@ const insight = { desiredState: "stopped", observedAt: null, allowedActions: ["s
     failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: null };
 
 it.each([
-    [{ modId: "CoopSycn", reason: "missing-assembly", assembly: "0Harmony" }, ["CoopSycn", "Harmony (0Harmony.dll)", "Bannerlord.Harmony", "hosting problem", "re-uploading", "will not fix it", "Contact support"]],
+    [{ modId: "CoopSycn", reason: "missing-assembly", assembly: "0Harmony" }, ["CoopSycn", "Harmony (0Harmony.dll)", "Bannerlord.Harmony", "hosting problem", "re-uploading", "will not fix it", "General Help support ticket"]],
     [{ modId: "Other", reason: "missing-assembly", assembly: "Dependency" }, ["Other", "Dependency", "Upload the dependency"]],
     [{ modId: "Other", reason: "missing-dll" }, ["Other", "SubModule.xml", "complete mod", "bin folder"]],
     [{ modId: "Other", reason: "load-error" }, ["Other", "version compatible", "dependencies"]],
@@ -50,7 +50,7 @@ it.each(["en", "de", "es", "fr", "ja", "ko", "pt-BR", "pt-PT", "ru", "tr", "zh-C
     expect(message).toContain("0Harmony.dll");
     expect(message).toContain("Bannerlord.Harmony");
     expect(message).not.toContain("{modId}");
-    expect(message).toBe(messages["controls.modLoadFailedHarmony"].replace("{modId}", "CoopSycn"));
+    expect(message).toBe(messages["controls.modLoadFailedHarmony"].replace("{modId}", "CoopSycn").replace("{supportLink}", "https://discord.gg/5vJzfz5Zzy"));
 });
 
 it.each([

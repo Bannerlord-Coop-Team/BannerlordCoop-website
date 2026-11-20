@@ -6,7 +6,7 @@ vi.mock("@/app/lib/localization/server", () => ({
     getTranslations: async (namespace: string) => createTranslator("en", namespace === "server-common" ? common : messages),
 }));
 import { changeManagedServerCampaign, listManagedServerCampaigns, readManagedServerCampaignReset } from "./managed-server-campaign-actions";
-import { CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION } from "../../../supabase/functions/_shared/server-campaign-contract";
+import { CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION, campaignResetStatusMessage } from "../../../supabase/functions/_shared/server-campaign-contract";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), select: vi.fn(), reset: vi.fn(), resetStatus: vi.fn() }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
@@ -29,9 +29,9 @@ it("checks the current account before listing or changing campaigns", async () =
 });
 
 it("returns fixed reset refusal guidance through the authenticated campaign action, never re-submitting Reset", async () => {
-    const status = { serverId: id, jobId: id, state: "failed", errorCode: "agent_capability_unavailable", instruction: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION };
+    const status = { serverId: id, jobId: id, state: "failed", errorCode: "agent_capability_unavailable", instruction: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION } as const;
     mocks.resetStatus.mockResolvedValue(status);
-    expect(await readManagedServerCampaignReset(id, id, "owner")).toEqual({ ok: true, status, message: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION });
+    expect(await readManagedServerCampaignReset(id, id, "owner")).toEqual({ ok: true, status, message: campaignResetStatusMessage(status) });
     expect(mocks.resetStatus).toHaveBeenCalledExactlyOnceWith("token", id, id);
     expect(mocks.reset).not.toHaveBeenCalled();
     mocks.resetStatus.mockClear();

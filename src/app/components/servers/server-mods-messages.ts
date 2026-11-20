@@ -1,3 +1,4 @@
+import { DISCORD_SUPPORT_URL } from "../../../../supabase/functions/_shared/discord-support";
 import type { Translator } from "@/app/lib/localization/types";
 import type { ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
 import type { ServerMod, ServerModsError } from "@/app/lib/hosting/server-mods";
@@ -145,7 +146,7 @@ export function archiveProblemMessage(error: ModArchiveError, t: Translate): str
 /** Explains a Start that failed because an enabled mod did not load, naming the mod and any missing assembly. */
 export function modLoadFailureMessage(failure: ModLoadFailure, t: Translate): string {
     if (failure.reason === "missing-assembly" && failure.assembly !== undefined) {
-        if (failure.assembly === "0Harmony") return t("controls.modLoadFailedHarmony", { modId: failure.modId });
+        if (failure.assembly === "0Harmony") return t("controls.modLoadFailedHarmony", { modId: failure.modId, supportLink: DISCORD_SUPPORT_URL });
         return t("controls.modLoadFailedMissingAssembly", { modId: failure.modId, assembly: failure.assembly });
     }
     if (failure.reason === "missing-dll") return t("controls.modLoadFailedMissingDll", { modId: failure.modId });

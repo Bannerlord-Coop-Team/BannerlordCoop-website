@@ -1,5 +1,6 @@
 "use server";
 
+import { GENERAL_HELP_TICKET } from "../../../supabase/functions/_shared/discord-support";
 import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
@@ -31,7 +32,7 @@ export async function readManagedServerCampaignReset(serverId: string, jobId: st
         return { ok: false,
             message: await ownerMaintenanceMessage(error) ?? (error instanceof MyServersApiError && ["server_not_found", "forbidden"].includes(error.code)
                 ? "This server is unavailable or your access changed."
-                : "The campaign reset status could not be confirmed. Check your campaigns or contact support before trying again."),
+                : "The campaign reset status could not be confirmed. Check your campaigns before trying again. " + GENERAL_HELP_TICKET + " if you need help."),
             retryable: error instanceof MyServersApiError && error.retryable };
     }
 }

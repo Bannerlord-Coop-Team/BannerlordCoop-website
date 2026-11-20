@@ -1,5 +1,6 @@
 "use client";
 
+import { DiscordSupportText } from "@/app/components/ui/DiscordSupportLink";
 import { useTranslations } from "@/app/lib/localization/client";
 import type { Translator } from "@/app/lib/localization/types";
 
@@ -60,8 +61,8 @@ export function ServerUpdateProgress({ job }: { job: BuildUpdateJob }) {
         {succeeded && <p className="text-sm font-medium text-foreground">{job.progress}</p>}
         {job.state === "failed" && <div role="alert" className="space-y-1 rounded-md border border-red-400/40 bg-red-400/[0.07] p-3 text-sm">
             <p className="font-semibold text-red-200">{t("serverUpdate.theUpdateDidNotFinish")}</p>
-            {job.failureMessage && <p className="text-foreground">{job.failureMessage}</p>}
-            {job.nextStep && <p className="text-foreground-muted">{job.nextStep}</p>}
+            {job.failureMessage && <p className="text-foreground"><DiscordSupportText message={job.failureMessage} /></p>}
+            {job.nextStep && <p className="text-foreground-muted"><DiscordSupportText message={job.nextStep} /></p>}
         </div>}
         {job.state === "cancelled" && <p role="status" className="text-sm text-foreground-muted">{t("serverUpdate.theUpdateWasCancelled")}</p>}
     </section>;

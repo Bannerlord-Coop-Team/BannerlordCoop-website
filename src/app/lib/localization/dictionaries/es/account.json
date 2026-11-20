@@ -1,4 +1,5 @@
 {
+  "support.discord": "nuestro Discord",
   "metadata.title": "Cuenta | Bannerlord Co-op",
   "heading": "Cuenta",
   "defaultName": "Tu cuenta",
@@ -7,7 +8,7 @@
   "error.rateLimited": "Se han realizado demasiados cambios en la cuenta o la sincronización aún está en curso. Espera a que se actualice el estado antes de volver a intentarlo. La autorización caduca en un plazo de diez minutos. Puedes seguir desconectando cuentas y gestionando los servidores existentes.",
   "error.retry": "La cuenta está ocupada. Comprueba el estado actualizado de la conexión antes de volver a intentarlo. Una nueva autorización sustituye los intentos sin terminar.",
   "error.lastIdentity": "Discord es tu único método para iniciar sesión. Conecta otro método para iniciar sesión antes de desconectarlo.",
-  "error.discordDisconnect": "No se pudo desconectar Discord. El estado se actualiza automáticamente; vuelve a intentarlo cuando esté disponible. Si el problema persiste, contacta con el equipo de soporte.",
+  "error.discordDisconnect": "No se pudo desconectar Discord. El estado se actualiza automáticamente; vuelve a intentarlo cuando esté disponible. Si el problema persiste, abre un ticket de soporte en «General Help» en {supportLink}.",
   "error.patreonDisconnect": "No se pudo desconectar Patreon. El estado se actualiza automáticamente; espera a que se muestre el estado actual antes de volver a intentarlo.",
   "error.discordRepair": "No se pudo completar la vinculación con Discord. Comprueba tu conexión actual a continuación antes de volver a intentarlo. Es posible que tu sesión haya cambiado, que la solicitud haya caducado o que Discord esté vinculado a otra cuenta. Nunca sustituimos la vinculación por un inicio de sesión.",
   "error.patreonAuthorization": "La autorización de Patreon se canceló o no se pudo completar. Comprueba tu conexión actual a continuación y vuelve a conectar o verificar si es necesario. Una cuenta de Patreon solo puede estar vinculada a una cuenta de este sitio web.",
@@ -25,7 +26,7 @@
   "membership.verified": "Membresía verificada.",
   "membership.nonqualifying": "{installer} y otras ventajas.",
   "membership.nightlyInstaller": "Quienes apoyan el proyecto en Patreon tienen acceso al instalador de versiones nocturnas (así se usa)",
-  "membership.reviewRequired": "Tu membresía necesita una revisión. Contacta con el equipo de soporte antes de volver a intentarlo.",
+  "membership.reviewRequired": "Tu membresía necesita una revisión. Abre un ticket de soporte en «General Help» en {supportLink} antes de volver a intentarlo.",
   "membership.verifyRequired": "Verifica tu membresía antes de crear un nuevo servidor.",
   "membership.syncPending": "Se está actualizando tu asignación de servidores. Normalmente tarda unos segundos; el estado se actualiza automáticamente.",
   "membership.syncUnavailable": "No se pudo comprobar tu cupo de servidores.",

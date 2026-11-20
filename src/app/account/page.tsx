@@ -1,3 +1,4 @@
+import { discordSupportSlots } from "@/app/components/ui/DiscordSupportLink";
 import { AccountStatusSync } from "@/app/account/AccountStatusSync";
 import { DisconnectAccount } from "@/app/account/DisconnectAccount";
 import { linkDiscordAccount, linkPatreonAccount, disconnectDiscordAccount, disconnectPatreonAccount } from "@/app/account/actions";
@@ -68,7 +69,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         {(params.patreon === "rate_limited" || params.discord === "rate_limited") && <p role="alert" className="mt-4">{t("error.rateLimited")}</p>}
         {[params.patreon, params.discord].includes("retry") && <p role="alert" className="mt-4">{t("error.retry")}</p>}
         {params.discord === "last_identity" && <p role="alert" className="mt-4 text-sm">{t("error.lastIdentity")}</p>}
-        {params.discord === "disconnect_error" && <p role="alert" className="mt-4 text-sm">{t("error.discordDisconnect")}</p>}
+        {params.discord === "disconnect_error" && <p role="alert" className="mt-4 text-sm">{rich("error.discordDisconnect", discordSupportSlots(t))}</p>}
         {params.patreon === "disconnect_error" && <p role="alert" className="mt-4 text-sm">{t("error.patreonDisconnect")}</p>}
         {params.discord === "repair" && <p role="alert" className="mt-4">{t("error.discordRepair")}</p>}
         {["error", "confirm_error", "cancelled"].includes(params.patreon ?? "") && <p role="alert" className="mt-4">{t("error.patreonAuthorization")}</p>}
@@ -97,7 +98,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                     {status?.membership.linked && <div className="mt-3 space-y-2 text-sm leading-6 text-foreground-muted">
                         <p role="status">{status.membership.verification === "qualifying" && status.membership.validUntil && Date.parse(status.membership.validUntil) > checkedAt ? t("membership.verified") : status.membership.verification === "nonqualifying" ? rich("membership.nonqualifying", {
                             installer: <a href="https://discord.com/channels/709516043332354119/1058155634702434355/1539466223916421201" target="_blank" rel="noopener noreferrer" className="text-gold underline hover:text-gold/85">{t("membership.nightlyInstaller")}</a>,
-                        }) : status.membership.verification === "review_required" ? t("membership.reviewRequired") : t("membership.verifyRequired")}</p>
+                        }) : status.membership.verification === "review_required" ? rich("membership.reviewRequired", discordSupportSlots(t)) : t("membership.verifyRequired")}</p>
                         {status.membership.sync === "pending" && <p role="status">{t("membership.syncPending")}</p>}
                         {status.membership.sync === "unavailable" && <p role="status">{t("membership.syncUnavailable")}</p>}
                         <p>{t("membership.expiry")}</p>

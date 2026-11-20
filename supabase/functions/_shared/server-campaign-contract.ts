@@ -1,3 +1,4 @@
+import { GENERAL_HELP_TICKET } from "./discord-support.ts";
 import { requireUuid } from "./server-file-contract.ts";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -33,6 +34,7 @@ export type CampaignSelection = { serverId: string; activeSaveId: string | null;
 
 export type CampaignResetResult = { outcome: "enqueued" | "existing"; jobId: string; action: "reset-campaign" };
 
+// Keep the v1 wire instruction stable for older website and Control Plane peers.
 export const CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION = "Contact support to update this server's runner, then request Reset Campaign again.";
 const RESET_STATES = ["queued", "running", "retry-wait", "succeeded", "failed", "cancelled"] as const;
 export type CampaignResetStatus = {
@@ -64,9 +66,9 @@ export function parseCampaignResetStatus(value: unknown, serverId: string, jobId
 export function campaignResetStatusMessage(status: CampaignResetStatus | null): string {
     if (status === null) return "The reset status is not available from the hosting service yet. Your request has not been submitted again.";
     if (status.state === "succeeded") return "Your fresh campaign is ready. Start the server when you want to play it.";
-    if (status.errorCode === "agent_capability_unavailable") return CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION;
+    if (status.errorCode === "agent_capability_unavailable") return GENERAL_HELP_TICKET + " to request a runner update, then request Reset Campaign again.";
     if (status.errorCode === "queue_timeout") return "The campaign reset expired before it could start. Refresh before requesting another reset.";
-    if (status.state === "failed" || status.state === "cancelled") return "The campaign reset did not complete. Check your campaigns or contact support before trying again.";
+    if (status.state === "failed" || status.state === "cancelled") return "The campaign reset did not complete. Check your campaigns before trying again. " + GENERAL_HELP_TICKET + " if you need help.";
     return "Preparing your fresh campaign. This takes about a minute…";
 }
 

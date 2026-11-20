@@ -68,10 +68,14 @@ it("reports a completed update as complete", async () => {
 it("reports a failed update with its reason, the automatic return and the next step, without exposing job identifiers", async () => {
     await render(job(["done", "done", "done", "failed"], { state: "failed", phase: "failed", rolledBack: true, failureCode: "agent_game_health_failed",
         failureMessage: "The game did not start on the new version. We returned your server to 0.1.10. Your campaign and the backup taken before the change are intact.",
-        nextStep: "Check that your campaign and enabled mods work on that version, then try again.", backup: { backupId: jobId } }));
+        nextStep: "Create a General Help support ticket in our Discord (https://discord.gg/5vJzfz5Zzy) before changing versions again.", backup: { backupId: jobId } }));
     const alert = [...container.querySelectorAll('[role="alert"]')].find(node => node.textContent?.includes("did not finish"))!;
     expect(alert.textContent).toContain("We returned your server to 0.1.10");
-    expect(alert.textContent).toContain("then try again");
+    expect(alert.textContent).toContain("Create a General Help support ticket in our Discord before changing versions again.");
+    const link = alert.querySelector("a");
+    expect(link?.getAttribute("href")).toBe("https://discord.gg/5vJzfz5Zzy");
+    expect(link?.getAttribute("target")).toBe("_blank");
+    expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
     expect(container.querySelector('[aria-current="step"]')).toBeNull();
     expect([...container.querySelectorAll("ol li")][3].textContent).toBe("Installing 0.1.11Failed");
     expect(container.textContent).not.toContain(jobId);

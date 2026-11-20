@@ -63,7 +63,7 @@ it("uses selected messages for metadata and accessible loading", async () => {
 it.each([true, false])("localizes unlinked presentation and only the missing-name fallback (named=%s)", async named => {
     const view = await renderAccount(accountStatus(false), {}, named);
     for (const key of ["heading", "intro", "connections.heading", "badge.unlinked", "discord.optional", "discord.connect", "patreon.benefits", "patreon.connect", "servers.heading", "servers.description", "servers.link"]) {
-        expect(view.textContent).toContain(translated[key]);
+        expect(view.textContent).toContain(translated[key].replace("{supportLink}", translated["support.discord"]));
     }
     expect(view.textContent).toContain(named ? "Actual Name" : translated.defaultName);
     expect(view.textContent?.includes(translated.defaultName)).toBe(!named);
@@ -87,7 +87,7 @@ it.each([
     ["patreon", "cancelled", "error.patreonAuthorization"],
 ])("localizes %s=%s error presentation", async (provider, code, key) => {
     const view = await renderAccount(accountStatus(false), { [provider]: code });
-    expect(view.querySelector('[role="alert"]')?.textContent).toBe(translated[key]);
+    expect(view.querySelector('[role="alert"]')?.textContent).toBe(translated[key].replace("{supportLink}", translated["support.discord"]));
     expect(view.textContent).toContain(translated["patreon.connect"]);
 });
 
@@ -101,11 +101,23 @@ it.each([
 ] as const)("localizes linked membership %s notices without translating actual Discord names", async (verification, validUntil, sync, verificationKey, syncKey) => {
     const view = await renderAccount(accountStatus(true, { ...EMPTY_MEMBERSHIP, linked: true, verification, validUntil, sync }));
     for (const key of [verificationKey, syncKey, "membership.expiry", "badge.connected", "patreon.linked", "patreon.verify"]) {
-        expect(view.textContent).toContain(translated[key]);
+        expect(view.textContent).toContain(translated[key].replace("{supportLink}", translated["support.discord"]));
     }
     expect(view.querySelector('a[href^="https://discord.com/channels/"]')).toBeNull();
     expect(view.textContent).toContain("actual_discord");
     expect(view.textContent).not.toContain(translated["discord.connected"]);
+});
+
+it.each(locales)("links membership review to General Help in %s", async locale => {
+    dictionary = JSON.parse(readFileSync(resolve("src/app/lib/localization/dictionaries", locale, "account.json"), "utf8"));
+    const view = await renderAccount(accountStatus(true, { ...EMPTY_MEMBERSHIP, linked: true, verification: "review_required" }));
+    const notice = view.querySelector('[role="status"]');
+    const link = notice?.querySelector("a");
+    expect(notice?.textContent).toContain("General Help");
+    expect(link?.textContent).toBe(dictionary["support.discord"]);
+    expect(link?.getAttribute("href")).toBe("https://discord.gg/5vJzfz5Zzy");
+    expect(link?.getAttribute("target")).toBe("_blank");
+    expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
 });
 
 const installerGuide = "https://discord.com/channels/709516043332354119/1058155634702434355/1539466223916421201";
