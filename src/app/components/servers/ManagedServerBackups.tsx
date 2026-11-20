@@ -200,22 +200,16 @@ function ManagedServerBackupsSession({
             && TERMINAL_JOB_STATES.has(status.job.state));
     const observedAt = Date.parse(server.runtimeInsight?.observedAt ?? "");
     // The observation timestamp belongs to the server summary, so require both reads to agree.
-    const freshStop = !statusIsStale
-        && server.runtimeInsight?.desiredState === "running"
-        && server.observedGameState === "stopped"
-        && status?.observedGameState === "stopped"
+    const gameObservedRunning = !statusIsStale
+        && pollingSession?.serverId === server.serverId
+        && pollingSession.statusSource === "backup"
+        && pollingSession.jobId === activeJob?.jobId
+        && server.observedGameState === "running"
+        && status?.observedGameState === "running"
         && status.updatedAt === server.updatedAt
         && now !== null
         && observedAt >= now - GAME_OBSERVATION_MAX_AGE_MILLISECONDS
         && observedAt < now + 60_000;
-    let backupStatusDetail: string | null = null;
-    if (activeJob?.action === "backup") {
-        if (activeJob.state === "queued" && status?.observedGameState === "running") {
-            backupStatusDetail = t("backups.queuedWhileRunning");
-        } else if (activeJob.state === "running" && freshStop && observedAt >= Date.parse(activeJob.createdAt)) {
-            backupStatusDetail = t("backups.theServerIsTemporarilyStoppedForThisBackup");
-        }
-    }
 
     useEffect(() => {
         const timeout = window.setTimeout(() => {
@@ -606,7 +600,7 @@ function ManagedServerBackupsSession({
                     </p>
                 )}
 
-                {shownJob !== null && <BackupJobStatus job={shownJob} detail={backupStatusDetail} />}
+                {shownJob !== null && <BackupJobStatus job={shownJob} gameObservedRunning={gameObservedRunning} />}
 
                 {statusIsStale && (
                     <div className={`flex flex-wrap items-center justify-between gap-3 ${workspaceNoticeClass}`}>
@@ -742,25 +736,28 @@ function formatRelativeTime(value: string, now: number, locale: string) {
 }
 
 // Presents durable backup progress without translating external job output.
-function BackupJobStatus({ job, detail }: { job: MyServerBackupJob; detail: string | null }) {
+function BackupJobStatus({ job, gameObservedRunning }: { job: MyServerBackupJob; gameObservedRunning: boolean }) {
     const { t } = useTranslations("managed-server");
     const active = ACTIVE_BACKUP_JOB_STATES.has(job.state);
     const failed = job.state === "failed" || job.state === "cancelled";
-    const message = active
-        ? formatProgress(job, t)
-        : job.state === "succeeded"
-            ? job.action === "backup" ? t("backups.backupCompleted") : t("backups.saveRestoreCompleted")
-            : job.action === "backup" ? t("backups.theBackupDidNotComplete") : t("backups.theSaveRestoreDidNotComplete");
+    // Backup status has no start timestamp. The progress alone avoids attributing a stop to the job.
+    let message: string;
+    if (job.action === "backup" && job.state === "queued") {
+        message = gameObservedRunning ? t("backups.queuedWhileRunning") : t("backups.queued");
+    } else if (active) {
+        message = formatProgress(job, t);
+    } else if (job.state === "succeeded") {
+        message = job.action === "backup" ? t("backups.backupCompleted") : t("backups.saveRestoreCompleted");
+    } else {
+        message = job.action === "backup" ? t("backups.theBackupDidNotComplete") : t("backups.theSaveRestoreDidNotComplete");
+    }
     return (
         <div
             role={failed ? "alert" : "status"}
             className={`flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${failed ? "border-crimson/50 bg-crimson/10 text-red-200" : "border-gold/30 bg-gold/[0.06] text-foreground"}`}
         >
             {active && <LoaderCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 animate-spin text-gold" />}
-            <span>
-                {message}
-                {detail !== null && <span className="mt-1 block text-xs">{detail}</span>}
-            </span>
+            <span>{message}</span>
         </div>
     );
 }

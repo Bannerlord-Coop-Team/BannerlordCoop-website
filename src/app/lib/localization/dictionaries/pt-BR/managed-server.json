@@ -698,7 +698,7 @@
   "downloadServerLogButton.theServerSLogFileIsEmptyRightNowIt": "O arquivo de log do servidor está vazio no momento. Ele é preenchido enquanto o jogo roda — tente novamente em um minuto.",
   "backups.createABackupNow": "Criar um backup agora?",
   "backups.theServerIsRunningItWillSaveStopBrieflyAndStartAgain": "O servidor está em execução, então ele vai salvar a campanha, parar por alguns instantes enquanto o backup é criado e depois iniciar novamente. Os jogadores conectados serão desconectados e poderão entrar de novo assim que ele voltar.",
-  "backups.theServerIsTemporarilyStoppedForThisBackup": "O servidor está temporariamente parado para este backup e será iniciado novamente de forma automática.",
+  "backups.queued": "O backup está na fila.",
   "backups.automaticStatusUpdatesHavePausedTheOperationMayStillBeRunning": "As atualizações automáticas de status foram pausadas. A operação pode ainda estar em andamento.",
   "backups.wereConfirmingYourBackupRequest": "Estamos confirmando sua solicitação de backup. Tentar novamente é seguro: a mesma solicitação é reutilizada, então nenhum backup extra é criado.",
   "backups.wereConfirmingYourRestoreRequest": "Estamos confirmando sua solicitação de restauração. Tentar novamente é seguro: a mesma solicitação é reutilizada, então o jogo salvo não será restaurado duas vezes.",

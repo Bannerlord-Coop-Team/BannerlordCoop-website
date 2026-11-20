@@ -497,6 +497,16 @@ describe("ManagedServerBackups owner experience", () => {
         },
     };
     const stoppedForBackupMessage = "The server is temporarily stopped for this backup";
+    const queuedWhileRunningMessage = "Backup queued — your server keeps running until the backup starts.";
+    const queuedBackup: MyServerBackupStatus = {
+        ...backupInProgress,
+        observedGameState: "running",
+        job: { ...backupInProgress.job!, state: "queued", progress: "Waiting to begin" },
+    };
+    const runningDuringQueue: MyServerSummary = {
+        ...stoppedForBackup,
+        observedGameState: "running",
+    };
 
     it("confirms the brief interruption before backing up a running server, but not a stopped one", async () => {
         const confirm = vi.mocked(window.confirm);
@@ -516,29 +526,49 @@ describe("ManagedServerBackups owner experience", () => {
         expect(request).toHaveBeenCalledTimes(1);
     });
 
-    it("says a queued backup leaves the currently running game up even when polling pauses", async () => {
-        await render({
-            ...backupInProgress,
-            observedGameState: "running",
-            job: { ...backupInProgress.job!, state: "queued", progress: "Waiting to begin" },
-        });
-        expect(container.textContent).toContain("Waiting to begin");
-        expect(container.textContent).toContain("Backup queued — your server keeps running until the backup starts.");
+    it("uses neutral queued copy when polling pauses even if the latest observation is fresh", async () => {
+        await render(queuedBackup, [backup], runningDuringQueue);
+        expect(container.textContent).toContain(queuedWhileRunningMessage);
         expect(container.textContent).not.toContain(stoppedForBackupMessage);
 
         await advance(16 * 60_000);
+        const updatedAt = new Date().toISOString();
+        await render({ ...queuedBackup, updatedAt }, [backup], {
+            ...runningDuringQueue,
+            updatedAt,
+            runtimeInsight: { ...runningDuringQueue.runtimeInsight!, observedAt: updatedAt },
+        });
         expect(container.textContent).toContain("Automatic status updates have paused");
-        expect(container.textContent).not.toContain(stoppedForBackupMessage);
+        expect(container.textContent).toContain("Backup queued.");
+        expect(container.textContent).not.toContain(queuedWhileRunningMessage);
     });
 
-    it("explains a temporary stop for a started backup with a fresh stopped observation", async () => {
-        await render(backupInProgress, [backup], stoppedForBackup);
-        expect(container.textContent).toContain("Saving the campaign");
-        expect(container.textContent).toContain(stoppedForBackupMessage);
+    it("drops the running claim when the observation ages out before polling pauses", async () => {
+        await render(queuedBackup, [backup], runningDuringQueue);
+        expect(container.textContent).toContain(queuedWhileRunningMessage);
 
         await advance(7 * 60_000);
+        expect(container.textContent).toContain("Backup queued.");
+        expect(container.textContent).not.toContain(queuedWhileRunningMessage);
+        expect(container.textContent).not.toContain("Automatic status updates have paused");
+    });
+
+    it("shows progress without attributing a fresh stop to a backup with no start timestamp", async () => {
+        await render(backupInProgress, [backup], stoppedForBackup);
         expect(container.textContent).toContain("Saving the campaign");
         expect(container.textContent).not.toContain(stoppedForBackupMessage);
+        expect(container.textContent).not.toContain("will start again automatically");
+    });
+
+    it("does not attribute a stop observed while queued to the backup after it starts", async () => {
+        await render({ ...queuedBackup, observedGameState: "stopped" }, [backup], stoppedForBackup);
+        expect(container.textContent).toContain("Backup queued.");
+        expect(container.textContent).not.toContain(queuedWhileRunningMessage);
+
+        await render(backupInProgress, [backup], stoppedForBackup);
+        expect(container.textContent).toContain("Saving the campaign");
+        expect(container.textContent).not.toContain(stoppedForBackupMessage);
+        expect(container.textContent).not.toContain("will start again automatically");
     });
 
     it("shows progress without downtime copy when a started backup still observes the game running", async () => {

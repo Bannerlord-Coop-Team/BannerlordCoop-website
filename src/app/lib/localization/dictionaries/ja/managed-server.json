@@ -698,7 +698,7 @@
   "downloadServerLogButton.theServerSLogFileIsEmptyRightNowIt": "サーバーのログファイルは現在空です。ゲームの実行中に書き込まれるので、1分ほどしてからもう一度お試しください。",
   "backups.createABackupNow": "今すぐバックアップを作成しますか？",
   "backups.theServerIsRunningItWillSaveStopBrieflyAndStartAgain": "サーバーは稼働中です。キャンペーンを保存し、バックアップの作成中は一時的に停止してから、再び起動します。接続中のプレイヤーは切断されますが、サーバーが戻り次第再参加できます。",
-  "backups.theServerIsTemporarilyStoppedForThisBackup": "このバックアップのため、サーバーは一時的に停止しています。完了後に自動で再起動します。",
+  "backups.queued": "バックアップは順番待ちです。",
   "backups.automaticStatusUpdatesHavePausedTheOperationMayStillBeRunning": "状態の自動更新を一時停止しました。操作はまだ進行中の可能性があります。",
   "backups.wereConfirmingYourBackupRequest": "バックアップリクエストを確認しています。再試行しても安全です。同じリクエストを再利用するため、余分なバックアップは作成されません。",
   "backups.wereConfirmingYourRestoreRequest": "復元リクエストを確認しています。再試行しても安全です。同じリクエストを再利用するため、セーブデータが二重に復元されることはありません。",

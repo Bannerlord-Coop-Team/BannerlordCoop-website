@@ -715,7 +715,7 @@
   "downloadServerLogButton.theServerSLogFileIsEmptyRightNowIt": "The server’s log file is empty right now. It fills in as the game runs — try again in a minute.",
   "backups.createABackupNow": "Create a backup now?",
   "backups.theServerIsRunningItWillSaveStopBrieflyAndStartAgain": "The server is running, so it will save the campaign, stop briefly while the backup is made, and then start again. Connected players will be disconnected and can rejoin once it is back.",
-  "backups.theServerIsTemporarilyStoppedForThisBackup": "The server is temporarily stopped for this backup and will start again automatically.",
+  "backups.queued": "Backup queued.",
   "backups.automaticStatusUpdatesHavePausedTheOperationMayStillBeRunning": "Automatic status updates have paused. The operation may still be running.",
   "backups.wereConfirmingYourBackupRequest": "We're confirming your backup request. Retrying is safe: it reuses the same request, so no extra backup is created.",
   "backups.wereConfirmingYourRestoreRequest": "We're confirming your restore request. Retrying is safe: it reuses the same request, so the save is not restored twice.",

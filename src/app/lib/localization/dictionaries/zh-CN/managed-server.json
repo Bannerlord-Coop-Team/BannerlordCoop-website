@@ -698,7 +698,7 @@
   "downloadServerLogButton.theServerSLogFileIsEmptyRightNowIt": "服务器的日志文件目前为空。游戏运行时会逐渐写入内容，请一分钟后再试。",
   "backups.createABackupNow": "现在创建备份吗？",
   "backups.theServerIsRunningItWillSaveStopBrieflyAndStartAgain": "服务器正在运行，因此会先保存战役，在创建备份期间短暂停止，然后重新启动。已连接的玩家将被断开连接，服务器恢复后即可重新加入。",
-  "backups.theServerIsTemporarilyStoppedForThisBackup": "服务器因本次备份暂时停止，完成后会自动重新启动。",
+  "backups.queued": "备份已排队。",
   "backups.automaticStatusUpdatesHavePausedTheOperationMayStillBeRunning": "自动状态更新已暂停。操作可能仍在进行。",
   "backups.wereConfirmingYourBackupRequest": "正在确认您的备份请求。重试是安全的：它会沿用同一个请求，因此不会额外创建备份。",
   "backups.wereConfirmingYourRestoreRequest": "正在确认您的恢复请求。重试是安全的：它会沿用同一个请求，因此存档不会被恢复两次。",

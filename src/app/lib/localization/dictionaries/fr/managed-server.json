@@ -698,7 +698,7 @@
   "downloadServerLogButton.theServerSLogFileIsEmptyRightNowIt": "Le fichier journal du serveur est vide pour le moment. Il se remplit pendant que le jeu tourne : réessayez dans une minute.",
   "backups.createABackupNow": "Créer une copie de sauvegarde maintenant ?",
   "backups.theServerIsRunningItWillSaveStopBrieflyAndStartAgain": "Le serveur est en cours d’exécution : il va enregistrer la campagne, s’arrêter brièvement pendant la création de la copie de sauvegarde, puis redémarrer. Les joueurs connectés seront déconnectés et pourront se reconnecter dès qu’il sera de nouveau disponible.",
-  "backups.theServerIsTemporarilyStoppedForThisBackup": "Le serveur est temporairement arrêté pour cette copie de sauvegarde et redémarrera automatiquement.",
+  "backups.queued": "La sauvegarde est en attente.",
   "backups.automaticStatusUpdatesHavePausedTheOperationMayStillBeRunning": "Les mises à jour automatiques de l’état ont été suspendues. L’opération est peut-être toujours en cours.",
   "backups.wereConfirmingYourBackupRequest": "Nous confirmons votre demande de copie de sauvegarde. Vous pouvez réessayer sans risque : la même demande est réutilisée, donc aucune copie supplémentaire n’est créée.",
   "backups.wereConfirmingYourRestoreRequest": "Nous confirmons votre demande de restauration. Vous pouvez réessayer sans risque : la même demande est réutilisée, donc la sauvegarde ne sera pas restaurée deux fois.",
