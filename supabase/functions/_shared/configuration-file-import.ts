@@ -102,7 +102,7 @@ const ignoredServerKeys = ['saveName', 'password', 'port', 'mode', 'devModuleRoo
 const ignoredModRootKeys = ['network'];
 // War Sails is fixed when a campaign is created, so an import reports it as ignored and never changes it.
 const WAR_SAILS_KEY = 'warSails';
-const ignoredModKeys = ['showPlayerNameplates', 'playerWoundedBattleEntry', WAR_SAILS_KEY];
+const ignoredModKeys = [WAR_SAILS_KEY];
 const importableModOptions: Readonly<Record<string, unknown>> = Object.freeze(Object.fromEntries(
   Object.entries(defaults.modConfig.modOptions).filter(([key]) => key !== WAR_SAILS_KEY),
 ));

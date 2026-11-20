@@ -80,7 +80,7 @@ test("injects direct import and configuration validation without changing rules"
 
 test("imports the native battle size and still reports other unmanaged mod options", () => {
     const parsed = readConfigurationFile('{"modOptions":{"battleSize":"600","showPlayerNameplates":true}}', "mod");
-    assert.deepEqual(parsed.ignoredSettings, ["showPlayerNameplates"]);
+    assert.deepEqual(parsed.ignoredSettings, []);
     assert.equal(applyConfigurationImport(defaults, parsed.input).modConfig.modOptions.battleSize, 600);
     assert.throws(() => readConfigurationFile('{"modOptions":{"battleSize":12001}}', "mod", messages), { message: messages.unsupportedValues });
 });

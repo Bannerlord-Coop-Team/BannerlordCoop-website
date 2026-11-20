@@ -13,19 +13,21 @@ import { segmentedButtonClass, segmentedGroupClass } from "./segmented-controls"
 import { workspaceNoticeClass } from "./server-workspace-ui";
 import { useServerWorkspaceSectionShown } from "./ServerManagementWorkspace";
 import {
-    MANAGED_DIFFICULTY_LEVELS, MANAGED_GOLD_FOOD_CHANGE_MODES, MANAGED_LORD_DEFECTION_RETRY_MODES,
-    parseManagedServerConfiguration, type ManagedServerConfiguration,
+    MANAGED_DIFFICULTY_LEVELS,
+    assertManagedConfigurationAvailableForChannel, parseManagedServerConfiguration, type ManagedServerConfiguration,
 } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { RunnerConfigurationFile, RunnerConfigurationPart } from "../../../../supabase/functions/_shared/server-configuration-contract";
+import catalog from "../../../../supabase/functions/_shared/managed-config-catalog.json";
 
-export type ConfigAccess = { serverId: string; userId: string; canEdit: boolean };
+export type ConfigAccess = { serverId: string; userId: string; canEdit: boolean; releaseChannel?: "stable" | "nightly" };
 type Settings = { serverConfig: ManagedServerConfiguration["serverConfig"]; modConfig: ManagedServerConfiguration["modConfig"] };
 type Live = { server: RunnerConfigurationFile | null; mod: RunnerConfigurationFile | null };
 type Group = "serverConfig" | "difficulty" | "modOptions";
 type Field = { key: string; label: string; help?: string } & (
     | { kind: "boolean" }
-    | { kind: "integer"; min: number; max: number }
-    | { kind: "number"; min: number; max: number; step: number }
+    | { kind: "integer"; min?: number; max?: number }
+    | { kind: "number"; min?: number; max?: number; step: number }
+    | { kind: "steamIdList" }
     | { kind: "choice"; options: readonly string[] });
 
 const inputClass = "mt-2 block w-full min-w-0 rounded-md border border-white/15 bg-background px-3 py-2 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-red-400";
@@ -48,17 +50,21 @@ function numberProblem(field: Field, value: unknown, t: Translator["t"], number:
     if (field.kind !== "integer" && field.kind !== "number") return null;
     if (typeof value !== "number" || Number.isNaN(value)) return t("configEditor.enterANumber");
     if (field.kind === "integer" && !Number.isInteger(value)) return t("configEditor.enterAWholeNumber");
-    if (value < field.min || value > field.max) return t("configEditor.enterAValueFromMinToMax", { min: number(field.min), max: number(field.max) });
+    if ((field.min !== undefined && value < field.min) || (field.max !== undefined && value > field.max)) {
+        if (field.min !== undefined && field.max !== undefined) return t("configEditor.enterAValueFromMinToMax", { min: number(field.min), max: number(field.max) });
+        return t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe");
+    }
     return null;
 }
 // Serializes editable configuration without translating its payload.
 function pretty(settings: Settings) { return JSON.stringify({ serverConfig: settings.serverConfig, modConfig: settings.modConfig }, null, 2); }
 // Validates configuration shape and injects detailed parser diagnostics.
-function parseSettings(value: unknown, t: Translator["t"], maximumBattleSize: number): Settings {
+function parseSettings(value: unknown, t: Translator["t"], maximumBattleSize: number, releaseChannel?: "stable" | "nightly"): Settings {
     if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(t("configEditor.expectedAnObjectWithServerconfigAndModconfig"));
     const keys = Object.keys(value);
     if (keys.length !== 2 || !("serverConfig" in value) || !("modConfig" in value)) throw new Error(t("configEditor.expectedExactlyServerconfigAndModconfig"));
     const parsed = parseManagedServerConfiguration({ schemaVersion: 1, ...(value as object) }, configurationMessages(t));
+    if (releaseChannel) assertManagedConfigurationAvailableForChannel(parsed.modConfig.modOptions, releaseChannel);
     if (parsed.modConfig.modOptions.battleSize > maximumBattleSize) throw new Error(t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe"));
     return { serverConfig: parsed.serverConfig, modConfig: parsed.modConfig };
 }
@@ -138,27 +144,19 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         { key: "birthAndDeath", label: t("configuration.field.birthAndDeath"), kind: "boolean" },
         { key: "autoAllocateClanMemberPerks", label: t("configuration.field.autoAllocateClanMemberPerks"), kind: "boolean" },
     ];
-    const MOD_OPTION_FIELDS: Field[] = [
-        { key: "battleSize", label: t("configuration.field.battleSize"), kind: "integer", min: 200, max: battleSizeLimit, help: t("configEditor.battleSizeHelp") },
-        { key: "fastForwardEnabled", label: t("configuration.field.fastForwardEnabled"), kind: "boolean" },
-        { key: "autoPauseEnabled", label: t("configuration.field.autoPauseEnabled"), kind: "boolean" },
-        { key: "clientsCanUseCheats", label: t("configuration.field.clientsCanUseCheats"), kind: "boolean" },
-        { key: "goldFoodInfluenceChangeInSettlements", label: t("configuration.field.goldFoodInfluenceChangeInSettlements"), kind: "boolean" },
-        { key: "goldFoodInfluenceChangeInBattles", label: t("configuration.field.goldFoodInfluenceChangeInBattles"), kind: "choice", options: MANAGED_GOLD_FOOD_CHANGE_MODES },
-        { key: "goldFoodInfluenceChangeForDisconnectedPlayers", label: t("configuration.field.goldFoodInfluenceChangeForDisconnectedPlayers"), kind: "boolean" },
-        { key: "playerBattleAiJoinWindowHours", label: t("configuration.field.playerBattleAiJoinWindowHours"), kind: "integer", min: 0, max: 8760 },
-        { key: "speedLimitWhilePlayersInBattle", label: t("configuration.field.speedLimitWhilePlayersInBattle"), kind: "boolean" },
-        { key: "wandererLimit", label: t("configuration.field.wandererLimit"), kind: "integer", min: 0, max: 1000 },
-        { key: "wandererLimitScalesWithPlayers", label: t("configuration.field.wandererLimitScalesWithPlayers"), kind: "boolean" },
-        { key: "playerKingdomClanTierRequired", label: t("configuration.field.playerKingdomClanTierRequired"), kind: "integer", min: 0, max: 6 },
-        { key: "smithingStaminaRecoveryOutsideSettlements", label: t("configuration.field.smithingStaminaRecoveryOutsideSettlements"), kind: "boolean" },
-        { key: "smithingStaminaRecoveryMultiplier", label: t("configuration.field.smithingStaminaRecoveryMultiplier"), kind: "number", min: 0, max: 100, step: 0.01 },
-        { key: "maximumLootersMultiplier", label: t("configuration.field.maximumLootersMultiplier"), kind: "number", min: 0, max: 100, step: 0.1 },
-        { key: "looterPartySizeMultiplier", label: t("configuration.field.looterPartySizeMultiplier"), kind: "number", min: 0, max: 100, step: 0.1 },
-        { key: "lordDefectionRetries", label: t("configuration.field.lordDefectionRetries"), kind: "choice", options: MANAGED_LORD_DEFECTION_RETRY_MODES },
-        { key: "enableHeroExecutions", label: t("configuration.field.enableHeroExecutions"), kind: "boolean" },
-        { key: "enablePlayerClanMemberExecutions", label: t("configuration.field.enablePlayerClanMemberExecutions"), kind: "boolean" },
-    ];
+    const MOD_OPTION_FIELDS_ALL: Field[] = catalog.options.map((option) => {
+        const label = t(`configuration.field.${option.key}`);
+        if (option.type === "boolean") return { key: option.key, label, kind: "boolean" };
+        if (option.type === "enum") return { key: option.key, label, kind: "choice", options: option.values ?? [] };
+        if (option.type === "steamIdList") return { key: option.key, label, kind: "steamIdList" };
+        const min = option.min;
+        const max = option.key === "battleSize" ? battleSizeLimit : option.max;
+        return option.type === "integer"
+            ? { key: option.key, label, kind: "integer", min, max, ...(option.key === "battleSize" ? { help: t("configEditor.battleSizeHelp") } : {}) }
+            : { key: option.key, label, kind: "number", min, max, step: 0.01 };
+    });
+    const MOD_OPTION_FIELDS = MOD_OPTION_FIELDS_ALL.filter((field) => access?.releaseChannel !== "stable"
+        || catalog.options.find((option) => option.key === field.key)?.stable !== false);
     const GROUPS: { group: Group; title: string; fields: Field[] }[] = [
         { group: "serverConfig", title: t("configEditor.serverSettings"), fields: SERVER_FIELDS },
         { group: "difficulty", title: t("configEditor.difficulty"), fields: DIFFICULTY_FIELDS },
@@ -247,7 +245,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     // Parses a JSON draft and reports validation without changing saved settings.
     function editJson(text: string) {
         setJsonText(text); setMessage("");
-        try { setDraft(withReadWarSails(parseSettings(JSON.parse(text), t, battleSizeLimit), baseline)); setJsonError(""); }
+        try { setDraft(withReadWarSails(parseSettings(JSON.parse(text), t, battleSizeLimit, access?.releaseChannel), baseline)); setJsonError(""); }
         catch (error) { setJsonError(error instanceof SyntaxError ? jsonSyntaxMessage(text, error, t) : error instanceof Error ? error.message : t("configEditor.unsupportedSettings")); }
     }
     // Restores the draft from the last confirmed configuration.
@@ -259,7 +257,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     function save() {
         if (!access || !editable || !draft || !dirty || jsonError) return;
         let parsed: Settings;
-        try { parsed = withReadWarSails(parseSettings({ serverConfig: draft.serverConfig, modConfig: draft.modConfig }, t, battleSizeLimit), baseline); }
+        try { parsed = withReadWarSails(parseSettings({ serverConfig: draft.serverConfig, modConfig: draft.modConfig }, t, battleSizeLimit, access?.releaseChannel), baseline); }
         catch { setMessage(t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe")); return; }
         setMessage("");
         startTransition(async () => {
@@ -314,6 +312,11 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
             <select id={id} className={inputClass} value={typeof value === "string" ? value : ""} onChange={(event) => update(event.target.value)}>
                 {field.options.map((option) => <option key={option} value={option}>{configurationChoiceLabel(option, t)}</option>)}
             </select>
+        </div>;
+        if (field.kind === "steamIdList") return <div key={field.key}>
+            <label htmlFor={id} className="text-sm">{field.label}</label>
+            <textarea id={id} className={inputClass} rows={3} value={Array.isArray(value) ? value.join("\n") : ""}
+                onChange={(event) => update(event.target.value.split(/[\s,]+/u).filter(Boolean))} />
         </div>;
         const problem = numberProblem(field, value, t, number);
         return <div key={field.key}>

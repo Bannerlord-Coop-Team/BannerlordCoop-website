@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import catalog from './managed-config-catalog.json' with { type: 'json' };
+import generatedCatalog from './managed-config-catalog-generated.ts';
 import {
   DEFAULT_MANAGED_SERVER_CONFIGURATION,
+  assertManagedConfigurationAvailableForChannel,
   parseManagedServerConfiguration,
+  validateCatalogManagedOptions,
+  validateManagedConfigCatalog,
   type ManagedConfigurationMessages,
 } from './managed-server-configuration';
 
@@ -73,4 +78,92 @@ test('War Sails defaults to off when omitted and accepts only a boolean', () => 
   const invalid = configuration();
   Object.assign(invalid.modConfig.modOptions, { warSails: 'true' });
   assert.throws(() => parseManagedServerConfiguration(invalid, messages), { message: messages.boolean });
+});
+
+test('the website schema matches the generated build catalog and round-trips all drifted options', () => {
+  assert.deepEqual(
+    Object.keys(DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions).sort(),
+    catalog.options.map(option => option.key).sort(),
+  );
+  assert.equal(catalog.catalogRevision, 'f92d6ab74369914f3284fe54bc5233e12a0e7488651d97e8420726b3ae9b084f');
+  assert.equal(catalog.sourceCommit, 'd8a3c6dcce1d9b452f4af9262f5a16da01ddf13a');
+  assert.deepEqual(generatedCatalog, catalog);
+  const value = configuration();
+  Object.assign(value.modConfig.modOptions, {
+    allowClientTimeControls: false,
+    postBattleAiAmnestySeconds: 90,
+    spawnRateWanderers: 2,
+    playerWoundedBattleEntry: false,
+    showPlayerNameplates: false,
+    kingdomDecisionVoteTimeoutSeconds: 120,
+    clansAfterKingdomDestruction: 'KeepClans',
+    preferredBattleHosts: ['76561198000000001'],
+    pvpBlockLeave: true,
+    pvpResponseTimerSeconds: 30,
+  });
+  const parsed = parseManagedServerConfiguration(value);
+  assert.equal(parsed.modConfig.modOptions.clansAfterKingdomDestruction, 'KeepClans');
+  assert.deepEqual(parsed.modConfig.modOptions.preferredBattleHosts, ['76561198000000001']);
+  const unknown = configuration();
+  Object.assign(unknown.modConfig.modOptions as unknown as Record<string, unknown>, { futureOption: true });
+  assert.throws(() => parseManagedServerConfiguration(unknown, messages), { message: messages.shape });
+});
+
+test('stable rejects Nightly-only values while Nightly accepts them and game coercions stay rejected', () => {
+  const value = configuration();
+  value.modConfig.modOptions.clansAfterKingdomDestruction = 'KeepClans';
+  assert.throws(() => {
+    const parsed = parseManagedServerConfiguration(value);
+    assertManagedConfigurationAvailableForChannel(parsed.modConfig.modOptions, 'stable');
+  }, /available on Nightly only/u);
+  const parsed = parseManagedServerConfiguration(value);
+  assert.doesNotThrow(() => assertManagedConfigurationAvailableForChannel(parsed.modConfig.modOptions, 'nightly'));
+  const invalid = configuration();
+  invalid.modConfig.modOptions.pvpResponseTimerSeconds = 9;
+  assert.equal(parseManagedServerConfiguration(invalid).modConfig.modOptions.pvpResponseTimerSeconds, 10);
+});
+
+test('accepts the game-coerced kingdom vote timeout values', () => {
+  for (const timeout of [0, -1]) {
+    const value = configuration();
+    value.modConfig.modOptions.kingdomDecisionVoteTimeoutSeconds = timeout;
+    assert.equal(parseManagedServerConfiguration(value).modConfig.modOptions.kingdomDecisionVoteTimeoutSeconds, timeout);
+  }
+});
+
+test('validates every catalog option through the same table used by the editor', () => {
+  for (const option of catalog.options) {
+    const value = { ...configuration().modConfig.modOptions } as Record<string, unknown>;
+    if (option.type === 'enum') value[option.key] = option.values?.[0];
+    if (option.type === 'steamIdList') value[option.key] = ['76561198000000001'];
+    assert.doesNotThrow(() => parseManagedServerConfiguration({
+      ...configuration(),
+      modConfig: { ...configuration().modConfig, modOptions: value },
+    }));
+  }
+});
+
+test('follows catalog mutations for new options, bounds, and enum members', () => {
+  const base = { ...configuration().modConfig.modOptions } as Record<string, unknown>;
+  const changedBound = structuredClone(catalog.options) as unknown as NonNullable<Parameters<typeof validateCatalogManagedOptions>[2]>;
+  const timeout = changedBound.find(option => option.key === 'kingdomDecisionVoteTimeoutSeconds');
+  if (!timeout) throw new Error('timeout option missing');
+  timeout.min = 10;
+  assert.throws(() => validateCatalogManagedOptions({ ...base, kingdomDecisionVoteTimeoutSeconds: 5 }, messages, changedBound), { message: messages.integer });
+  const newOption = [...catalog.options, { key: 'futureInteger', type: 'integer', stable: true, availableSince: '0.1.7', min: 1, max: 3, default: 2 }] as unknown as Parameters<typeof validateCatalogManagedOptions>[2];
+  assert.equal((validateCatalogManagedOptions({ ...base, futureInteger: 2 }, messages, newOption) as unknown as Record<string, unknown>).futureInteger, 2);
+  const enumChanged = structuredClone(catalog.options) as unknown as NonNullable<Parameters<typeof validateCatalogManagedOptions>[2]>;
+  const mode = enumChanged.find(option => option.key === 'clansAfterKingdomDestruction');
+  if (!mode) throw new Error('clans option missing');
+  mode.values = ['Vanilla', 'KeepClans', 'RetireClans'];
+  assert.equal(validateCatalogManagedOptions({ ...base, clansAfterKingdomDestruction: 'RetireClans' }, messages, enumChanged).clansAfterKingdomDestruction, 'RetireClans');
+});
+
+test('rejects oversized and malformed catalog structures before parsing settings', () => {
+  const oversized = structuredClone(catalog) as { options: unknown[] };
+  oversized.options = Array.from({ length: 129 }, () => structuredClone(catalog.options[0]));
+  assert.throws(() => validateManagedConfigCatalog(oversized), /malformed/u);
+  const malformed = structuredClone(catalog) as { options: Array<Record<string, unknown>> };
+  malformed.options[0] = { ...malformed.options[0], itemPattern: '[' };
+  assert.throws(() => validateManagedConfigCatalog(malformed), /pattern is malformed/u);
 });

@@ -9,7 +9,7 @@ const REFUSAL_CODES = new Set([
     "save_not_found", "save_still_loaded", "confirmation_mismatch", "active_save_delete_forbidden",
     "packaged_save_delete_forbidden", "backup_not_found", "backup_expired", "backup_unavailable",
     "backup_build_mismatch", "no_update_available", "validated_build_unavailable", "nightly_unavailable",
-    "release_compatibility_unknown", "release_compatibility_unsafe", "settings_unchanged",
+    "release_compatibility_unknown", "release_compatibility_unsafe", "configuration_option_unavailable", "configuration_agent_unsupported", "settings_unchanged",
     "first_start_required", "impersonation_read_only", "battle_size_runner_unsupported",
     "war_sails_save_mismatch", "war_sails_unsupported",
 ]);
