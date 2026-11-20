@@ -1,6 +1,3 @@
-import { DiscordSupportText } from "@/app/components/ui/DiscordSupportLink";
-import { GENERAL_HELP_TICKET } from "../../../../supabase/functions/_shared/discord-support";
-import { GENERIC_ERROR_MESSAGE } from "@/app/lib/nightly/messages";
 import { WINDOWS_INSTALLER_FILENAME, WINDOWS_INSTALLER_URL } from "@/app/lib/nightly/links";
 import { QUALIFYING_ROLES_TEXT } from "../../../../supabase/functions/_shared/nightly/policy";
 import type { ReactNode } from "react";
@@ -14,20 +11,6 @@ export function SupportNote({ title, children }: { title: string; children: Reac
             <span className="text-foreground-muted">{children}</span>
         </div>
     );
-}
-
-/** Points a user at the Discord server when an error needs a human. */
-export function DiscordHelpNote() {
-    return (
-        <SupportNote title="Need a hand?">
-            <DiscordSupportText message={GENERAL_HELP_TICKET + " and include the message shown above."} />
-        </SupportNote>
-    );
-}
-
-/** Gives inline action failures the same support route as the standalone error page. */
-export function NightlyErrorText({ message }: { message: string }) {
-    return <>{message}{message === GENERIC_ERROR_MESSAGE && <> <DiscordSupportText message={GENERAL_HELP_TICKET + "."} /></>}</>;
 }
 
 /** Renders a bordered help panel with an optional action. */

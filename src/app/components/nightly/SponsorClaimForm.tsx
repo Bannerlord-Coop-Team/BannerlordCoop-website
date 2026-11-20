@@ -1,6 +1,6 @@
 "use client";
 
-import { NightlyErrorText } from "./NightlyNotes";
+import { NightlyErrorText } from "./NightlySupport";
 import { LoadingButton } from "@/app/components/ui/LoadingButton";
 import type { ClaimFormState } from "@/app/lib/nightly/flows";
 import { SPONSOR_CODE_FIELD } from "@/app/lib/nightly/form-fields";

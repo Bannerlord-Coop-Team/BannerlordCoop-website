@@ -1,4 +1,8 @@
 {
+  "support.discord": "notre Discord",
+  "nightly.support.title": "Besoin d’aide ?",
+  "nightly.support.ticket": "Ouvrez un ticket d’assistance « General Help » sur {supportLink}.",
+  "nightly.support.includeMessage": "Ouvrez un ticket d’assistance « General Help » sur {supportLink} et joignez le message affiché ci-dessus.",
   "metadata.description": "Jouez à la campagne de Mount & Blade II: Bannerlord entre amis dans un monde multijoueur partagé.",
   "nav.homeLabel": "Accueil de Bannerlord Co-op",
   "nav.primary": "Navigation principale",

@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { LocalizationProvider } from "@/app/lib/localization/client";
+import common from "@/app/lib/localization/dictionaries/en/common.json";
+import { locales, type Locale } from "@/app/lib/localization/types";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
@@ -10,12 +14,12 @@ let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
 /** Mounts a component in a fresh act-enabled container. */
-async function mount(element: React.ReactElement): Promise<HTMLDivElement> {
+async function mount(element: React.ReactElement, locale: Locale = "en", dictionary = common): Promise<HTMLDivElement> {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
-    await act(async () => root!.render(element));
+    await act(async () => root!.render(<LocalizationProvider locale={locale} messages={{ common: dictionary }}>{element}</LocalizationProvider>));
     return container;
 }
 
@@ -31,13 +35,16 @@ afterEach(async () => {
     container = null;
 });
 
-it("shows a General Help link in the inline generic Nightly error", async () => {
-    const view = await mount(<SponsorClaimForm action={async () => ({ error: GENERIC_ERROR_MESSAGE })} />);
+it.each(locales)("shows localized inline generic Nightly ticket guidance in %s", async locale => {
+    const dictionary = JSON.parse(readFileSync(`src/app/lib/localization/dictionaries/${locale}/common.json`, "utf8")) as typeof common;
+    const view = await mount(<SponsorClaimForm action={async () => ({ error: GENERIC_ERROR_MESSAGE })} />, locale, dictionary);
     view.querySelector<HTMLInputElement>("#sponsor-code")!.value = "AB2C-DEF3-GH45";
     await submit(view.querySelector("form")!);
     const alert = view.querySelector('[role="alert"]');
     const link = alert?.querySelector("a");
-    expect(alert?.textContent).toContain("Create a General Help support ticket in our Discord");
+    expect(dictionary["nightly.support.ticket"]).toContain("{supportLink}");
+    expect(alert?.textContent).toBe(`${GENERIC_ERROR_MESSAGE} ${dictionary["nightly.support.ticket"].replace("{supportLink}", dictionary["support.discord"])}`);
+    expect(link?.textContent).toBe(dictionary["support.discord"]);
     expect(link?.getAttribute("href")).toBe("https://discord.gg/5vJzfz5Zzy");
     expect(link?.getAttribute("target")).toBe("_blank");
     expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
