@@ -11,6 +11,11 @@ const eslintConfig = defineConfig([
     files: ["supabase/functions/**/*.ts"],
     rules: { "@typescript-eslint/ban-ts-comment": ["error", { "ts-nocheck": "allow-with-description" }] },
   },
+  {
+    // Keep the captured Deno entry point identical to the deployed source.
+    files: ["supabase/functions/network-stats-cached/index.ts"],
+    rules: { "@typescript-eslint/no-explicit-any": "off" },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

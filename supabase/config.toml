@@ -74,3 +74,13 @@ verify_jwt = false
 # Called anonymously by the mod; abuse is limited by the network-id blacklist and upload size caps.
 [functions.create-github-issue-bug-report]
 verify_jwt = false
+
+# Match the live gateways for these captured legacy functions.
+[functions.admin-servers]
+verify_jwt = true
+
+[functions.network-stats-cached]
+verify_jwt = true
+
+[functions.sync-platform-statistics]
+verify_jwt = false
