@@ -63,7 +63,7 @@ it("uses selected messages for metadata and accessible loading", async () => {
 it.each([true, false])("localizes unlinked presentation and only the missing-name fallback (named=%s)", async named => {
     const view = await renderAccount(accountStatus(false), {}, named);
     for (const key of ["heading", "intro", "connections.heading", "badge.unlinked", "discord.optional", "discord.connect", "patreon.benefits", "patreon.connect", "servers.heading", "servers.description", "servers.link"]) {
-        expect(view.textContent).toContain(translated[key].replace("{supportLink}", translated["support.discord"]));
+        expect(view.textContent).toContain(translated[key]);
     }
     expect(view.textContent).toContain(named ? "Actual Name" : translated.defaultName);
     expect(view.textContent?.includes(translated.defaultName)).toBe(!named);

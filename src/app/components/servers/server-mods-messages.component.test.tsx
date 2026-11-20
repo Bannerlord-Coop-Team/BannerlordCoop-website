@@ -20,7 +20,7 @@ const insight = { desiredState: "stopped", observedAt: null, allowedActions: ["s
     failureCode: null, recommendedAction: null, failureMessage: null, recommendation: null, start: null };
 
 it.each([
-    [{ modId: "CoopSycn", reason: "missing-assembly", assembly: "0Harmony" }, ["CoopSycn", "Harmony (0Harmony.dll)", "Bannerlord.Harmony", "hosting problem", "re-uploading", "will not fix it", "General Help support ticket"]],
+    [{ modId: "CoopSycn", reason: "missing-assembly", assembly: "0Harmony" }, ["CoopSycn", "Harmony (0Harmony.dll)", "Bannerlord.Harmony", "hosting problem", "Re-uploading", "will not fix it", "General Help support ticket"]],
     [{ modId: "Other", reason: "missing-assembly", assembly: "Dependency" }, ["Other", "Dependency", "Upload the dependency"]],
     [{ modId: "Other", reason: "missing-dll" }, ["Other", "SubModule.xml", "complete mod", "bin folder"]],
     [{ modId: "Other", reason: "load-error" }, ["Other", "version compatible", "dependencies"]],
