@@ -49,6 +49,7 @@ export function ManagedServerMods({ serverId, canManage, warSails }: { serverId:
 /** Lists a server's mods and saves each load-order or enabled change as it is made; uploads and deletes use the same catalog. */
 export function ServerModsPanel({ serverId, catalog, canEdit, active = true, onChanged, warSails = false }: { serverId: string; catalog: ServerModCatalog; canEdit: boolean; active?: boolean; onChanged?: () => void; warSails?: CampaignWarSails }) {
     const { t } = useTranslations("managed-server");
+    const { t: common } = useTranslations("server-common");
     const idPrefix = useId();
     const listRef = useRef<HTMLOListElement>(null);
     const uploadRef = useRef<HTMLInputElement>(null);
@@ -106,6 +107,12 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true, onC
         return draggingRef.current || keyboardSaveTimer.current !== null;
     }
 
+    /** Uses the shared maintenance copy for the owner adapter's unavailable code. */
+    function describeApiError(error: ServerModsError, changedRunsOn?: readonly ServerMod[]) {
+        return error.code === "control_plane_unavailable"
+            ? common("error.maintenance") : modsErrorMessage(error, t, changedRunsOn);
+    }
+
     /** Reads the list; a failure shows the last confirmed list (if any) again and offers a retry. */
     async function load() {
         setBusy("loading");
@@ -114,7 +121,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true, onC
             setPendingUpload(await catalog.pendingServerModUpload?.(serverId).catch(() => null) ?? null);
         } catch (error) {
             setLoadFailed(error instanceof ServerModsError && error.code === "server_suspended" ? t("state.suspended")
-                : error instanceof ServerModsError ? modsErrorMessage(error, t) : t("mods.error.other"));
+                : error instanceof ServerModsError ? describeApiError(error) : t("mods.error.other"));
             if (loadedRef.current) updateDraft(loadedRef.current.mods);
         } finally {
             setBusy(null);
@@ -144,7 +151,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true, onC
                 setNotice({ tone: "info", text: t("mods.uploadPaused") });
                 return;
             }
-            const message = error instanceof ServerModsError ? modsErrorMessage(error, t) : error instanceof ModArchiveError ? archiveProblemMessage(error, t) : t("mods.error.other");
+            const message = error instanceof ServerModsError ? describeApiError(error) : error instanceof ModArchiveError ? archiveProblemMessage(error, t) : t("mods.error.other");
             setNotice({ tone: "error", text: message });
             if (!(error instanceof ModArchiveError)) await reconcile(error);
         } finally {
@@ -185,7 +192,7 @@ export function ServerModsPanel({ serverId, catalog, canEdit, active = true, onC
             setNotice({ tone: "info", text: t("mods.saved") });
             onChanged?.();
         } catch (error) {
-            setNotice({ tone: "error", text: error instanceof ServerModsError ? modsErrorMessage(error, t, changedRunsOn) : t("mods.error.other") });
+            setNotice({ tone: "error", text: error instanceof ServerModsError ? describeApiError(error, changedRunsOn) : t("mods.error.other") });
             await reconcile(error, changedRunsOn.length > 0);
         } finally {
             savingRef.current = false;

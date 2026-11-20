@@ -1,4 +1,5 @@
 {
+  "error.maintenance": "Le service est temporairement indisponible pour maintenance. Réessayez dans quelques minutes.",
   "managementWorkspace.information": "Informations",
   "managementWorkspace.listAvailableConsoleCommands": "Lister les commandes de console disponibles",
   "managementWorkspace.showCampaignTimePartiesAndPlayers": "Afficher l’heure de la campagne, les groupes et les joueurs",

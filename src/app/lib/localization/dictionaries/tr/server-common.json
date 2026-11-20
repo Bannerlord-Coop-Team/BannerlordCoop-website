@@ -1,4 +1,5 @@
 {
+  "error.maintenance": "Hizmet bakım nedeniyle geçici olarak kullanılamıyor. Lütfen birkaç dakika sonra tekrar deneyin.",
   "managementWorkspace.information": "Bilgi",
   "managementWorkspace.listAvailableConsoleCommands": "Kullanılabilir konsol komutlarını listele",
   "managementWorkspace.showCampaignTimePartiesAndPlayers": "Sefer zamanını, birlikleri ve oyuncuları göster",

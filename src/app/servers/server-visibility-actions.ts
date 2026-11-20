@@ -1,5 +1,6 @@
 "use server";
 
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
@@ -47,21 +48,23 @@ export async function setServerVisibility(value: unknown): Promise<{ ok: boolean
     } catch (error) {
         const code = error instanceof MyServersApiError ? error.code : "visibility_update_failed";
         if (code === "request_conflict" || code === "stale_interaction") {
+            let maintenance: string | undefined;
             try {
                 const retried = await retryAtCurrentRevision(accessToken, input);
                 if (retried !== null) return acknowledged(retried);
             } catch (retryError) {
+                maintenance = await ownerMaintenanceMessage(retryError);
                 const refusal = ownerRefusalMessage(retryError, t);
                 if (refusal !== null) return { ok: false, rejected: true, message: refusal };
                 const retryCode = retryError instanceof MyServersApiError ? retryError.code : "visibility_update_failed";
                 console.error("Server visibility retry failed", { code: retryCode });
             }
-            return { ok: false, rejected: true, message: t("server-visibility.theServerChangedRefreshAndTryAgain") };
+            return { ok: false, rejected: true, message: maintenance ?? t("server-visibility.theServerChangedRefreshAndTryAgain") };
         }
         const refusal = ownerRefusalMessage(error, t);
         if (refusal !== null) return { ok: false, rejected: true, message: refusal };
         console.error("Server visibility update failed", { code });
-        return { ok: false, rejected: ["server_not_found", "invalid_request"].includes(code), message: t("server-visibility.visibilityCouldNotBeUpdatedOnlyTheCurrentOwnerCan") };
+        return { ok: false, rejected: ["server_not_found", "invalid_request"].includes(code), message: await ownerMaintenanceMessage(error) ?? t("server-visibility.visibilityCouldNotBeUpdatedOnlyTheCurrentOwnerCan") };
     }
 }
 

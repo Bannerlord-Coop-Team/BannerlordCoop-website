@@ -1,5 +1,6 @@
 "use server";
 
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
@@ -37,8 +38,8 @@ async function failure(error: unknown, notSubmitted = false) {
     return { ok: false as const, notSubmitted,
         rejected: !notSubmitted && ["stale_interaction", "safe_stop_required", "operation_unavailable"].includes(code),
         stale: !notSubmitted && code === "stale_interaction",
-        message: notSubmitted ? t("action.file.theTransferWasNotSentCheckYourFilesAndCampaign")
-            : messages[code] ?? t("action.file.theTransferOutcomeCouldNotBeConfirmedCheckItsStatus") };
+        message: await ownerMaintenanceMessage(error) ?? (notSubmitted ? t("action.file.theTransferWasNotSentCheckYourFilesAndCampaign")
+            : messages[code] ?? t("action.file.theTransferOutcomeCouldNotBeConfirmedCheckItsStatus")) };
 }
 
 // Authenticates and validates transfers while preserving original file bytes.

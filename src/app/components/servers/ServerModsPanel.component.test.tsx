@@ -432,7 +432,7 @@ it("shows the saved list and offers Refresh when the reload after an unknown sav
     vi.spyOn(catalog, "listServerMods").mockRejectedValueOnce(new ServerModsError("control_plane_unavailable", true));
     await click(checkbox("Beta"));
     expect(checkbox("Beta").checked).toBe(false);
-    expect(container.querySelector('[role="alert"]')?.textContent).toContain("could not be reached");
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Temporarily down for maintenance. Please check back in a few minutes.");
     expect(button("Refresh")?.disabled).toBe(false);
     expect(container.querySelector('[aria-label="Delete Alpha"]')).toHaveProperty("disabled", false);
     await click(button("Refresh")!);
