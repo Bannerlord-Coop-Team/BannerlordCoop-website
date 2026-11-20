@@ -1,5 +1,6 @@
 "use server";
 
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 import type { Translator } from "@/app/lib/localization/types";
@@ -57,8 +58,8 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
             if (parsed.expectedReleaseChannel !== undefined) {
                 let current;
                 try { current = await getMyServerSummary(accessToken, parsed.serverId, undefined, { includeRuntimeInsight: false }); }
-                catch {
-                    return { ok: false, refresh: true, message: t("action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent") };
+                catch (error) {
+                    return { ok: false, refresh: true, message: await ownerMaintenanceMessage(error) ?? t("action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent") };
                 }
                 if (current.releaseChannel !== parsed.expectedReleaseChannel) {
                     return { ok: false, refresh: true, message: t("action.actions.yourServerSStatusChangedSoWeRefreshedItPress", { action: t("controls.updateNow") }) };
@@ -130,6 +131,8 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         }
         const refusal = ownerRefusalMessage(error, t);
         if (refusal !== null) return { ok: false, message: refusal };
+        const maintenance = await ownerMaintenanceMessage(error);
+        if (maintenance !== undefined) return { ok: false, checkStatus: true, message: maintenance };
         if (parsed.action === "stop") return { ok: false, checkStatus: true, message: t("controls.checkingWhetherYourServerHasStopped") };
         return { ok: false, checkStatus: true, message: t("controls.weCouldnTConfirmThatYourOperationRequestWentThrough", { operation: operationLabel(parsed.action, t) }) };
     }
@@ -208,7 +211,7 @@ export async function setManagedServerPassword(input: { serverId: string; expect
     } catch (error) {
         const refusal = ownerRefusalMessage(error, t);
         if (refusal !== null) return { ok: false, message: refusal };
-        return { ok: false, checkStatus: true, message: t("controls.weCouldnTConfirmThePasswordChangeSoWeRefreshed") };
+        return { ok: false, checkStatus: true, message: await ownerMaintenanceMessage(error) ?? t("controls.weCouldnTConfirmThePasswordChangeSoWeRefreshed") };
     }
 }
 
@@ -226,8 +229,8 @@ export async function cancelManagedServerStart(input: StartCancellationInput): P
         revalidatePath(`/servers/${parsed.serverId}`);
         revalidatePath("/servers");
         return { ok: true, message: t("controls.startCancelled") };
-    } catch {
-        return { ok: false, refresh: true, message: t("controls.startCancellationUnconfirmed") };
+    } catch (error) {
+        return { ok: false, refresh: true, message: await ownerMaintenanceMessage(error) ?? t("controls.startCancellationUnconfirmed") };
     }
 }
 
@@ -246,7 +249,7 @@ export async function readManagedServerStartStatus(serverId: string, jobId: stri
         if (error instanceof MyServersApiError && ["forbidden", "server_not_found", "unauthenticated"].includes(error.code)) {
             return { ok: false as const, retryable: false, message: t("action.actions.yourServerAccessCouldNotBeConfirmedSignInAgain") };
         }
-        return { ok: false as const, retryable: true, message: t("action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing") };
+        return { ok: false as const, retryable: true, message: await ownerMaintenanceMessage(error) ?? t("action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing") };
     }
 }
 

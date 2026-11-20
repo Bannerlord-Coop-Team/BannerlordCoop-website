@@ -1,5 +1,6 @@
 "use server";
 
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
@@ -64,6 +65,8 @@ export async function saveServerSettings(value: unknown): Promise<{ ok: boolean;
                 if (retried.outcome === "changed") return { ok: false, rejected: true, field: retried.field,
                     message: t("server-settings.thisSettingWasChangedElsewhereWhileThePageWasOpen") };
             } catch (retryError) {
+                const maintenance = await ownerMaintenanceMessage(retryError);
+                if (maintenance !== undefined) return { ok: false, rejected: true, message: maintenance };
                 const refusal = ownerRefusalMessage(retryError, t);
                 if (refusal !== null) return { ok: false, rejected: true, message: refusal };
                 // Fall through to the ordinary explanation; the page refreshes before the next attempt.
@@ -78,7 +81,7 @@ export async function saveServerSettings(value: unknown): Promise<{ ok: boolean;
         };
         const refusal = !Object.hasOwn(messages, code) ? ownerRefusalMessage(error, t) : null;
         if (refusal !== null) return { ok: false, rejected: true, message: refusal };
-        return { ok: false, rejected: Object.hasOwn(messages, code), message: messages[code] ?? t("server-settings.theSettingsUpdateCouldNotBeConfirmedRetryOrRefresh") };
+        return { ok: false, rejected: Object.hasOwn(messages, code), message: await ownerMaintenanceMessage(error) ?? messages[code] ?? t("server-settings.theSettingsUpdateCouldNotBeConfirmedRetryOrRefresh") };
     }
 }
 

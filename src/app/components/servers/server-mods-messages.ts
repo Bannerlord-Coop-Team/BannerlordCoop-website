@@ -9,7 +9,7 @@ import type { ModLoadFailure } from "@/app/lib/hosting/my-servers-server";
 
 type Translate = Translator["t"];
 
-const UNAVAILABLE_CODES = new Set(["identity_unavailable", "server_api_unavailable", "control_plane_unavailable", "network_unavailable", "invalid_response", "server_api_not_configured"]);
+const UNAVAILABLE_CODES = new Set(["identity_unavailable", "server_api_unavailable", "network_unavailable", "invalid_response", "server_api_not_configured"]);
 const SIMPLE_ERROR_KEYS: Readonly<Record<string, string>> = {
     mod_host_storage_low: "mods.error.hostStorageLow",
     browser_storage_unavailable: "mods.error.browserStorage",

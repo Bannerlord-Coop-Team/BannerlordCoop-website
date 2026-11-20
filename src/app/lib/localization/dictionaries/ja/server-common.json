@@ -1,4 +1,5 @@
 {
+  "error.maintenance": "メンテナンスのため一時的にご利用いただけません。数分後にもう一度お試しください。",
   "managementWorkspace.information": "情報",
   "managementWorkspace.listAvailableConsoleCommands": "利用可能なコンソールコマンドを一覧表示",
   "managementWorkspace.showCampaignTimePartiesAndPlayers": "キャンペーンの時間、部隊、プレイヤーを表示",

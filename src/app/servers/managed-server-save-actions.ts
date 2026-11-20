@@ -1,5 +1,6 @@
 "use server";
 
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -45,6 +46,8 @@ export async function selectManagedServerSave(value: unknown, expectedUserId: st
     } catch (error) {
         const refusal = ownerRefusalMessage(error, t);
         if (refusal !== null) return { ok: false, message: refusal };
+        const maintenance = await ownerMaintenanceMessage(error);
+        if (maintenance !== undefined) return { ok: false, message: maintenance };
         return error instanceof MyServersApiError && error.code === "invalid_request"
             ? { ok: false, message: t("campaigns.selectionFailed") }
             : await failure();
@@ -68,7 +71,7 @@ export async function deleteManagedServerSave(value: unknown, expectedUserId: st
         }
         const refusal = ownerRefusalMessage(error, t);
         if (refusal !== null) return { ok: false, notSubmitted: true, message: refusal };
-        return { ok: false, notSubmitted: error instanceof MyServersApiError && !error.retryable && error.operationId === undefined && ["save_not_found", "server_suspended", "save_still_loaded", "safe_stop_required", "confirmation_mismatch", "active_save_delete_forbidden", "packaged_save_delete_forbidden", "stale_interaction", "invalid_request", "unauthorized", "forbidden"].includes(error.code), message: t(error instanceof MyServersApiError && error.code === "save_still_loaded"
+        return { ok: false, notSubmitted: error instanceof MyServersApiError && !error.retryable && error.operationId === undefined && ["save_not_found", "server_suspended", "save_still_loaded", "safe_stop_required", "confirmation_mismatch", "active_save_delete_forbidden", "packaged_save_delete_forbidden", "stale_interaction", "invalid_request", "unauthorized", "forbidden"].includes(error.code), message: await ownerMaintenanceMessage(error) ?? t(error instanceof MyServersApiError && error.code === "save_still_loaded"
             ? "campaigns.saveStillLoaded" : "campaigns.deleteFailed") };
     }
 }
@@ -87,7 +90,7 @@ export async function readManagedServerSaveDeletion(serverId: string, jobId: str
             : status.errorCode === "save_still_loaded" ? "campaigns.saveStillLoaded"
             : status.errorCode === "queue_timeout" ? "campaigns.deleteQueueTimeout" : "campaigns.deleteOutcomeFailed";
         return { ok: true, status, message: t(key) };
-    } catch {
-        return { ok: false, message: t("campaigns.deleteStatusUnavailable") };
+    } catch (error) {
+        return { ok: false, message: await ownerMaintenanceMessage(error) ?? t("campaigns.deleteStatusUnavailable") };
     }
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { MyServersApiError, requestServerOnboarding } from "@/app/lib/hosting/my-servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -57,7 +58,7 @@ export async function submitServerOnboarding(input: unknown, expectedPageUserId:
             revalidatePath("/servers");
             return { ok: false, retrySameRequest: false, message: t("action.regionNotOffered") };
         }
-        return uncertain(t("action.unconfirmed"));
+        return uncertain(await ownerMaintenanceMessage(error) ?? t("action.unconfirmed"));
     }
 }
 /** Retains ambiguous requests for safe exact replay. */

@@ -1,5 +1,6 @@
 "use server";
 
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -37,6 +38,6 @@ export async function deleteManagedServer(value: unknown): Promise<ServerDeletio
         const rejected = busy || ["stale_interaction", "confirmation_mismatch", "forbidden", "server_not_found", "invalid_request", "request_conflict", "hosting_conflict", "operation_conflict"].includes(code);
         const refusal = !rejected ? ownerRefusalMessage(error, t) : null;
         if (refusal !== null) return { ok: false, rejected: true, message: refusal };
-        return { ok: false, rejected, message: t(busy ? "deletion.busy" : rejected ? "deletion.rejected" : "deletion.unknown") };
+        return { ok: false, rejected, message: await ownerMaintenanceMessage(error) ?? t(busy ? "deletion.busy" : rejected ? "deletion.rejected" : "deletion.unknown") };
     }
 }

@@ -1,3 +1,4 @@
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { isColdSleeping } from "@/app/lib/hosting/cold-sleep";
 import type { Translator } from "@/app/lib/localization/types";
 import { LocalizationProvider } from "@/app/lib/localization/client";
@@ -106,10 +107,11 @@ async function AuthorizedServerPage({ params, searchParams }: ServerPageProps) {
             const retryable = error instanceof MyServersApiError
                 && (error.retryable || ["server_api_unavailable", "control_plane_unavailable"].includes(error.code));
             if (retryable) {
+                const maintenance = await ownerMaintenanceMessage(error);
                 return <ServerManagementWorkspace
                     name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{t("page.serverTemporarilyUnavailableRetry")}</h1>}
-                    summary={t("action.config.theHostingServiceCouldNotBeReachedTryAgain")}
-                    banner={<ManagedServerUnavailable />}
+                    summary={maintenance ?? t("action.config.theHostingServiceCouldNotBeReachedTryAgain")}
+                    banner={<ManagedServerUnavailable message={maintenance} />}
                     initialSection={rememberedSection}
                 >
                     <ServerWorkspacePanel section="Console"><ServerConsoleWorkspace><UnavailableServerConsole /></ServerConsoleWorkspace></ServerWorkspacePanel>
@@ -323,7 +325,9 @@ async function ManagedServerBackupsSection({
     const backups = backupsResult.status === "fulfilled" ? backupsResult.value : [];
     const status = statusResult.status === "fulfilled" ? statusResult.value : null;
     const loadError = backupsResult.status === "rejected" || statusResult.status === "rejected"
-        ? t("page.backupHistoryCouldnTBeLoadedJustNowBackupActionsArePaused")
+        ? await ownerMaintenanceMessage(backupsResult.status === "rejected" ? backupsResult.reason : undefined)
+            ?? await ownerMaintenanceMessage(statusResult.status === "rejected" ? statusResult.reason : undefined)
+            ?? t("page.backupHistoryCouldnTBeLoadedJustNowBackupActionsArePaused")
         : undefined;
     if (backupsResult.status === "rejected") {
         console.error("Managed server backups failed to load");
@@ -341,7 +345,8 @@ async function ManagedServerBackupsSection({
         saves={savesResult.status === "fulfilled" ? savesResult.value : null}
         backups={backups} status={status} loadError={loadError}
         autosaves={autosavesResult.status === "fulfilled" ? autosavesResult.value : null}
-        autosaveLoadError={autosavesResult.status === "rejected" ? t("page.recentAutosavesCouldNotBeLoaded") : undefined} />;
+        autosaveLoadError={autosavesResult.status === "rejected"
+            ? await ownerMaintenanceMessage(autosavesResult.reason) ?? t("page.recentAutosavesCouldNotBeLoaded") : undefined} />;
 }
 
 // Renders the accessible loading state for streamed backup and file data.

@@ -1,4 +1,5 @@
 {
+  "error.maintenance": "점검으로 인해 일시적으로 서비스를 이용할 수 없습니다. 몇 분 후에 다시 시도해 주세요.",
   "managementWorkspace.information": "정보",
   "managementWorkspace.listAvailableConsoleCommands": "사용 가능한 콘솔 명령어 목록을 표시합니다",
   "managementWorkspace.showCampaignTimePartiesAndPlayers": "캠페인 시간, 부대, 플레이어를 표시합니다",

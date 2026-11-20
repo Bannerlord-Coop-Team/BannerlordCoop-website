@@ -1,4 +1,5 @@
 {
+  "error.maintenance": "Der Dienst ist wegen Wartungsarbeiten vorübergehend nicht verfügbar. Bitte versuche es in ein paar Minuten erneut.",
   "managementWorkspace.information": "Informationen",
   "managementWorkspace.listAvailableConsoleCommands": "Verfügbare Konsolenbefehle auflisten",
   "managementWorkspace.showCampaignTimePartiesAndPlayers": "Kampagnenzeit, Trupps und Spieler anzeigen",

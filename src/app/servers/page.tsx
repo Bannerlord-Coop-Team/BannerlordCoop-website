@@ -1,5 +1,7 @@
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { isColdSleeping } from "@/app/lib/hosting/cold-sleep";
 import { LocalizationProvider } from "@/app/lib/localization/client";
+import type { Translator } from "@/app/lib/localization/types";
 import { getLocale, getMessages, getTranslations } from "@/app/lib/localization/server";
 import { Suspense } from "react";
 import { MembershipNextStep } from "@/app/components/servers/MembershipNextStep";
@@ -39,12 +41,12 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function ServersPage() {
     const publicInventory = loadPublicInventory();
     const viewer = loadViewer();
-    const managedInventory = viewer.then(({ user, accessToken, inventory }) => loadManagedInventory(user, accessToken, inventory));
     const hostingStatus = viewer.then(({ user, accessToken, accountRead }) => loadHostingStatus(user, accessToken, accountRead));
 
     const locale = await getLocale();
     const [{ t, number }, messages] = await Promise.all([getTranslations("servers", locale), getMessages(["servers", "server-common"], locale)]);
 
+    const managedInventory = viewer.then(({ user, accessToken, inventory }) => loadManagedInventory(user, accessToken, inventory, t));
     return (
         <LocalizationProvider locale={locale} messages={messages}>
             <Suspense fallback={<div role="status" aria-label={t("page.navigation")} className="h-16 border-b border-white/10 bg-background" />}>
@@ -97,7 +99,7 @@ export default async function ServersPage() {
                                     <p className="mb-4 text-sm text-foreground-muted">{t("page.associatedCount", { count: managedServers.length, countLabel: number(managedServers.length) })}</p>
                                     {managedServersError && (
                                         <p role="alert" className="mb-4 border-l-2 border-crimson bg-crimson/10 px-4 py-3 text-sm text-red-200">
-                                            {t(managedServersError)}
+                                            {managedServersError}
                                         </p>
                                     )}
                                     <h3 className="mb-3 font-semibold">{t("page.ownedHeading")}</h3>
@@ -209,12 +211,12 @@ async function loadHostingStatus(user: User | null, accessToken: string | null,
 
 /** Loads authenticated managed inventory once for all private directory sections. */
 async function loadManagedInventory(user: User | null, accessToken: string | null,
-    inventory: Promise<PromiseSettledResult<MyServerSummary[]>> | undefined) {
+    inventory: Promise<PromiseSettledResult<MyServerSummary[]>> | undefined, t: Translator["t"]) {
     let listed: MyServerSummary[] = [];
     let managedServersError = "";
     if (user) {
         if (!accessToken) {
-            managedServersError = "page.error.sessionUnavailable";
+            managedServersError = t("page.error.sessionUnavailable");
         } else {
             try {
                 if (!inventory) throw new Error("Authenticated inventory read was not started.");
@@ -223,7 +225,7 @@ async function loadManagedInventory(user: User | null, accessToken: string | nul
                 listed = result.value;
             } catch (error) {
                 console.error("Managed server inventory failed to load", error);
-                managedServersError = "page.error.managedUnavailable";
+                managedServersError = await ownerMaintenanceMessage(error) ?? t("page.error.managedUnavailable");
             }
         }
     }

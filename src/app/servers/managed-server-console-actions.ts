@@ -1,5 +1,6 @@
 "use server";
 
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
@@ -41,9 +42,9 @@ async function failure(error: unknown, notSubmitted = false) {
         notSubmitted,
         uncertain: !notSubmitted && !known,
         refresh: false,
-        message: known ? messages[code] : notSubmitted
+        message: await ownerMaintenanceMessage(error) ?? (known ? messages[code] : notSubmitted
             ? t("action.console.theCommandWasNotSentCheckYourCommandAndSign")
-            : t("action.console.weCouldnTConfirmTheCommandWasDeliveredIfNo"),
+            : t("action.console.weCouldnTConfirmTheCommandWasDeliveredIfNo")),
     };
 }
 

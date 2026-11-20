@@ -1,7 +1,10 @@
 import { beforeEach, expect, it, vi } from "vitest";
 import { createTranslator } from "@/app/lib/localization/translator";
 import messages from "@/app/lib/localization/dictionaries/en/managed-server.json";
-vi.mock("@/app/lib/localization/server", () => ({ getTranslations: async () => createTranslator("en", messages) }));
+import common from "@/app/lib/localization/dictionaries/en/server-common.json";
+vi.mock("@/app/lib/localization/server", () => ({
+    getTranslations: async (namespace: string) => createTranslator("en", namespace === "server-common" ? common : messages),
+}));
 import { changeManagedServerCampaign, listManagedServerCampaigns, readManagedServerCampaignReset } from "./managed-server-campaign-actions";
 import { CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION } from "../../../supabase/functions/_shared/server-campaign-contract";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
@@ -61,7 +64,8 @@ it("maps control plane rejections to guidance and marks state conflicts for refr
         ["stale_interaction", "changed since this page loaded", true],
         ["first_start_required", "Start the server once", false],
         ["server_not_found", "unavailable or your access changed", false],
-        ["control_plane_unavailable", "could not be reached", false],
+        ["control_plane_unavailable", "Temporarily down for maintenance.", false],
+        ["server_api_unavailable", "could not be reached", false],
     ] as const) {
         mocks.reset.mockRejectedValueOnce(new MyServersApiError(code, "Rejected"));
         expect(await changeManagedServerCampaign({ requestId: id, action: "reset-campaign", serverId: id, expectedUpdatedAt: updatedAt }, "owner"))

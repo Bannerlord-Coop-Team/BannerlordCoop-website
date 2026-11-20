@@ -195,7 +195,7 @@ it.each([
 });
 
 // Resolve the page's server components, leaving client components for React to render.
-function findServerElement(node: ReactNode, name: "ServerManagementWorkspace"): Promise<ReactElement<{ name?: ReactNode; address?: string | null; notice?: string; banner?: ReactNode; visibility: ReactElement<ComponentProps<typeof ServerVisibilitySetting>> }> | null>;
+function findServerElement(node: ReactNode, name: "ServerManagementWorkspace"): Promise<ReactElement<{ name?: ReactNode; summary?: string; address?: string | null; notice?: string; banner?: ReactNode; visibility: ReactElement<ComponentProps<typeof ServerVisibilitySetting>> }> | null>;
 function findServerElement(node: ReactNode, name: "ServerSettingsPanel"): Promise<ReactElement<ComponentProps<typeof ServerSettingsPanel>> | null>;
 function findServerElement(node: ReactNode, name: "ServerWorkspacePanel"): Promise<ReactElement<ComponentProps<typeof ServerWorkspacePanel>> | null>;
 function findServerElement(node: ReactNode, name: "ManagedServerConsole"): Promise<ReactElement<ComponentProps<typeof ManagedServerConsole>> | null>;
@@ -429,14 +429,20 @@ it("places managed password configuration in Settings rather than the Console wo
     expect(await findServerElement(consolePanel, "ManagedServerPassword")).toBeNull();
 });
 
-it("degrades a transient single-server read failure and offers a refresh", async () => {
+it.each([
+    ["control_plane_unavailable", "Temporarily down for maintenance. Please check back in a few minutes."],
+    ["server_api_unavailable", "The hosting service could not be reached. Try again."],
+])("shows the single-server copy and offers a refresh for %s", async (code, message) => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-        const failure = new MyServersApiError("control_plane_unavailable", "Unavailable", true);
+        const failure = new MyServersApiError(code, "Unavailable", false);
         mocks.managedServers.mockRejectedValueOnce(failure);
         const tree = await page();
         const workspace = await findServerElement(tree, "ServerManagementWorkspace");
-        expect((workspace?.props as { banner?: ReactElement }).banner?.type).toBe(ManagedServerUnavailable);
+        const banner = (workspace?.props as { banner?: ReactElement }).banner;
+        expect(banner?.type).toBe(ManagedServerUnavailable);
+        expect(workspace?.props.summary).toBe(message);
+        expect(renderToStaticMarkup(<TestLocalization>{banner}</TestLocalization>)).toContain(message);
         expect(renderToStaticMarkup(<>{workspace?.props.name}</>)).toContain("This server is temporarily unavailable. Try again.");
         expect(renderToStaticMarkup(<>{workspace?.props.name}</>)).not.toContain("your access was removed");
         expect(error).toHaveBeenCalledExactlyOnceWith("Managed server detail failed to load", failure);

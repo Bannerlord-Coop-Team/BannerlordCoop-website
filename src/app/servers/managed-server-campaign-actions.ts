@@ -1,5 +1,6 @@
 "use server";
 
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
@@ -28,9 +29,9 @@ export async function readManagedServerCampaignReset(serverId: string, jobId: st
         return { ok: true, status, message: campaignResetStatusMessage(status) };
     } catch (error) {
         return { ok: false,
-            message: error instanceof MyServersApiError && ["server_not_found", "forbidden"].includes(error.code)
+            message: await ownerMaintenanceMessage(error) ?? (error instanceof MyServersApiError && ["server_not_found", "forbidden"].includes(error.code)
                 ? "This server is unavailable or your access changed."
-                : "The campaign reset status could not be confirmed. Check your campaigns or contact support before trying again.",
+                : "The campaign reset status could not be confirmed. Check your campaigns or contact support before trying again."),
             retryable: error instanceof MyServersApiError && error.retryable };
     }
 }
@@ -57,7 +58,6 @@ function message(error: unknown): { code: string; message: string } {
         server_not_found: "This server is unavailable or your access changed.",
         rate_limited: "Too many requests were sent. Wait a moment and try again.",
         invalid_request: "The campaign request was rejected. Refresh and try again.",
-        control_plane_unavailable: "The hosting service could not be reached. Try again.",
         server_api_unavailable: "The hosting service could not be reached. Try again.",
     };
     return { code, message: messages[code] ?? "The campaign change could not be confirmed. Refresh to see the current state." };
@@ -68,7 +68,7 @@ export async function listManagedServerCampaigns(serverId: string, expectedUserI
         requireUuid(serverId);
         return { ok: true, campaigns: await listMyServerCampaigns(await currentToken(expectedUserId), serverId) };
     } catch (error) {
-        return { ok: false, message: error instanceof MyServersApiError ? message(error).message : "The campaign list could not be loaded. Try again." };
+        return { ok: false, message: await ownerMaintenanceMessage(error) ?? (error instanceof MyServersApiError ? message(error).message : "The campaign list could not be loaded. Try again.") };
     }
 }
 
@@ -94,6 +94,6 @@ export async function changeManagedServerCampaign(input: unknown, expectedUserId
         const described = message(error);
         if (refusal !== null) return { ok: false, notSubmitted: true, refresh: REFRESH_CODES.has(described.code),
             message: REFRESH_CODES.has(described.code) || described.code === "operation_unavailable" || described.code === "first_start_required" ? described.message : refusal };
-        return { ok: false, notSubmitted: false, refresh: REFRESH_CODES.has(described.code), message: described.message };
+        return { ok: false, notSubmitted: false, refresh: REFRESH_CODES.has(described.code), message: await ownerMaintenanceMessage(error) ?? described.message };
     }
 }
