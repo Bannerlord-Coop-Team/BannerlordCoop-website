@@ -1,5 +1,6 @@
 "use client";
 
+import { NightlyErrorText } from "./NightlyNotes";
 import { LoadingButton } from "@/app/components/ui/LoadingButton";
 import type { ClaimFormState } from "@/app/lib/nightly/flows";
 import { SPONSOR_CODE_FIELD } from "@/app/lib/nightly/form-fields";
@@ -35,7 +36,7 @@ export function SponsorClaimForm({ action }: { action: ClaimFormAction }) {
                     Claim a seat <span aria-hidden="true">&rarr;</span>
                 </LoadingButton>
             </div>
-            {state.error !== null && <p role="alert" className={alertClass}>{state.error}</p>}
+            {state.error !== null && <p role="alert" className={alertClass}><NightlyErrorText message={state.error} /></p>}
             <p id="sponsor-help" className="mt-3 text-xs leading-5 text-foreground-dim">
                 Your friend must have a qualifying {QUALIFYING_ROLES_TEXT} role and an open seat. Access is
                 checked again on every install and update.

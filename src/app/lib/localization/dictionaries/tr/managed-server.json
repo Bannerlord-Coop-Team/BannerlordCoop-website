@@ -1,5 +1,13 @@
 {
   "support.discord": "Discord sunucumuzda",
+  "campaigns.resetRunnerHelp": "Sunucu aracısının güncellenmesini istemek için {supportLink} “General Help” kategorisinde bir destek talebi açın. Güncellemeden sonra seferi sıfırlamayı tekrar isteyin.",
+  "campaigns.resetFailedHelp": "Sefer sıfırlama tamamlanmadı. Tekrar denemeden önce seferlerinizi kontrol edin. Yardıma ihtiyacınız varsa {supportLink} “General Help” kategorisinde bir destek talebi açın.",
+  "campaigns.resetStatusHelp": "Sefer sıfırlama durumu doğrulanamadı. Tekrar denemeden önce seferlerinizi kontrol edin. Yardıma ihtiyacınız varsa {supportLink} “General Help” kategorisinde bir destek talebi açın.",
+  "campaigns.resetOutcomeHelp": "Sefer sıfırlama sonucu doğrulanamadı. Tekrar denemeden önce seferlerinizi kontrol edin. Yardıma ihtiyacınız varsa {supportLink} “General Help” kategorisinde bir destek talebi açın.",
+  "hold.accountLink": "hesabınızda",
+  "hold.ownerHelp": "Uygun aboneliğinizi yeniden etkinleştirin ve doğru Patreon hesabının {accountLink} bağlı olduğunu doğrulayın. Finansman zaten etkinse {supportLink} “General Help” kategorisinde bir destek talebi açın.",
+  "hold.viewerHelp": "Sunucu sahibi, sunucu kaldırılmadan önce uygun finansmanı yeniden etkinleştirmelidir. Yardıma ihtiyacınız varsa {supportLink} “General Help” kategorisinde bir destek talebi açın.",
+  "hold.removalHelp": "Sunucu kaldırılmayı bekliyor. Kaldırma başladıktan sonra finansmanı geri yüklemek için çok geç olabilir. Hemen {supportLink} “General Help” kategorisinde bir destek talebi açın.",
   "controls.cancelStart": "Başlatmayı iptal et",
   "controls.cancellingStart": "Başlatma iptal ediliyor…",
   "controls.startCancellationUnconfirmed": "İptal doğrulanamadı. Başlatma işlemi başlamış olabilir; ilerleme yenileniyor.",

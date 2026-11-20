@@ -14,7 +14,7 @@ export type NightlyErrorHelp = "sponsor-code" | null;
 /** The canned message and optional help panel the error page renders. */
 export type NightlyErrorView = { message: string; help: NightlyErrorHelp };
 
-export const GENERIC_ERROR_MESSAGE = "Access could not be verified. Run the installer again or ask in the Bannerlord Co-op Discord.";
+export const GENERIC_ERROR_MESSAGE = "Access could not be verified. Run the installer again.";
 export const ROLE_REQUIRED_MESSAGE = `A ${QUALIFYING_ROLES_TEXT} role is required.`;
 export const INSTALLER_AUTHORIZATION_EXPIRED_MESSAGE = "That installer authorization has expired.";
 

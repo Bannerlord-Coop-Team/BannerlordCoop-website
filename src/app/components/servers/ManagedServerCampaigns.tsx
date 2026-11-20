@@ -1,7 +1,7 @@
 "use client";
 
 import { DiscordSupportText } from "@/app/components/ui/DiscordSupportLink";
-import { GENERAL_HELP_TICKET } from "../../../../supabase/functions/_shared/discord-support";
+import { DISCORD_SUPPORT_URL } from "../../../../supabase/functions/_shared/discord-support";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RefreshCw, Sparkles, Trash2 } from "lucide-react";
@@ -19,11 +19,10 @@ type Campaigns = Omit<CampaignPage, "nextCursor">;
 type CampaignMode = "classic" | "warSails";
 type ResetReceipt = { serverId: string; userId: string; jobId: string; previousSaveId: string | null; since: number };
 
-const unconfirmedResetMessage = "The campaign reset outcome could not be confirmed. Check your campaigns before trying again. " + GENERAL_HELP_TICKET + " if you need help.";
-
 /** Lists, selects, deletes and resets campaigns, with War Sails available when supported. */
 export function ManagedServerCampaigns({ userId, serverId, status, canDelete = false, warSailsCapable = false }: { userId: string; serverId: string; status: OwnerFileStatus | null; canDelete?: boolean; warSailsCapable?: boolean }) {
     const { t } = useTranslations("managed-server");
+    const unconfirmedResetMessage = t("campaigns.resetOutcomeHelp", { supportLink: DISCORD_SUPPORT_URL });
     const router = useRouter();
     const [campaigns, setCampaigns] = useState<Campaigns | null>(null);
     const [loadError, setLoadError] = useState("");
@@ -95,7 +94,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
         const deadline = setTimeout(() => finish(unconfirmedResetMessage), Math.max(0, receipt.since + 10 * 60_000 - Date.now()));
         void poll();
         return () => { cancelled = true; clearTimeout(deadline); if (timer !== undefined) clearTimeout(timer); };
-    }, [resetting, serverId, userId, router]);
+    }, [resetting, serverId, userId, router, unconfirmedResetMessage]);
 
     useEffect(() => {
         const dialog = dialogRef.current;
@@ -192,7 +191,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
                 </DisabledControlHint>
             </div>
         </div>
-        {message && <p role="status" className="mt-3 text-sm text-foreground-muted"><DiscordSupportText message={message} /></p>}
+        {message && <p role="status" className="mt-3 text-sm text-foreground-muted"><DiscordSupportText message={message} label={t("support.discord")} /></p>}
         {deletion.message && <p role="status" className="mt-3 text-sm text-foreground-muted"><DiscordSupportText message={deletion.message} label={t("support.discord")} /></p>}
         {deletion.canRecover && canDelete && <button type="button" className={fileButtonClass} onClick={deletion.recover}>Recover deletion request</button>}
         {deletion.statusUnknown && canDelete && <button type="button" className={fileButtonClass} onClick={() => void deletion.checkUnknown()}>Check campaigns to recover</button>}

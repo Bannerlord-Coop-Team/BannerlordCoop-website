@@ -1,5 +1,13 @@
 {
   "support.discord": "公式Discord",
+  "campaigns.resetRunnerHelp": "{supportLink}で「General Help」のサポートチケットを作成し、サーバーエージェントの更新を依頼してください。更新後にキャンペーンのリセットを再度リクエストしてください。",
+  "campaigns.resetFailedHelp": "キャンペーンのリセットが完了しませんでした。再試行する前にキャンペーン一覧を確認してください。サポートが必要な場合は、{supportLink}で「General Help」のサポートチケットを作成してください。",
+  "campaigns.resetStatusHelp": "キャンペーンのリセット状況を確認できませんでした。再試行する前にキャンペーン一覧を確認してください。サポートが必要な場合は、{supportLink}で「General Help」のサポートチケットを作成してください。",
+  "campaigns.resetOutcomeHelp": "キャンペーンのリセット結果を確認できませんでした。再試行する前にキャンペーン一覧を確認してください。サポートが必要な場合は、{supportLink}で「General Help」のサポートチケットを作成してください。",
+  "hold.accountLink": "アカウント",
+  "hold.ownerHelp": "対象のサブスクリプションを再開し、正しいPatreonアカウントが{accountLink}に連携されていることを確認してください。支援がすでに有効な場合は、{supportLink}で「General Help」のサポートチケットを作成してください。",
+  "hold.viewerHelp": "サーバーが削除される前に、所有者が対象の支援を再開する必要があります。サポートが必要な場合は、{supportLink}で「General Help」のサポートチケットを作成してください。",
+  "hold.removalHelp": "サーバーの削除が予定されています。削除が始まると、支援を再開しても間に合わない場合があります。すぐに{supportLink}で「General Help」のサポートチケットを作成してください。",
   "controls.cancelStart": "起動をキャンセル",
   "controls.cancellingStart": "起動をキャンセル中…",
   "controls.startCancellationUnconfirmed": "キャンセルを確認できませんでした。すでに起動処理が始まっている可能性があります。進行状況を更新します。",

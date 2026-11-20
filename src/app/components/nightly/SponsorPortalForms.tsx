@@ -1,5 +1,6 @@
 "use client";
 
+import { NightlyErrorText } from "./NightlyNotes";
 import { LoadingButton } from "@/app/components/ui/LoadingButton";
 import type { CreateCodeState, RemoveSeatState } from "@/app/lib/nightly/flows";
 import { SEAT_USER_FIELD } from "@/app/lib/nightly/form-fields";
@@ -24,7 +25,7 @@ export function CreateSponsorCodeForm({ action, hasSeats }: { action: CreateCode
                     Creating a new code disables the previous one. Existing sponsored accounts keep access.
                 </p>
             </form>
-            {state.error !== null && <p role="alert" className={alertClass}>{state.error}</p>}
+            {state.error !== null && <p role="alert" className={alertClass}><NightlyErrorText message={state.error} /></p>}
             {state.code !== null && (
                 <div role="status" className="mt-6 border border-gold/25 bg-background/70 px-5 py-5">
                     <p className="font-display text-2xl font-semibold text-foreground">Sponsor code created</p>
@@ -49,7 +50,7 @@ export function RemoveSeatForm({ action, discordUserId }: { action: RemoveSeatAc
             <LoadingButton className={textButtonClass} pendingText="Removing…" aria-label={`Remove access for Discord account ${discordUserId}`}>
                 Remove access
             </LoadingButton>
-            {state.error !== null && <p role="alert" className="max-w-xs text-xs leading-5 text-[#cf555c]">{state.error}</p>}
+            {state.error !== null && <p role="alert" className="max-w-xs text-xs leading-5 text-[#cf555c]"><NightlyErrorText message={state.error} /></p>}
         </form>
     );
 }

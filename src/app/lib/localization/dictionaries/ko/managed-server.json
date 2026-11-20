@@ -1,5 +1,13 @@
 {
   "support.discord": "공식 Discord",
+  "campaigns.resetRunnerHelp": "{supportLink}에서 ‘General Help’ 지원 티켓을 만들어 서버 실행 에이전트 업데이트를 요청하세요. 업데이트 후 캠페인 초기화를 다시 요청하세요.",
+  "campaigns.resetFailedHelp": "캠페인 초기화가 완료되지 않았습니다. 다시 시도하기 전에 캠페인 목록을 확인하세요. 도움이 필요하면 {supportLink}에서 ‘General Help’ 지원 티켓을 만들어 주세요.",
+  "campaigns.resetStatusHelp": "캠페인 초기화 상태를 확인할 수 없습니다. 다시 시도하기 전에 캠페인 목록을 확인하세요. 도움이 필요하면 {supportLink}에서 ‘General Help’ 지원 티켓을 만들어 주세요.",
+  "campaigns.resetOutcomeHelp": "캠페인 초기화 결과를 확인할 수 없습니다. 다시 시도하기 전에 캠페인 목록을 확인하세요. 도움이 필요하면 {supportLink}에서 ‘General Help’ 지원 티켓을 만들어 주세요.",
+  "hold.accountLink": "내 계정",
+  "hold.ownerHelp": "자격을 충족하는 구독을 복구하고 {accountLink}에 올바른 Patreon 계정이 연결되어 있는지 확인하세요. 후원이 이미 활성화되어 있다면 {supportLink}에서 ‘General Help’ 지원 티켓을 만들어 주세요.",
+  "hold.viewerHelp": "삭제 전에 소유자가 자격을 충족하는 후원을 복구해야 합니다. 도움이 필요하면 {supportLink}에서 ‘General Help’ 지원 티켓을 만들어 주세요.",
+  "hold.removalHelp": "서버 삭제가 예정되어 있습니다. 삭제가 시작되면 후원을 복구해도 늦을 수 있습니다. 즉시 {supportLink}에서 ‘General Help’ 지원 티켓을 만들어 주세요.",
   "controls.cancelStart": "시작 취소",
   "controls.cancellingStart": "시작 취소 중…",
   "controls.startCancellationUnconfirmed": "취소를 확인하지 못했습니다. 시작 작업이 이미 진행 중일 수 있습니다. 진행 상황을 새로 고칩니다.",

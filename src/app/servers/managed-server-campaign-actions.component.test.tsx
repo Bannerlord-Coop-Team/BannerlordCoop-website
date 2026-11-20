@@ -1,22 +1,27 @@
+import { readFileSync } from "node:fs";
+import { locales, type Locale } from "@/app/lib/localization/types";
 import { beforeEach, expect, it, vi } from "vitest";
 import { createTranslator } from "@/app/lib/localization/translator";
-import messages from "@/app/lib/localization/dictionaries/en/managed-server.json";
 import common from "@/app/lib/localization/dictionaries/en/server-common.json";
 vi.mock("@/app/lib/localization/server", () => ({
-    getTranslations: async (namespace: string) => createTranslator("en", namespace === "server-common" ? common : messages),
+    getTranslations: async (namespace: string) => createTranslator(mocks.locale, namespace === "server-common" ? common : readMessages(mocks.locale)),
 }));
 import { changeManagedServerCampaign, listManagedServerCampaigns, readManagedServerCampaignReset } from "./managed-server-campaign-actions";
-import { CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION, campaignResetStatusMessage } from "../../../supabase/functions/_shared/server-campaign-contract";
+import { CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION } from "../../../supabase/functions/_shared/server-campaign-contract";
 import { MyServersApiError } from "@/app/lib/hosting/my-servers";
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), select: vi.fn(), reset: vi.fn(), resetStatus: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), list: vi.fn(), select: vi.fn(), reset: vi.fn(), resetStatus: vi.fn(), locale: "en" as Locale }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: mocks.auth }));
 vi.mock("@/app/lib/hosting/server-campaigns", () => ({ listMyServerCampaigns: mocks.list, selectMyServerCampaign: mocks.select, resetMyServerCampaign: mocks.reset, getMyServerCampaignResetStatus: mocks.resetStatus }));
 const id = "11111111-1111-4111-8111-111111111111";
 const updatedAt = "2026-10-02T12:00:00.000Z";
 const page = { serverId: id, updatedAt, activeSaveId: id, items: [] };
+function readMessages(locale: Locale) {
+    return JSON.parse(readFileSync(`src/app/lib/localization/dictionaries/${locale}/managed-server.json`, "utf8"));
+}
 beforeEach(() => {
     vi.resetAllMocks();
+    mocks.locale = "en";
     mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "owner" } } }), getSession: async () => ({ data: { session: { access_token: "token" } } }) } });
 });
 it("checks the current account before listing or changing campaigns", async () => {
@@ -31,7 +36,7 @@ it("checks the current account before listing or changing campaigns", async () =
 it("returns fixed reset refusal guidance through the authenticated campaign action, never re-submitting Reset", async () => {
     const status = { serverId: id, jobId: id, state: "failed", errorCode: "agent_capability_unavailable", instruction: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION } as const;
     mocks.resetStatus.mockResolvedValue(status);
-    expect(await readManagedServerCampaignReset(id, id, "owner")).toEqual({ ok: true, status, message: campaignResetStatusMessage(status) });
+    expect(await readManagedServerCampaignReset(id, id, "owner")).toEqual({ ok: true, status, message: "Please create a General Help support ticket in https://discord.gg/5vJzfz5Zzy to request a runner update, then request Reset Campaign again." });
     expect(mocks.resetStatus).toHaveBeenCalledExactlyOnceWith("token", id, id);
     expect(mocks.reset).not.toHaveBeenCalled();
     mocks.resetStatus.mockClear();
@@ -93,4 +98,29 @@ it("explains a War Sails capability refusal in the owner's language and lets the
     mocks.select.mockRejectedValueOnce(new MyServersApiError("war_sails_save_mismatch", "Control plane English copy.", false, undefined, true));
     expect(await changeManagedServerCampaign({ requestId: id, action: "select-save", serverId: id, saveId: id, expectedUpdatedAt: updatedAt }, "owner"))
         .toMatchObject({ ok: false, message: "This campaign's War Sails mode doesn't match. Select or start a campaign in the right mode." });
+});
+
+it.each(locales)("localizes reset support messages in %s", async locale => {
+    mocks.locale = locale;
+    const dictionary = readMessages(locale);
+    const invite = "https://discord.gg/5vJzfz5Zzy";
+    for (const [errorCode, instruction, key] of [
+        ["agent_capability_unavailable", CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION, "campaigns.resetRunnerHelp"],
+        ["operation_failed", null, "campaigns.resetFailedHelp"],
+    ] as const) {
+        const status = { serverId: id, jobId: id, state: "failed", errorCode, instruction };
+        mocks.resetStatus.mockResolvedValueOnce(status);
+        expect(await readManagedServerCampaignReset(id, id, "owner")).toEqual({
+            ok: true, status, message: dictionary[key].replace("{supportLink}", invite),
+        });
+        expect(dictionary[key]).toContain("General Help");
+        expect(dictionary[key]).toContain("{supportLink}");
+    }
+    mocks.resetStatus.mockRejectedValueOnce(new MyServersApiError("server_api_unavailable", "private error"));
+    expect(await readManagedServerCampaignReset(id, id, "owner")).toMatchObject({
+        ok: false, message: dictionary["campaigns.resetStatusHelp"].replace("{supportLink}", invite),
+    });
+    expect(dictionary["campaigns.resetStatusHelp"]).toContain("{supportLink}");
+    expect(dictionary["campaigns.resetOutcomeHelp"]).toContain("{supportLink}");
+    expect(mocks.reset).not.toHaveBeenCalled();
 });

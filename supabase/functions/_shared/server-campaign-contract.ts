@@ -1,4 +1,3 @@
-import { GENERAL_HELP_TICKET } from "./discord-support.ts";
 import { requireUuid } from "./server-file-contract.ts";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -60,16 +59,6 @@ export function parseCampaignResetStatus(value: unknown, serverId: string, jobId
         throw new Error("Invalid campaign reset failure");
     }
     return value as CampaignResetStatus;
-}
-
-/** Fixed presentation shared by the authenticated action and its consumer checks. */
-export function campaignResetStatusMessage(status: CampaignResetStatus | null): string {
-    if (status === null) return "The reset status is not available from the hosting service yet. Your request has not been submitted again.";
-    if (status.state === "succeeded") return "Your fresh campaign is ready. Start the server when you want to play it.";
-    if (status.errorCode === "agent_capability_unavailable") return GENERAL_HELP_TICKET + " to request a runner update, then request Reset Campaign again.";
-    if (status.errorCode === "queue_timeout") return "The campaign reset expired before it could start. Refresh before requesting another reset.";
-    if (status.state === "failed" || status.state === "cancelled") return "The campaign reset did not complete. Check your campaigns before trying again. " + GENERAL_HELP_TICKET + " if you need help.";
-    return "Preparing your fresh campaign. This takes about a minute…";
 }
 
 export type CampaignMutation =

@@ -1,5 +1,13 @@
 {
   "support.discord": "我们的 Discord 服务器",
+  "campaigns.resetRunnerHelp": "请在{supportLink}的“General Help”类别中创建支持工单，申请更新服务器代理。更新后再请求重置战役。",
+  "campaigns.resetFailedHelp": "战役重置未完成。请先检查战役列表，再重试。如需帮助，请在{supportLink}的“General Help”类别中创建支持工单。",
+  "campaigns.resetStatusHelp": "无法确认战役重置的状态。请先检查战役列表，再重试。如需帮助，请在{supportLink}的“General Help”类别中创建支持工单。",
+  "campaigns.resetOutcomeHelp": "无法确认战役重置的结果。请先检查战役列表，再重试。如需帮助，请在{supportLink}的“General Help”类别中创建支持工单。",
+  "hold.accountLink": "您的账户",
+  "hold.ownerHelp": "请恢复符合条件的订阅，并确认正确的 Patreon 账户已关联到{accountLink}。如果赞助已生效，请在{supportLink}的“General Help”类别中创建支持工单。",
+  "hold.viewerHelp": "服务器所有者必须在移除前恢复符合条件的赞助。如需帮助，请在{supportLink}的“General Help”类别中创建支持工单。",
+  "hold.removalHelp": "服务器即将移除。一旦开始移除，可能已来不及恢复赞助。请立即在{supportLink}的“General Help”类别中创建支持工单。",
   "controls.cancelStart": "取消启动",
   "controls.cancellingStart": "正在取消启动…",
   "controls.startCancellationUnconfirmed": "无法确认取消。启动可能已开始，正在刷新进度。",

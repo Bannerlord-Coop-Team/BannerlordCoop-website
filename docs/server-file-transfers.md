@@ -34,8 +34,9 @@ authority and the job's server/action binding. The result contains only
 `serverId`, `jobId`, `state`, `errorCode` and `instruction`.
 
 A retained runner that cannot safely seed a new campaign refuses before removing
-any saves. The card displays: "Contact support to update this server's runner,
-then request Reset Campaign again." Polling never submits another Reset. Other
+any saves. The card asks the owner to create a General Help support ticket in
+[our Discord](https://discord.gg/5vJzfz5Zzy) to request a runner update, then
+request Reset Campaign again. Polling never submits another Reset. Other
 terminal failures use fixed safe messages; private worker/runner diagnostics are
 rejected. A successful job is reported even if the selected save ID is unchanged.
 

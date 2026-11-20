@@ -1,5 +1,13 @@
 {
   "support.discord": "nuestro Discord",
+  "campaigns.resetRunnerHelp": "Abre un ticket de soporte en «General Help» en {supportLink} para solicitar una actualización del agente del servidor. Después, vuelve a solicitar el reinicio de la campaña.",
+  "campaigns.resetFailedHelp": "No se completó el reinicio de la campaña. Revisa tus campañas antes de volver a intentarlo. Si necesitas ayuda, abre un ticket de soporte en «General Help» en {supportLink}.",
+  "campaigns.resetStatusHelp": "No se pudo confirmar el estado del reinicio. Revisa tus campañas antes de volver a intentarlo. Si necesitas ayuda, abre un ticket de soporte en «General Help» en {supportLink}.",
+  "campaigns.resetOutcomeHelp": "No se pudo confirmar el resultado del reinicio. Revisa tus campañas antes de volver a intentarlo. Si necesitas ayuda, abre un ticket de soporte en «General Help» en {supportLink}.",
+  "hold.accountLink": "tu cuenta",
+  "hold.ownerHelp": "Restaura tu suscripción válida y comprueba que la cuenta de Patreon correcta esté vinculada en {accountLink}. Si la financiación ya está activa, abre un ticket de soporte en «General Help» en {supportLink}.",
+  "hold.viewerHelp": "El propietario debe restablecer la financiación válida antes de la eliminación. Si necesitas ayuda, abre un ticket de soporte en «General Help» en {supportLink}.",
+  "hold.removalHelp": "La eliminación está pendiente. Una vez iniciada, podría ser demasiado tarde para restablecer la financiación. Abre de inmediato un ticket de soporte en «General Help» en {supportLink}.",
   "controls.cancelStart": "Cancelar inicio",
   "controls.cancellingStart": "Cancelando inicio…",
   "controls.startCancellationUnconfirmed": "No se pudo confirmar la cancelación. Puede que el inicio ya haya comenzado; actualizando el progreso.",

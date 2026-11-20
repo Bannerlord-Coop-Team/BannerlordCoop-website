@@ -1,5 +1,13 @@
 {
   "support.discord": "our Discord",
+  "campaigns.resetRunnerHelp": "Please create a General Help support ticket in {supportLink} to request a runner update, then request Reset Campaign again.",
+  "campaigns.resetFailedHelp": "The campaign reset did not complete. Check your campaigns before trying again. If you need help, please create a General Help support ticket in {supportLink}.",
+  "campaigns.resetStatusHelp": "The campaign reset status could not be confirmed. Check your campaigns before trying again. If you need help, please create a General Help support ticket in {supportLink}.",
+  "campaigns.resetOutcomeHelp": "The campaign reset outcome could not be confirmed. Check your campaigns before trying again. If you need help, please create a General Help support ticket in {supportLink}.",
+  "hold.accountLink": "your account",
+  "hold.ownerHelp": "Restore your qualifying subscription and check that the correct Patreon account is linked in {accountLink}. If funding is already active, please create a General Help support ticket in {supportLink}.",
+  "hold.viewerHelp": "The owner must restore qualifying funding before removal. If you need help, please create a General Help support ticket in {supportLink}.",
+  "hold.removalHelp": "Removal is pending. Restoring funding may be too late once removal begins. Please create a General Help support ticket in {supportLink} immediately.",
   "controls.cancelStart": "Cancel Start",
   "controls.cancellingStart": "Cancelling Start…",
   "controls.startCancellationUnconfirmed": "Cancellation could not be confirmed. The Start may already have begun; refreshing its progress.",

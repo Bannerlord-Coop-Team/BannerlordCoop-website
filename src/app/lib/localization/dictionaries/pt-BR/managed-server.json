@@ -1,5 +1,13 @@
 {
   "support.discord": "nosso Discord",
+  "campaigns.resetRunnerHelp": "Abra um chamado de suporte em “General Help” no {supportLink} para pedir a atualização do agente do servidor. Depois, solicite a redefinição da campanha novamente.",
+  "campaigns.resetFailedHelp": "A redefinição da campanha não foi concluída. Verifique suas campanhas antes de tentar novamente. Se precisar de ajuda, abra um chamado de suporte em “General Help” no {supportLink}.",
+  "campaigns.resetStatusHelp": "Não foi possível confirmar o status da redefinição. Verifique suas campanhas antes de tentar novamente. Se precisar de ajuda, abra um chamado de suporte em “General Help” no {supportLink}.",
+  "campaigns.resetOutcomeHelp": "Não foi possível confirmar o resultado da redefinição. Verifique suas campanhas antes de tentar novamente. Se precisar de ajuda, abra um chamado de suporte em “General Help” no {supportLink}.",
+  "hold.accountLink": "sua conta",
+  "hold.ownerHelp": "Reative a assinatura elegível e confira se a conta correta do Patreon está vinculada em {accountLink}. Se o financiamento já estiver ativo, abra um chamado de suporte em “General Help” no {supportLink}.",
+  "hold.viewerHelp": "O proprietário precisa restaurar o financiamento elegível antes da remoção. Se precisar de ajuda, abra um chamado de suporte em “General Help” no {supportLink}.",
+  "hold.removalHelp": "A remoção está pendente. Depois de iniciada, talvez seja tarde demais para restaurar o financiamento. Abra imediatamente um chamado de suporte em “General Help” no {supportLink}.",
   "controls.cancelStart": "Cancelar início",
   "controls.cancellingStart": "Cancelando início…",
   "controls.startCancellationUnconfirmed": "Não foi possível confirmar o cancelamento. O início pode já ter começado; atualizando o progresso.",

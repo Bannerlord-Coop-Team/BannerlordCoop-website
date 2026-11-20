@@ -1,12 +1,14 @@
-import { CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION, campaignResetStatusMessage } from "../../../../supabase/functions/_shared/server-campaign-contract";
+import { createTranslator } from "@/app/lib/localization/translator";
+import { campaignResetStatusMessage } from "@/app/lib/hosting/campaign-reset-messages";
+import { CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION } from "../../../../supabase/functions/_shared/server-campaign-contract";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerCampaigns } from "./ManagedServerCampaigns";
-import { TestLocalization } from "./ManagedServerLocalization.test-utils";
+import { TestLocalization, serverTestMessages } from "./ManagedServerLocalization.test-utils";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
-const runnerUpdateMessage = campaignResetStatusMessage({ serverId: "server", jobId: "job", state: "failed", errorCode: "agent_capability_unavailable", instruction: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION });
+const runnerUpdateMessage = campaignResetStatusMessage({ serverId: "server", jobId: "job", state: "failed", errorCode: "agent_capability_unavailable", instruction: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION }, createTranslator("en", serverTestMessages["managed-server"]).t);
 
 const mocks = vi.hoisted(() => ({ list: vi.fn(), change: vi.fn(), resetStatus: vi.fn(), deleteSave: vi.fn(), deletionStatus: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => { const router = { refresh: mocks.refresh }; return { useRouter: () => router }; });
@@ -121,7 +123,7 @@ it("shows the retained native reset refusal without another Reset or a changed c
     await beginReset();
     mocks.resetStatus.mockResolvedValue({ ok: true, status: { serverId, jobId: freshId, state: "failed", errorCode: "agent_capability_unavailable", instruction: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION }, message: runnerUpdateMessage });
     await act(async () => vi.advanceTimersByTimeAsync(5_000));
-    expect(container.textContent).toContain("Create a General Help support ticket in our Discord to request a runner update");
+    expect(container.textContent).toContain("Please create a General Help support ticket in our Discord to request a runner update");
     expect(container.querySelector('a[href="https://discord.gg/5vJzfz5Zzy"]')?.getAttribute("rel")).toBe("noopener noreferrer");
     expect(container.textContent).toContain("Default New Game");
     expect(mocks.change).toHaveBeenCalledTimes(1);

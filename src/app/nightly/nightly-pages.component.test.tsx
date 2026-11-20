@@ -66,7 +66,14 @@ it("error page renders only canned copy for the context and code", async () => {
     expect(role.textContent).toContain("Have a sponsor code?");
     const forged = render(await NightlyErrorPage(params({ context: "<script>", code: "<img src=x onerror=alert(1)>" })));
     expect(forged.querySelector("img, script")).toBeNull();
-    expect(forged.querySelector('[role="alert"]')?.textContent).toBe("Access could not be verified. Run the installer again or ask in the Bannerlord Co-op Discord.");
+    expect(forged.querySelector('[role="alert"]')?.textContent).toBe("Access could not be verified. Run the installer again.");
+    for (const page of [expired, role, forged]) {
+        const link = page.querySelector('a[href="https://discord.gg/5vJzfz5Zzy"]');
+        expect(link?.textContent).toBe("our Discord");
+        expect(link?.getAttribute("target")).toBe("_blank");
+        expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+        expect(page.textContent).toContain("Create a General Help support ticket");
+    }
 });
 
 it("claim page shows the form for the pending device and escapes the Discord username", async () => {

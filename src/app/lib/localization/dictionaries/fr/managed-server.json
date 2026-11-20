@@ -1,5 +1,13 @@
 {
   "support.discord": "notre Discord",
+  "campaigns.resetRunnerHelp": "Ouvrez un ticket d’assistance « General Help » sur {supportLink} pour demander une mise à jour de l’agent du serveur. Demandez ensuite à nouveau la réinitialisation de la campagne.",
+  "campaigns.resetFailedHelp": "La réinitialisation de la campagne n’a pas abouti. Vérifiez vos campagnes avant de réessayer. Si vous avez besoin d’aide, ouvrez un ticket d’assistance « General Help » sur {supportLink}.",
+  "campaigns.resetStatusHelp": "Impossible de confirmer l’état de la réinitialisation. Vérifiez vos campagnes avant de réessayer. Si vous avez besoin d’aide, ouvrez un ticket d’assistance « General Help » sur {supportLink}.",
+  "campaigns.resetOutcomeHelp": "Impossible de confirmer le résultat de la réinitialisation. Vérifiez vos campagnes avant de réessayer. Si vous avez besoin d’aide, ouvrez un ticket d’assistance « General Help » sur {supportLink}.",
+  "hold.accountLink": "votre compte",
+  "hold.ownerHelp": "Rétablissez votre abonnement éligible et vérifiez que le bon compte Patreon est associé dans {accountLink}. Si le financement est déjà actif, ouvrez un ticket d’assistance « General Help » sur {supportLink}.",
+  "hold.viewerHelp": "Le propriétaire doit rétablir un financement éligible avant la suppression. Si vous avez besoin d’aide, ouvrez un ticket d’assistance « General Help » sur {supportLink}.",
+  "hold.removalHelp": "La suppression est en attente. Une fois lancée, il sera peut-être trop tard pour rétablir le financement. Ouvrez immédiatement un ticket d’assistance « General Help » sur {supportLink}.",
   "controls.cancelStart": "Annuler le démarrage",
   "controls.cancellingStart": "Annulation du démarrage…",
   "controls.startCancellationUnconfirmed": "L’annulation n’a pas pu être confirmée. Le démarrage a peut-être déjà commencé ; actualisation de sa progression.",

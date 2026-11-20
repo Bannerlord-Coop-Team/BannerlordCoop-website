@@ -1082,7 +1082,7 @@ function Get-InstallerPin {
     if ([string]::IsNullOrWhiteSpace($value)) { return '' }
     $pin = $value.Trim()
     if ($pin -cnotmatch '^[A-Za-z0-9_-]{43}$') {
-        throw 'The create-build installer pin is invalid. Ask staff for a new /create-build link.'
+        throw 'The create-build installer pin is invalid. You need a new /create-build link. Include that in your support ticket.'
     }
     return $pin
 }
@@ -1109,28 +1109,28 @@ function Get-CreateBuildPinRedeemDecision {
         return [pscustomobject]@{
             Action = 'Fail'
             Token = ''
-            Message = 'That create-build installer link was already used. Ask staff for a new /create-build link.'
+            Message = 'That create-build installer link was already used. You need a new /create-build link. Include that in your support ticket.'
         }
     }
     if ($errorCode -ceq 'expired_token') {
         return [pscustomobject]@{
             Action = 'Fail'
             Token = ''
-            Message = 'That create-build installer link has expired. Ask staff for a new /create-build link.'
+            Message = 'That create-build installer link has expired. You need a new /create-build link. Include that in your support ticket.'
         }
     }
     if ($errorCode -ceq 'pin_incomplete') {
         return [pscustomobject]@{
             Action = 'Fail'
             Token = ''
-            Message = 'That create-build installer is not ready yet. Ask staff to run /create-build again.'
+            Message = 'That create-build installer is not ready yet. It needs to be regenerated with /create-build. Include that in your support ticket.'
         }
     }
     if ($statusCode -eq 400 -or $statusCode -eq 401 -or $errorCode -ceq 'invalid_request') {
         return [pscustomobject]@{
             Action = 'Fail'
             Token = ''
-            Message = 'That create-build installer link is invalid. Ask staff for a new /create-build link.'
+            Message = 'That create-build installer link is invalid. You need a new /create-build link. Include that in your support ticket.'
         }
     }
     if ($null -eq $ErrorRecord) {
@@ -1608,7 +1608,7 @@ function Get-PinManifest {
     } catch {
         $statusCode = Get-HttpStatusCode $_
         if ($statusCode -eq 401 -or $statusCode -eq 403) {
-            throw 'The create-build installer session expired. Ask staff for a new /create-build link.'
+            throw 'The create-build installer session expired. You need a new /create-build link. Include that in your support ticket.'
         }
         throw
     }
@@ -2357,13 +2357,13 @@ function Get-InstallationSupportLines {
     if ($FailureMessage -match 'The nightly authorization token is invalid') {
         $lines += 'If Discord desktop did not complete verification, run the installer again and open its verification link in a web browser.'
     } elseif ($FailureMessage -match '(?i)7-Zip failed to extract|CRC Failed') {
-        $lines += 'The downloaded archive failed 7-Zip integrity checks. Run the installer again; if it repeats, copy this exact message when asking for help.'
+        $lines += 'The downloaded archive failed 7-Zip integrity checks. Run the installer again. If it repeats, include this exact message in your support ticket.'
     } elseif ([string]::IsNullOrWhiteSpace($FailureMessage) -or
         (($FailureMessage -match '(?i)download|HTTP|gateway|DNS|network|proxy|hash|incomplete|authorization') -and
             $FailureMessage -notmatch 'GoodbyeDPI|zapret|ByeDPI|SpoofDPI|PowerTunnel|GreenTunnel|youtubeUnblock|Cloudflare WARP|HTTPS scanning|DNS for the nightly|hostname could not be resolved|network filter replaced|Cloudflare challenged|internal_error|HTTP 50|not available yet|#nightly-releases|could not validate')) {
         $lines += 'If a DNS tool such as GoodbyeDPI is interfering, try Cloudflare WARP or turn that tool off, then run the installer again.'
     }
-    $lines += 'If you need help, copy this message and ask in the Bannerlord Co-op Discord.'
+    $lines += 'If you need help, create a General Help support ticket in our Discord (https://discord.gg/5vJzfz5Zzy) and include this message.'
     return $lines
 }
 

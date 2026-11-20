@@ -1,6 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
+import { GENERIC_ERROR_MESSAGE } from "@/app/lib/nightly/messages";
 import type { ClaimFormState, CreateCodeState, RemoveSeatState } from "@/app/lib/nightly/flows";
 import { SponsorClaimForm } from "./SponsorClaimForm";
 import { SponsorPortal } from "./SponsorPortal";
@@ -28,6 +29,18 @@ afterEach(async () => {
     container?.remove();
     root = null;
     container = null;
+});
+
+it("shows a General Help link in the inline generic Nightly error", async () => {
+    const view = await mount(<SponsorClaimForm action={async () => ({ error: GENERIC_ERROR_MESSAGE })} />);
+    view.querySelector<HTMLInputElement>("#sponsor-code")!.value = "AB2C-DEF3-GH45";
+    await submit(view.querySelector("form")!);
+    const alert = view.querySelector('[role="alert"]');
+    const link = alert?.querySelector("a");
+    expect(alert?.textContent).toContain("Create a General Help support ticket in our Discord");
+    expect(link?.getAttribute("href")).toBe("https://discord.gg/5vJzfz5Zzy");
+    expect(link?.getAttribute("target")).toBe("_blank");
+    expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
 });
 
 it("claim form submits the sponsor code and shows the mapped error inline", async () => {

@@ -1,5 +1,13 @@
 {
   "support.discord": "unserem Discord",
+  "campaigns.resetRunnerHelp": "Erstelle ein Support-Ticket unter „General Help“ auf {supportLink}, um ein Runner-Update anzufordern. Setze danach die Kampagne erneut zurück.",
+  "campaigns.resetFailedHelp": "Die Kampagne konnte nicht zurückgesetzt werden. Prüfe vor einem erneuten Versuch deine Kampagnen. Wenn du Hilfe brauchst, erstelle ein Support-Ticket unter „General Help“ auf {supportLink}.",
+  "campaigns.resetStatusHelp": "Der Status der Kampagnenzurücksetzung konnte nicht bestätigt werden. Prüfe vor einem erneuten Versuch deine Kampagnen. Wenn du Hilfe brauchst, erstelle ein Support-Ticket unter „General Help“ auf {supportLink}.",
+  "campaigns.resetOutcomeHelp": "Das Ergebnis der Kampagnenzurücksetzung konnte nicht bestätigt werden. Prüfe vor einem erneuten Versuch deine Kampagnen. Wenn du Hilfe brauchst, erstelle ein Support-Ticket unter „General Help“ auf {supportLink}.",
+  "hold.accountLink": "deinem Konto",
+  "hold.ownerHelp": "Stelle deine berechtigte Mitgliedschaft wieder her und prüfe, ob das richtige Patreon-Konto in {accountLink} verknüpft ist. Wenn die Finanzierung bereits aktiv ist, erstelle ein Support-Ticket unter „General Help“ auf {supportLink}.",
+  "hold.viewerHelp": "Der Eigentümer muss die berechtigte Finanzierung vor der Entfernung wiederherstellen. Wenn du Hilfe brauchst, erstelle ein Support-Ticket unter „General Help“ auf {supportLink}.",
+  "hold.removalHelp": "Die Entfernung steht bevor. Sobald sie begonnen hat, kann es für die Wiederherstellung der Finanzierung zu spät sein. Erstelle sofort ein Support-Ticket unter „General Help“ auf {supportLink}.",
   "controls.cancelStart": "Start abbrechen",
   "controls.cancellingStart": "Start wird abgebrochen…",
   "controls.startCancellationUnconfirmed": "Der Abbruch konnte nicht bestätigt werden. Der Start hat möglicherweise schon begonnen; der Fortschritt wird aktualisiert.",
