@@ -468,7 +468,7 @@ it.each(["failed", "retry-wait"] as const)("restores truthful %s progress after 
 
 it.each([
     ["war_sails_save_mismatch", "This campaign's War Sails mode doesn't match. Select or start a campaign in the right mode."],
-    ["war_sails_unsupported", "This campaign uses War Sails, which this server's build can't run. Switch to the nightly channel or pick a Classic campaign."],
+    ["war_sails_unsupported", "This campaign uses War Sails, which this server's build can't run. Update the server to a build that ships War Sails or pick a Classic campaign."],
 ] as const)("explains a %s failure insight and a failed Start with localized copy", async (failureCode, message) => {
     vi.useFakeTimers();
     const container = document.createElement("div"); const root = createRoot(container);
@@ -870,7 +870,7 @@ it.each([
     ["mod_load_failed", null, "A custom mod failed to load. Disable recently enabled mods and start again."],
     ["crash_loop_cooldown", null, "The server crashed repeatedly while starting, so Start is paused for about 25 minutes. Changing its enabled mods ends the pause now."],
     ["war_sails_save_mismatch", null, "This campaign's War Sails mode doesn't match. Select or start a campaign in the right mode."],
-    ["war_sails_unsupported", null, "This campaign uses War Sails, which this server's build can't run. Switch to the nightly channel or pick a Classic campaign."],
+    ["war_sails_unsupported", null, "This campaign uses War Sails, which this server's build can't run. Update the server to a build that ships War Sails or pick a Classic campaign."],
 ])("shows a terminal %s Start refusal without following status", async (code, diagnosis, message) => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     beginPolling.mockClear();

@@ -1005,7 +1005,7 @@
   "controls.modLoadFailedHarmony": "모드 {modId}에서 서버가 제공하는 Harmony(0Harmony.dll)를 불러오지 못했습니다. 호스팅 문제이므로 Bannerlord.Harmony를 다시 업로드해도 해결되지 않습니다. {supportLink}에서 ‘General Help’ 지원 티켓을 만들거나 Mods에서 이 모드와 이 모드에 의존하는 모드를 비활성화한 뒤 다시 시작하세요.",
   "controls.modLoadFailedUnknown": "사용자 모드를 로드할 수 없습니다. 업로드한 모드와 종속성을 확인하거나 최근 활성화한 모드를 비활성화한 뒤 다시 시작하세요.",
   "controls.warSailsSaveMismatch": "이 캠페인의 War Sails 모드가 맞지 않습니다. 올바른 모드의 캠페인을 선택하거나 새로 시작하세요.",
-  "controls.warSailsUnsupported": "이 캠페인은 War Sails를 사용하지만 이 서버의 빌드에서는 실행할 수 없습니다. 나이틀리 채널로 전환하거나 클래식 캠페인을 선택하세요.",
+  "controls.warSailsUnsupported": "이 캠페인은 War Sails를 사용하지만 이 서버의 빌드에서는 실행할 수 없습니다. War Sails가 포함된 빌드로 서버를 업데이트하거나 클래식 캠페인을 선택하세요.",
   "maintenance.title": "유지 관리",
   "maintenance.update": "게임 서버 업데이트",
   "maintenance.updateDescription": "최신 {channel} 릴리스를 지금 설치합니다. 먼저 백업이 생성됩니다.",
