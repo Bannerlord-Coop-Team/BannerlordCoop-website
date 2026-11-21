@@ -236,7 +236,12 @@ function cardHtml(html: string, operation: string) {
     return html.slice(start, html.indexOf("</article>", start));
 }
 
-it("registers Capacity after Placement and leaves the rate-limited capacity read to the browser", async () => {
+it("opens Capacity without querying region availability and leaves the fleet capacity read to the browser", async () => {
+    mocks.request.mockImplementation(async request => {
+        if (request.operation !== "overview") throw new Error("Unexpected Capacity page read");
+        request.onAuthenticated();
+        return {};
+    });
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "capacity" }) }));
     await stream.allReady;
     const html = await new Response(stream).text();
@@ -247,8 +252,9 @@ it("registers Capacity after Placement and leaves the rate-limited capacity read
     expect(html).toContain("Fleet capacity");
     expect(html).toContain("Loading fleet capacity…");
     expect(html).not.toContain("The control plane view could not be loaded");
-    // The control plane authorizes the page through a small read, as for every other view.
-    expect(mocks.request.mock.calls.map(([request]) => [request.operation, request.input])).toEqual([["hosting-regions", {}]]);
+    expect(mocks.request.mock.calls).toEqual([[expect.objectContaining({
+        operation: "overview", input: { compact: true }, requireOrdinarySession: true,
+    })]]);
     expect(mocks.auth).not.toHaveBeenCalled();
     expect(mocks.accounts).not.toHaveBeenCalled();
 });
