@@ -5,6 +5,7 @@ import { localizedContinentLabel, localizedRegionLabel } from "@/app/lib/hosting
 import { LocalizationProvider } from "@/app/lib/localization/client";
 import { getLocale, getMessages, getOpenGraphLocale, getTranslations } from "@/app/lib/localization/server";
 import type { Translator } from "@/app/lib/localization/types";
+import { NIGHTLY_INSTALLER_GUIDE_URL } from "@/app/lib/nightly/links";
 import { JsonLd, SITE_URL, organizationNode } from "@/app/lib/structured-data";
 import { ArrowRight, Check } from "lucide-react";
 import type { Metadata } from "next";
@@ -68,6 +69,10 @@ export default async function HostingPage() {
         getTranslations("servers", locale),
     ]);
     const price = formatPrice(number);
+    const installerGuideLabel = t("faq.friends.installerGuide");
+    const faqSlots = {
+        installerGuide: <a href={NIGHTLY_INSTALLER_GUIDE_URL} target="_blank" rel="noopener noreferrer" className="text-gold underline hover:text-gold/85">{installerGuideLabel}</a>,
+    };
     const regionGroups = HOSTING_CONTINENTS
         .map((continent) => ({ continent, regions: HOSTING_REGIONS.filter((region) => region.continent === continent) }))
         .filter((group) => group.regions.length > 0);
@@ -103,7 +108,7 @@ export default async function HostingPage() {
                 mainEntity: questions.map((question) => ({
                     "@type": "Question",
                     name: t(`faq.${question}.question`),
-                    acceptedAnswer: { "@type": "Answer", text: t(`faq.${question}.answer`) },
+                    acceptedAnswer: { "@type": "Answer", text: t(`faq.${question}.answer`, { installerGuide: installerGuideLabel }) },
                 })),
             },
         ],
@@ -222,7 +227,7 @@ export default async function HostingPage() {
                             {questions.map((question) => (
                                 <div key={question} className="bg-surface-raised px-5 py-6 sm:px-6 lg:last:odd:col-span-2">
                                     <dt className="font-display text-xl font-semibold text-foreground">{t(`faq.${question}.question`)}</dt>
-                                    <dd className="mt-2 text-sm leading-6 text-foreground-muted">{t(`faq.${question}.answer`)}</dd>
+                                    <dd className="mt-2 text-sm leading-6 text-foreground-muted">{rich(`faq.${question}.answer`, faqSlots)}</dd>
                                 </div>
                             ))}
                         </dl>
