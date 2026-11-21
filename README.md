@@ -219,33 +219,12 @@ Do not replace the unavailable state with mock production values. Live values sh
 
 ## Media Configuration
 
-Official YouTube links and approved creator channel IDs are configured in:
+Homepage videos and featured creators are rows in Supabase, so adding or reordering them needs no deployment:
 
-```text
-src/app/components/home/media/CommunityMedia.tsx
-```
+- Videos: `public.homepage_videos`, documented in [docs/homepage-videos.md](docs/homepage-videos.md).
+- Creators: `public.homepage_creators`, documented in [docs/homepage-creators.md](docs/homepage-creators.md).
 
-Videos require only a YouTube URL:
-
-```ts
-{ href: "https://www.youtube.com/watch?v=VIDEO_ID" }
-```
-
-YouTube creators require only a channel ID:
-
-```ts
-{ channelId: "UC_CHANNEL_ID" }
-```
-
-The server-side YouTube utility retrieves the remaining metadata.
-
-Creators on other platforms, such as Twitch, carry their full profile instead, because the site has no API integration for those platforms. Their avatar host must be allowed in `next.config.ts`:
-
-```ts
-{ profile: { id: "twitch:name", name: "Name", description: "", avatar: "https://...", href: "https://www.twitch.tv/name" } }
-```
-
-Creators appear in the order they are listed.
+YouTube rows need only a video URL or channel ID; the server-side YouTube utility retrieves the remaining metadata. Remote image hosts are listed in `src/app/lib/remote-image-hosts.ts`.
 
 ## Project Structure
 

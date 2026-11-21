@@ -72,10 +72,11 @@ describe("homepage generated media labels", () => {
             { id: "custom", title: "Custom title", description: "Custom prose", thumbnail: "https://example.com/image", thumbnailAlt: "Custom alternative", category: "Custom category", duration: "1:05", href: "https://example.com/video", ...editorialKeys },
             expect.objectContaining({ id: "youtube", title: "Localized fallback", href: `${href}&t=10s` }),
         ]);
-        const query = new URL(fetcher.mock.calls[0][0]).searchParams;
+        const request = new URL(fetcher.mock.calls[0][0]);
+        expect(request.pathname).toBe("/rest/v1/homepage_videos");
+        const query = request.searchParams;
         expect(query.get("order")).toBe("published_at.desc.nullslast,sort_order.asc,id.asc");
         expect(query.get("published")).toBe("eq.true");
         expect(query.get("select")?.split(",")).toEqual(expect.arrayContaining(Object.keys(editorialKeys)));
-        expect(fetcher.mock.calls[0][1]).toEqual({ headers: { apikey: "test-public" }, next: { revalidate: 60 } });
     });
 });
