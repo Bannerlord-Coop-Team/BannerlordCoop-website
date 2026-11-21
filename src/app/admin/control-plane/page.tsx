@@ -396,9 +396,8 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             return { inventory, regionCatalog: hostingRegions.regions, activeJobs: activeJobs.items } satisfies PlacementViewData;
         }
         case "capacity":
-            // The capacity read is rate limited, so the browser requests it when the tab opens. This small read
-            // lets the control plane authorize the page, as every other view's read does.
-            await readControlPlaneAdmin<unknown>({ accessToken: token, signal, ...identity, operation: "hosting-regions", input: {} });
+            // The browser starts the rate-limited capacity read after the compact overview authorizes the page.
+            await readControlPlaneAdmin<unknown>({ accessToken: token, signal, ...identity, operation: "overview", input: { compact: true } });
             return null;
         case "notices": {
             // A bounded server window a notice can target; searching and the notice list load in the browser.
