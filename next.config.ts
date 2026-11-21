@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { NIGHTLY_GATEWAY_ORIGIN } from "./src/app/lib/nightly/links";
+import { remoteImagePatterns } from "./src/app/lib/remote-image-hosts";
 
 const nextConfig: NextConfig = {
     turbopack: {root: process.cwd()},
@@ -36,20 +37,7 @@ const nextConfig: NextConfig = {
         ];
     },
     images: {
-        remotePatterns: [
-            {
-                protocol: "https",
-                hostname: "yt3.ggpht.com",
-            },
-            {
-                protocol: "https",
-                hostname: "i.ytimg.com",
-            },
-            {
-                protocol: "https",
-                hostname: "static-cdn.jtvnw.net",
-            },
-        ],
+        remotePatterns: remoteImagePatterns,
     },
 };
 

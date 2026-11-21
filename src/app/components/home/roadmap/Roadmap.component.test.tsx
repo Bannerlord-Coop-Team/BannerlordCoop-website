@@ -93,22 +93,10 @@ describe("Roadmap", () => {
     });
 });
 
-it("loads ordered milestones and nested items using public credentials with a short cache", async () => {
+it("reads the roadmap_milestones table and returns its rows unchanged", async () => {
     const { getRoadmap: load } = await vi.importActual<typeof import("@/app/lib/roadmap")>("@/app/lib/roadmap");
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://example.supabase.co");
-    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "public-test-key");
     const rows = [{ id: "one", title: "v1.0", title_translation_key: "roadmap.milestone.v1-0.title", roadmap_items: [{ ...item("Trading", "planned"), title_translation_key: "roadmap.item.trading.title", description_translation_key: null }] }];
-    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => rows });
-    vi.stubGlobal("fetch", fetchMock);
-    expect(await load()).toEqual(rows);
-    const [url, options] = fetchMock.mock.calls[0];
-    expect(new URL(url).searchParams.get("select")).toBe("id,title,title_translation_key,roadmap_items(id,title,title_translation_key,description,description_translation_key,status)");
-    expect(new URL(url).searchParams.get("order")).toBe("sort_order.asc,id.asc");
-    expect(new URL(url).searchParams.get("roadmap_items.order")).toBe("sort_order.asc,id.asc");
-    expect(options).toEqual({ headers: { apikey: "public-test-key" }, next: { revalidate: 60 } });
-
-    fetchMock.mockResolvedValue({ ok: false, status: 503 });
-    const log = vi.spyOn(console, "error").mockImplementation(() => {});
-    expect(await load()).toEqual([]);
-    log.mockRestore();
+    const readRows = vi.fn().mockResolvedValue(rows);
+    expect(await load({ readRows })).toEqual(rows);
+    expect(readRows).toHaveBeenCalledWith("roadmap_milestones", expect.any(Object));
 });

@@ -8,7 +8,7 @@ The homepage carousel reads `public.homepage_videos` in Supabase. Manage rows th
 - `sort_order`: ascending tie-breaker for equal or unknown publication dates; use gaps such as 10, 20, 30. Remaining ties are ordered by row UUID.
 - `published`: false hides the entry, including from anonymous API reads.
 - Custom videos require `title`, `thumbnail`, and `thumbnail_alt`. Optional fields: `description`, `category`, `duration`.
-- Custom thumbnail hosts must also be allowed by `next.config.ts` for Next Image.
+- Custom thumbnail hosts must also be listed in `src/app/lib/remote-image-hosts.ts`, which feeds the Next Image allowlist in `next.config.ts`.
 
 Example privileged MCP SQL:
 
@@ -26,9 +26,9 @@ When adding a video, set `published_at` through MCP/the dashboard using its veri
 
 Anonymous and signed-in website users have SELECT access only, restricted by RLS to published rows. Privileged MCP/database administrators and the service role can edit. The website uses the publishable key, not a secret key.
 
-The list revalidates on requests after 60 seconds (Next.js may serve a stale response while refreshing); YouTube metadata retains its existing 24-hour cache. If the list is unavailable or empty, the carousel is omitted. The hero trailer and creator list are unchanged.
+The list revalidates on requests after 60 seconds (Next.js may serve a stale response while refreshing); YouTube metadata retains its existing 24-hour cache. If the list is unavailable or empty, the carousel is omitted. The hero trailer is unchanged. Featured creators are documented in [homepage-creators.md](homepage-creators.md).
 
-Validation: `npx tsx --test src/app/lib/homepage-videos.test.mjs` (Node 22.15+ or 24, for module hooks).
+Validation: `npx tsx --test src/app/lib/homepage-videos.test.mjs src/app/lib/supabase/public-rows.test.mjs` (Node 22.15+ or 24, for module hooks).
 
 Thumbnail `sizes` in `VideoCarousel.tsx` follows `.site-container` in `globals.css`: 2rem mobile gutters, 3rem from 640px, 6rem from 1024px, and the 3rem short-landscape override. At 1024px the cards form two columns with a 1rem gap; the container caps at 1280px. The hint also subtracts the card's two 1px borders (a capped image is 630px wide at the default font size). Update these together when changing the layout; both the one/two-video grid and scrolling carousel use the same image hint.
 
