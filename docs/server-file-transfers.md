@@ -70,9 +70,9 @@ optional so today's control plane keeps working:
   from the active campaign's notes that switching changes the mode (and that
   players must enable War Sails for a War Sails campaign).
 - **Owner summary** may carry `warSailsCapable: boolean`, true only when the
-  installed build can run War Sails (nightly channel, an image with War Sails and a
-  Coop build with naval support). Only then does the "Start a new campaign?" dialog
-  offer a Classic / War Sails choice (Classic by default).
+  installed build can run War Sails (an image with War Sails and a Coop build
+  with naval support, on any release channel). Only then does the "Start a new
+  campaign?" dialog offer a Classic / War Sails choice (Classic by default).
 - **New campaign** sends `warSails: true` only when War Sails is chosen. A Classic
   reset sends exactly the request it sent before (`{ action, serverId,
   expectedUpdatedAt }`); the Edge Function accepts an optional boolean `warSails`

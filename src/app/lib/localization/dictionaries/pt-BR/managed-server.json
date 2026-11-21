@@ -1006,7 +1006,7 @@
   "controls.modLoadFailedHarmony": "O mod {modId} não conseguiu carregar o Harmony (0Harmony.dll) fornecido pelo servidor. É um problema da hospedagem; reenviar Bannerlord.Harmony não resolve. Abra um chamado de suporte em “General Help” no {supportLink} ou desative este mod e os que dependem dele em Mods antes de iniciar novamente.",
   "controls.modLoadFailedUnknown": "Um mod personalizado não carregou. Confira os mods enviados e suas dependências ou desative os últimos mods ativados antes de iniciar novamente.",
   "controls.warSailsSaveMismatch": "O modo War Sails desta campanha não corresponde. Selecione ou inicie uma campanha no modo certo.",
-  "controls.warSailsUnsupported": "Esta campanha usa War Sails, que a versão deste servidor não consegue executar. Mude para o canal Nightly ou escolha uma campanha Clássica.",
+  "controls.warSailsUnsupported": "Esta campanha usa War Sails, que a versão deste servidor não consegue executar. Atualize o servidor para uma versão que inclua War Sails ou escolha uma campanha Clássica.",
   "maintenance.title": "Manutenção",
   "maintenance.update": "Atualização do servidor de jogo",
   "maintenance.updateDescription": "Instala agora a versão {channel} mais recente. Um backup é feito antes.",

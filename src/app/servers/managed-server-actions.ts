@@ -95,7 +95,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         if (parsed.action === "start" && code === "mod_load_failed" && error instanceof MyServersApiError) {
             return { ok: false, message: await startModLoadFailureMessage(accessToken, parsed.serverId, error, t) };
         }
-        // The campaign's War Sails mode cannot run as launched; the owner must pick another campaign or channel, not retry.
+        // The campaign's War Sails mode cannot run as launched; the owner must pick another campaign or update to a build that ships War Sails, not retry.
         if ((parsed.action === "start" || parsed.action === "restart-game") && isWarSailsFailureCode(code)) {
             return { ok: false, refresh: true, message: warSailsFailureMessage(code, t) };
         }

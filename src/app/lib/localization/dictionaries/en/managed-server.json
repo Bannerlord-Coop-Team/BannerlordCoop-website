@@ -1006,7 +1006,7 @@
   "controls.modLoadFailedHarmony": "Mod {modId} could not load the server-provided Harmony (0Harmony.dll). This is a hosting problem. Re-uploading Bannerlord.Harmony will not fix it. Please create a General Help support ticket in {supportLink}, or disable this mod and its dependants in Mods before starting again.",
   "controls.modLoadFailedUnknown": "A custom mod failed to load. Check your uploaded mods and their dependencies, or disable recently enabled mods before starting again.",
   "controls.warSailsSaveMismatch": "This campaign's War Sails mode doesn't match. Select or start a campaign in the right mode.",
-  "controls.warSailsUnsupported": "This campaign uses War Sails, which this server's build can't run. Switch to the nightly channel or pick a Classic campaign.",
+  "controls.warSailsUnsupported": "This campaign uses War Sails, which this server's build can't run. Update the server to a build that ships War Sails or pick a Classic campaign.",
   "maintenance.title": "Maintenance",
   "maintenance.update": "Game server update",
   "maintenance.updateDescription": "Installs the latest {channel} release now. A backup is taken first.",

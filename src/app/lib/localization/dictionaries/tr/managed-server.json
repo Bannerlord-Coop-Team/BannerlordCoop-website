@@ -1006,7 +1006,7 @@
   "controls.modLoadFailedHarmony": "{modId} modu, sunucunun sağladığı Harmony (0Harmony.dll) bileşenini yükleyemedi. Bu bir barındırma sorunudur; Bannerlord.Harmony modunu yeniden yüklemek sorunu çözmez. {supportLink} “General Help” kategorisinde bir destek talebi açın veya yeniden başlatmadan önce Modlar bölümünde bu modu ve ona bağlı modları devre dışı bırakın.",
   "controls.modLoadFailedUnknown": "Bir özel mod yüklenemedi. Yüklediğiniz modları ve bağımlılıklarını kontrol edin veya son etkinleştirdiğiniz modları devre dışı bırakıp yeniden başlatın.",
   "controls.warSailsSaveMismatch": "Bu seferin War Sails modu uyuşmuyor. Doğru modda bir sefer seçin veya başlatın.",
-  "controls.warSailsUnsupported": "Bu sefer War Sails kullanıyor ve bu sunucunun sürümü bunu çalıştıramıyor. Nightly kanalına geçin veya Klasik bir sefer seçin.",
+  "controls.warSailsUnsupported": "Bu sefer War Sails kullanıyor ve bu sunucunun sürümü bunu çalıştıramıyor. Sunucuyu War Sails içeren bir sürüme güncelleyin veya Klasik bir sefer seçin.",
   "maintenance.title": "Bakım",
   "maintenance.update": "Oyun sunucusu güncellemesi",
   "maintenance.updateDescription": "En son {channel} sürümünü şimdi yükler. Önce bir yedek alınır.",
