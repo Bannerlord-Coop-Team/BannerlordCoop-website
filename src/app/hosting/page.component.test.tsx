@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import english from "@/app/lib/localization/dictionaries/en/hosting.json";
 import russian from "@/app/lib/localization/dictionaries/ru/hosting.json";
 import { HOSTING_OFFER_TIER, PATREON_HOSTING_CHECKOUT_URL } from "@/app/lib/hosting/patreon-checkout";
+import { getEnabledLocales } from "@/app/lib/localization/registry";
+import { getTranslations } from "@/app/lib/localization/server";
 import { HOSTING_REGIONS } from "../../../supabase/functions/_shared/hosting-regions";
 
 const request = vi.hoisted(() => ({ locale: undefined as string | undefined }));
@@ -69,7 +71,31 @@ describe("hosting landing page", () => {
         request.locale = "ru";
         const root = await render();
         expect(root.querySelector("h1")?.textContent).toBe(russian["hero.heading"]);
-        expect(root.textContent).toContain(russian["faq.friends.answer"]);
+    });
+
+    it.each(getEnabledLocales())("ends the friends FAQ answer with the Nightly installer guide in $name", async ({ locale }) => {
+        request.locale = locale;
+        const { t } = await getTranslations("hosting");
+        const root = await render();
+        const question = [...root.querySelectorAll("#faq-heading ~ dl dt")]
+            .find((term) => term.textContent === t("faq.friends.question"));
+        const answer = question?.nextElementSibling;
+        const link = answer?.querySelector("a");
+        const label = t("faq.friends.installerGuide");
+
+        expect(link?.getAttribute("href")).toBe("https://discord.com/channels/709516043332354119/1058155634702434355/1539466223916421201");
+        expect(link?.getAttribute("target")).toBe("_blank");
+        expect(link?.getAttribute("rel")).toBe("noopener noreferrer");
+        expect(link?.textContent).toBe(label);
+        expect(answer?.lastChild).toBe(link);
+        expect(answer?.textContent).toBe(t("faq.friends.answer", { installerGuide: label }));
+
+        const graph = JSON.parse(root.querySelector("script[type='application/ld+json']")!.textContent!)["@graph"];
+        expect(graph[2].mainEntity).toContainEqual({
+            "@type": "Question",
+            name: t("faq.friends.question"),
+            acceptedAnswer: { "@type": "Answer", text: answer?.textContent },
+        });
     });
 
     it("is listed in the sitemap, which robots.txt advertises", () => {
