@@ -371,7 +371,14 @@ it.each(["Form", "JSON"])("warns about a saved large wanderer limit and saves on
     const settings = { ...liveServer, autosaveMinutes: 20 };
     if (mode === "JSON") {
         await click("JSON");
+        expect(field<HTMLTextAreaElement>("config-json").getAttribute("aria-describedby")).toContain("config-json-warnings");
+        expect(field("config-json-warnings").textContent).toContain("Wanderer limit. The saved value is outside the edit range.");
         await type("config-json", JSON.stringify({ serverConfig: settings, modConfig }));
+        expect(field("config-json-warnings").textContent).toContain("The saved value is outside the edit range");
+        await click("Form");
+        expect(container.textContent).toContain("The saved value is outside the edit range");
+        await click("JSON");
+        expect(field("config-json-warnings").textContent).toContain("The saved value is outside the edit range");
     } else {
         await type("config-serverConfig-autosaveMinutes", "20");
     }

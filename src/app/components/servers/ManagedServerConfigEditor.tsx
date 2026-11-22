@@ -238,8 +238,18 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     const dirty = dirtyParts.length > 0 || jsonError !== "";
     const hasBlockingProblem = draft !== null && GROUPS.some(({ group, fields }) => fields.some(field => {
         const value = groupValues(draft, group)[field.key];
-        return (!baseline || value !== groupValues(baseline, group)[field.key]) && numberProblem(field, value, t, number) !== null;
+        return !isSavedValue(group, field, value) && numberProblem(field, value, t, number) !== null;
     }));
+
+    function isSavedValue(group: Group, field: Field, value: unknown): boolean {
+        return baseline !== null && value === groupValues(baseline, group)[field.key];
+    }
+
+    const jsonWarnings = mode === "json" && draft ? GROUPS.flatMap(({ group, fields }) => fields.flatMap((field) => {
+        const value = groupValues(draft, group)[field.key];
+        const problem = isSavedValue(group, field, value) ? numberProblem(field, value, t, number) : null;
+        return problem === null ? [] : [{ key: `${group}-${field.key}`, label: field.label, problem }];
+    })) : [];
 
     // Reloads current configuration, confirming first when that would discard unsaved edits.
     function reload() {
@@ -331,7 +341,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         </div>;
         if (field.kind === "stringList") return <StringListField key={field.key} id={id} label={field.label} value={value} update={update} />;
         const problem = numberProblem(field, value, t, number);
-        const warning = problem !== null && baseline !== null && value === groupValues(baseline, group)[field.key];
+        const warning = problem !== null && isSavedValue(group, field, value);
         return <div key={field.key}>
             <label htmlFor={id} className="text-sm">{field.label}</label>
             <input id={id} type="number" inputMode={field.kind === "integer" ? "numeric" : "decimal"} min={field.min} max={field.max} step={field.kind === "integer" ? 1 : field.step}
@@ -355,8 +365,11 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         </p>
         {loadState === "loading" ? <ConfigLoadingSkeleton groups={GROUPS} label={t("configEditor.loadingSkeleton")} /> : draft && mode === "json" && <>
             <label htmlFor="config-json" className="mb-2 block text-xs text-foreground-muted">{t("configEditor.managedConfigurationJson")}</label>
-            <textarea id="config-json" spellCheck={false} disabled={!editable} value={jsonText} onChange={(event) => editJson(event.target.value)} aria-invalid={jsonError ? true : undefined} aria-describedby={jsonError ? "config-json-error config-help" : "config-help"} className="min-h-64 w-full resize-y rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm leading-7 text-foreground disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-red-400" />
+            <textarea id="config-json" spellCheck={false} disabled={!editable} value={jsonText} onChange={(event) => editJson(event.target.value)} aria-invalid={jsonError ? true : undefined} aria-describedby={["config-help", jsonError && "config-json-error", jsonWarnings.length > 0 && "config-json-warnings"].filter(Boolean).join(" ")} className="min-h-64 w-full resize-y rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm leading-7 text-foreground disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-red-400" />
             {jsonError && <p id="config-json-error" role="alert" className="mt-2 text-sm text-red-200">{jsonError}</p>}
+            {jsonWarnings.length > 0 && <ul id="config-json-warnings" className="mt-2 space-y-1 text-xs text-amber-200">
+                {jsonWarnings.map(({ key, label, problem }) => <li key={key}>{label}. {t("configEditor.savedValueOutsideEditRange", { range: problem })}</li>)}
+            </ul>}
         </>}
         {loadState !== "loading" && draft && mode === "form" && <div className="space-y-6">
             {GROUPS.map(({ group, title, fields }) => <fieldset key={group} disabled={!editable} className="min-w-0">
