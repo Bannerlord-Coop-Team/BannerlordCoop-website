@@ -34,8 +34,9 @@ authority and the job's server/action binding. The result contains only
 `serverId`, `jobId`, `state`, `errorCode` and `instruction`.
 
 A retained runner that cannot safely seed a new campaign refuses before removing
-any saves. The card displays: "Contact support to update this server's runner,
-then request Reset Campaign again." Polling never submits another Reset. Other
+any saves. The card asks the owner to create a General Help support ticket in
+[our Discord](https://discord.gg/5vJzfz5Zzy) to request a runner update, then
+request Reset Campaign again. Polling never submits another Reset. Other
 terminal failures use fixed safe messages; private worker/runner diagnostics are
 rejected. A successful job is reported even if the selected save ID is unchanged.
 
@@ -69,9 +70,9 @@ optional so today's control plane keeps working:
   from the active campaign's notes that switching changes the mode (and that
   players must enable War Sails for a War Sails campaign).
 - **Owner summary** may carry `warSailsCapable: boolean`, true only when the
-  installed build can run War Sails (nightly channel, an image with War Sails and a
-  Coop build with naval support). Only then does the "Start a new campaign?" dialog
-  offer a Classic / War Sails choice (Classic by default).
+  installed build can run War Sails (an image with War Sails and a Coop build
+  with naval support, on any release channel). Only then does the "Start a new
+  campaign?" dialog offer a Classic / War Sails choice (Classic by default).
 - **New campaign** sends `warSails: true` only when War Sails is chosen. A Classic
   reset sends exactly the request it sent before (`{ action, serverId,
   expectedUpdatedAt }`); the Edge Function accepts an optional boolean `warSails`

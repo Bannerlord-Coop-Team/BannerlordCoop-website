@@ -563,17 +563,17 @@ if ($invalidSupport.Count -ne 2 -or $invalidSupport[0] -notmatch 'open its verif
 $supportLines = @(Get-InstallationSupportLines)
 if ($supportLines.Count -ne 2 -or
     $supportLines[0] -cne 'If a DNS tool such as GoodbyeDPI is interfering, try Cloudflare WARP or turn that tool off, then run the installer again.' -or
-    $supportLines[1] -cne 'If you need help, copy this message and ask in the Bannerlord Co-op Discord.') {
+    $supportLines[1] -cne 'If you need help, create a General Help support ticket in our Discord (https://discord.gg/5vJzfz5Zzy) and include this message.') {
     throw 'Installer failure help omitted the GoodbyeDPI or Discord guidance.'
 }
 $diagnosedSupport = @(Get-InstallationSupportLines 'GoodbyeDPI is running and is blocking nightly authorization. Turn off GoodbyeDPI, or enable Cloudflare WARP, then run the installer again.')
 if ($diagnosedSupport.Count -ne 1 -or
-    $diagnosedSupport[0] -cne 'If you need help, copy this message and ask in the Bannerlord Co-op Discord.') {
+    $diagnosedSupport[0] -cne 'If you need help, create a General Help support ticket in our Discord (https://discord.gg/5vJzfz5Zzy) and include this message.') {
     throw 'A diagnosed authorization failure still repeated the generic DNS advice.'
 }
 $unpublishedSupport = @(Get-InstallationSupportLines (Get-UnpublishedNightlyMessage))
 if ($unpublishedSupport.Count -ne 1 -or
-    $unpublishedSupport[0] -cne 'If you need help, copy this message and ask in the Bannerlord Co-op Discord.') {
+    $unpublishedSupport[0] -cne 'If you need help, create a General Help support ticket in our Discord (https://discord.gg/5vJzfz5Zzy) and include this message.') {
     throw 'An unpublished nightly still repeated the generic DNS advice.'
 }
 
@@ -682,7 +682,7 @@ if ($serverError.Code -cne 'internal_error' -or $serverError.Message -notmatch '
     throw 'A gateway internal_error was still blamed on GoodbyeDPI.'
 }
 $serverSupport = @(Get-InstallationSupportLines $serverError.Message)
-if ($serverSupport.Count -ne 1 -or $serverSupport[0] -notmatch 'Bannerlord Co-op Discord') {
+if ($serverSupport.Count -ne 1 -or $serverSupport[0] -notmatch 'General Help support ticket in our Discord') {
     throw 'A gateway internal_error still repeated the generic DNS advice.'
 }
 
@@ -1038,8 +1038,8 @@ if ($pinOutageMessage -notmatch '^The create-build installer link could not be r
     throw 'An unexpected create-build pin failure was not reported with its details.'
 }
 $pinUsed = Get-CreateBuildPinRedeemDecision -Response ([pscustomobject]@{ error = 'already_used' })
-if ($pinUsed.Action -cne 'Fail' -or $pinUsed.Message -notmatch 'already used') {
-    throw 'An already-used create-build pin did not tell the user to ask staff for a new link.'
+if ($pinUsed.Action -cne 'Fail' -or $pinUsed.Message -notmatch 'already used' -or $pinUsed.Message -notmatch 'new /create-build link') {
+    throw 'An already-used create-build pin did not explain that the user needs a new link.'
 }
 $pinExpired = Get-CreateBuildPinRedeemDecision -ErrorRecord (New-GatewayWebError 400 'expired_token')
 if ($pinExpired.Action -cne 'Fail' -or $pinExpired.Message -notmatch 'has expired') {

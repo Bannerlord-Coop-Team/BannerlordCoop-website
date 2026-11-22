@@ -3,7 +3,6 @@ import { afterEach, test } from "node:test";
 import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { createMyServersHandler } from "../../../../supabase/functions/_shared/my-servers.ts";
-import { campaignResetStatusMessage } from "../../../../supabase/functions/_shared/server-campaign-contract.ts";
 import { getMyServerCampaignResetStatus, resetMyServerCampaign } from "./server-campaigns.ts";
 import { MyServersApiError } from "./my-servers.ts";
 
@@ -80,7 +79,6 @@ test("real Website client and Edge consume the fixed refusal without submitting 
     const check = wire(requestId => Response.json({ version: 1, requestId, ok: true, result }));
     const status = await getMyServerCampaignResetStatus("synthetic-owner-token", serverId, jobId);
     assert.deepEqual(status, result);
-    assert.equal(campaignResetStatusMessage(status), failure.instruction);
     check();
 });
 

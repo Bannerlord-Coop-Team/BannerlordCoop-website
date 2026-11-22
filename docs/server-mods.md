@@ -253,8 +253,8 @@ Which mods run headless is the control plane's and the dedicated server's concer
 - `war_sails_save_mismatch` and `war_sails_unsupported` (a Start refusal, a failed
   Start status or the runtime insight) show the website's localized copy instead of
   the control plane's text: the campaign's War Sails mode doesn't match, or the
-  server's build can't run War Sails (switch to the nightly channel or pick a
-  Classic campaign). See [War Sails campaigns](server-file-transfers.md#war-sails-campaigns).
+  server's build can't run War Sails (update the server to a build that ships War
+  Sails or pick a Classic campaign). See [War Sails campaigns](server-file-transfers.md#war-sails-campaigns).
 
 ## Rollout
 

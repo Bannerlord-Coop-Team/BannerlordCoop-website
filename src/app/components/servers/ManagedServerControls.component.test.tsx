@@ -88,6 +88,9 @@ vi.mock("./ManagedServerPollingProvider", () => ({
 }));
 
 it("refreshes the polling fingerprint when lifecycle hints unlock without another server revision", async () => {
+    summary.mockReset();
+    backupStatus.mockReset();
+    deletionStatus.mockReset();
     const serverId = "22222222-2222-4222-8222-222222222222";
     const status = { updatedAt: "2026-10-02T16:00:03.000Z", operationState: "stopped", observedGameState: "stopped", job: null };
     backupStatus.mockResolvedValue(status);
@@ -95,10 +98,16 @@ it("refreshes the polling fingerprint when lifecycle hints unlock without anothe
     summary.mockResolvedValue({ ...status, runtimeInsight: { desiredState: "stopped", allowedActions: [] } });
     const blocked = await serverActions.readManagedServerStatusFingerprint(serverId);
     expect(blocked.ok).toBe(true);
+    expect(summary).toHaveBeenNthCalledWith(1, "token", serverId, undefined, { includeRuntimeInsight: true });
+    summary.mockResolvedValue({ ...status, runtimeInsightWarning: { fieldPath: "runtimeInsight", reason: "not provided" } });
+    const degraded = await serverActions.readManagedServerStatusFingerprint(serverId);
+    expect(degraded.ok).toBe(true);
+    expect(degraded).not.toEqual(blocked);
     summary.mockResolvedValue({ ...status, runtimeInsight: { desiredState: "stopped", allowedActions: ["start"] } });
     const ready = await serverActions.readManagedServerStatusFingerprint(serverId);
     expect(ready.ok).toBe(true);
-    expect(ready).not.toEqual(blocked);
+    expect(summary).toHaveBeenNthCalledWith(3, "token", serverId, undefined, { includeRuntimeInsight: true });
+    expect(ready).not.toEqual(degraded);
 });
 
 it.each([
@@ -459,7 +468,7 @@ it.each(["failed", "retry-wait"] as const)("restores truthful %s progress after 
 
 it.each([
     ["war_sails_save_mismatch", "This campaign's War Sails mode doesn't match. Select or start a campaign in the right mode."],
-    ["war_sails_unsupported", "This campaign uses War Sails, which this server's build can't run. Switch to the nightly channel or pick a Classic campaign."],
+    ["war_sails_unsupported", "This campaign uses War Sails, which this server's build can't run. Update the server to a build that ships War Sails or pick a Classic campaign."],
 ] as const)("explains a %s failure insight and a failed Start with localized copy", async (failureCode, message) => {
     vi.useFakeTimers();
     const container = document.createElement("div"); const root = createRoot(container);
@@ -832,7 +841,7 @@ it("shows a stopped server's retained mod diagnosis on reload without sending St
     const container = document.createElement("div"); const root = createRoot(container);
     try {
         await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="stopped" runtimeInsight={insight} /></TestLocalization>));
-        expect(container.textContent).toContain("Mod CoopSycn could not load the server-provided Harmony (0Harmony.dll). This is a hosting problem; re-uploading Bannerlord.Harmony will not fix it.");
+        expect(container.textContent).toContain("Mod CoopSycn could not load the server-provided Harmony (0Harmony.dll). This is a hosting problem. Re-uploading Bannerlord.Harmony will not fix it.");
         expect(request).not.toHaveBeenCalled();
         expect(startStatus).not.toHaveBeenCalled();
         await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps} observedGameState="running" runtimeInsight={insight} /></TestLocalization>));
@@ -861,7 +870,7 @@ it.each([
     ["mod_load_failed", null, "A custom mod failed to load. Disable recently enabled mods and start again."],
     ["crash_loop_cooldown", null, "The server crashed repeatedly while starting, so Start is paused for about 25 minutes. Changing its enabled mods ends the pause now."],
     ["war_sails_save_mismatch", null, "This campaign's War Sails mode doesn't match. Select or start a campaign in the right mode."],
-    ["war_sails_unsupported", null, "This campaign uses War Sails, which this server's build can't run. Switch to the nightly channel or pick a Classic campaign."],
+    ["war_sails_unsupported", null, "This campaign uses War Sails, which this server's build can't run. Update the server to a build that ships War Sails or pick a Classic campaign."],
 ])("shows a terminal %s Start refusal without following status", async (code, diagnosis, message) => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     beginPolling.mockClear();

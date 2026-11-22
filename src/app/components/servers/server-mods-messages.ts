@@ -1,3 +1,4 @@
+import { DISCORD_SUPPORT_URL } from "../../../../supabase/functions/_shared/discord-support";
 import type { Translator } from "@/app/lib/localization/types";
 import type { ModArchiveError } from "@/app/lib/hosting/server-mod-archive";
 import type { ServerMod, ServerModsError } from "@/app/lib/hosting/server-mods";
@@ -9,7 +10,7 @@ import type { ModLoadFailure } from "@/app/lib/hosting/my-servers-server";
 
 type Translate = Translator["t"];
 
-const UNAVAILABLE_CODES = new Set(["identity_unavailable", "server_api_unavailable", "control_plane_unavailable", "network_unavailable", "invalid_response", "server_api_not_configured"]);
+const UNAVAILABLE_CODES = new Set(["identity_unavailable", "server_api_unavailable", "network_unavailable", "invalid_response", "server_api_not_configured"]);
 const SIMPLE_ERROR_KEYS: Readonly<Record<string, string>> = {
     mod_host_storage_low: "mods.error.hostStorageLow",
     browser_storage_unavailable: "mods.error.browserStorage",
@@ -145,7 +146,7 @@ export function archiveProblemMessage(error: ModArchiveError, t: Translate): str
 /** Explains a Start that failed because an enabled mod did not load, naming the mod and any missing assembly. */
 export function modLoadFailureMessage(failure: ModLoadFailure, t: Translate): string {
     if (failure.reason === "missing-assembly" && failure.assembly !== undefined) {
-        if (failure.assembly === "0Harmony") return t("controls.modLoadFailedHarmony", { modId: failure.modId });
+        if (failure.assembly === "0Harmony") return t("controls.modLoadFailedHarmony", { modId: failure.modId, supportLink: DISCORD_SUPPORT_URL });
         return t("controls.modLoadFailedMissingAssembly", { modId: failure.modId, assembly: failure.assembly });
     }
     if (failure.reason === "missing-dll") return t("controls.modLoadFailedMissingDll", { modId: failure.modId });

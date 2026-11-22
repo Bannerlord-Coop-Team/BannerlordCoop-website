@@ -1,4 +1,4 @@
-import { DISCORD_INVITE_URL, WINDOWS_INSTALLER_FILENAME, WINDOWS_INSTALLER_URL } from "@/app/lib/nightly/links";
+import { WINDOWS_INSTALLER_FILENAME, WINDOWS_INSTALLER_URL } from "@/app/lib/nightly/links";
 import { QUALIFYING_ROLES_TEXT } from "../../../../supabase/functions/_shared/nightly/policy";
 import type { ReactNode } from "react";
 import { primaryButtonClass, secondaryButtonClass } from "./styles";
@@ -10,18 +10,6 @@ export function SupportNote({ title, children }: { title: string; children: Reac
             <strong className="font-label text-xs font-semibold uppercase tracking-[0.14em] text-gold">{title}</strong>
             <span className="text-foreground-muted">{children}</span>
         </div>
-    );
-}
-
-/** Points a user at the Discord server when an error needs a human. */
-export function DiscordHelpNote() {
-    return (
-        <SupportNote title="Need a hand?">
-            <a href={DISCORD_INVITE_URL} className="text-foreground underline underline-offset-4 hover:text-gold">
-                Ask in the Bannerlord Co-op Discord
-            </a>{" "}
-            and include the message shown above.
-        </SupportNote>
     );
 }
 

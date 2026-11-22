@@ -1,3 +1,4 @@
+import { DISCORD_SUPPORT_URL } from "../../../supabase/functions/_shared/discord-support";
 import type { Translator } from "@/app/lib/localization/types";
 import type { ConfigurationImportMessages } from "../../../supabase/functions/_shared/configuration-file-import";
 import type { ManagedConfigurationMessages } from "../../../supabase/functions/_shared/managed-server-configuration";
@@ -16,9 +17,9 @@ export function configurationImportMessages(t: Translator["t"]): ConfigurationIm
         invalidImport: t("import.invalidImport"), noServerSettings: t("import.noServerSettings"), chooseFile: t("import.chooseFile"),
         noGameplaySettings: t("import.noGameplaySettings"), tooLarge: t("import.tooLarge"), unreadable: t("import.unreadable"),
         combinedBackup: t("import.combinedBackup"), olderBackup: t("import.olderBackup"), expectedMod: t("import.expectedMod"),
-        expectedServer: t("import.expectedServer"), duplicateNames: t("import.duplicateNames"), unknownSettings: t("import.unknownSettings"),
-        unknownSettingsWithNames: (names) => `${t("import.unknownSettings")} (${names.join(", ")})`,
-        unsupportedValues: t("import.unsupportedValues"), invalidObject: t("import.invalidObject"), unsupportedSetting: t("import.unsupportedSetting"),
+        expectedServer: t("import.expectedServer"), duplicateNames: t("import.duplicateNames"), unknownSettings: t("import.unknownSettings", { supportLink: DISCORD_SUPPORT_URL }),
+        unknownSettingsWithNames: (names) => `${t("import.unknownSettings", { supportLink: DISCORD_SUPPORT_URL })} (${names.join(", ")})`,
+        unsupportedValues: t("import.unsupportedValues", { supportLink: DISCORD_SUPPORT_URL }), invalidObject: t("import.invalidObject"), unsupportedSetting: t("import.unsupportedSetting"),
         configuration: configurationMessages(t),
     };
 }

@@ -10,6 +10,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerFiles } from "@/app/components/servers/ManagedServerFiles";
 import { ManagedServerUnavailable } from "@/app/components/servers/ManagedServerUnavailable";
+import { ManagedServerLoadError } from "@/app/components/servers/ManagedServerLoadError";
 import { ManagedServerPollingProvider } from "@/app/components/servers/ManagedServerPollingProvider";
 import ServerPage, { generateMetadata } from "./page";
 import { createTranslator } from "@/app/lib/localization/translator";
@@ -99,14 +100,16 @@ it("redirects a verified user without a session token before loading server data
     expect(mocks.preview).not.toHaveBeenCalled();
 });
 
-// Retired external IDs reach no managed record or preview, so every viewer returns to discovery.
-it.each([true, false])("returns a retired external server ID to discovery with hosted access %s", async hostedAccess => {
+// Retired external IDs are explicit access refusals, so the page does not guess at a preview.
+it.each([true, false])("renders access removed for a retired external server ID with hosted access %s", async hostedAccess => {
     vi.stubEnv("CONSOLE_SERVER_CATALOG", JSON.stringify([{ id: "legacy-server", name: "Legacy", address: "203.0.113.10", nodeId: "node", provider: "External VPS" }]));
     try {
         mocks.hostedAccess.mockReturnValue(hostedAccess);
         mocks.managedServers.mockRejectedValue(new MyServersApiError("server_not_found", "Gone"));
-        await expect(page("legacy-server")).rejects.toThrow("redirect:/servers");
-        expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", "legacy-server");
+        const tree = await page("legacy-server");
+        const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+        expect(renderToStaticMarkup(<>{workspace?.props.name}</>)).toContain("This server is unavailable or your access changed.");
+        expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", "legacy-server", undefined, { includeRuntimeInsight: true });
         expect(mocks.backups).not.toHaveBeenCalled();
         expect(mocks.files).not.toHaveBeenCalled();
     } finally { vi.unstubAllEnvs(); }
@@ -114,7 +117,7 @@ it.each([true, false])("returns a retired external server ID to discovery with h
 
 it("renders managed pages from the requested registered server identity", async () => {
     const result = await page(managedId);
-    expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", managedId);
+    expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", managedId, undefined, { includeRuntimeInsight: true });
     expect(result.props.server.serverId).toBe(managedId);
 });
 
@@ -192,7 +195,7 @@ it.each([
 });
 
 // Resolve the page's server components, leaving client components for React to render.
-function findServerElement(node: ReactNode, name: "ServerManagementWorkspace"): Promise<ReactElement<{ visibility: ReactElement<ComponentProps<typeof ServerVisibilitySetting>> }> | null>;
+function findServerElement(node: ReactNode, name: "ServerManagementWorkspace"): Promise<ReactElement<{ name?: ReactNode; summary?: string; address?: string | null; notice?: ReactNode; banner?: ReactNode; visibility: ReactElement<ComponentProps<typeof ServerVisibilitySetting>> }> | null>;
 function findServerElement(node: ReactNode, name: "ServerSettingsPanel"): Promise<ReactElement<ComponentProps<typeof ServerSettingsPanel>> | null>;
 function findServerElement(node: ReactNode, name: "ServerWorkspacePanel"): Promise<ReactElement<ComponentProps<typeof ServerWorkspacePanel>> | null>;
 function findServerElement(node: ReactNode, name: "ManagedServerConsole"): Promise<ReactElement<ComponentProps<typeof ManagedServerConsole>> | null>;
@@ -426,18 +429,64 @@ it("places managed password configuration in Settings rather than the Console wo
     expect(await findServerElement(consolePanel, "ManagedServerPassword")).toBeNull();
 });
 
-it("degrades a transient single-server read failure and offers a refresh", async () => {
+it.each([
+    ["control_plane_unavailable", "Temporarily down for maintenance. Please check back in a few minutes."],
+    ["server_api_unavailable", "The hosting service could not be reached. Try again."],
+])("shows the single-server copy and offers a refresh for %s", async (code, message) => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
-        const failure = new MyServersApiError("control_plane_unavailable", "Unavailable", true);
+        const failure = new MyServersApiError(code, "Unavailable", false);
         mocks.managedServers.mockRejectedValueOnce(failure);
         const tree = await page();
         const workspace = await findServerElement(tree, "ServerManagementWorkspace");
-        expect((workspace?.props as { banner?: ReactElement }).banner?.type).toBe(ManagedServerUnavailable);
+        const banner = (workspace?.props as { banner?: ReactElement }).banner;
+        expect(banner?.type).toBe(ManagedServerUnavailable);
+        expect(workspace?.props.summary).toBe(message);
+        expect(renderToStaticMarkup(<TestLocalization>{banner}</TestLocalization>)).toContain(message);
+        expect(renderToStaticMarkup(<>{workspace?.props.name}</>)).toContain("This server is temporarily unavailable. Try again.");
+        expect(renderToStaticMarkup(<>{workspace?.props.name}</>)).not.toContain("your access was removed");
         expect(error).toHaveBeenCalledExactlyOnceWith("Managed server detail failed to load", failure);
     } finally { error.mockRestore(); }
     expect(mocks.backups).not.toHaveBeenCalled();
     expect(mocks.files).not.toHaveBeenCalled();
+});
+
+it("shows the validated server while omitting a rejected optional runtime insight", async () => {
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, connectionIp: "198.51.100.10", gamePorts: [4203], runtimeInsightWarning: { fieldPath: "runtimeInsight.start.attemptCount", reason: "counter exceeds maximum" } });
+    const tree = await page();
+    const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+    expect(renderToStaticMarkup(<>{workspace?.props.notice}</>)).toContain('href="https://discord.gg/5vJzfz5Zzy"');
+    expect(workspace?.props.address).toBe("198.51.100.10:4203");
+    const commands = await findServerElement(tree, "ManagedServerCommands");
+    const controls = await findServerElement(commands?.props.controls, "ManagedServerControls");
+    expect((controls as ReactElement<{ runtimeInsight?: unknown; runtimeInsightUnavailable?: boolean }> | null)?.props.runtimeInsight).toBeUndefined();
+    expect((controls as ReactElement<{ runtimeInsightUnavailable?: boolean }> | null)?.props.runtimeInsightUnavailable).toBe(true);
+});
+
+it("degrades an absent runtime insight and disables guessed lifecycle actions", async () => {
+    mocks.managedServers.mockResolvedValue({ ...managedSummary, runtimeInsightWarning: { fieldPath: "runtimeInsight", reason: "not provided" } });
+    const tree = await page();
+    const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+    expect(renderToStaticMarkup(<>{workspace?.props.notice}</>)).toContain('href="https://discord.gg/5vJzfz5Zzy"');
+    const commands = await findServerElement(tree, "ManagedServerCommands");
+    const controls = await findServerElement(commands?.props.controls, "ManagedServerControls") as ReactElement<{ runtimeInsightUnavailable?: boolean }> | null;
+    expect(controls?.props.runtimeInsightUnavailable).toBe(true);
+});
+
+it("keeps the access-removed state when authorization refuses a malformed optional insight", async () => {
+    mocks.managedServers.mockRejectedValueOnce(new MyServersApiError("forbidden", "Unavailable", false));
+    const tree = await page();
+    const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+    expect(renderToStaticMarkup(<>{workspace?.props.name}</>)).toContain("This server is unavailable or your access changed.");
+    expect(workspace?.props.notice).toBeUndefined();
+});
+
+it("shows an explicit load error for malformed core server data", async () => {
+    mocks.managedServers.mockRejectedValueOnce(new MyServersApiError("invalid_response", "Malformed", true));
+    const tree = await page();
+    const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+    expect((workspace?.props as { banner?: ReactElement }).banner?.type).toBe(ManagedServerLoadError);
+    expect(renderToStaticMarkup(<>{workspace?.props.name}</>)).toContain("This server page could not load. Try again.");
 });
 
 it("refreshes the server page when the temporary-unavailable retry is pressed", async () => {
@@ -463,12 +512,14 @@ it("still surfaces an unclassified single-server read failure", async () => {
     } finally { error.mockRestore(); }
 });
 
-it.each(["server_not_found", "forbidden"])("returns to discovery without managed controls when the single-server read returns %s", async code => {
+it.each(["server_not_found", "forbidden"])("renders access-removed state when the single-server read returns %s", async code => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
         mocks.managedServers.mockRejectedValueOnce(new MyServersApiError(code, "Unavailable"));
-        await expect(page()).rejects.toThrow("redirect:/servers");
-        expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", managedId);
+        const tree = await page();
+        const workspace = await findServerElement(tree, "ServerManagementWorkspace");
+        expect(renderToStaticMarkup(<>{workspace?.props.name}</>)).toContain("This server is unavailable or your access changed.");
+        expect(mocks.managedServers).toHaveBeenCalledExactlyOnceWith("token", managedId, undefined, { includeRuntimeInsight: true });
         // An expected unknown-server answer is not logged as a failure.
         expect(error).not.toHaveBeenCalled();
     } finally { error.mockRestore(); }

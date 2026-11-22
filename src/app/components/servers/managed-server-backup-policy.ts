@@ -1,3 +1,4 @@
+import { GENERAL_HELP_TICKET } from "../../../../supabase/functions/_shared/discord-support";
 import type {
     MyServerBackupJob,
     MyServerBackupSummary,
@@ -22,7 +23,7 @@ const defaultRestoreMessages = {
     "installedBuildUnknown": "The server's installed game/mod version has not been confirmed. Refresh after server setup or its current operation finishes.",
     "backupBuildUnknown": "This backup has no recorded game/mod version, so compatibility cannot be checked. Choose a newer backup.",
     "buildMismatch": "This backup was created on a different game/mod build from the one currently installed. Save-only restore requires an exact build match; choose a backup from the current build.",
-    "unknown": "The server did not provide a restore-blocking reason. Refresh to check again; contact support if no reason appears."
+    "unknown": "The server did not provide a restore-blocking reason. Refresh to check again. " + GENERAL_HELP_TICKET + " if no reason appears."
 };
 
 // Reports the existing restore guard with optional injected website presentation.

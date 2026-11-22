@@ -21,8 +21,8 @@ import { dismissManagedServerNotice } from "./server-notice-actions";
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), locale: "en" }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
-vi.mock("@/app/lib/localization/server", () => ({ getTranslations: async () => createTranslator("en",
-    JSON.parse(readFileSync(`src/app/lib/localization/dictionaries/${mocks.locale}/managed-server.json`, "utf8"))) }));
+vi.mock("@/app/lib/localization/server", () => ({ getTranslations: async (namespace: string) => createTranslator("en",
+    JSON.parse(readFileSync(`src/app/lib/localization/dictionaries/${mocks.locale}/${namespace}.json`, "utf8"))) }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: async () => ({ auth: {
     getUser: async () => ({ data: { user: { id: "owner" } } }),
     getSession: async () => ({ data: { session: { user: { id: "owner" }, access_token: "synthetic" } } }),
@@ -118,6 +118,15 @@ for (const [name, run, settlement] of handlers) {
             : name.startsWith("campaign-") ? "Campaign changes are not available for this server right now." : "The request was refused.";
         expect(await run()).toMatchObject({ ok: false, message: translated });
         expect(mocks.call).toHaveBeenCalledOnce();
+    });
+    it(`${name}: shows maintenance without settling an uncertain owner request`, async () => {
+        mocks.call.mockRejectedValueOnce(await envelopeError("control_plane_failure", true));
+        const baseline = await run();
+        mocks.call.mockRejectedValueOnce(await envelopeError("control_plane_unavailable"));
+        expect(await run()).toEqual({
+            ...baseline, ok: false, message: "Temporarily down for maintenance. Please check back in a few minutes.",
+        });
+        expect(mocks.call).toHaveBeenCalledTimes(2);
     });
     it(`${name}: keeps retryable suspension failures on the existing recovery path`, async () => {
         mocks.call.mockRejectedValue(await envelopeError("server_suspended", true));

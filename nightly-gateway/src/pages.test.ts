@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { page } from "./pages";
+import { errorPage, gatewayErrorMessage, page } from "./pages";
 
 test("gateway pages use the site brand without weakening page security", () => {
     const markup = page(
@@ -18,4 +18,13 @@ test("gateway pages use the site brand without weakening page security", () => {
     assert.match(markup, /Supporter &quot;builds&quot;/);
     assert.match(markup, /class="shell claim-page"/);
     assert.doesNotMatch(markup, /<script/i);
+});
+
+test("create-build and generic errors link the fixed General Help invite and escape the message", () => {
+    for (const code of ["already_used", "pin_incomplete", "pin_identity_conflict", "unexpected"]) {
+        const markup = errorPage(gatewayErrorMessage(code));
+        assert.match(markup, /Create a General Help support ticket in <a href="https:\/\/discord\.gg\/5vJzfz5Zzy" target="_blank" rel="noopener noreferrer">our Discord<\/a>/);
+    }
+    assert.match(errorPage(gatewayErrorMessage("unexpected")), /Run the installer again\./);
+    assert.match(errorPage("<script>test</script>"), /&lt;script&gt;test&lt;\/script&gt;/);
 });

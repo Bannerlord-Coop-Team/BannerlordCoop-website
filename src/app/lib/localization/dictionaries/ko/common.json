@@ -1,4 +1,8 @@
 {
+  "support.discord": "공식 Discord",
+  "nightly.support.title": "도움이 필요하신가요?",
+  "nightly.support.ticket": "{supportLink}에서 ‘General Help’ 지원 티켓을 만들어 주세요.",
+  "nightly.support.includeMessage": "{supportLink}에서 ‘General Help’ 지원 티켓을 만든 뒤 위에 표시된 메시지를 포함해 주세요.",
   "metadata.description": "친구들과 함께하는 멀티플레이 세계에서 Mount & Blade II: Bannerlord 캠페인을 즐기세요.",
   "nav.homeLabel": "Bannerlord Co-op 홈",
   "nav.primary": "주 메뉴",

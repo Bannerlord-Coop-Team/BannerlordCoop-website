@@ -41,7 +41,8 @@ it("rejects mismatched sessions and retains uncertain requests for safe retry", 
     mocks.save.mockRejectedValueOnce(new MyServersApiError("request_conflict", "Different intent"));
     expect(await saveServerSettings(input)).toMatchObject({ ok: false, rejected: true });
     mocks.save.mockRejectedValueOnce(new MyServersApiError("control_plane_unavailable", "Unknown outcome", true));
-    expect(await saveServerSettings(input)).toMatchObject({ ok: false, rejected: false });
+    expect(await saveServerSettings(input)).toMatchObject({ ok: false, rejected: false,
+        message: "Temporarily down for maintenance. Please check back in a few minutes." });
 });
 
 it("names the rejected field instead of describing every rule at once", async () => {
@@ -107,6 +108,6 @@ it("stops recovery when the single-server read reports revoked access", async ()
     mocks.save.mockRejectedValueOnce(new MyServersApiError("stale_interaction", "Stale"));
     mocks.list.mockRejectedValueOnce(new MyServersApiError("server_not_found", "Unavailable"));
     expect(await saveServerSettings({ ...input, previous })).toMatchObject({ ok: false });
-    expect(mocks.list).toHaveBeenCalledExactlyOnceWith("verified-token", serverId);
+    expect(mocks.list).toHaveBeenCalledExactlyOnceWith("verified-token", serverId, undefined, { includeRuntimeInsight: false });
     expect(mocks.save).toHaveBeenCalledOnce();
 });

@@ -1,3 +1,4 @@
+import { DISCORD_SUPPORT_URL } from "./discord-support.ts";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { boundedJson } from "./membership.ts";
 import { isEmailAddress, type SmtpMessage } from "./smtp.ts";
@@ -34,23 +35,23 @@ const CONTROL_CHARACTERS = /\p{Cc}/u;
 // Builds the owner email naming the server, the removal deadline and how to keep it.
 export function subscriptionGraceMessage(alert: SubscriptionGraceAlert & { email: string }, siteUrl: string, sender: Sender): SmtpMessage {
     const deadline = `${alert.dueAt.slice(0, 10)} ${alert.dueAt.slice(11, 16)} UTC`;
+    const paragraphs = [
+        `Your Bannerlord Co-op server "${alert.serverName}" has been stopped because the supporter membership`
+            + " funding it has ended or is no longer linked to your account. Players were warned and the campaign was saved.",
+        `It is locked and scheduled for removal after ${deadline}.`,
+        `To keep it, renew your membership or link a qualifying supporter membership (Patreon or another linked funding provider) at ${siteUrl}/account before then.`
+            + " Once a qualifying membership is verified, removal is cancelled and the server is unlocked."
+            + " It stays stopped; press Start to run it again.",
+    ];
+    const support = "A final backup is taken before the server is removed. If you think this is a mistake, please create a General Help support ticket in ";
     return {
         from: sender.from,
         ...(sender.fromName === undefined ? {} : { fromName: sender.fromName }),
         to: [alert.email],
         subject: `[BannerlordCoop] Your server "${alert.serverName}" has been stopped and will be removed after ${deadline}`,
-        text: [
-            `Your Bannerlord Co-op server "${alert.serverName}" has been stopped because the supporter membership`
-                + " funding it has ended or is no longer linked to your account. Players were warned and the campaign was saved.",
-            "",
-            `It is locked and scheduled for removal after ${deadline}.`,
-            "",
-            `To keep it, renew your membership or link a qualifying supporter membership (Patreon or another linked funding provider) at ${siteUrl}/account before then.`
-                + " Once a qualifying membership is verified, removal is cancelled and the server is unlocked."
-                + " It stays stopped; press Start to run it again.",
-            "",
-            "A final backup is taken before the server is removed. If you think this is a mistake, contact an administrator.",
-        ].join("\n"),
+        text: [...paragraphs, support + "our Discord (" + DISCORD_SUPPORT_URL + ")."].join("\n\n"),
+        html: paragraphs.map(paragraph => `<p>${paragraph.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")}</p>`).join("\n")
+            + `\n<p>${support}<a href="${DISCORD_SUPPORT_URL}" target="_blank" rel="noopener noreferrer">our Discord</a>.</p>`,
     };
 }
 

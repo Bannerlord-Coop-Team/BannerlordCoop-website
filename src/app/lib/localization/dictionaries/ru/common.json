@@ -1,4 +1,8 @@
 {
+  "support.discord": "нашем Discord",
+  "nightly.support.title": "Нужна помощь?",
+  "nightly.support.ticket": "Создайте заявку в поддержку в разделе «General Help» на {supportLink}.",
+  "nightly.support.includeMessage": "Создайте заявку в поддержку в разделе «General Help» на {supportLink} и приложите сообщение, показанное выше.",
   "metadata.description": "Играйте в кампанию Mount & Blade II: Bannerlord с друзьями в общем многопользовательском мире.",
   "nav.homeLabel": "Главная страница Bannerlord Co-op",
   "nav.primary": "Основная навигация",

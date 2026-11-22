@@ -1,4 +1,8 @@
 {
+  "support.discord": "我们的 Discord 服务器",
+  "nightly.support.title": "需要帮助？",
+  "nightly.support.ticket": "请在{supportLink}的“General Help”类别中创建支持工单。",
+  "nightly.support.includeMessage": "请在{supportLink}的“General Help”类别中创建支持工单，并附上上方显示的消息。",
   "metadata.description": "与好友在共享的多人世界中，一同畅玩 Mount & Blade II: Bannerlord 战役。",
   "nav.homeLabel": "Bannerlord Co-op 首页",
   "nav.primary": "主导航",

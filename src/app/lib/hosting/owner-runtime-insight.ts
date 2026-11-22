@@ -31,6 +31,7 @@ export type OwnerRuntimeInsight = {
     recommendation: string | null;
     start: OwnerStartInsight | null;
 };
+export type OwnerRuntimeInsightValidationIssue = { fieldPath: string; reason: string };
 export const START_INSIGHT_KEYS = ["action", "jobId", "state", "phase", "progress", "attemptCount", "maximumAttempts", "nextRetryAt", "stoppedRetrying", "failureCode", "recommendedAction"];
 const RUNTIME_KEYS = ["desiredState", "observedAt", "allowedActions", "crashLoopDetected", "failureCode", "recommendedAction", "failureMessage", "recommendation", "start"];
 const FAILURE_CODES: readonly string[] = ["game_crashed_during_load", "game_unavailable", "crash_loop_cooldown", "mod_load_failed", "operation_failed", ...WAR_SAILS_FAILURE_CODES];
@@ -80,4 +81,44 @@ export function isOwnerRuntimeInsight(value: unknown, context?: { operationState
         && (value.failureMessage === null || text(value.failureMessage))
         && (value.recommendation === null || text(value.recommendation))
         && (value.start === null || isOwnerStartInsight(value.start));
+}
+
+/** Returns one bounded, field-specific explanation for a rejected insight without exposing its payload. */
+export function ownerRuntimeInsightValidationIssue(value: unknown, context?: { operationState: unknown; observedGameState: unknown; subscriptionHold?: unknown }): OwnerRuntimeInsightValidationIssue {
+    if (!isRecord(value)) return { fieldPath: "runtimeInsight", reason: "must be an object" };
+    const keys = Object.keys(value);
+    const expected = [...RUNTIME_KEYS, ...(Object.hasOwn(value, "modLoadFailure") ? ["modLoadFailure"] : [])];
+    const unknown = keys.find(key => !expected.includes(key));
+    if (unknown) return { fieldPath: "runtimeInsight", reason: "unknown field" };
+    const missing = expected.find(key => !Object.hasOwn(value, key));
+    if (missing) return { fieldPath: "runtimeInsight." + missing, reason: "required field is missing" };
+    if (!["running", "stopped", "deleted"].includes(value.desiredState as string)) return { fieldPath: "runtimeInsight.desiredState", reason: "unknown enum value" };
+    if (value.observedAt !== null && !timestamp(value.observedAt)) return { fieldPath: "runtimeInsight.observedAt", reason: "invalid timestamp" };
+    if (!Array.isArray(value.allowedActions)) return { fieldPath: "runtimeInsight.allowedActions", reason: "must be an array" };
+    const badAction = value.allowedActions.find(action => !["start", "stop", "restart-game"].includes(action as string));
+    if (badAction !== undefined) return { fieldPath: "runtimeInsight.allowedActions", reason: "unknown enum value" };
+    if (value.allowedActions.length > 3 || new Set(value.allowedActions).size !== value.allowedActions.length) return { fieldPath: "runtimeInsight.allowedActions", reason: "duplicate or too many actions" };
+    if (value.crashLoopDetected !== null && typeof value.crashLoopDetected !== "boolean") return { fieldPath: "runtimeInsight.crashLoopDetected", reason: "must be boolean or null" };
+    if (!failure(value.failureCode)) return { fieldPath: "runtimeInsight.failureCode", reason: "unknown enum value" };
+    if (!recommendation(value.recommendedAction)) return { fieldPath: "runtimeInsight.recommendedAction", reason: "unknown enum value" };
+    for (const field of ["failureMessage", "recommendation"] as const) {
+        if (value[field] !== null && !text(value[field])) return { fieldPath: "runtimeInsight." + field, reason: "must be a bounded string or null" };
+    }
+    if (Object.hasOwn(value, "modLoadFailure") && !isModLoadFailure(value.modLoadFailure)) return { fieldPath: "runtimeInsight.modLoadFailure", reason: "invalid value" };
+    if (value.start !== null) {
+        const start = value.start;
+        if (!isRecord(start)) return { fieldPath: "runtimeInsight.start", reason: "must be an object or null" };
+        if (!hasExactKeys(start, START_INSIGHT_KEYS)) {
+            const unknownStart = Object.keys(start).find(key => !START_INSIGHT_KEYS.includes(key));
+            return { fieldPath: "runtimeInsight.start", reason: unknownStart ? "unknown field" : "required field is missing" };
+        }
+        if (!text(start.progress)) return { fieldPath: "runtimeInsight.start.progress", reason: "must be a bounded string" };
+        if (!Number.isSafeInteger(start.maximumAttempts) || (start.maximumAttempts as number) < 1 || (start.maximumAttempts as number) > 100) return { fieldPath: "runtimeInsight.start.maximumAttempts", reason: "must be an integer from 1 to 100" };
+        if (!Number.isSafeInteger(start.attemptCount) || (start.attemptCount as number) < 0) return { fieldPath: "runtimeInsight.start.attemptCount", reason: "must be a non-negative safe integer" };
+        if ((start.attemptCount as number) > (start.maximumAttempts as number)) return { fieldPath: "runtimeInsight.start.attemptCount", reason: "must be less than or equal to maximumAttempts" };
+        if (!["start", "restart-game", "provision"].includes(start.action as string)) return { fieldPath: "runtimeInsight.start.action", reason: "unknown enum value" };
+        if (!["queued", "running", "retry-wait", "succeeded", "failed", "cancelled"].includes(start.state as string)) return { fieldPath: "runtimeInsight.start.state", reason: "unknown enum value" };
+    }
+    if (isOwnerRuntimeInsight(value, context)) return { fieldPath: "runtimeInsight", reason: "unknown validation failure" };
+    return { fieldPath: "runtimeInsight", reason: "failed the strict contract" };
 }

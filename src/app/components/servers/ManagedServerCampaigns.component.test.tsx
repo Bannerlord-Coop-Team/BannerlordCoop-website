@@ -1,11 +1,14 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import { campaignResetStatusMessage } from "@/app/lib/hosting/campaign-reset-messages";
+import { CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION } from "../../../../supabase/functions/_shared/server-campaign-contract";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerCampaigns } from "./ManagedServerCampaigns";
-import { TestLocalization } from "./ManagedServerLocalization.test-utils";
+import { TestLocalization, serverTestMessages } from "./ManagedServerLocalization.test-utils";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
-const CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION = "Contact support to update this server's runner, then request Reset Campaign again.";
+const runnerUpdateMessage = campaignResetStatusMessage({ serverId: "server", jobId: "job", state: "failed", errorCode: "agent_capability_unavailable", instruction: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION }, createTranslator("en", serverTestMessages["managed-server"]).t);
 
 const mocks = vi.hoisted(() => ({ list: vi.fn(), change: vi.fn(), resetStatus: vi.fn(), deleteSave: vi.fn(), deletionStatus: vi.fn(), refresh: vi.fn() }));
 vi.mock("next/navigation", () => { const router = { refresh: mocks.refresh }; return { useRouter: () => router }; });
@@ -118,9 +121,10 @@ async function beginReset() {
 
 it("shows the retained native reset refusal without another Reset or a changed campaign", async () => {
     await beginReset();
-    mocks.resetStatus.mockResolvedValue({ ok: true, status: { serverId, jobId: freshId, state: "failed", errorCode: "agent_capability_unavailable", instruction: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION }, message: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION });
+    mocks.resetStatus.mockResolvedValue({ ok: true, status: { serverId, jobId: freshId, state: "failed", errorCode: "agent_capability_unavailable", instruction: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION }, message: runnerUpdateMessage });
     await act(async () => vi.advanceTimersByTimeAsync(5_000));
-    expect(container.textContent).toContain(CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION);
+    expect(container.textContent).toContain("Please create a General Help support ticket in our Discord to request a runner update");
+    expect(container.querySelector('a[href="https://discord.gg/5vJzfz5Zzy"]')?.getAttribute("rel")).toBe("noopener noreferrer");
     expect(container.textContent).toContain("Default New Game");
     expect(mocks.change).toHaveBeenCalledTimes(1);
     expect(mocks.resetStatus).toHaveBeenCalledWith(serverId, freshId, "owner");
@@ -158,8 +162,8 @@ it("ignores a late reset status after the page account changes", async () => {
     mocks.resetStatus.mockImplementationOnce(() => new Promise(value => { resolve = value; }));
     await act(async () => vi.advanceTimersByTimeAsync(5_000));
     await act(async () => root.render(<TestLocalization><ManagedServerCampaigns userId="other-owner" serverId={serverId} status={stopped} /></TestLocalization>));
-    await act(async () => resolve({ ok: true, status: { state: "failed" }, message: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION }));
-    expect(container.textContent).not.toContain(CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION);
+    await act(async () => resolve({ ok: true, status: { state: "failed" }, message: runnerUpdateMessage }));
+    expect(container.textContent).not.toContain("General Help support ticket");
     expect(mocks.change).toHaveBeenCalledTimes(1);
 });
 

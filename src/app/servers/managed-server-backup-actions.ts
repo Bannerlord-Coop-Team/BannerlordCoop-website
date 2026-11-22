@@ -1,5 +1,6 @@
 "use server";
 
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
@@ -82,7 +83,7 @@ export async function manageServerBackup(input: unknown, expectedPageUserId: unk
         console.error("Managed server backup operation failed", { code });
         if (backupRequestOutcomeIsUncertain(error)) {
             return uncertain(
-                t("action.backup.theSubmissionOutcomeCouldNotBeConfirmedRetryThisRequest"),
+                await ownerMaintenanceMessage(error) ?? t("action.backup.theSubmissionOutcomeCouldNotBeConfirmedRetryThisRequest"),
             );
         }
         if (code === "stale_interaction") {

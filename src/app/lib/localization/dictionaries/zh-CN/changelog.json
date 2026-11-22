@@ -10,6 +10,7 @@
   "history.eyebrow": "版本历史",
   "history.title": "有哪些更新？",
   "history.description": "版本信息直接从项目的 GitHub 公共仓库加载，每小时刷新一次。",
+  "history.olderOnGitHub": "更早的版本可在 GitHub 上查看。",
   "history.count": {
     "other": "共显示 {formattedCount} 个版本"
   },

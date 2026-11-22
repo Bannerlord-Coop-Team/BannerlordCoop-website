@@ -24,7 +24,7 @@ export async function generateMetadata(): Promise<Metadata> {
 /** Localizes release presentation while retaining GitHub content and release links unchanged. */
 export default async function ChangelogPage() {
     const locale = await getLocale();
-    const [translator, messages, { releases, isAvailable }] = await Promise.all([
+    const [translator, messages, { releases, isAvailable, hasMore }] = await Promise.all([
         getTranslations("changelog", locale),
         getMessages(["changelog"], locale),
         getGitHubReleases(),
@@ -103,6 +103,12 @@ export default async function ChangelogPage() {
                                     <p className="mt-5 text-sm leading-7 text-foreground-muted">
                                         {t("history.description")}
                                     </p>
+
+                                    {hasMore && (
+                                        <p role="status" className="mt-5 border-l-2 border-gold/60 bg-gold/5 px-3 py-2 text-xs leading-5 text-foreground-muted">
+                                            {t("history.olderOnGitHub")} <a href={GITHUB_RELEASES_URL} target="_blank" rel="noopener noreferrer" className="font-semibold text-gold underline underline-offset-2">{t("links.githubReleases")}</a>
+                                        </p>
+                                    )}
 
                                     {releases.length > 0 && (
                                         <p className="mt-7 border-t border-white/10 pt-5 font-label text-xs font-semibold uppercase tracking-[0.16em] text-foreground-dim">

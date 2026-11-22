@@ -1,5 +1,7 @@
 "use client";
 
+import { discordSupportSlots, DiscordSupportText } from "@/app/components/ui/DiscordSupportLink";
+import { DISCORD_SUPPORT_URL } from "../../../../supabase/functions/_shared/discord-support";
 import { configurationImportMessages } from "@/app/servers/managed-server-messages";
 
 import { useTranslations } from "@/app/lib/localization/client";
@@ -159,7 +161,7 @@ function TransferSession({ userId, serverId, serverName, releaseChannel, status,
         if (next.kind === "job") confirmedJob.current = next;
         if (next.kind === "rejected") {
             const message = next.failureReason ? t(`transfers.rejection.${next.failureReason}`)
-                : t("transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck");
+                : t("transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck", { supportLink: DISCORD_SUPPORT_URL });
             const requestId = intentRef.current?.requestId;
             say(requestId ? `${message} ${t("transfers.rejection.reference", { requestId })}` : message, scope);
             remember(null); setDeadline(null); router.refresh();
@@ -168,7 +170,7 @@ function TransferSession({ userId, serverId, serverName, releaseChannel, status,
         } else if (["succeeded", "failed", "cancelled"].includes(next.state)) {
             setDeadline(null); router.refresh();
             say(next.state === "succeeded" ? next.action === "export-save" ? t("transfers.yourSaveExportIsReadyToDownload") : t("transfers.campaignAddedYourCurrentCampaignIsUnchanged")
-                : next.state === "failed" && next.failureReason ? t(`transfers.failure.${next.failureReason}`)
+                : next.state === "failed" && next.failureReason ? t(`transfers.failure.${next.failureReason}`, { supportLink: DISCORD_SUPPORT_URL })
                     : t("transfers.theTransferStateYourRequestIsRetainedForReference", { state: t(`transferState.${next.state}`) }), scope);
             if (next.state === "succeeded" && next.action === "import-save") remember(null);
         } else say(next.state === "queued" ? t("transfers.queued") : next.state === "retry-wait" ? t("transfers.retryWaiting")
@@ -377,7 +379,7 @@ function TransferSession({ userId, serverId, serverName, releaseChannel, status,
         return <>
             {intent !== null && ready && intentScope !== scope && <p className="mt-3 text-xs leading-5 text-foreground-muted">{t("transfers.pausedWhileAnotherTransferIsOpenFinishOrDismissIt")}</p>}
             <div aria-live="polite">
-                {feedback?.scope === scope && <p className={`mt-3 ${workspaceNoticeClass}`}>{isPending && <LoaderCircle aria-hidden className="mr-2 inline size-4 animate-spin" />}{feedback.text}</p>}
+                {feedback?.scope === scope && <p className={`mt-3 ${workspaceNoticeClass}`}>{isPending && <LoaderCircle aria-hidden className="mr-2 inline size-4 animate-spin" />}<DiscordSupportText message={feedback.text} label={t("support.discord")} /></p>}
             </div>
             {intent && intentScope === scope && result?.kind === "job" && result.state === "failed" && <p className="mt-2 text-xs text-foreground-muted">{t("transfers.failedRequest", { requestId: intent.requestId })}</p>}
             {intent && intentScope === scope && <div className="mt-3 flex flex-wrap gap-3">
@@ -435,7 +437,7 @@ function TransferSession({ userId, serverId, serverName, releaseChannel, status,
                         {configPart === "combined" ? <p>{t("transfers.reSelectTheSameJsonFileToRecoverYourEarlier")}</p> : <>
                             <p className="mb-3">{t("transfers.ifYouUsedExportConfigOnThisWebsiteOpenDownloads")}</p>
                             <p>{t("transfers.gameFileLocation", { path: `Documents → Mount and Blade II Bannerlord → CoopData${configPart === "server" ? " → DedicatedServer" : ""}` })}</p>
-                            <p className="mt-2">{rich("transfers.chooseFileHelp", { file: <strong className="text-foreground">{configPart === "server" ? "server-config.json" : "mod-config.json"}</strong> })}</p>
+                            <p className="mt-2">{rich("transfers.chooseFileHelp", discordSupportSlots(t, { file: <strong className="text-foreground">{configPart === "server" ? "server-config.json" : "mod-config.json"}</strong> }))}</p>
                         </>}
                         <p className="mt-3">{configPart === "server" ? t("transfers.yourGameplaySettingsWillBeKeptPasswordConnectionDetailsAnd") : configPart === "mod" ? t("transfers.yourServerSettingsWillBeKept") : t("transfers.thisOptionCanChangeBothServerAndGameplaySettings")} {" "}{t("transfers.anySettingsMissingFromAnIndividualFileWillBeKept")}</p>
                     </div>
@@ -451,7 +453,7 @@ function TransferSession({ userId, serverId, serverName, releaseChannel, status,
                 {dialogKind === "import-config" && <p className="mt-4 text-sm font-semibold">{configPart === "server" ? t("transfers.yourGameplaySettingsWillStayTheSame") : configPart === "mod" ? t("transfers.yourServerSettingsWillStayTheSame") : t("transfers.bothSetsOfSettingsCanChange")}</p>}
                 <p className="mt-4 text-sm text-foreground-muted">{dialogKind === "import-config" ? t("transfers.yourSavedGameStaysTheSameAfterImportingStopAnd") : t("transfers.theServerStaysStoppedAndYourCurrentCampaignStaysSelected")}</p>
             </div>}
-            {dialogError && <p role="alert" className="mt-4 text-sm text-red-200">{dialogError}</p>}
+            {dialogError && <p role="alert" className="mt-4 text-sm text-red-200"><DiscordSupportText message={dialogError} label={t("support.discord")} /></p>}
             <div className="mt-6 flex flex-wrap justify-end gap-3 border-t border-white/10 pt-4">
                 <button className={buttonClass} disabled={isPending} onClick={() => { if (review) { setReview(null); setFiles([]); setIgnoredSettings([]); } else setDialogKind(null); }}>{review ? t("transfers.back") : t("transfers.cancel")}</button>
                 <button className={buttonClass} disabled={isPending} onClick={() => {

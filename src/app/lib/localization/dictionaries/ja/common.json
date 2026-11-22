@@ -1,4 +1,8 @@
 {
+  "support.discord": "公式Discord",
+  "nightly.support.title": "サポートが必要ですか？",
+  "nightly.support.ticket": "{supportLink}で「General Help」のサポートチケットを作成してください。",
+  "nightly.support.includeMessage": "{supportLink}で「General Help」のサポートチケットを作成し、上に表示されたメッセージを添えてください。",
   "metadata.description": "Mount & Blade II: Bannerlordのキャンペーンを、共有のマルチプレイ世界でフレンドとともに楽しみましょう。",
   "nav.homeLabel": "Bannerlord Co-opのホーム",
   "nav.primary": "メインナビゲーション",

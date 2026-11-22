@@ -19,6 +19,13 @@ const accepted = (request: Input, result: unknown = page) => Response.json({ ver
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
+function expectSummary(actual: unknown, expected: Record<string, unknown>, insightRequested = true) {
+    expect(actual).toMatchObject(expected);
+    const parsed = actual as { runtimeInsightWarning?: unknown };
+    if (Object.hasOwn(expected, "runtimeInsight") || !insightRequested) expect(parsed.runtimeInsightWarning).toBeUndefined();
+    else expect(parsed.runtimeInsightWarning).toEqual({ fieldPath: "runtimeInsight", reason: "not provided" });
+}
+
 it("reads every owner page afresh through the fixed route with current roles and optional join fields", async () => {
     const requestIds = new Set<string>();
     let calls = 0;
@@ -223,7 +230,7 @@ it("uses the closed owner read in native workerd with fresh pages and no redirec
             const summary = onboardingSummary(); onboardingRegion(summary, "us-west").available = revision % 2 === 0;
             expect(await (await runtime.dispatchFetch("http://localhost/onboarding")).json()).toEqual(summary);
         }
-        expect(await (await runtime.dispatchFetch("http://localhost/summary")).json()).toEqual(summary);
+        expect(await (await runtime.dispatchFetch("http://localhost/summary")).json()).toEqual({ ...summary, runtimeInsightWarning: { fieldPath: "runtimeInsight", reason: "not provided" } });
         for (const status of [301, 302, 303, 307, 308]) for (const path of ["/", "/onboarding", "/summary"]) {
             redirectStatus = status; const before = calls;
             expect(await (await runtime.dispatchFetch(`http://localhost${path}`)).json()).toEqual({ error: "invalid_response" }); expect(calls).toBe(before + 1); }
@@ -285,13 +292,39 @@ const failedStartInsight = { action: "start", jobId: startJobId, state: "failed"
 const runtimeInsight = { desiredState: "running", observedAt: server.updatedAt, allowedActions: ["start"], crashLoopDetected: false,
     failureCode: "game_crashed_during_load", recommendedAction: "review-backups", failureMessage: "The game crashed while loading.", recommendation: "Review backups before choosing recovery.", start: failedStartInsight };
 
+it("preserves the pre-PR summary model when insight was not requested", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const request = input(init);
+        expect(request.input).toEqual({ serverId: server.serverId });
+        return accepted(request, summary);
+    });
+    vi.stubGlobal("fetch", fetch);
+    expectSummary(await getMyServerSummary(TOKEN, server.serverId, undefined, { includeRuntimeInsight: false }), summary, false);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(warning).not.toHaveBeenCalled();
+});
+
+it("degrades a requested summary that omits runtime insight", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => {
+        const request = input(init);
+        expect(request.input).toEqual({ serverId: server.serverId, includeRuntimeInsight: true });
+        return accepted(request, summary);
+    });
+    const result = await getMyServerSummary(TOKEN, server.serverId, undefined, { includeRuntimeInsight: true });
+    expect(result.runtimeInsightWarning).toEqual({ fieldPath: "runtimeInsight", reason: "not provided" });
+    expect(warning).toHaveBeenCalledOnce();
+    expect(warning).toHaveBeenCalledWith("Managed server runtime insight unavailable", { fieldPath: "runtimeInsight", reason: "not provided" });
+});
+
 it("reads the opt-in failure and attempt receipt through both owner reads", async () => {
     vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => {
         const request = input(init);
         expect(request.input).toHaveProperty("includeRuntimeInsight", true);
         return accepted(request, request.operation === "server-summary" ? { ...summary, runtimeInsight } : { serverId: server.serverId, ...failedStartInsight });
     });
-    expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual({ ...summary, runtimeInsight });
+    expectSummary(await getMyServerSummary(TOKEN, server.serverId), { ...summary, runtimeInsight });
     expect(await getMyServerStartStatus(TOKEN, server.serverId, startJobId)).toEqual({ serverId: server.serverId, ...failedStartInsight });
 });
 
@@ -304,7 +337,7 @@ it.each(["server-summary", "server-start-status"])("falls back only after an old
         expect(request.input).not.toHaveProperty("includeRuntimeInsight");
         return accepted(request, operation === "server-summary" ? summary : startStatus);
     });
-    if (operation === "server-summary") expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual(summary);
+    if (operation === "server-summary") expectSummary(await getMyServerSummary(TOKEN, server.serverId), summary, false);
     else expect(await getMyServerStartStatus(TOKEN, server.serverId, startJobId)).toEqual(startStatus);
     expect(inputs).toHaveLength(operation === "server-summary" ? 2 : 3);
     expect(inputs[0]).toHaveProperty("includeRuntimeInsight", true);
@@ -343,13 +376,61 @@ it("accepts only closed queue details and never falls back on malformed admissio
 
 it.each([{ ...runtimeInsight, allowedActions: ["start", "stop"] }, { ...runtimeInsight, privatePath: "extra" },
     { ...runtimeInsight, desiredState: "suspended" }, { ...runtimeInsight, start: { ...failedStartInsight, nextRetryAt: server.updatedAt } },
-    { ...runtimeInsight, start: { ...failedStartInsight, attemptCount: 6 } },
-    { ...runtimeInsight, start: { ...failedStartInsight, phase: "preparing" } },
-    { ...runtimeInsight, crashLoopDetected: true }, { ...runtimeInsight, desiredState: "deleted" }])("rejects malformed runtime insight without legacy fallback: %j", async runtimeInsight => {
-    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...summary, runtimeInsight }));
+    { ...runtimeInsight, start: { ...failedStartInsight, attemptCount: 6 } }, { ...runtimeInsight, start: { ...failedStartInsight, phase: "preparing" } },
+    { ...runtimeInsight, crashLoopDetected: true }, { ...runtimeInsight, desiredState: "deleted" }])("omits malformed runtime insight without legacy fallback: %j", async runtimeInsight => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+        const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...summary, runtimeInsight }));
+        vi.stubGlobal("fetch", fetch);
+        const result = await getMyServerSummary(TOKEN, server.serverId);
+        expect(result.runtimeInsight).toBeUndefined();
+        expect(result.runtimeInsightWarning).toMatchObject({ fieldPath: expect.stringMatching(/^runtimeInsight/) });
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(warning).toHaveBeenCalledOnce();
+    } finally { warning.mockRestore(); }
+});
+
+// Control-plane owner projection, 2026-11-18 incident. Customer identifiers are intentionally omitted.
+const INCIDENT_RETRY_WAIT_PROJECTION = { attemptCount: 104, maximumAttempts: 5, state: "retry-wait", errorCode: "game_maintenance_state_unknown" } as const;
+it("degrades the exact retry-wait counter regression to the validated core page", async () => {
+    const incidentInsight = { ...runtimeInsight, failureCode: "operation_failed", recommendedAction: "wait", start: {
+        ...failedStartInsight, action: "restart-game", state: INCIDENT_RETRY_WAIT_PROJECTION.state, phase: "retry-wait", attemptCount: INCIDENT_RETRY_WAIT_PROJECTION.attemptCount, maximumAttempts: INCIDENT_RETRY_WAIT_PROJECTION.maximumAttempts,
+        nextRetryAt: server.updatedAt, stoppedRetrying: false, failureCode: null, recommendedAction: null,
+        progress: "Waiting to retry",
+    } };
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+        const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...summary, runtimeInsight: incidentInsight }));
+        vi.stubGlobal("fetch", fetch);
+        const result = await getMyServerSummary(TOKEN, server.serverId);
+        expect(result.serverId).toBe(server.serverId);
+        expect(result.runtimeInsight).toBeUndefined();
+        expect(result.runtimeInsightWarning).toEqual({ fieldPath: "runtimeInsight.start.attemptCount", reason: "must be less than or equal to maximumAttempts" });
+    } finally { warning.mockRestore(); }
+});
+
+it.each([
+    ["attemptCount exceeds maximumAttempts", { ...failedStartInsight, attemptCount: 104, maximumAttempts: 5 }],
+    ["maximumAttempts is out of bounds", { ...failedStartInsight, maximumAttempts: 999 }],
+    ["unknown enum value", { ...failedStartInsight, state: "retrying" }],
+    ["missing required key", (() => { const { progress: _progress, ...missing } = failedStartInsight; return missing; })()],
+    ["oversized string", { ...failedStartInsight, progress: "x".repeat(257) }],
+] as const)("shows the server and omits invalid insight for %s", async (_name, start) => {
+    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...summary, runtimeInsight: { ...runtimeInsight, start } }));
     vi.stubGlobal("fetch", fetch);
-    await expect(getMyServerSummary(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
-    expect(fetch).toHaveBeenCalledOnce();
+    const result = await getMyServerSummary(TOKEN, server.serverId);
+    expect(result.serverId).toBe(server.serverId);
+    expect(result.runtimeInsight).toBeUndefined();
+    expect(result.runtimeInsightWarning).toBeDefined();
+});
+
+it.each(["bad\nfield", "x".repeat(5_000)])("bounds rejected insight field paths for an untrusted key %j", async key => {
+    const invalidInsight = { ...runtimeInsight, [key]: "untrusted" };
+    const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...summary, runtimeInsight: invalidInsight }));
+    vi.stubGlobal("fetch", fetch);
+    const result = await getMyServerSummary(TOKEN, server.serverId);
+    expect(result.runtimeInsight).toBeUndefined();
+    expect(result.runtimeInsightWarning).toEqual({ fieldPath: "runtimeInsight", reason: "unknown field" });
 });
 
 it.each([0, 999])("reads fleet target %s with one request rather than ten inventory pages", async index => {
@@ -369,14 +450,14 @@ it.each([0, 999])("reads fleet target %s with one request rather than ten invent
     expect((await listAllMyServers(TOKEN))[index]).toEqual(fleet[index]);
     expect(fetch).toHaveBeenCalledTimes(10);
     fetch.mockClear();
-    expect(await getMyServerSummary(TOKEN, fleet[index].serverId)).toEqual(fleet[index]);
+    expectSummary(await getMyServerSummary(TOKEN, fleet[index].serverId), fleet[index]);
     expect(fetch).toHaveBeenCalledOnce();
 });
 
 it.each(["server_not_found", "forbidden", "invalid_request"])("propagates %s without inventory fallback or reuse of an earlier summary", async code => {
     const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), summary));
     vi.stubGlobal("fetch", fetch);
-    expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual(summary);
+    expectSummary(await getMyServerSummary(TOKEN, server.serverId), summary);
     fetch.mockImplementation(async (_url, init) => Response.json({ version: 1, requestId: input(init).requestId, ok: false,
         error: { code, message: "Unavailable", retryable: false } }, { status: code === "forbidden" ? 403 : 404 }));
     await expect(getMyServerSummary(TOKEN, server.serverId)).rejects.toMatchObject({ code });
@@ -386,14 +467,14 @@ it.each(["server_not_found", "forbidden", "invalid_request"])("propagates %s wit
 it.each([null, "v0.1.6", "0.1.6 hotfix"])("accepts installedVersion %j when present, alone and beside runtime insight", async installedVersion => {
     for (const result of [{ ...summary, installedVersion }, { ...summary, installedVersion, runtimeInsight }]) {
         vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), result));
-        expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual(result);
+        expectSummary(await getMyServerSummary(TOKEN, server.serverId), result);
     }
 });
 
 it.each([true, false])("accepts warSailsCapable %j when present, alone and beside runtime insight; older summaries omit it", async warSailsCapable => {
     for (const result of [summary, { ...summary, warSailsCapable }, { ...summary, warSailsCapable, installedVersion: "v0.1.6", runtimeInsight }]) {
         vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), result));
-        expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual(result);
+        expectSummary(await getMyServerSummary(TOKEN, server.serverId), result);
     }
 });
 
@@ -410,7 +491,6 @@ it.each(["war_sails_save_mismatch", "war_sails_unsupported"])("accepts the %s la
 
 it.each([
     { ...summary, warSailsCapable: null }, { ...summary, warSailsCapable: "true" }, { ...summary, warSailsCapable: 1 },
-    { ...summary, runtimeInsight: { ...runtimeInsight, failureCode: "war_sails_unknown" } },
     { ...summary, serverId: "22222222-2222-4222-8222-222222222222" },
     { ...summary, updatedAt: "yesterday" }, { ...summary, accessRole: "administrator" },
     { ...summary, operationState: "unbounded".repeat(20) }, { ...summary, observedGameState: "invalid" },
@@ -637,7 +717,7 @@ it("accepts an absent or null subscription hold and validates every supplied fie
     for (const subscriptionHold of [undefined, null, hold, { ...hold, state: "removal-pending", canExportSave: false }]) {
         const value = { ...summary, ...(subscriptionHold === undefined ? {} : { subscriptionHold }) };
         vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), value));
-        expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual(value);
+        expectSummary(await getMyServerSummary(TOKEN, server.serverId), value);
     }
     for (const subscriptionHold of [{ ...hold, state: "unknown" }, { ...hold, removalDueAt: "tomorrow" },
         { ...hold, reason: "administrator" }, { ...hold, privateIdentity: "unexpected" }, { ...hold, canExportSave: "yes" },
@@ -652,7 +732,7 @@ it.each([{ allowedActions: ["start"] }, { allowedActions: ["start", "stop"] }, {
         runtimeInsight: { ...runtimeInsight, desiredState: "running", allowedActions, failureCode: null,
             recommendedAction: null, failureMessage: null, recommendation: null, start: null } };
     vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), sleeping));
-    expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual(sleeping);
+    expectSummary(await getMyServerSummary(TOKEN, server.serverId), sleeping);
 });
 
 it.each([
@@ -665,7 +745,9 @@ it.each([
     vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), {
         ...summary, operationState: "suspended", observedGameState: "stopped", runtimeInsight: { ...runtimeInsight, ...insight },
     }));
-    await expect(getMyServerSummary(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
+    const parsed = await getMyServerSummary(TOKEN, server.serverId);
+    expect(parsed.runtimeInsight).toBeUndefined();
+    expect(parsed.runtimeInsightWarning).toBeDefined();
 });
 
 it.each([
@@ -690,5 +772,7 @@ it.each([
         ...summary, operationState: "suspended", ...context,
         runtimeInsight: { ...runtimeInsight, allowedActions: ["start", "stop"] },
     }));
-    await expect(getMyServerSummary(TOKEN, server.serverId)).rejects.toMatchObject({ code: "invalid_response" });
+    const parsed = await getMyServerSummary(TOKEN, server.serverId);
+    expect(parsed.runtimeInsight).toBeUndefined();
+    expect(parsed.runtimeInsightWarning).toBeDefined();
 });

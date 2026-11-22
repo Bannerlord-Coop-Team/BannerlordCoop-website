@@ -1,5 +1,7 @@
 "use server";
 
+import { DISCORD_SUPPORT_URL } from "../../../supabase/functions/_shared/discord-support";
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
@@ -45,14 +47,14 @@ export async function changeServerRelease(value: unknown): Promise<{ ok: boolean
             stale_interaction: t("server-release.theServerChangedRefreshBeforeSavingTheReleaseChannelAgain"),
             nightly_unavailable: t("server-release.nightlyReleasesAreCurrentlyUnavailable"),
             validated_build_unavailable: t("server-release.noValidatedBuildIsAvailableForThatChannel"),
-            release_compatibility_unknown: t("server-release.campaignCompatibilityIsNotValidatedForThisReleaseContactHosting"),
+            release_compatibility_unknown: t("server-release.campaignCompatibilityIsNotValidatedForThisReleaseContactHosting", { supportLink: DISCORD_SUPPORT_URL }),
             release_compatibility_unsafe: t("server-release.thatReleaseCannotSafelyReadThisCampaignTheChannelWas"),
             settings_unchanged: t("server-release.thisChannelIsAlreadySelected"),
         };
         // A revision conflict from an unrelated write is retried once, only while the channel is still the one shown.
         if ((code === "request_conflict" || code === "stale_interaction") && token !== null && input !== null && previousChannel !== null) {
             try {
-                const server = await getMyServerSummary(token, input.serverId);
+                const server = await getMyServerSummary(token, input.serverId, undefined, { includeRuntimeInsight: false });
                 if (server?.accessRole === "owner" && server.releaseChannel === input.releaseChannel) {
                     return { ok: false, rejected: true, message: t("server-release.thisChannelIsAlreadySelected") };
                 }
@@ -61,6 +63,8 @@ export async function changeServerRelease(value: unknown): Promise<{ ok: boolean
                     return queued(result.jobId, input.serverId);
                 }
             } catch (retryError) {
+                const maintenance = await ownerMaintenanceMessage(retryError);
+                if (maintenance !== undefined) return { ok: false, rejected: Object.hasOwn(messages, code), message: maintenance };
                 const refusal = ownerRefusalMessage(retryError, t);
                 if (refusal !== null) return { ok: false, rejected: true,
                     message: retryError instanceof MyServersApiError ? messages[retryError.code] ?? refusal : refusal };
@@ -69,7 +73,7 @@ export async function changeServerRelease(value: unknown): Promise<{ ok: boolean
         }
         const refusal = !Object.hasOwn(messages, code) ? ownerRefusalMessage(error, t) : null;
         if (refusal !== null) return { ok: false, rejected: true, message: refusal };
-        return { ok: false, rejected: Object.hasOwn(messages, code), message: messages[code] ?? t("server-release.theReleaseChangeCouldNotBeConfirmedCheckProgressOr") };
+        return { ok: false, rejected: Object.hasOwn(messages, code), message: await ownerMaintenanceMessage(error) ?? messages[code] ?? t("server-release.theReleaseChangeCouldNotBeConfirmedCheckProgressOr") };
     }
 }
 
