@@ -5,7 +5,10 @@ import type { HostingAdminHostResources, HostingAdminVpsHost, HostingAdminVpsInv
 import { VpsView } from "./VpsView";
 
 const mocks = vi.hoisted(() => ({ request: vi.fn(), resources: vi.fn(), billing: vi.fn(), oracle: vi.fn(), regionRequests: vi.fn(), session: vi.fn() }));
-vi.mock("@/app/lib/control-plane/client", () => ({ requestControlPlaneAdmin: mocks.request }));
+vi.mock("@/app/lib/control-plane/client", async importOriginal => ({
+    ...await importOriginal<typeof import("@/app/lib/control-plane/client")>(),
+    requestControlPlaneAdmin: mocks.request,
+}));
 vi.mock("@/app/lib/supabase/client", () => ({ getSupabaseBrowserClient: () => ({ auth: { getSession: mocks.session } }) }));
 vi.mock("./RunnerOnboardingStatus", () => ({ RunnerOnboardingStatus: () => <span>Runner current</span> }));
 vi.mock("./VpsSlotCapacityRaise", () => ({ VpsSlotCapacityRaise: () => <span>Raise slots</span> }));
@@ -30,7 +33,7 @@ beforeEach(() => {
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); vi.useRealTimers(); });
 function inventory(liveDataIncluded = false, name = "host-a"): HostingAdminVpsInventory {
     const item = host(name, resources(60, 40), 0);
-    return { liveDataIncluded, hosts: [{ ...item, resources: liveDataIncluded ? item.resources : null,
+    return { liveDataIncluded, nextCursor: null, hosts: [{ ...item, resources: liveDataIncluded ? item.resources : null,
         occupiedSlots: item.occupiedSlots.map(slot => ({ ...slot, resources: liveDataIncluded ? slot.resources : null })),
         cost: liveDataIncluded ? item.cost : null, providerCheckedAt: liveDataIncluded ? item.providerCheckedAt : null }],
         controlPlaneHost: liveDataIncluded ? resources(60, 40) : null,
@@ -141,6 +144,20 @@ it("shows usable inventory before readings and preserves an expanded row when th
     expect(container.textContent).toContain("47.7%");
     expect(container.querySelector('button[aria-label="Collapse details for host-a"]')).not.toBeNull();
     expect(mocks.resources).toHaveBeenCalledWith(expect.objectContaining({ accessToken: "test-token", operation: "vps-hosts" }));
+});
+
+it("follows the telemetry cursor and publishes the completed scan", async () => {
+    mocks.resources.mockResolvedValueOnce({ ...inventory(true), nextCursor: "live-continuation" })
+        .mockResolvedValueOnce(inventory(true, "host-b"));
+    await act(async () => root.render(<VpsView regionCatalog={[]} inventory={inventory()} accounts={[]} />));
+    expect(mocks.resources.mock.calls).toEqual([null, "live-continuation"].map(storedAfter => [{
+        accessToken: "test-token", operation: "vps-hosts", signal: expect.any(AbortSignal),
+        input: { includeLiveData: true, includeProviderInventory: false, storedAfter },
+    }]));
+    expect(container.textContent).toContain("host-a");
+    expect(container.textContent).toContain("host-b");
+    await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-a"]')!.click());
+    expect(container.textContent).not.toContain("Loading live resource");
 });
 
 it("keeps inventory on failure and retries live readings", async () => {
@@ -371,7 +388,7 @@ it("shows resources and runner state while billing is pending, then merges only 
     expect(container.querySelector('[data-label="Capacity"]')?.textContent).toContain("Running2");
     expect(container.textContent).toContain("47.7%");
     expect(container.querySelector('button[aria-label="Collapse details for host-a"]')).not.toBeNull();
-    expect(mocks.resources).toHaveBeenCalledWith(expect.objectContaining({ input: { includeLiveData: true, includeProviderInventory: false } }));
+    expect(mocks.resources).toHaveBeenCalledWith(expect.objectContaining({ input: { includeLiveData: true, includeProviderInventory: false, storedAfter: null } }));
     expect(mocks.billing).toHaveBeenCalledWith(expect.objectContaining({ input: { includeLiveData: false, includeProviderInventory: true } }));
 });
 

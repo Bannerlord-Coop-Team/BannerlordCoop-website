@@ -349,6 +349,7 @@ export type HostingResolveVpsSlotDecommissionResult = {
 };
 
 export type HostingAdminVpsInventory = {
+    nextCursor?: string | null;
     liveDataIncluded?: boolean;
     controlPlaneHost: HostingAdminHostResources | null;
     hosts: HostingAdminVpsHost[];

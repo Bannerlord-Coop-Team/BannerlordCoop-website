@@ -338,8 +338,14 @@ fresh available VPS names without fetching unused per-host billing metadata,
 CPU/memory samples or the runner target revision. Registered-host membership and
 the available-service limit are still checked against the current provider list;
 failures remain visible. Deploy the control-plane version supporting this literal
-before the website rollout; older backends reject it without a fallback. The VPS
-pane's live readings and billing remain unchanged.
+before the website rollout; older backends reject it without a fallback.
+
+The VPS tab reads registered hosts in pages on the server and on each browser
+telemetry refresh. Each scan starts with `storedAfter: null`, turns off provider
+inventory, and passes the returned cursor unchanged until it is null. If the
+registered set changes, the website discards its partial scan and tries again once.
+An older backend that refuses the initial paging option receives the legacy read.
+The provider billing refresh uses its separate account read.
 
 The bottom of the VPS view also loads the pending region-request queue through
 the `region-requests` operation. Each row shows the requested region, the

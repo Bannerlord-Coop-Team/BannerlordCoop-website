@@ -23,6 +23,7 @@ import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
 import { serverProgressView } from "@/app/lib/control-plane/server-progress";
 import { readControlPlaneAdmin } from "@/app/lib/control-plane/server-read";
 import { readOperationsVpsInventory } from "@/app/lib/control-plane/operations-inventory";
+import { readRegisteredVpsInventory } from "@/app/lib/control-plane/registered-vps-inventory";
 import { readHostingRegionCatalog } from "@/app/lib/control-plane/hosting-region-catalog";
 import { recordReleaseFirstObservations } from "@/app/lib/control-plane/release-observations";
 import { ADMIN_READ_PAGE_LIMIT, readBoundedHostingPage, type BoundedHostingPage } from "@/app/lib/control-plane/pagination";
@@ -330,7 +331,9 @@ async function loadView(token: string, view: View, query: string, serverId: stri
         }
         case "vps": {
             const [inventory, hostingRegions] = await Promise.all([
-                readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false } }),
+                readRegisteredVpsInventory((input, pageSignal) => readControlPlaneAdmin<HostingAdminVpsInventory>({
+                    accessToken: token, signal: pageSignal, ...identity, operation: "vps-hosts", input,
+                }), false, signal),
                 loadHostingRegionCatalog(token, signal, identity),
             ]);
             // Host labels match the stored placements; an unreadable catalog leaves the hosts listed without regions.

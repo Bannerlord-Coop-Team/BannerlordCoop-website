@@ -24,6 +24,7 @@ vi.mock("@/app/components/admin/ControlPlaneReadTables", async importOriginal =>
 });
 import ControlPlaneAdminPage from "./page";
 import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
+import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
 import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
 beforeEach(() => {
@@ -288,6 +289,36 @@ it.each(["revoked", "member", "mismatched"])("aborts and does not render early d
     await expect(ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "servers" }) })).rejects.toThrow();
     expect(mocks.request.mock.calls[0][0].signal.aborted).toBe(true);
     expect(mocks.accounts).not.toHaveBeenCalled();
+});
+
+it("loads the registered VPS view through stored pages", async () => {
+    const options = { operation: "vps-hosts", accessToken: "test-admin-token", signal: expect.any(AbortSignal),
+        expectedUserId: "admin", requireOrdinarySession: true, onAuthenticated: expect.any(Function) };
+    const host = (name: string): HostingAdminVpsHost => ({
+        name, provider: "ovhcloud-vps", locationId: "us-east-va", countryCode: "US", region: null,
+        occupiedSlots: [], totalSlots: 1, availableServers: 1, runningServers: 0,
+        resources: null, cost: null, expirationDate: null, autoRenew: null, providerCheckedAt: null,
+        runnerOnboarding: null, runnerUpdate: null,
+    });
+    mocks.request.mockImplementation(async request => {
+        request.onAuthenticated();
+        if (request.operation === "hosting-regions") return { revision: 1, regions: hostingRegionCatalogPayload() };
+        const cursor = request.input.storedAfter;
+        if (cursor !== null && cursor !== "stored-continuation") throw new Error("Unexpected VPS cursor");
+        return { liveDataIncluded: false, availableHosts: [], controlPlaneHost: null,
+            hosts: [host(cursor === null ? "first-vps" : "last-vps")],
+            nextCursor: cursor === null ? "stored-continuation" : null };
+    });
+    mocks.accounts.mockResolvedValue({ users: [], truncated: false });
+    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "vps" }) }));
+    await stream.allReady;
+    const html = await new Response(stream).text();
+    expect(html).toContain("first-vps");
+    expect(html).toContain("last-vps");
+    expect(mocks.request.mock.calls.filter(([request]) => request.operation === "vps-hosts")).toEqual(
+        [null, "stored-continuation"].map(storedAfter => [{ ...options,
+            input: { includeLiveData: false, includeProviderInventory: false, storedAfter },
+        }]));
 });
 
 it("never renders the VPS view, where the slot decommission controls live, for a member", async () => {

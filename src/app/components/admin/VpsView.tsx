@@ -7,6 +7,7 @@ import { OutOfAdmissionBanner } from "./OutOfAdmissionBanner";
 import { VpsInventoryBrowser } from "./VpsInventoryBrowser";
 import { VpsSlotSummary } from "./VpsSlotSummary";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
+import { readRegisteredVpsInventory } from "@/app/lib/control-plane/registered-vps-inventory";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
 import { failedVpsProviderReadsMessage } from "@/app/lib/control-plane/vps-providers";
@@ -235,8 +236,12 @@ function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: "resou
                     ? { ...initialInventory, liveDataIncluded: true, controlPlaneHost:
                         await requestControlPlaneAdmin<HostingAdminHostResources | null>({ accessToken: session.access_token,
                             operation: "control-plane-host-resources", signal }) }
-                    : await requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: session.access_token, operation: "vps-hosts",
-                        input: { includeLiveData: kind === "resources", includeProviderInventory: kind === "billing" }, signal });
+                    : kind === "resources"
+                        ? await readRegisteredVpsInventory((input, pageSignal) => requestControlPlaneAdmin<HostingAdminVpsInventory>({
+                            accessToken: session.access_token, operation: "vps-hosts", input, signal: pageSignal,
+                        }), true, signal)
+                        : await requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: session.access_token, operation: "vps-hosts",
+                            input: { includeLiveData: false, includeProviderInventory: true }, signal });
                 if (result.liveDataIncluded !== (kind !== "billing")) throw new Error("Live VPS data is unavailable.");
                 if (!cancelled) setRefresh({ initial: initialInventory, result });
             } catch (error) {
