@@ -36,6 +36,25 @@ async function select(name: string, index: number) {
     await act(async () => { element.selectedIndex = index; element.dispatchEvent(new Event("change", { bubbles: true })); });
 }
 function submit() { return container.querySelector<HTMLButtonElement>('button[type="submit"]')!; }
+it("continues batch maintenance with the same request ID and resumes an interrupted page", async () => {
+    const first = "00000000-0000-4000-8000-000000000001";
+    const second = "00000000-0000-4000-8000-000000000002";
+    request.mockResolvedValueOnce({ nextCursor: first }).mockRejectedValueOnce(new Error("Temporary failure"))
+        .mockResolvedValueOnce({ nextCursor: second }).mockResolvedValueOnce({ nextCursor: null });
+    await act(async () => root.render(<ControlPlaneActionCard operation="batch-maintenance" title="Batch" description="Batch maintenance"
+        fields={[{ name: "releaseChannel", label: "Channel", kind: "select", valueType: "nullable", options: [] },
+            { name: "reason", label: "Reason", kind: "textarea", defaultValue: "Scheduled maintenance" }]} />));
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    expect(container.textContent).toContain("Temporary failure");
+    await act(async () => container.querySelector("form")!.requestSubmit());
+    const requestId = request.mock.calls[0]?.[0].requestId;
+    const input = { reason: "Scheduled maintenance", releaseChannel: null };
+    expect(request.mock.calls.map(([options]) => options)).toEqual([input, { ...input, cursor: first },
+        { ...input, cursor: first }, { ...input, cursor: second }].map(page => ({
+        accessToken: "test-only", requestId, operation: "batch-maintenance", input: page,
+    })));
+    expect(refresh).toHaveBeenCalledOnce();
+});
 it("loads backups on server selection and clears a previous server's selected backup", async () => {
     let resolveBravo!: (page: HostingPage<Backup>) => void;
     request.mockResolvedValueOnce({ items: [backup], nextCursor: null });
