@@ -1,11 +1,17 @@
 # Managed configuration catalog
 
-The shared fixture in `supabase/functions/_shared/managed-config-catalog.json`
-is copied from the mod's generated catalog. The generated TypeScript module is
-updated with the same bytes for Supabase deployment.
+Copy the exact LF bytes of the mod's `deploy/managed-config-catalog.json` into
+`supabase/functions/_shared/managed-config-catalog.json`. The catalog contains
+`contentDigest` and `options`. Record the producer commit and digest in
+`managed-config-catalog-source.json`, and regenerate the TypeScript export from
+that JSON for Supabase's TypeScript-only deployment recipe. Run
+`npm run check:managed-config-catalog` in the website and control-plane repos.
+Both commands fetch the same immutable producer file and compare its bytes.
+The website command also checks the generated TypeScript export.
 
-After a mod catalog release, copy the JSON and regenerate the TypeScript module,
-then run `npm run check:managed-config-catalog` with the mod catalog URL. The
-command compares the source commit and content digest and reports drift before
-the website is released. The parser and editor iterate the fixture, so an added
-option is refused until this fixture and its pinned digest test are updated.
+The editor uses each option's `availableSince` and the server's installed
+version when that version is known. The control plane authoritatively checks
+availability on writes and imports. The website parser fills optional settings
+for older configurations using the required option set from released runner
+`8e5c511dc3a9c9f9222429558c2df8816a03a4b7`, matching the control plane's
+compatibility pin. The active campaign controls War Sails.

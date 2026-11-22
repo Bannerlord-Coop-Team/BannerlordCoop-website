@@ -1,16 +1,16 @@
 import rawCatalog from './managed-config-catalog-generated.ts';
 
-type CatalogOption = { key: string; type: string; stable: boolean; default: unknown; min?: number; max?: number;
-  itemPattern?: string; maxItems?: number; uniqueItems?: boolean; omitForOldAgents?: boolean;
-  availableSince?: string; values?: readonly string[]; coerceRanges?: readonly (readonly [number, number, number])[] };
-type Catalog = { schemaVersion: number; catalogRevision: string; contentDigest: string; sourceCommit: string; source: string; oldAgentOmittedKeys: readonly string[]; options: readonly CatalogOption[] };
-const catalog = rawCatalog as unknown as Catalog;
+type CatalogOption = { key: string; type: string; default: unknown; min?: number; max?: number;
+  itemPattern?: string; itemFormat?: 'steamId64'; uniqueItems?: boolean;
+  availableSince: string; values?: readonly string[]; coerceRanges?: readonly (readonly [number, number, number])[] };
+type Catalog = { contentDigest: string; options: readonly CatalogOption[] };
+const catalog: Catalog = rawCatalog;
 const CATALOG_MAX_OPTIONS = 128;
 const CATALOG_MAX_KEY_LENGTH = 64;
 const CATALOG_MAX_STRING_LENGTH = 128;
 const CATALOG_MAX_ENUM_VALUES = 32;
 const CATALOG_MAX_RULES = 8;
-const CATALOG_MAX_LIST_ITEMS = 32;
+const MANAGED_LIST_MAX_ITEMS = 32;
 const CATALOG_MAX_NUMERIC_BOUND = 1_000_000_000;
 
 function catalogEnumValues<const T extends readonly string[]>(key: string): T {
@@ -22,17 +22,15 @@ function catalogEnumValues<const T extends readonly string[]>(key: string): T {
 export function validateManagedConfigCatalog(value: unknown): asserts value is Catalog {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Managed configuration catalog is malformed');
   const candidate = value as Catalog;
-  if (candidate.schemaVersion !== 2 || candidate.catalogRevision !== candidate.contentDigest
-    || !/^[0-9a-f]{64}$/u.test(candidate.catalogRevision) || !/^[0-9a-f]{40}$/u.test(candidate.sourceCommit)
-    || typeof candidate.source !== 'string' || candidate.source.length === 0 || candidate.source.length > 256
-    || !Array.isArray(candidate.oldAgentOmittedKeys) || candidate.oldAgentOmittedKeys.length > CATALOG_MAX_OPTIONS
+  if (Object.keys(candidate).length !== 2 || typeof candidate.contentDigest !== 'string'
+    || !/^[0-9a-f]{64}$/u.test(candidate.contentDigest)
     || !Array.isArray(candidate.options) || candidate.options.length === 0 || candidate.options.length > CATALOG_MAX_OPTIONS) throw new Error('Managed configuration catalog is malformed');
   const keys = new Set<string>();
   for (const option of candidate.options) {
     if (typeof option !== 'object' || option === null || Array.isArray(option)
       || typeof option.key !== 'string' || option.key.length > CATALOG_MAX_KEY_LENGTH || !/^[a-z][A-Za-z0-9]*$/u.test(option.key) || keys.has(option.key)
-      || !['boolean', 'integer', 'number', 'enum', 'steamIdList'].includes(option.type)
-      || typeof option.stable !== 'boolean' || typeof option.availableSince !== 'string' || !/^\d+\.\d+\.\d+$/u.test(option.availableSince)
+      || !['boolean', 'integer', 'number', 'enum', 'stringList'].includes(option.type)
+      || typeof option.availableSince !== 'string' || !/^\d+\.\d+\.\d+$/u.test(option.availableSince)
       || option.default === undefined) throw new Error(`Managed configuration catalog option is malformed: ${option.key}`);
     keys.add(option.key);
     if (option.type === 'boolean' && typeof option.default !== 'boolean') throw new Error(`Managed configuration catalog default is malformed: ${option.key}`);
@@ -45,23 +43,27 @@ export function validateManagedConfigCatalog(value: unknown): asserts value is C
     if (option.min !== undefined && (typeof option.min !== 'number' || !Number.isFinite(option.min) || Math.abs(option.min) > CATALOG_MAX_NUMERIC_BOUND || option.type === 'integer' && !Number.isSafeInteger(option.min))) throw new Error(`Managed configuration catalog bounds are malformed: ${option.key}`);
     if (option.max !== undefined && (typeof option.max !== 'number' || !Number.isFinite(option.max) || Math.abs(option.max) > CATALOG_MAX_NUMERIC_BOUND || option.type === 'integer' && !Number.isSafeInteger(option.max))) throw new Error(`Managed configuration catalog bounds are malformed: ${option.key}`);
     if (option.min !== undefined && option.max !== undefined && option.min > option.max) throw new Error(`Managed configuration catalog bounds are malformed: ${option.key}`);
-    if (option.type === 'steamIdList' && (option.maxItems === undefined || !Number.isSafeInteger(option.maxItems) || option.maxItems < 1 || option.maxItems > CATALOG_MAX_LIST_ITEMS || typeof option.itemPattern !== 'string' || option.itemPattern.length === 0 || option.itemPattern.length > CATALOG_MAX_STRING_LENGTH || option.uniqueItems !== true)) throw new Error(`Managed configuration catalog list rules are malformed: ${option.key}`);
+    if ((option.itemPattern !== undefined || option.itemFormat !== undefined || option.uniqueItems !== undefined) && option.type !== 'stringList'
+      || option.itemFormat !== undefined && option.itemFormat !== 'steamId64'
+      || option.uniqueItems !== undefined && typeof option.uniqueItems !== 'boolean') throw new Error(`Managed configuration catalog list rules are malformed: ${option.key}`);
     if (option.itemPattern !== undefined) {
       if (typeof option.itemPattern !== 'string' || option.itemPattern.length === 0 || option.itemPattern.length > CATALOG_MAX_STRING_LENGTH) throw new Error(`Managed configuration catalog pattern is malformed: ${option.key}`);
       try { new RegExp(option.itemPattern, 'u'); } catch { throw new Error(`Managed configuration catalog pattern is malformed: ${option.key}`); }
     }
-    if (option.uniqueItems !== undefined && typeof option.uniqueItems !== 'boolean') throw new Error(`Managed configuration catalog list rules are malformed: ${option.key}`);
-    if (option.maxItems !== undefined && (option.type !== 'steamIdList' || !Number.isSafeInteger(option.maxItems) || option.maxItems < 1 || option.maxItems > CATALOG_MAX_LIST_ITEMS)) throw new Error(`Managed configuration catalog list rules are malformed: ${option.key}`);
     if (option.coerceRanges !== undefined && ((option.type !== 'integer' && option.type !== 'number') || !Array.isArray(option.coerceRanges) || option.coerceRanges.length > CATALOG_MAX_RULES || option.coerceRanges.some((range: unknown) => !Array.isArray(range) || range.length !== 3 || range.some(part => typeof part !== 'number' || !Number.isFinite(part)) || !Number.isSafeInteger(range[0]) || !Number.isSafeInteger(range[1]) || range[0] > range[1]))) throw new Error(`Managed configuration catalog coercion rules are malformed: ${option.key}`);
-    if (option.omitForOldAgents !== undefined && typeof option.omitForOldAgents !== 'boolean') throw new Error(`Managed configuration catalog compatibility marker is malformed: ${option.key}`);
+    if (option.type === 'stringList') {
+      const list = option.default;
+      const pattern = option.itemPattern === undefined ? null : new RegExp(option.itemPattern, 'u');
+      if (!Array.isArray(list) || list.some((entry) => typeof entry !== 'string' || pattern !== null && !pattern.test(entry))
+        || option.uniqueItems === true && new Set(list).size !== list.length) throw new Error(`Managed configuration catalog list default is malformed: ${option.key}`);
+    }
     if (option.min !== undefined && (option.default as number) < option.min || option.max !== undefined && (option.default as number) > option.max) throw new Error(`Managed configuration catalog bounds are malformed: ${option.key}`);
   }
-  if (candidate.oldAgentOmittedKeys.some(key => typeof key !== 'string' || !keys.has(key))
-    || new Set(candidate.oldAgentOmittedKeys).size !== candidate.oldAgentOmittedKeys.length
-    || JSON.stringify(candidate.oldAgentOmittedKeys) !== JSON.stringify(candidate.options.filter(option => option.omitForOldAgents === true).map(option => option.key))) throw new Error('Managed configuration catalog compatibility key set is malformed');
+
 }
 
 validateManagedConfigCatalog(catalog);
+export const MANAGED_CONFIG_CATALOG_OPTIONS = catalog.options;
 
 export const MANAGED_DIFFICULTY_LEVELS = ['VeryEasy', 'Easy', 'Realistic'] as const;
 export type ManagedDifficultyLevel = (typeof MANAGED_DIFFICULTY_LEVELS)[number];
@@ -141,6 +143,8 @@ export interface ManagedModOptionsConfiguration {
   preferredBattleHosts: readonly string[];
   pvpBlockLeave: boolean;
   pvpResponseTimerSeconds: number;
+  maxClansPerKingdom: number;
+  maxClansPerKingdomCountsMercenaries: boolean;
   /** Coop's War Sails (NavalDLC) mode; the dedicated server reads it from mod-config.json. */
   warSails: boolean;
 }
@@ -158,12 +162,19 @@ export interface ManagedServerConfiguration {
 const CATALOG_DEFAULT_MOD_OPTIONS = Object.freeze(Object.fromEntries(
   catalog.options.map((option) => [option.key, option.default]),
 )) as unknown as ManagedModOptionsConfiguration;
+// Required keys of the released runner 8e5c511d. The other options can be
+// absent in older website backups and runner replies.
+const RELEASED_REQUIRED_MOD_OPTION_KEYS = new Set<string>([
+  'fastForwardEnabled', 'autoPauseEnabled', 'clientsCanUseCheats',
+  'goldFoodInfluenceChangeInSettlements', 'goldFoodInfluenceChangeInBattles', 'goldFoodInfluenceChangeForDisconnectedPlayers',
+  'playerBattleAiJoinWindowHours', 'speedLimitWhilePlayersInBattle', 'wandererLimit',
+  'wandererLimitScalesWithPlayers', 'playerKingdomClanTierRequired', 'smithingStaminaRecoveryOutsideSettlements',
+  'smithingStaminaRecoveryMultiplier', 'maximumLootersMultiplier', 'looterPartySizeMultiplier',
+  'lordDefectionRetries', 'enableHeroExecutions', 'enablePlayerClanMemberExecutions',
+]);
 const CATALOG_ADDED_MOD_OPTION_DEFAULTS = Object.freeze(Object.fromEntries(
-  catalog.options.filter((option) => option.omitForOldAgents === true).map((option) => [option.key, option.default]),
+  catalog.options.filter(({ key }) => !RELEASED_REQUIRED_MOD_OPTION_KEYS.has(key)).map(({ key, default: value }) => [key, value]),
 ));
-const CATALOG_LEGACY_MOD_OPTION_KEYS = catalog.options
-  .filter((option) => option.omitForOldAgents !== true)
-  .map((option) => option.key);
 
 export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfiguration> =
   deepFreeze({
@@ -200,35 +211,18 @@ export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfigu
     },
   });
 
-export function assertManagedConfigurationAvailableForChannel(
-  modOptions: object,
-  channel: 'stable' | 'nightly',
-): void {
-  assertManagedConfigurationAvailableForInstalledBuild(modOptions, channel === 'stable' ? '0.1.7' : '0.1.8', channel);
-}
-
-export function assertManagedConfigurationAvailableForInstalledBuild(
-  modOptions: object,
-  installedBuildVersion: string | null,
-  channel: 'stable' | 'nightly',
-): void {
-  const parseVersion = (value: string) => value.match(/(?:^|[^0-9])v?(\d+)\.(\d+)\.(\d+)(?:$|[^0-9])/u);
-  for (const [key, value] of Object.entries(modOptions)) {
-    const option = catalog.options.find(candidate => candidate.key === key);
-    if (option === undefined || JSON.stringify(value) === JSON.stringify(option.default)) continue;
-    if (channel === 'stable' && option.stable === false) throw new Error(`${key} is available on Nightly only; switch this server to Nightly before changing it`);
-    if (installedBuildVersion === null) throw new Error(`${key} is unavailable until the installed build version is known`);
-    const installed = parseVersion(installedBuildVersion);
-    const required = option.availableSince === undefined ? null : parseVersion(option.availableSince);
-    const installedParts = installed?.slice(1).map(Number);
-    const requiredParts = required?.slice(1).map(Number);
-    const older = installedParts === undefined || requiredParts === undefined
-      || installedParts.some((part, index) => part < (requiredParts[index] ?? part)
-        || part > (requiredParts[index] ?? part) && installedParts.slice(0, index).every((previous, previousIndex) => previous === requiredParts[previousIndex]));
-    if (older) {
-      throw new Error(`${key} is unavailable in the installed build`);
-    }
+/** Returns null when the installed version is unknown or cannot be compared. */
+export function isManagedConfigOptionAvailable(
+  option: CatalogOption,
+  installedVersion: string | null | undefined,
+): boolean | null {
+  const installed = installedVersion?.match(/(?:^|[^0-9])v?(\d+)\.(\d+)\.(\d+)(?:$|[^0-9])/u);
+  if (!installed) return null;
+  const required = option.availableSince.split('.').map(Number);
+  for (const [index, part] of installed.slice(1).map(Number).entries()) {
+    if (part !== required[index]) return part > required[index];
   }
+  return true;
 }
 
 export type ManagedConfigurationMessages = {
@@ -284,7 +278,7 @@ export function parseManagedServerConfiguration(
     'birthAndDeath',
     'autoAllocateClanMemberPerks',
   ], messages);
-  const modOptions = requireCompatibleRecord(modConfig.modOptions, CATALOG_LEGACY_MOD_OPTION_KEYS, CATALOG_ADDED_MOD_OPTION_DEFAULTS, messages);
+  const modOptions = requireCompatibleRecord(modConfig.modOptions, [...RELEASED_REQUIRED_MOD_OPTION_KEYS], CATALOG_ADDED_MOD_OPTION_DEFAULTS, messages);
   const validatedModOptions = validateCatalogManagedOptions(modOptions, messages);
   return deepFreeze({
     schemaVersion: 1,
@@ -336,13 +330,14 @@ export function validateCatalogManagedOptions(
     if (option.type === 'integer' && !Number.isSafeInteger(actual)) throw new Error(messages.integer);
     if (option.type === 'number' && (typeof actual !== 'number' || !Number.isFinite(actual))) throw new Error(messages.number);
     if (option.type === 'enum' && (typeof actual !== 'string' || option.values?.includes(actual) !== true)) throw new Error(messages.choice);
-    if (option.type === 'steamIdList' && (!Array.isArray(actual) || actual.some((entry) => typeof entry !== 'string'))) throw new Error(messages.shape);
+    if (option.type === 'stringList' && (!Array.isArray(actual) || actual.some((entry) => typeof entry !== 'string'))) throw new Error(messages.shape);
     if (option.min !== undefined && (actual as number) < option.min) throw new Error(option.type === 'integer' ? messages.integer : messages.number);
-    if (option.max !== undefined && (actual as number) > option.max) throw new Error(option.type === 'integer' ? messages.integer : messages.number);
-    if (option.type === 'steamIdList') {
+    // The editor separately enforces the live limit reported by the control plane.
+    const max = option.key === 'battleSize' ? 12_000 : option.max;
+    if (max !== undefined && (actual as number) > max) throw new Error(option.type === 'integer' ? messages.integer : messages.number);
+    if (option.type === 'stringList') {
       const list = actual as string[];
-      if (option.maxItems !== undefined && list.length > option.maxItems) throw new Error(messages.shape);
-      if (option.uniqueItems === true && new Set(list).size !== list.length) throw new Error(messages.shape);
+      if (list.length > MANAGED_LIST_MAX_ITEMS || option.uniqueItems === true && new Set(list).size !== list.length) throw new Error(messages.shape);
       if (option.itemPattern !== undefined && list.some((entry) => !new RegExp(option.itemPattern as string, 'u').test(entry))) throw new Error(messages.shape);
     }
     validated[option.key] = actual;
@@ -451,5 +446,3 @@ function deepFreeze<T>(value: T): T {
   for (const child of Object.values(value)) deepFreeze(child);
   return Object.freeze(value);
 }
-
-

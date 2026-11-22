@@ -4,6 +4,7 @@
 # Keep shell scripts LF so Windows deploys do not break Linux shebangs.
 *.sh text eol=lf
 supabase/functions/_shared/managed-config-catalog.json text eol=lf
+supabase/functions/_shared/managed-config-catalog-generated.ts text eol=lf
 test/fixtures/campaign-reset/*.json text eol=lf
 
 # This migration is mirrored and checksummed by ControlPlane's shared-ledger catalog.
