@@ -176,6 +176,7 @@
   "configEditor.enterANumber": "数値を入力してください。",
   "configEditor.enterAWholeNumber": "整数を入力してください。",
   "configEditor.enterAValueFromMinToMax": "{min}から{max}までの値を入力してください。",
+  "configEditor.savedValueOutsideEditRange": "保存済みの値は編集範囲外です。{range}",
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "serverConfigとmodConfigを含むオブジェクトが必要です。",
   "configEditor.expectedExactlyServerconfigAndModconfig": "serverConfigとmodConfigのみを指定してください。",
   "configEditor.0TurnsAutosaveOff": "0にすると自動保存が無効になります。",

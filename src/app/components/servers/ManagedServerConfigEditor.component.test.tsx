@@ -359,3 +359,24 @@ it("blocks numeric edits outside the released runner range before submission", a
     expect(button("Save config").disabled).toBe(true);
     expect(mocks.save).not.toHaveBeenCalled();
 });
+
+it.each(["Form", "JSON"])("warns about a saved large wanderer limit and saves only an autosave edit in %s", async mode => {
+    const modConfig = { ...config.modConfig, modOptions: { ...config.modConfig.modOptions, wandererLimit: 1001 } };
+    mocks.read.mockImplementation(async (_serverId, part: RunnerConfigurationPart) => ({
+        ok: true, file: part === "mod" ? { ...file("mod"), settings: modConfig } : file("server"),
+    }));
+    await render();
+    expect(container.textContent).toContain("The saved value is outside the edit range");
+    expect(field<HTMLInputElement>("config-modOptions-wandererLimit").getAttribute("aria-invalid")).toBeNull();
+    const settings = { ...liveServer, autosaveMinutes: 20 };
+    if (mode === "JSON") {
+        await click("JSON");
+        await type("config-json", JSON.stringify({ serverConfig: settings, modConfig }));
+    } else {
+        await type("config-serverConfig-autosaveMinutes", "20");
+    }
+    mocks.save.mockResolvedValue({ ok: true, file: { ...file("server"), settings } });
+    expect(button("Save config").disabled).toBe(false);
+    await click("Save config");
+    expect(mocks.save).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ configPart: "server", settings }), "owner");
+});

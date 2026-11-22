@@ -176,6 +176,7 @@
   "configEditor.enterANumber": "Saisissez un nombre.",
   "configEditor.enterAWholeNumber": "Saisissez un nombre entier.",
   "configEditor.enterAValueFromMinToMax": "Saisissez une valeur comprise entre {min} et {max}.",
+  "configEditor.savedValueOutsideEditRange": "La valeur enregistrée est hors de la plage de modification. {range}",
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "Un objet contenant serverConfig et modConfig est attendu.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Seuls serverConfig et modConfig sont attendus.",
   "configEditor.0TurnsAutosaveOff": "0 désactive l’enregistrement automatique.",

@@ -3,14 +3,14 @@ import test from "node:test";
 import { applyConfigurationImport, parseConfigurationImport, readConfigurationFile, type ConfigurationImportMessages } from "./configuration-file-import.ts";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION as defaults } from "./managed-server-configuration.ts";
 
-const messages: ConfigurationImportMessages = {
+const messages = {
     invalidImport: "localized import", noServerSettings: "localized empty server", chooseFile: "localized selection",
     noGameplaySettings: "localized empty gameplay", tooLarge: "localized size", unreadable: "localized unreadable",
     combinedBackup: "localized combined", olderBackup: "localized older", expectedMod: "localized mod", expectedServer: "localized server",
     duplicateNames: "localized duplicate", unknownSettings: "localized unknown", unsupportedValues: "localized unsupported",
     invalidObject: "localized object", unsupportedSetting: "localized setting",
     configuration: { root: "root", version: "version", shape: "shape", boolean: "boolean", integer: "integer", number: "number", choice: "choice" },
-};
+} satisfies ConfigurationImportMessages;
 
 // Exercises distinct file rejection paths with detailed default and injected diagnostics.
 for (const [text, part, key, english] of [
@@ -114,4 +114,17 @@ test("refuses fractional timer values and released-bounds violations in a native
     for (const options of [{ pvpResponseTimerSeconds: 1.5 }, { wandererLimit: 1001 }]) {
         assert.throws(() => readConfigurationFile(JSON.stringify({ modOptions: options }), "mod", messages), { message: messages.unsupportedValues });
     }
+});
+
+test("previews server-only and unchanged gameplay imports with a saved value above the released cap", () => {
+    const saved = { ...defaults, modConfig: { ...defaults.modConfig,
+        modOptions: { ...defaults.modConfig.modOptions, wandererLimit: 1001 } } };
+    const server = readConfigurationFile('{"autosaveMinutes":15}', "server", messages, "read");
+    const preview = applyConfigurationImport(saved, server.input, messages);
+    assert.equal(preview.serverConfig.autosaveMinutes, 15);
+    assert.equal(preview.modConfig.modOptions.wandererLimit, 1001);
+    const unchanged = readConfigurationFile('{"modOptions":{"wandererLimit":1001,"voiceEnabled":false}}', "mod", messages, "read");
+    assert.equal(applyConfigurationImport(saved, unchanged.input, messages).modConfig.modOptions.wandererLimit, 1001);
+    const changed = readConfigurationFile('{"modOptions":{"wandererLimit":1002}}', "mod", messages, "read");
+    assert.throws(() => applyConfigurationImport(saved, changed.input, messages), { message: messages.configuration.integer });
 });

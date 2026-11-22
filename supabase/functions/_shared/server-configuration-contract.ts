@@ -56,9 +56,10 @@ export function parseRunnerConfigurationMutation(value: unknown): RunnerConfigur
   requireRunnerConfigurationPart(value.configPart);
   requireRunnerConfigurationRevision(value.expectedRevision);
   const common = { serverId: value.serverId, expectedRevision: value.expectedRevision };
+  // This full-file transport has no baseline. The editor checks changed ranges and CP admits the write.
   return value.configPart === "server"
-    ? { ...common, configPart: "server", settings: parseRunnerConfigurationSettings("server", value.settings) }
-    : { ...common, configPart: "mod", settings: parseRunnerConfigurationSettings("mod", value.settings) };
+    ? { ...common, configPart: "server", settings: parseRunnerConfigurationSettings("server", value.settings, "read") }
+    : { ...common, configPart: "mod", settings: parseRunnerConfigurationSettings("mod", value.settings, "read") };
 }
 
 function record(value: unknown): value is Record<string, unknown> {

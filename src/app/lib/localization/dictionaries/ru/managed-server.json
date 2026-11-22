@@ -176,6 +176,7 @@
   "configEditor.enterANumber": "Введите число.",
   "configEditor.enterAWholeNumber": "Введите целое число.",
   "configEditor.enterAValueFromMinToMax": "Введите значение от {min} до {max}.",
+  "configEditor.savedValueOutsideEditRange": "Сохранённое значение выходит за пределы диапазона редактирования. {range}",
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "Ожидается объект с serverConfig и modConfig.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Ожидаются только serverConfig и modConfig.",
   "configEditor.0TurnsAutosaveOff": "0 отключает автосохранение.",

@@ -59,7 +59,7 @@ export function parseOwnerFileMutation(value: unknown): OwnerFileMutation {
   const common = ['action', 'serverId', 'expectedUpdatedAt'];
   if (value.action === 'import-config') {
     const { action, serverId, expectedUpdatedAt, ...configuration } = value;
-    return { action, serverId, expectedUpdatedAt, ...parseConfigurationImport(configuration) };
+    return { action, serverId, expectedUpdatedAt, ...parseConfigurationImport(configuration, undefined, "read") };
   }
   if (value.action === 'export-save') {
     exact(value, [...common, 'saveId']);

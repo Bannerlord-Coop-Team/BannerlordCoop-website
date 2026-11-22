@@ -176,6 +176,7 @@
   "configEditor.enterANumber": "Bir sayı girin.",
   "configEditor.enterAWholeNumber": "Bir tamsayı girin.",
   "configEditor.enterAValueFromMinToMax": "{min} ile {max} arasında bir değer girin.",
+  "configEditor.savedValueOutsideEditRange": "Kayıtlı değer düzenleme aralığının dışında. {range}",
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "serverConfig ve modConfig içeren bir nesne bekleniyordu.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Yalnızca serverConfig ve modConfig bekleniyordu.",
   "configEditor.0TurnsAutosaveOff": "0, otomatik kaydetmeyi kapatır.",

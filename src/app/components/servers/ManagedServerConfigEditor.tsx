@@ -73,12 +73,13 @@ function numberProblem(field: Field, value: unknown, t: Translator["t"], number:
 // Serializes editable configuration without translating its payload.
 function pretty(settings: Settings) { return JSON.stringify({ serverConfig: settings.serverConfig, modConfig: settings.modConfig }, null, 2); }
 // Validates configuration shape and injects detailed parser diagnostics.
-function parseSettings(value: unknown, t: Translator["t"], maximumBattleSize: number): Settings {
+function parseSettings(value: unknown, t: Translator["t"], maximumBattleSize: number, baseline: Settings | null): Settings {
     if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(t("configEditor.expectedAnObjectWithServerconfigAndModconfig"));
     const keys = Object.keys(value);
     if (keys.length !== 2 || !("serverConfig" in value) || !("modConfig" in value)) throw new Error(t("configEditor.expectedExactlyServerconfigAndModconfig"));
-    const parsed = parseManagedServerConfiguration({ schemaVersion: 1, ...(value as object) }, configurationMessages(t));
-    if (parsed.modConfig.modOptions.battleSize > maximumBattleSize) throw new Error(t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe"));
+    const parsed = parseManagedServerConfiguration({ schemaVersion: 1, ...(value as object) }, configurationMessages(t),
+        baseline?.modConfig.modOptions ?? "edit");
+    if (parsed.modConfig.modOptions.battleSize > maximumBattleSize && parsed.modConfig.modOptions.battleSize !== baseline?.modConfig.modOptions.battleSize) throw new Error(t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe"));
     return { serverConfig: parsed.serverConfig, modConfig: parsed.modConfig };
 }
 // Compares serialized settings to detect unsaved changes.
@@ -235,7 +236,10 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     ]) : [];
     // JSON that does not parse yet is still an edit the user may want to discard.
     const dirty = dirtyParts.length > 0 || jsonError !== "";
-    const problems = draft ? GROUPS.flatMap(({ group, fields }) => fields.filter((field) => numberProblem(field, groupValues(draft, group)[field.key], t, number) !== null)) : [];
+    const hasBlockingProblem = draft !== null && GROUPS.some(({ group, fields }) => fields.some(field => {
+        const value = groupValues(draft, group)[field.key];
+        return (!baseline || value !== groupValues(baseline, group)[field.key]) && numberProblem(field, value, t, number) !== null;
+    }));
 
     // Reloads current configuration, confirming first when that would discard unsaved edits.
     function reload() {
@@ -257,7 +261,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     // Parses a JSON draft and reports validation without changing saved settings.
     function editJson(text: string) {
         setJsonText(text); setMessage("");
-        try { setDraft(withReadWarSails(parseSettings(JSON.parse(text), t, battleSizeLimit), baseline)); setJsonError(""); }
+        try { setDraft(withReadWarSails(parseSettings(JSON.parse(text), t, battleSizeLimit, baseline), baseline)); setJsonError(""); }
         catch (error) { setJsonError(error instanceof SyntaxError ? jsonSyntaxMessage(text, error, t) : error instanceof Error ? error.message : t("configEditor.unsupportedSettings")); }
     }
     // Restores the draft from the last confirmed configuration.
@@ -267,9 +271,9 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     }
     // Submits the existing settings operation and presents its outcome.
     function save() {
-        if (!access || !editable || !draft || !dirty || jsonError) return;
+        if (!access || !editable || !draft || !dirty || jsonError || hasBlockingProblem) return;
         let parsed: Settings;
-        try { parsed = withReadWarSails(parseSettings({ serverConfig: draft.serverConfig, modConfig: draft.modConfig }, t, battleSizeLimit), baseline); }
+        try { parsed = withReadWarSails(parseSettings({ serverConfig: draft.serverConfig, modConfig: draft.modConfig }, t, battleSizeLimit, baseline), baseline); }
         catch { setMessage(t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe")); return; }
         setMessage("");
         startTransition(async () => {
@@ -327,12 +331,14 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         </div>;
         if (field.kind === "stringList") return <StringListField key={field.key} id={id} label={field.label} value={value} update={update} />;
         const problem = numberProblem(field, value, t, number);
+        const warning = problem !== null && baseline !== null && value === groupValues(baseline, group)[field.key];
         return <div key={field.key}>
             <label htmlFor={id} className="text-sm">{field.label}</label>
             <input id={id} type="number" inputMode={field.kind === "integer" ? "numeric" : "decimal"} min={field.min} max={field.max} step={field.kind === "integer" ? 1 : field.step}
-                className={inputClass} value={typeof value === "number" && !Number.isNaN(value) ? value : ""} aria-invalid={problem ? true : undefined} aria-describedby={problem || field.help ? `${id}-help` : undefined}
+                className={inputClass} value={typeof value === "number" && !Number.isNaN(value) ? value : ""} aria-invalid={problem && !warning ? true : undefined} aria-describedby={problem || field.help ? `${id}-help` : undefined}
                 onChange={(event) => update(event.target.value === "" ? Number.NaN : Number(event.target.value))} />
-            {(problem || field.help) && <p id={`${id}-help`} className={`mt-1 text-xs ${problem ? "text-red-200" : "text-foreground-muted"}`}>{problem ?? field.help}</p>}
+            {(problem || field.help) && <p id={`${id}-help`} className={`mt-1 text-xs ${warning ? "text-amber-200" : problem ? "text-red-200" : "text-foreground-muted"}`}>
+                {warning ? t("configEditor.savedValueOutsideEditRange", { range: problem }) : problem ?? field.help}</p>}
         </div>;
     }
 
@@ -369,7 +375,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
                     <p className="text-sm text-foreground-muted">{dirty ? <span className="flex items-center gap-2 font-semibold text-gold"><CircleAlert className="size-4 shrink-0" aria-hidden="true" />{jsonError ? t("configEditor.theJsonHasUnsavedEditsThatArenTValidYet") : t("configEditor.unsavedChanges", { settings: new Intl.ListFormat(locale, { type: "conjunction" }).format(dirtyParts) })}</span> : t("configEditor.noPendingChanges")}</p>
                     <div className="ml-auto flex gap-2">
                         <button type="button" disabled={!dirty || pending} className={fileButtonClass} onClick={discard}>{t("configEditor.discard")}</button>
-                        <button type="button" disabled={!dirty || !editable || !!jsonError || problems.length > 0} className={filePrimaryButtonClass} onClick={save}>{pending ? t("configEditor.saving") : t("configEditor.saveConfig")}</button>
+                        <button type="button" disabled={!dirty || !editable || !!jsonError || hasBlockingProblem} className={filePrimaryButtonClass} onClick={save}>{pending ? t("configEditor.saving") : t("configEditor.saveConfig")}</button>
                     </div>
                 </div>
             </div>

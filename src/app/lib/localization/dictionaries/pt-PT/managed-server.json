@@ -176,6 +176,7 @@
   "configEditor.enterANumber": "Introduza um número.",
   "configEditor.enterAWholeNumber": "Introduza um número inteiro.",
   "configEditor.enterAValueFromMinToMax": "Introduza um valor entre {min} e {max}.",
+  "configEditor.savedValueOutsideEditRange": "O valor guardado está fora do intervalo de edição. {range}",
   "configEditor.expectedAnObjectWithServerconfigAndModconfig": "Era esperado um objeto com serverConfig e modConfig.",
   "configEditor.expectedExactlyServerconfigAndModconfig": "Eram esperados exatamente serverConfig e modConfig.",
   "configEditor.0TurnsAutosaveOff": "0 desativa a gravação automática.",

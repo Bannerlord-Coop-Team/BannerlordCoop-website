@@ -272,11 +272,14 @@ const defaultConfigurationMessages: ManagedConfigurationMessages = {
   choice: 'Managed server configuration choice is invalid',
 };
 
+/** An observed baseline enables released range checks only for changed options. */
+export type ManagedConfigValidation = 'edit' | 'read' | Readonly<ManagedModOptionsConfiguration>;
+
 // Validates and freezes configuration using caller-provided diagnostics without request dependencies.
 export function parseManagedServerConfiguration(
   value: unknown,
   messages: ManagedConfigurationMessages = defaultConfigurationMessages,
-  mode: 'edit' | 'read' = 'edit',
+  mode: ManagedConfigValidation = 'edit',
 ): ManagedServerConfiguration {
   if (!isExactRecord(value, ['schemaVersion', 'serverConfig', 'modConfig'])) {
     throw new Error(messages.root);
@@ -347,9 +350,10 @@ export function validateCatalogManagedOptions(
   value: Record<string, unknown>,
   messages: ManagedConfigurationMessages,
   options: readonly CatalogOption[] = catalog.options,
-  mode: 'edit' | 'read' = 'edit',
+  mode: ManagedConfigValidation = 'edit',
 ): ManagedModOptionsConfiguration {
   const validated: Record<string, unknown> = {};
+  const baseline = typeof mode === 'object' ? mode as unknown as Record<string, unknown> : undefined;
   for (const option of options) {
     const raw = value[option.key];
     if (raw === undefined) throw new Error(messages.shape);
@@ -360,7 +364,8 @@ export function validateCatalogManagedOptions(
     if (option.type === 'number' && (typeof actual !== 'number' || !Number.isFinite(actual))) throw new Error(messages.number);
     if (option.type === 'enum' && (typeof actual !== 'string' || option.values?.includes(actual) !== true)) throw new Error(messages.choice);
     if (option.type === 'stringList' && (!Array.isArray(actual) || actual.some((entry) => typeof entry !== 'string'))) throw new Error(messages.shape);
-    const { min, max } = mode === 'edit' ? managedConfigNumericBounds(option, 12_000)
+    const checkReleasedRange = mode === 'edit' || baseline !== undefined && actual !== baseline[option.key];
+    const { min, max } = checkReleasedRange ? managedConfigNumericBounds(option, 12_000)
       : { min: option.min, max: option.key === 'battleSize' ? 12_000 : option.max };
     if (min !== undefined && (actual as number) < min || max !== undefined && (actual as number) > max) {
       throw new Error(option.type === 'integer' ? messages.integer : messages.number);
