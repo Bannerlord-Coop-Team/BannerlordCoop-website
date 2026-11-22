@@ -349,3 +349,13 @@ it("keeps a typed line break while entering a second preferred battle host", asy
     await click("Save config");
     expect(mocks.save).toHaveBeenCalledExactlyOnceWith({ requestId: expect.stringMatching(/^[0-9a-f-]{36}$/), serverId, configPart: "mod", expectedRevision: revisions.mod, settings }, "owner");
 });
+
+it("blocks numeric edits outside the released runner range before submission", async () => {
+    await render();
+    const id = "config-modOptions-wandererLimit";
+    expect(field<HTMLInputElement>(id).max).toBe("1000");
+    await type(id, "1001");
+    expect(field<HTMLInputElement>(id).getAttribute("aria-invalid")).toBe("true");
+    expect(button("Save config").disabled).toBe(true);
+    expect(mocks.save).not.toHaveBeenCalled();
+});

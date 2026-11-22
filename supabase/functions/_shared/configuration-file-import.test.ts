@@ -109,3 +109,9 @@ test("a backup's War Sails setting is reported as ignored and every import keeps
     delete older.modConfig.modOptions.warSails;
     assert.deepEqual(readConfigurationFile(JSON.stringify(older), "combined").ignoredSettings, []);
 });
+
+test("refuses fractional timer values and released-bounds violations in a native import", () => {
+    for (const options of [{ pvpResponseTimerSeconds: 1.5 }, { wandererLimit: 1001 }]) {
+        assert.throws(() => readConfigurationFile(JSON.stringify({ modOptions: options }), "mod", messages), { message: messages.unsupportedValues });
+    }
+});

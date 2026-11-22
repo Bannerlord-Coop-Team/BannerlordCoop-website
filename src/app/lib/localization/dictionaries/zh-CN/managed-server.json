@@ -656,6 +656,7 @@
   "configuration.reviewOption.OneDayMax": "最多一天",
   "configuration.reviewOption.Enabled": "启用",
   "configuration.reviewOption.Vanilla": "原版",
+  "configuration.reviewOption.KeepClans": "Keep clans",
   "configuration.reviewOption.NeverExpire": "永不过期",
   "configuration.reviewOption.AlwaysRetry": "始终重试",
   "state.running": "运行中",

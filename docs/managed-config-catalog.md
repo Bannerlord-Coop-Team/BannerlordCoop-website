@@ -15,3 +15,9 @@ availability on writes and imports. The website parser fills optional settings
 for older configurations using the required option set from released runner
 `8e5c511dc3a9c9f9222429558c2df8816a03a4b7`, matching the control plane's
 compatibility pin. The active campaign controls War Sails.
+
+The editor and import admission retain the released runner's numeric ranges
+during rollout. Reading settings still accepts newer catalog values, and the
+editor's live Limitless limit still governs expanded battle sizes. Direct
+saves and durable import rejections show the control plane's option-specific
+refusal. The paired synthetic capture is `test/fixtures/managed-config-refusals-v1.json`.

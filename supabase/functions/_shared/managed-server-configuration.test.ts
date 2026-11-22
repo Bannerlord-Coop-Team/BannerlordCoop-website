@@ -7,6 +7,7 @@ import {
   DEFAULT_MANAGED_SERVER_CONFIGURATION,
   isManagedConfigOptionAvailable,
   MANAGED_CONFIG_CATALOG_OPTIONS,
+  managedConfigNumericBounds,
   parseManagedServerConfiguration,
   validateCatalogManagedOptions,
   validateManagedConfigCatalog,
@@ -177,4 +178,27 @@ test('rejects oversized and malformed catalog structures before parsing settings
   const hosts = malformed.options.find(({ key }) => key === 'preferredBattleHosts')!;
   hosts.itemPattern = '[';
   assert.throws(() => validateManagedConfigCatalog(malformed), /pattern is malformed/u);
+});
+
+test('mirrors the released direct numeric bounds while retaining the live Limitless ceiling', () => {
+  const released = { battleSize: [200, 1000], playerBattleAiJoinWindowHours: [0, 8760],
+    wandererLimit: [0, 1000], playerKingdomClanTierRequired: [0, 6], smithingStaminaRecoveryMultiplier: [0, 100],
+    maximumLootersMultiplier: [0, 100], looterPartySizeMultiplier: [0, 100] };
+  for (const [key, [min, max]] of Object.entries(released)) {
+    const option = MANAGED_CONFIG_CATALOG_OPTIONS.find(candidate => candidate.key === key)!;
+    assert.deepEqual(managedConfigNumericBounds(option, 1000), { min, max });
+    const value = configuration();
+    const input = { ...value.modConfig.modOptions, [key]: key === 'battleSize' ? 199 : max + 1 };
+    assert.throws(() => validateCatalogManagedOptions(input, messages));
+  }
+});
+
+test('enforces Steam ID format without a pattern and rejects fractional timer inputs', () => {
+  const options = MANAGED_CONFIG_CATALOG_OPTIONS.map(({ itemPattern, ...option }) => option.key === 'preferredBattleHosts'
+    ? option : { ...option, ...(itemPattern === undefined ? {} : { itemPattern }) });
+  const defaults = configuration().modConfig.modOptions;
+  assert.throws(() => validateCatalogManagedOptions({ ...defaults, preferredBattleHosts: ['abc'] }, messages, options));
+  assert.doesNotThrow(() => validateCatalogManagedOptions({ ...defaults, preferredBattleHosts: ['76561198000000001'] }, messages, options));
+  assert.throws(() => validateCatalogManagedOptions({ ...defaults, pvpResponseTimerSeconds: 1.5 }, messages), { message: messages.integer });
+  assert.equal(validateCatalogManagedOptions({ ...defaults, pvpResponseTimerSeconds: 1 }, messages).pvpResponseTimerSeconds, 10);
 });

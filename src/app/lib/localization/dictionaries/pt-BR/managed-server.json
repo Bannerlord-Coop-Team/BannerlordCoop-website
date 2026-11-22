@@ -656,6 +656,7 @@
   "configuration.reviewOption.OneDayMax": "No máximo um dia",
   "configuration.reviewOption.Enabled": "Ativado",
   "configuration.reviewOption.Vanilla": "Padrão do jogo base",
+  "configuration.reviewOption.KeepClans": "Keep clans",
   "configuration.reviewOption.NeverExpire": "Nunca expirar",
   "configuration.reviewOption.AlwaysRetry": "Sempre tentar novamente",
   "state.running": "Em execução",

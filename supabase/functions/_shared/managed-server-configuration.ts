@@ -5,6 +5,7 @@ type CatalogOption = { key: string; type: string; default: unknown; min?: number
   availableSince: string; values?: readonly string[]; coerceRanges?: readonly (readonly [number, number, number])[] };
 type Catalog = { contentDigest: string; options: readonly CatalogOption[] };
 const catalog: Catalog = rawCatalog;
+const STEAM_ID_64 = /^[0-9]{17}$/u;
 const CATALOG_MAX_OPTIONS = 128;
 const CATALOG_MAX_KEY_LENGTH = 64;
 const CATALOG_MAX_STRING_LENGTH = 128;
@@ -17,6 +18,11 @@ function catalogEnumValues<const T extends readonly string[]>(key: string): T {
   const option = catalog.options.find(candidate => candidate.key === key);
   if (option?.type !== 'enum' || option.values === undefined) throw new Error(`Managed configuration enum is missing: ${key}`);
   return option.values as T;
+}
+
+function managedConfigListItemMatches(option: CatalogOption, entry: string): boolean {
+  return (option.itemFormat !== 'steamId64' || STEAM_ID_64.test(entry))
+    && (option.itemPattern === undefined || new RegExp(option.itemPattern, 'u').test(entry));
 }
 
 export function validateManagedConfigCatalog(value: unknown): asserts value is Catalog {
@@ -53,8 +59,7 @@ export function validateManagedConfigCatalog(value: unknown): asserts value is C
     if (option.coerceRanges !== undefined && ((option.type !== 'integer' && option.type !== 'number') || !Array.isArray(option.coerceRanges) || option.coerceRanges.length > CATALOG_MAX_RULES || option.coerceRanges.some((range: unknown) => !Array.isArray(range) || range.length !== 3 || range.some(part => typeof part !== 'number' || !Number.isFinite(part)) || !Number.isSafeInteger(range[0]) || !Number.isSafeInteger(range[1]) || range[0] > range[1]))) throw new Error(`Managed configuration catalog coercion rules are malformed: ${option.key}`);
     if (option.type === 'stringList') {
       const list = option.default;
-      const pattern = option.itemPattern === undefined ? null : new RegExp(option.itemPattern, 'u');
-      if (!Array.isArray(list) || list.some((entry) => typeof entry !== 'string' || pattern !== null && !pattern.test(entry))
+      if (!Array.isArray(list) || list.some((entry) => typeof entry !== 'string' || !managedConfigListItemMatches(option, entry))
         || option.uniqueItems === true && new Set(list).size !== list.length) throw new Error(`Managed configuration catalog list default is malformed: ${option.key}`);
     }
     if (option.min !== undefined && (option.default as number) < option.min || option.max !== undefined && (option.default as number) > option.max) throw new Error(`Managed configuration catalog bounds are malformed: ${option.key}`);
@@ -64,6 +69,28 @@ export function validateManagedConfigCatalog(value: unknown): asserts value is C
 
 validateManagedConfigCatalog(catalog);
 export const MANAGED_CONFIG_CATALOG_OPTIONS = catalog.options;
+
+// Mirror the direct parser at ControlPlane 8e5c511d while that runner is supported.
+const RELEASED_NUMERIC_BOUNDS: Readonly<Record<string, readonly [number, number] | undefined>> = Object.freeze({
+  battleSize: [200, 1000],
+  playerBattleAiJoinWindowHours: [0, 8760],
+  wandererLimit: [0, 1000],
+  playerKingdomClanTierRequired: [0, 6],
+  smithingStaminaRecoveryMultiplier: [0, 100],
+  maximumLootersMultiplier: [0, 100],
+  looterPartySizeMultiplier: [0, 100],
+});
+
+export function managedConfigNumericBounds(option: CatalogOption, battleSizeLimit: number) {
+  const released = Object.hasOwn(RELEASED_NUMERIC_BOUNDS, option.key) ? RELEASED_NUMERIC_BOUNDS[option.key] : undefined;
+  return {
+    min: released === undefined ? option.min : Math.max(option.min ?? released[0], released[0]),
+    // The editor receives the actual Limitless limit. Reads must also decode values within that expanded range.
+    max: option.key === 'battleSize' ? battleSizeLimit
+      : released === undefined ? option.max : Math.min(option.max ?? released[1], released[1]),
+  };
+}
+
 
 export const MANAGED_DIFFICULTY_LEVELS = ['VeryEasy', 'Easy', 'Realistic'] as const;
 export type ManagedDifficultyLevel = (typeof MANAGED_DIFFICULTY_LEVELS)[number];
@@ -249,6 +276,7 @@ const defaultConfigurationMessages: ManagedConfigurationMessages = {
 export function parseManagedServerConfiguration(
   value: unknown,
   messages: ManagedConfigurationMessages = defaultConfigurationMessages,
+  mode: 'edit' | 'read' = 'edit',
 ): ManagedServerConfiguration {
   if (!isExactRecord(value, ['schemaVersion', 'serverConfig', 'modConfig'])) {
     throw new Error(messages.root);
@@ -279,7 +307,7 @@ export function parseManagedServerConfiguration(
     'autoAllocateClanMemberPerks',
   ], messages);
   const modOptions = requireCompatibleRecord(modConfig.modOptions, [...RELEASED_REQUIRED_MOD_OPTION_KEYS], CATALOG_ADDED_MOD_OPTION_DEFAULTS, messages);
-  const validatedModOptions = validateCatalogManagedOptions(modOptions, messages);
+  const validatedModOptions = validateCatalogManagedOptions(modOptions, messages, catalog.options, mode);
   return deepFreeze({
     schemaVersion: 1,
     serverConfig: {
@@ -319,26 +347,28 @@ export function validateCatalogManagedOptions(
   value: Record<string, unknown>,
   messages: ManagedConfigurationMessages,
   options: readonly CatalogOption[] = catalog.options,
+  mode: 'edit' | 'read' = 'edit',
 ): ManagedModOptionsConfiguration {
   const validated: Record<string, unknown> = {};
   for (const option of options) {
     const raw = value[option.key];
     if (raw === undefined) throw new Error(messages.shape);
+    if (option.type === 'integer' && !Number.isSafeInteger(raw)) throw new Error(messages.integer);
     const coercion = option.coerceRanges?.find(([from, to]) => typeof raw === 'number' && raw >= from && raw <= to);
     const actual = coercion === undefined ? raw : coercion[2];
     if (option.type === 'boolean' && typeof actual !== 'boolean') throw new Error(messages.boolean);
-    if (option.type === 'integer' && !Number.isSafeInteger(actual)) throw new Error(messages.integer);
     if (option.type === 'number' && (typeof actual !== 'number' || !Number.isFinite(actual))) throw new Error(messages.number);
     if (option.type === 'enum' && (typeof actual !== 'string' || option.values?.includes(actual) !== true)) throw new Error(messages.choice);
     if (option.type === 'stringList' && (!Array.isArray(actual) || actual.some((entry) => typeof entry !== 'string'))) throw new Error(messages.shape);
-    if (option.min !== undefined && (actual as number) < option.min) throw new Error(option.type === 'integer' ? messages.integer : messages.number);
-    // The editor separately enforces the live limit reported by the control plane.
-    const max = option.key === 'battleSize' ? 12_000 : option.max;
-    if (max !== undefined && (actual as number) > max) throw new Error(option.type === 'integer' ? messages.integer : messages.number);
+    const { min, max } = mode === 'edit' ? managedConfigNumericBounds(option, 12_000)
+      : { min: option.min, max: option.key === 'battleSize' ? 12_000 : option.max };
+    if (min !== undefined && (actual as number) < min || max !== undefined && (actual as number) > max) {
+      throw new Error(option.type === 'integer' ? messages.integer : messages.number);
+    }
     if (option.type === 'stringList') {
       const list = actual as string[];
       if (list.length > MANAGED_LIST_MAX_ITEMS || option.uniqueItems === true && new Set(list).size !== list.length) throw new Error(messages.shape);
-      if (option.itemPattern !== undefined && list.some((entry) => !new RegExp(option.itemPattern as string, 'u').test(entry))) throw new Error(messages.shape);
+      if (list.some((entry) => !managedConfigListItemMatches(option, entry))) throw new Error(messages.shape);
     }
     validated[option.key] = actual;
   }

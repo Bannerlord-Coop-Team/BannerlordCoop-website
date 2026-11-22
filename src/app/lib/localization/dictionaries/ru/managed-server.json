@@ -656,6 +656,7 @@
   "configuration.reviewOption.OneDayMax": "Не более одного дня",
   "configuration.reviewOption.Enabled": "Включено",
   "configuration.reviewOption.Vanilla": "Как в оригинальной игре",
+  "configuration.reviewOption.KeepClans": "Keep clans",
   "configuration.reviewOption.NeverExpire": "Без ограничения срока",
   "configuration.reviewOption.AlwaysRetry": "Всегда повторять попытку",
   "state.running": "Работает",

@@ -656,6 +656,7 @@
   "configuration.reviewOption.OneDayMax": "최대 하루",
   "configuration.reviewOption.Enabled": "활성화",
   "configuration.reviewOption.Vanilla": "기본 게임",
+  "configuration.reviewOption.KeepClans": "Keep clans",
   "configuration.reviewOption.NeverExpire": "만료 없음",
   "configuration.reviewOption.AlwaysRetry": "항상 재시도",
   "state.running": "실행 중",

@@ -656,6 +656,7 @@
   "configuration.reviewOption.OneDayMax": "Maximal ein Tag",
   "configuration.reviewOption.Enabled": "Aktiviert",
   "configuration.reviewOption.Vanilla": "Vanilla",
+  "configuration.reviewOption.KeepClans": "Keep clans",
   "configuration.reviewOption.NeverExpire": "Läuft nie ab",
   "configuration.reviewOption.AlwaysRetry": "Immer wiederholen",
   "state.running": "Läuft",

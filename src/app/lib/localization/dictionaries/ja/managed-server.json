@@ -656,6 +656,7 @@
   "configuration.reviewOption.OneDayMax": "最大1日",
   "configuration.reviewOption.Enabled": "有効",
   "configuration.reviewOption.Vanilla": "標準（バニラ）",
+  "configuration.reviewOption.KeepClans": "Keep clans",
   "configuration.reviewOption.NeverExpire": "無期限",
   "configuration.reviewOption.AlwaysRetry": "常に再試行",
   "state.running": "稼働中",

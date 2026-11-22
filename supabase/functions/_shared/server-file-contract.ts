@@ -30,8 +30,21 @@ export type OwnerFileFailureReason = typeof OWNER_FILE_FAILURE_REASONS[number];
 export const OWNER_FILE_REJECTION_REASONS = [...OWNER_FILE_FAILURE_REASONS, 'invalid-companion', 'save-too-large', 'server-unavailable'] as const;
 export type OwnerFileRejectionReason = typeof OWNER_FILE_REJECTION_REASONS[number];
 
+type OwnerConfigurationError = {
+  code: 'configuration_option_unavailable' | 'configuration_agent_unsupported';
+  message: string;
+};
+
+function readOwnerConfigurationError(value: unknown): OwnerConfigurationError | undefined {
+  if (!record(value) || Object.keys(value).length !== 2
+    || (value.code !== 'configuration_option_unavailable' && value.code !== 'configuration_agent_unsupported')
+    || typeof value.message !== 'string' || value.message.length === 0 || value.message.length > 500
+    || /[\p{Cc}\p{Cf}]/u.test(value.message)) return undefined;
+  return { code: value.code, message: value.message };
+}
+
 export type OwnerFileResult =
-  | { kind: 'rejected'; failureReason?: OwnerFileRejectionReason }
+  | { kind: 'rejected'; failureReason?: OwnerFileRejectionReason; configurationError?: OwnerConfigurationError }
   | { kind: 'configuration'; outcome: 'updated' | 'existing'; updatedAt: string }
   | { kind: 'job'; outcome: 'enqueued' | 'existing'; jobId: string; action: 'import-save' | 'export-save'; state: string; failureReason?: OwnerFileFailureReason };
 
@@ -107,14 +120,19 @@ export function parseOwnerFileStatus(value: unknown): OwnerFileStatus {
     if (typeof value.activeSave.displayName !== 'string' || value.activeSave.displayName.length < 1
       || value.activeSave.displayName.length > 128 || /[\p{Cc}\p{Cf}]/u.test(value.activeSave.displayName)) throw new Error('Invalid campaign');
   }
-  return { ...value, managedConfig: parseManagedServerConfiguration(value.managedConfig) } as OwnerFileStatus;
+  return { ...value, managedConfig: parseManagedServerConfiguration(value.managedConfig, undefined, "read") } as OwnerFileStatus;
 }
 
 export function parseOwnerFileResult(value: unknown): OwnerFileResult | null {
   if (value === null) return null;
   if (!record(value)) throw new Error('Invalid transfer result');
   if (value.kind === 'rejected') {
-    exact(value, ['kind', ...(Object.hasOwn(value, 'failureReason') ? ['failureReason'] : [])]);
+    exact(value, ['kind', ...(Object.hasOwn(value, 'failureReason') ? ['failureReason'] : []),
+      ...(Object.hasOwn(value, 'configurationError') ? ['configurationError'] : [])]);
+    if (Object.hasOwn(value, 'configurationError') &&
+      (Object.hasOwn(value, 'failureReason') || readOwnerConfigurationError(value.configurationError) === undefined)) {
+      throw new Error('Invalid configuration transfer rejection');
+    }
     if (Object.hasOwn(value, 'failureReason')
       && !OWNER_FILE_REJECTION_REASONS.some((reason) => reason === value.failureReason)) throw new Error('Invalid transfer rejection reason');
   } else if (value.kind === 'configuration') {

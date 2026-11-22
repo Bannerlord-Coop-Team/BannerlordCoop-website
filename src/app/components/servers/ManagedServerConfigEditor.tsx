@@ -14,7 +14,7 @@ import { workspaceNoticeClass } from "./server-workspace-ui";
 import { useServerWorkspaceSectionShown } from "./ServerManagementWorkspace";
 import {
     MANAGED_DIFFICULTY_LEVELS,
-    isManagedConfigOptionAvailable, MANAGED_CONFIG_CATALOG_OPTIONS, parseManagedServerConfiguration, type ManagedServerConfiguration,
+    isManagedConfigOptionAvailable, MANAGED_CONFIG_CATALOG_OPTIONS, managedConfigNumericBounds, parseManagedServerConfiguration, type ManagedServerConfiguration,
 } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { RunnerConfigurationFile, RunnerConfigurationPart } from "../../../../supabase/functions/_shared/server-configuration-contract";
 
@@ -164,8 +164,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
             if (option.type === "boolean") return { key: option.key, label, kind: "boolean" };
             if (option.type === "enum") return { key: option.key, label, kind: "choice", options: option.values ?? [] };
             if (option.type === "stringList") return { key: option.key, label, kind: "stringList" };
-            const min = option.min;
-            const max = option.key === "battleSize" ? battleSizeLimit : option.max;
+            const { min, max } = managedConfigNumericBounds(option, battleSizeLimit);
             return option.type === "integer"
                 ? { key: option.key, label, kind: "integer", min, max, ...(option.key === "battleSize" ? { help: t("configEditor.battleSizeHelp") } : {}) }
                 : { key: option.key, label, kind: "number", min, max, step: 0.01 };

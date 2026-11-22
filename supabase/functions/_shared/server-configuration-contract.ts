@@ -29,13 +29,13 @@ export function requireRunnerConfigurationRevision(value: unknown): asserts valu
 }
 
 /** Validates one file's complete supported settings without substituting defaults for missing values. */
-export function parseRunnerConfigurationSettings(part: "server", value: unknown): RunnerServerSettings;
-export function parseRunnerConfigurationSettings(part: "mod", value: unknown): RunnerModSettings;
-export function parseRunnerConfigurationSettings(part: RunnerConfigurationPart, value: unknown): RunnerServerSettings | RunnerModSettings;
-export function parseRunnerConfigurationSettings(part: RunnerConfigurationPart, value: unknown): RunnerServerSettings | RunnerModSettings {
+export function parseRunnerConfigurationSettings(part: "server", value: unknown, mode?: "edit" | "read"): RunnerServerSettings;
+export function parseRunnerConfigurationSettings(part: "mod", value: unknown, mode?: "edit" | "read"): RunnerModSettings;
+export function parseRunnerConfigurationSettings(part: RunnerConfigurationPart, value: unknown, mode?: "edit" | "read"): RunnerServerSettings | RunnerModSettings;
+export function parseRunnerConfigurationSettings(part: RunnerConfigurationPart, value: unknown, mode: "edit" | "read" = "edit"): RunnerServerSettings | RunnerModSettings {
   const parsed = parseManagedServerConfiguration(part === "server"
     ? { ...defaults, serverConfig: value }
-    : { ...defaults, modConfig: value });
+    : { ...defaults, modConfig: value }, undefined, mode);
   return part === "server" ? parsed.serverConfig : parsed.modConfig;
 }
 
@@ -45,8 +45,8 @@ export function parseRunnerConfigurationFile(value: unknown): RunnerConfiguratio
   requireRunnerConfigurationPart(value.configPart);
   requireRunnerConfigurationRevision(value.revision);
   return value.configPart === "server"
-    ? { configPart: "server", revision: value.revision, settings: parseRunnerConfigurationSettings("server", value.settings) }
-    : { configPart: "mod", revision: value.revision, settings: parseRunnerConfigurationSettings("mod", value.settings) };
+    ? { configPart: "server", revision: value.revision, settings: parseRunnerConfigurationSettings("server", value.settings, "read") }
+    : { configPart: "mod", revision: value.revision, settings: parseRunnerConfigurationSettings("mod", value.settings, "read") };
 }
 
 export function parseRunnerConfigurationMutation(value: unknown): RunnerConfigurationMutation {

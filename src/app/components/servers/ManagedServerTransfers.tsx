@@ -152,7 +152,8 @@ function TransferSession({ userId, serverId, serverName, installedVersion, statu
 
     // Presents the durable transfer result without changing its state transitions.
     function accept(next: OwnerFileResult | null) {
-        const scope = next?.kind === "job" ? transferScope(next.action)
+        const scope = next?.kind === "rejected" && next.configurationError ? "config"
+            : next?.kind === "job" ? transferScope(next.action)
             : next?.kind === "configuration" ? "config" : transferScope(intentRef.current?.action ?? "export-save");
         if (next === null) {
             say(t(confirmedJob.current ? "transfers.acceptedStatusUnavailable" : "transfers.noAcceptedTransferWasFoundRetryTheSameRequestWith"), scope); return;
@@ -160,8 +161,8 @@ function TransferSession({ userId, serverId, serverName, installedVersion, statu
         setResult(next);
         if (next.kind === "job") confirmedJob.current = next;
         if (next.kind === "rejected") {
-            const message = next.failureReason ? t(`transfers.rejection.${next.failureReason}`)
-                : t("transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck", { supportLink: DISCORD_SUPPORT_URL });
+            const message = next.configurationError?.message ?? (next.failureReason ? t(`transfers.rejection.${next.failureReason}`)
+                : t("transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck", { supportLink: DISCORD_SUPPORT_URL }));
             const requestId = intentRef.current?.requestId;
             say(requestId ? `${message} ${t("transfers.rejection.reference", { requestId })}` : message, scope);
             remember(null); setDeadline(null); router.refresh();

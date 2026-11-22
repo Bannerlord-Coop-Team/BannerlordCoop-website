@@ -656,6 +656,7 @@
   "configuration.reviewOption.OneDayMax": "En fazla bir gün",
   "configuration.reviewOption.Enabled": "Etkin",
   "configuration.reviewOption.Vanilla": "Orijinal",
+  "configuration.reviewOption.KeepClans": "Keep clans",
   "configuration.reviewOption.NeverExpire": "Asla sona ermez",
   "configuration.reviewOption.AlwaysRetry": "Her zaman yeniden dene",
   "state.running": "Çalışıyor",
