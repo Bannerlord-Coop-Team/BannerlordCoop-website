@@ -217,6 +217,25 @@ it("reviews native configuration changes and rejects unsupported fields before a
     expect(container.textContent).toContain("Autosave Minutes: 5 → 10");
     expect(button("Import these settings").disabled).toBe(false); expect(mocks.submit).not.toHaveBeenCalled();
 });
+it("previews an autosave import and warns about an unchanged saved wanderer limit", async () => {
+    const { managedConfig } = status;
+    const saved = { ...managedConfig, modConfig: { ...managedConfig.modConfig,
+        modOptions: { ...managedConfig.modConfig.modOptions, wandererLimit: 1001 } } };
+    await render({ ...status, managedConfig: saved });
+    await click("Import config");
+    const contents = '{"autosaveMinutes":10}';
+    const file = new File([contents], "server-config.json", { type: "application/json" });
+    Object.defineProperty(file, "text", { value: async () => contents });
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
+    Object.defineProperty(input, "files", { value: [file] });
+    await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+    await click("Review import");
+    expect(container.textContent).toContain("Autosave Minutes: 5 → 10");
+    expect(container.textContent).toContain("Wanderer Limit: The saved value is outside the edit range.");
+    expect(button("Import these settings").disabled).toBe(false);
+    expect(mocks.submit).not.toHaveBeenCalled();
+});
+
 it("rejects malformed stored fingerprints and cross-server identity", () => {
     const value = { requestId: status.serverId, serverId: status.serverId, expectedUpdatedAt: status.updatedAt, action: "import-save", fingerprints: [], displayName: "Campaign", saveId: status.activeSave!.saveId };
     expect(() => readFileIntent(JSON.stringify(value), status.serverId)).toThrow();

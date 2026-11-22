@@ -326,3 +326,64 @@ it("refreshes the invisible limit after a mod-tab visit while preserving unsaved
     expect(button("Save config").disabled).toBe(true);
     expect(container.textContent).not.toContain("Limitless");
 });
+
+it("shows clan limits when the installed version supports them and keeps War Sails campaign-controlled", async () => {
+    await render({ configuration: config, access: { ...access, installedVersion: "v0.1.7" } });
+    expect(container.querySelector("#config-modOptions-maxClansPerKingdom")).toBeNull();
+    await render({ configuration: config, access: { ...access, installedVersion: "v0.1.8" } });
+    expect(field<HTMLInputElement>("config-modOptions-maxClansPerKingdom").value).toBe("0");
+    expect(field<HTMLInputElement>("config-modOptions-maxClansPerKingdomCountsMercenaries").checked).toBe(false);
+    expect(container.querySelector("#config-modOptions-warSails")).toBeNull();
+});
+
+it("keeps a typed line break while entering a second preferred battle host", async () => {
+    await render();
+    const id = "config-modOptions-preferredBattleHosts";
+    const firstHost = "76561198000000001";
+    const secondHost = "76561198000000002";
+    await type(id, firstHost + "\n");
+    expect(field<HTMLTextAreaElement>(id).value).toBe(firstHost + "\n");
+    await type(id, field<HTMLTextAreaElement>(id).value + secondHost);
+    const settings = { ...config.modConfig, modOptions: { ...config.modConfig.modOptions, preferredBattleHosts: [firstHost, secondHost] } };
+    mocks.save.mockResolvedValue({ ok: true, file: { configPart: "mod", revision: "c".repeat(64), settings } });
+    await click("Save config");
+    expect(mocks.save).toHaveBeenCalledExactlyOnceWith({ requestId: expect.stringMatching(/^[0-9a-f-]{36}$/), serverId, configPart: "mod", expectedRevision: revisions.mod, settings }, "owner");
+});
+
+it("blocks numeric edits outside the released runner range before submission", async () => {
+    await render();
+    const id = "config-modOptions-wandererLimit";
+    expect(field<HTMLInputElement>(id).max).toBe("1000");
+    await type(id, "1001");
+    expect(field<HTMLInputElement>(id).getAttribute("aria-invalid")).toBe("true");
+    expect(button("Save config").disabled).toBe(true);
+    expect(mocks.save).not.toHaveBeenCalled();
+});
+
+it.each(["Form", "JSON"])("warns about a saved large wanderer limit and saves only an autosave edit in %s", async mode => {
+    const modConfig = { ...config.modConfig, modOptions: { ...config.modConfig.modOptions, wandererLimit: 1001 } };
+    mocks.read.mockImplementation(async (_serverId, part: RunnerConfigurationPart) => ({
+        ok: true, file: part === "mod" ? { ...file("mod"), settings: modConfig } : file("server"),
+    }));
+    await render();
+    expect(container.textContent).toContain("The saved value is outside the edit range");
+    expect(field<HTMLInputElement>("config-modOptions-wandererLimit").getAttribute("aria-invalid")).toBeNull();
+    const settings = { ...liveServer, autosaveMinutes: 20 };
+    if (mode === "JSON") {
+        await click("JSON");
+        expect(field<HTMLTextAreaElement>("config-json").getAttribute("aria-describedby")).toContain("config-json-warnings");
+        expect(field("config-json-warnings").textContent).toContain("Wanderer limit. The saved value is outside the edit range.");
+        await type("config-json", JSON.stringify({ serverConfig: settings, modConfig }));
+        expect(field("config-json-warnings").textContent).toContain("The saved value is outside the edit range");
+        await click("Form");
+        expect(container.textContent).toContain("The saved value is outside the edit range");
+        await click("JSON");
+        expect(field("config-json-warnings").textContent).toContain("The saved value is outside the edit range");
+    } else {
+        await type("config-serverConfig-autosaveMinutes", "20");
+    }
+    mocks.save.mockResolvedValue({ ok: true, file: { ...file("server"), settings } });
+    expect(button("Save config").disabled).toBe(false);
+    await click("Save config");
+    expect(mocks.save).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ configPart: "server", settings }), "owner");
+});

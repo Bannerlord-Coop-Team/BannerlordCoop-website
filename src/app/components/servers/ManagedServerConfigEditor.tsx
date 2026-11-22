@@ -13,22 +13,38 @@ import { segmentedButtonClass, segmentedGroupClass } from "./segmented-controls"
 import { workspaceNoticeClass } from "./server-workspace-ui";
 import { useServerWorkspaceSectionShown } from "./ServerManagementWorkspace";
 import {
-    MANAGED_DIFFICULTY_LEVELS, MANAGED_GOLD_FOOD_CHANGE_MODES, MANAGED_LORD_DEFECTION_RETRY_MODES,
-    parseManagedServerConfiguration, type ManagedServerConfiguration,
+    MANAGED_DIFFICULTY_LEVELS,
+    isManagedConfigOptionAvailable, MANAGED_CONFIG_CATALOG_OPTIONS, managedConfigNumericBounds, parseManagedServerConfiguration, type ManagedServerConfiguration,
 } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { RunnerConfigurationFile, RunnerConfigurationPart } from "../../../../supabase/functions/_shared/server-configuration-contract";
 
-export type ConfigAccess = { serverId: string; userId: string; canEdit: boolean };
+export type ConfigAccess = { serverId: string; userId: string; canEdit: boolean; installedVersion?: string | null | undefined };
 type Settings = { serverConfig: ManagedServerConfiguration["serverConfig"]; modConfig: ManagedServerConfiguration["modConfig"] };
 type Live = { server: RunnerConfigurationFile | null; mod: RunnerConfigurationFile | null };
 type Group = "serverConfig" | "difficulty" | "modOptions";
 type Field = { key: string; label: string; help?: string } & (
     | { kind: "boolean" }
-    | { kind: "integer"; min: number; max: number }
-    | { kind: "number"; min: number; max: number; step: number }
+    | { kind: "integer"; min?: number; max?: number }
+    | { kind: "number"; min?: number; max?: number; step: number }
+    | { kind: "stringList" }
     | { kind: "choice"; options: readonly string[] });
 
 const inputClass = "mt-2 block w-full min-w-0 rounded-md border border-white/15 bg-background px-3 py-2 text-sm text-foreground disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-red-400";
+
+function StringListField({ id, label, value, update }: { id: string; label: string; value: unknown; update: (value: string[]) => void }) {
+    const [edit, setEdit] = useState<{ items: string[]; text: string }>();
+    // Keep separators while typing, and use the saved value when the parent resets the draft.
+    const text = edit && edit.items === value ? edit.text : Array.isArray(value) ? value.join("\n") : "";
+    return <div>
+        <label htmlFor={id} className="text-sm">{label}</label>
+        <textarea id={id} className={inputClass} rows={3} value={text} onChange={(event) => {
+            const next = event.target.value;
+            const items = next.split(/[\s,]+/u).filter(Boolean);
+            setEdit({ items, text: next });
+            update(items);
+        }} />
+    </div>;
+}
 
 // Resolves the label for an unchanged configuration choice value.
 function configurationChoiceLabel(value: string, t: Translator["t"]) {
@@ -48,18 +64,22 @@ function numberProblem(field: Field, value: unknown, t: Translator["t"], number:
     if (field.kind !== "integer" && field.kind !== "number") return null;
     if (typeof value !== "number" || Number.isNaN(value)) return t("configEditor.enterANumber");
     if (field.kind === "integer" && !Number.isInteger(value)) return t("configEditor.enterAWholeNumber");
-    if (value < field.min || value > field.max) return t("configEditor.enterAValueFromMinToMax", { min: number(field.min), max: number(field.max) });
+    if ((field.min !== undefined && value < field.min) || (field.max !== undefined && value > field.max)) {
+        if (field.min !== undefined && field.max !== undefined) return t("configEditor.enterAValueFromMinToMax", { min: number(field.min), max: number(field.max) });
+        return t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe");
+    }
     return null;
 }
 // Serializes editable configuration without translating its payload.
 function pretty(settings: Settings) { return JSON.stringify({ serverConfig: settings.serverConfig, modConfig: settings.modConfig }, null, 2); }
 // Validates configuration shape and injects detailed parser diagnostics.
-function parseSettings(value: unknown, t: Translator["t"], maximumBattleSize: number): Settings {
+function parseSettings(value: unknown, t: Translator["t"], maximumBattleSize: number, baseline: Settings | null): Settings {
     if (typeof value !== "object" || value === null || Array.isArray(value)) throw new Error(t("configEditor.expectedAnObjectWithServerconfigAndModconfig"));
     const keys = Object.keys(value);
     if (keys.length !== 2 || !("serverConfig" in value) || !("modConfig" in value)) throw new Error(t("configEditor.expectedExactlyServerconfigAndModconfig"));
-    const parsed = parseManagedServerConfiguration({ schemaVersion: 1, ...(value as object) }, configurationMessages(t));
-    if (parsed.modConfig.modOptions.battleSize > maximumBattleSize) throw new Error(t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe"));
+    const parsed = parseManagedServerConfiguration({ schemaVersion: 1, ...(value as object) }, configurationMessages(t),
+        baseline?.modConfig.modOptions ?? "edit");
+    if (parsed.modConfig.modOptions.battleSize > maximumBattleSize && parsed.modConfig.modOptions.battleSize !== baseline?.modConfig.modOptions.battleSize) throw new Error(t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe"));
     return { serverConfig: parsed.serverConfig, modConfig: parsed.modConfig };
 }
 // Compares serialized settings to detect unsaved changes.
@@ -138,27 +158,18 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         { key: "birthAndDeath", label: t("configuration.field.birthAndDeath"), kind: "boolean" },
         { key: "autoAllocateClanMemberPerks", label: t("configuration.field.autoAllocateClanMemberPerks"), kind: "boolean" },
     ];
-    const MOD_OPTION_FIELDS: Field[] = [
-        { key: "battleSize", label: t("configuration.field.battleSize"), kind: "integer", min: 200, max: battleSizeLimit, help: t("configEditor.battleSizeHelp") },
-        { key: "fastForwardEnabled", label: t("configuration.field.fastForwardEnabled"), kind: "boolean" },
-        { key: "autoPauseEnabled", label: t("configuration.field.autoPauseEnabled"), kind: "boolean" },
-        { key: "clientsCanUseCheats", label: t("configuration.field.clientsCanUseCheats"), kind: "boolean" },
-        { key: "goldFoodInfluenceChangeInSettlements", label: t("configuration.field.goldFoodInfluenceChangeInSettlements"), kind: "boolean" },
-        { key: "goldFoodInfluenceChangeInBattles", label: t("configuration.field.goldFoodInfluenceChangeInBattles"), kind: "choice", options: MANAGED_GOLD_FOOD_CHANGE_MODES },
-        { key: "goldFoodInfluenceChangeForDisconnectedPlayers", label: t("configuration.field.goldFoodInfluenceChangeForDisconnectedPlayers"), kind: "boolean" },
-        { key: "playerBattleAiJoinWindowHours", label: t("configuration.field.playerBattleAiJoinWindowHours"), kind: "integer", min: 0, max: 8760 },
-        { key: "speedLimitWhilePlayersInBattle", label: t("configuration.field.speedLimitWhilePlayersInBattle"), kind: "boolean" },
-        { key: "wandererLimit", label: t("configuration.field.wandererLimit"), kind: "integer", min: 0, max: 1000 },
-        { key: "wandererLimitScalesWithPlayers", label: t("configuration.field.wandererLimitScalesWithPlayers"), kind: "boolean" },
-        { key: "playerKingdomClanTierRequired", label: t("configuration.field.playerKingdomClanTierRequired"), kind: "integer", min: 0, max: 6 },
-        { key: "smithingStaminaRecoveryOutsideSettlements", label: t("configuration.field.smithingStaminaRecoveryOutsideSettlements"), kind: "boolean" },
-        { key: "smithingStaminaRecoveryMultiplier", label: t("configuration.field.smithingStaminaRecoveryMultiplier"), kind: "number", min: 0, max: 100, step: 0.01 },
-        { key: "maximumLootersMultiplier", label: t("configuration.field.maximumLootersMultiplier"), kind: "number", min: 0, max: 100, step: 0.1 },
-        { key: "looterPartySizeMultiplier", label: t("configuration.field.looterPartySizeMultiplier"), kind: "number", min: 0, max: 100, step: 0.1 },
-        { key: "lordDefectionRetries", label: t("configuration.field.lordDefectionRetries"), kind: "choice", options: MANAGED_LORD_DEFECTION_RETRY_MODES },
-        { key: "enableHeroExecutions", label: t("configuration.field.enableHeroExecutions"), kind: "boolean" },
-        { key: "enablePlayerClanMemberExecutions", label: t("configuration.field.enablePlayerClanMemberExecutions"), kind: "boolean" },
-    ];
+    const MOD_OPTION_FIELDS: Field[] = MANAGED_CONFIG_CATALOG_OPTIONS
+        .filter((option) => option.key !== "warSails" && isManagedConfigOptionAvailable(option, access?.installedVersion) !== false)
+        .map((option) => {
+            const label = t(`configuration.field.${option.key}`);
+            if (option.type === "boolean") return { key: option.key, label, kind: "boolean" };
+            if (option.type === "enum") return { key: option.key, label, kind: "choice", options: option.values ?? [] };
+            if (option.type === "stringList") return { key: option.key, label, kind: "stringList" };
+            const { min, max } = managedConfigNumericBounds(option, battleSizeLimit);
+            return option.type === "integer"
+                ? { key: option.key, label, kind: "integer", min, max, ...(option.key === "battleSize" ? { help: t("configEditor.battleSizeHelp") } : {}) }
+                : { key: option.key, label, kind: "number", min, max, step: 0.01 };
+        });
     const GROUPS: { group: Group; title: string; fields: Field[] }[] = [
         { group: "serverConfig", title: t("configEditor.serverSettings"), fields: SERVER_FIELDS },
         { group: "difficulty", title: t("configEditor.difficulty"), fields: DIFFICULTY_FIELDS },
@@ -225,7 +236,20 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     ]) : [];
     // JSON that does not parse yet is still an edit the user may want to discard.
     const dirty = dirtyParts.length > 0 || jsonError !== "";
-    const problems = draft ? GROUPS.flatMap(({ group, fields }) => fields.filter((field) => numberProblem(field, groupValues(draft, group)[field.key], t, number) !== null)) : [];
+    const hasBlockingProblem = draft !== null && GROUPS.some(({ group, fields }) => fields.some(field => {
+        const value = groupValues(draft, group)[field.key];
+        return !isSavedValue(group, field, value) && numberProblem(field, value, t, number) !== null;
+    }));
+
+    function isSavedValue(group: Group, field: Field, value: unknown): boolean {
+        return baseline !== null && value === groupValues(baseline, group)[field.key];
+    }
+
+    const jsonWarnings = mode === "json" && draft ? GROUPS.flatMap(({ group, fields }) => fields.flatMap((field) => {
+        const value = groupValues(draft, group)[field.key];
+        const problem = isSavedValue(group, field, value) ? numberProblem(field, value, t, number) : null;
+        return problem === null ? [] : [{ key: `${group}-${field.key}`, label: field.label, problem }];
+    })) : [];
 
     // Reloads current configuration, confirming first when that would discard unsaved edits.
     function reload() {
@@ -247,7 +271,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     // Parses a JSON draft and reports validation without changing saved settings.
     function editJson(text: string) {
         setJsonText(text); setMessage("");
-        try { setDraft(withReadWarSails(parseSettings(JSON.parse(text), t, battleSizeLimit), baseline)); setJsonError(""); }
+        try { setDraft(withReadWarSails(parseSettings(JSON.parse(text), t, battleSizeLimit, baseline), baseline)); setJsonError(""); }
         catch (error) { setJsonError(error instanceof SyntaxError ? jsonSyntaxMessage(text, error, t) : error instanceof Error ? error.message : t("configEditor.unsupportedSettings")); }
     }
     // Restores the draft from the last confirmed configuration.
@@ -257,9 +281,9 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     }
     // Submits the existing settings operation and presents its outcome.
     function save() {
-        if (!access || !editable || !draft || !dirty || jsonError) return;
+        if (!access || !editable || !draft || !dirty || jsonError || hasBlockingProblem) return;
         let parsed: Settings;
-        try { parsed = withReadWarSails(parseSettings({ serverConfig: draft.serverConfig, modConfig: draft.modConfig }, t, battleSizeLimit), baseline); }
+        try { parsed = withReadWarSails(parseSettings({ serverConfig: draft.serverConfig, modConfig: draft.modConfig }, t, battleSizeLimit, baseline), baseline); }
         catch { setMessage(t("configEditor.someValuesAreMissingOrOutOfRangeCheckThe")); return; }
         setMessage("");
         startTransition(async () => {
@@ -315,13 +339,16 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
                 {field.options.map((option) => <option key={option} value={option}>{configurationChoiceLabel(option, t)}</option>)}
             </select>
         </div>;
+        if (field.kind === "stringList") return <StringListField key={field.key} id={id} label={field.label} value={value} update={update} />;
         const problem = numberProblem(field, value, t, number);
+        const warning = problem !== null && isSavedValue(group, field, value);
         return <div key={field.key}>
             <label htmlFor={id} className="text-sm">{field.label}</label>
             <input id={id} type="number" inputMode={field.kind === "integer" ? "numeric" : "decimal"} min={field.min} max={field.max} step={field.kind === "integer" ? 1 : field.step}
-                className={inputClass} value={typeof value === "number" && !Number.isNaN(value) ? value : ""} aria-invalid={problem ? true : undefined} aria-describedby={problem || field.help ? `${id}-help` : undefined}
+                className={inputClass} value={typeof value === "number" && !Number.isNaN(value) ? value : ""} aria-invalid={problem && !warning ? true : undefined} aria-describedby={problem || field.help ? `${id}-help` : undefined}
                 onChange={(event) => update(event.target.value === "" ? Number.NaN : Number(event.target.value))} />
-            {(problem || field.help) && <p id={`${id}-help`} className={`mt-1 text-xs ${problem ? "text-red-200" : "text-foreground-muted"}`}>{problem ?? field.help}</p>}
+            {(problem || field.help) && <p id={`${id}-help`} className={`mt-1 text-xs ${warning ? "text-amber-200" : problem ? "text-red-200" : "text-foreground-muted"}`}>
+                {warning ? t("configEditor.savedValueOutsideEditRange", { range: problem }) : problem ?? field.help}</p>}
         </div>;
     }
 
@@ -338,8 +365,11 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
         </p>
         {loadState === "loading" ? <ConfigLoadingSkeleton groups={GROUPS} label={t("configEditor.loadingSkeleton")} /> : draft && mode === "json" && <>
             <label htmlFor="config-json" className="mb-2 block text-xs text-foreground-muted">{t("configEditor.managedConfigurationJson")}</label>
-            <textarea id="config-json" spellCheck={false} disabled={!editable} value={jsonText} onChange={(event) => editJson(event.target.value)} aria-invalid={jsonError ? true : undefined} aria-describedby={jsonError ? "config-json-error config-help" : "config-help"} className="min-h-64 w-full resize-y rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm leading-7 text-foreground disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-red-400" />
+            <textarea id="config-json" spellCheck={false} disabled={!editable} value={jsonText} onChange={(event) => editJson(event.target.value)} aria-invalid={jsonError ? true : undefined} aria-describedby={["config-help", jsonError && "config-json-error", jsonWarnings.length > 0 && "config-json-warnings"].filter(Boolean).join(" ")} className="min-h-64 w-full resize-y rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm leading-7 text-foreground disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-red-400" />
             {jsonError && <p id="config-json-error" role="alert" className="mt-2 text-sm text-red-200">{jsonError}</p>}
+            {jsonWarnings.length > 0 && <ul id="config-json-warnings" className="mt-2 space-y-1 text-xs text-amber-200">
+                {jsonWarnings.map(({ key, label, problem }) => <li key={key}>{label}. {t("configEditor.savedValueOutsideEditRange", { range: problem })}</li>)}
+            </ul>}
         </>}
         {loadState !== "loading" && draft && mode === "form" && <div className="space-y-6">
             {GROUPS.map(({ group, title, fields }) => <fieldset key={group} disabled={!editable} className="min-w-0">
@@ -358,7 +388,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
                     <p className="text-sm text-foreground-muted">{dirty ? <span className="flex items-center gap-2 font-semibold text-gold"><CircleAlert className="size-4 shrink-0" aria-hidden="true" />{jsonError ? t("configEditor.theJsonHasUnsavedEditsThatArenTValidYet") : t("configEditor.unsavedChanges", { settings: new Intl.ListFormat(locale, { type: "conjunction" }).format(dirtyParts) })}</span> : t("configEditor.noPendingChanges")}</p>
                     <div className="ml-auto flex gap-2">
                         <button type="button" disabled={!dirty || pending} className={fileButtonClass} onClick={discard}>{t("configEditor.discard")}</button>
-                        <button type="button" disabled={!dirty || !editable || !!jsonError || problems.length > 0} className={filePrimaryButtonClass} onClick={save}>{pending ? t("configEditor.saving") : t("configEditor.saveConfig")}</button>
+                        <button type="button" disabled={!dirty || !editable || !!jsonError || hasBlockingProblem} className={filePrimaryButtonClass} onClick={save}>{pending ? t("configEditor.saving") : t("configEditor.saveConfig")}</button>
                     </div>
                 </div>
             </div>

@@ -52,10 +52,10 @@ export type ConfigurationImport = { managedConfig: ManagedServerConfiguration }
   | { configPart: 'mod'; settings: ModSettings };
 
 /** Validate the selected patch without substituting defaults for omitted settings. */
-export function parseConfigurationImport(value: unknown, messages: ConfigurationImportMessages = defaultImportMessages): ConfigurationImport {
+export function parseConfigurationImport(value: unknown, messages: ConfigurationImportMessages = defaultImportMessages, mode: 'edit' | 'read' = 'edit'): ConfigurationImport {
   const input = object(value, messages);
   if (Object.keys(input).length === 1 && Object.hasOwn(input, 'managedConfig')) {
-    return { managedConfig: parseManagedServerConfiguration(input.managedConfig, messages.configuration) };
+    return { managedConfig: parseManagedServerConfiguration(input.managedConfig, messages.configuration, mode) };
   }
   if (Object.keys(input).length !== 2 || !Object.hasOwn(input, 'settings')) throw new Error(messages.invalidImport);
   const settings = object(input.settings, messages);
@@ -79,7 +79,7 @@ export function parseConfigurationImport(value: unknown, messages: Configuration
     voice: { ...defaults.modConfig.voice, ...object(settings.voice ?? {}, messages) },
     difficulty: { ...defaults.modConfig.difficulty, ...object(settings.difficulty ?? {}, messages) },
     modOptions: { ...defaults.modConfig.modOptions, ...object(settings.modOptions ?? {}, messages) },
-  } }, messages.configuration);
+  } }, messages.configuration, mode);
   if (!count) throw new Error(messages.noGameplaySettings);
   return { configPart: 'mod', settings };
 }
@@ -94,7 +94,7 @@ export function applyConfigurationImport(current: ManagedServerConfiguration, in
       modOptions: { ...current.modConfig.modOptions, ...input.settings.modOptions },
     } };
   return parseManagedServerConfiguration({ ...imported, modConfig: { ...imported.modConfig,
-    modOptions: { ...imported.modConfig.modOptions, warSails: current.modConfig.modOptions.warSails } } }, messages.configuration);
+    modOptions: { ...imported.modConfig.modOptions, warSails: current.modConfig.modOptions.warSails } } }, messages.configuration, current.modConfig.modOptions);
 }
 
 // These native settings are intentionally outside the managed configuration contract.
@@ -102,7 +102,7 @@ const ignoredServerKeys = ['saveName', 'password', 'port', 'mode', 'devModuleRoo
 const ignoredModRootKeys = ['network'];
 // War Sails is fixed when a campaign is created, so an import reports it as ignored and never changes it.
 const WAR_SAILS_KEY = 'warSails';
-const ignoredModKeys = ['showPlayerNameplates', 'playerWoundedBattleEntry', WAR_SAILS_KEY];
+const ignoredModKeys = [WAR_SAILS_KEY];
 const importableModOptions: Readonly<Record<string, unknown>> = Object.freeze(Object.fromEntries(
   Object.entries(defaults.modConfig.modOptions).filter(([key]) => key !== WAR_SAILS_KEY),
 ));
@@ -116,7 +116,7 @@ function backupNamesWarSails(raw: Record<string, unknown>): boolean {
 }
 
 // Reads a native or exported configuration with detailed injected diagnostics and private ignored values.
-export function readConfigurationFile(text: string, part: ConfigurationPart, messages: ConfigurationImportMessages = defaultImportMessages): { input: ConfigurationImport; ignoredSettings: string[] } {
+export function readConfigurationFile(text: string, part: ConfigurationPart, messages: ConfigurationImportMessages = defaultImportMessages, mode: 'edit' | 'read' = 'edit'): { input: ConfigurationImport; ignoredSettings: string[] } {
   if (new TextEncoder().encode(text).byteLength > 64 * 1024) throw new Error(messages.tooLarge);
   let raw: Record<string, unknown>;
   try { raw = object(parseCommentedJson(text), messages); }
@@ -124,7 +124,7 @@ export function readConfigurationFile(text: string, part: ConfigurationPart, mes
   const ignoredSettings: string[] = [];
   if (part === 'combined') {
     let backup: ManagedServerConfiguration;
-    try { backup = parseManagedServerConfiguration(raw, messages.configuration); }
+    try { backup = parseManagedServerConfiguration(raw, messages.configuration, mode); }
     catch { throw new Error(messages.combinedBackup); }
     if (backupNamesWarSails(raw)) ignoredSettings.push(WAR_SAILS_KEY);
     return { input: { managedConfig: backup }, ignoredSettings };
@@ -168,7 +168,7 @@ export function readConfigurationFile(text: string, part: ConfigurationPart, mes
       ? pick(object(settings[section], messages), importableModOptions, ignoredModKeys, true, section)
       : pick(object(settings[section], messages), defaults.modConfig[section], [], true, section);
   }
-  try { return { input: parseConfigurationImport({ configPart: part, settings }, messages), ignoredSettings }; }
+  try { return { input: parseConfigurationImport({ configPart: part, settings }, messages, mode), ignoredSettings }; }
   catch { throw new Error(messages.unsupportedValues); }
 }
 

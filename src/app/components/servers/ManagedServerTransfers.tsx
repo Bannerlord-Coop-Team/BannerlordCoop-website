@@ -16,6 +16,7 @@ import { workspaceNoticeClass } from "./server-workspace-ui";
 import { useRouter } from "next/navigation";
 import { checkManagedServerFile, downloadManagedServerSave, exportManagedServerConfig, readManagedServerFileStatus, submitManagedServerFile } from "@/app/servers/managed-server-file-actions";
 import { readConfigurationFile, applyConfigurationImport, type ConfigurationPart } from "../../../../supabase/functions/_shared/configuration-file-import";
+import { MANAGED_CONFIG_CATALOG_OPTIONS, managedConfigNumericBounds } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import { MAXIMUM_WEB_SAVE_BYTES, MAXIMUM_WEB_CONFIG_BYTES, requireUuid, requireFileTimestamp, type OwnerFileStatus, type OwnerFileResult } from "../../../../supabase/functions/_shared/server-file-contract";
 
 type Intent = {
@@ -71,7 +72,7 @@ function saveDownload(bytes: BlobPart, fileName: string) {
     window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
 }
 
-type TransferProps = { userId: string; serverId: string; serverName?: string; status: OwnerFileStatus | null; canImportConfig: boolean; canEditConfig?: boolean; canExportSave: boolean; subscriptionRescue?: boolean; campaigns?: ReactNode };
+type TransferProps = { userId: string; serverId: string; serverName?: string; installedVersion?: string | null | undefined; status: OwnerFileStatus | null; canImportConfig: boolean; canEditConfig?: boolean; canExportSave: boolean; subscriptionRescue?: boolean; campaigns?: ReactNode };
 
 // Keys transfer state to the current account and server.
 export function ManagedServerTransfers(props: TransferProps) {
@@ -79,7 +80,7 @@ export function ManagedServerTransfers(props: TransferProps) {
 }
 
 // Presents file imports and durable transfer progress with localized diagnostics.
-function TransferSession({ userId, serverId, serverName, status, canImportConfig, canEditConfig = false, canExportSave, subscriptionRescue = false, campaigns }: TransferProps) {
+function TransferSession({ userId, serverId, serverName, installedVersion, status, canImportConfig, canEditConfig = false, canExportSave, subscriptionRescue = false, campaigns }: TransferProps) {
     const { t, rich, number, locale } = useTranslations("managed-server");
     const router = useRouter();
     const storageKey = `managed-file-transfer:v1:${userId}:${serverId}`;
@@ -152,7 +153,8 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
 
     // Presents the durable transfer result without changing its state transitions.
     function accept(next: OwnerFileResult | null) {
-        const scope = next?.kind === "job" ? transferScope(next.action)
+        const scope = next?.kind === "rejected" && next.configurationError ? "config"
+            : next?.kind === "job" ? transferScope(next.action)
             : next?.kind === "configuration" ? "config" : transferScope(intentRef.current?.action ?? "export-save");
         if (next === null) {
             say(t(confirmedJob.current ? "transfers.acceptedStatusUnavailable" : "transfers.noAcceptedTransferWasFoundRetryTheSameRequestWith"), scope); return;
@@ -160,8 +162,8 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
         setResult(next);
         if (next.kind === "job") confirmedJob.current = next;
         if (next.kind === "rejected") {
-            const message = next.failureReason ? t(`transfers.rejection.${next.failureReason}`)
-                : t("transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck", { supportLink: DISCORD_SUPPORT_URL });
+            const message = next.configurationError?.message ?? (next.failureReason ? t(`transfers.rejection.${next.failureReason}`)
+                : t("transfers.theTransferWasRejectedBeforeAJobWasAcceptedCheck", { supportLink: DISCORD_SUPPORT_URL }));
             const requestId = intentRef.current?.requestId;
             say(requestId ? `${message} ${t("transfers.rejection.reference", { requestId })}` : message, scope);
             remember(null); setDeadline(null); router.refresh();
@@ -219,7 +221,7 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
             if (files.length !== 1 || !files[0].name.endsWith(".json") || files[0].size > MAXIMUM_WEB_CONFIG_BYTES || files[0].size === 0) {
                 throw new Error(t("transfers.chooseOneConfigurationJsonFileUpTo64Kib"));
             }
-            const importedFile = readConfigurationFile(await files[0].text(), configPart, configurationImportMessages(t));
+            const importedFile = readConfigurationFile(await files[0].text(), configPart, configurationImportMessages(t), "read");
             setIgnoredSettings(importedFile.ignoredSettings);
             if (!status) throw new Error(t("transfers.refreshThePageToLoadYourCurrentSettings"));
             const imported = applyConfigurationImport(status.managedConfig, importedFile.input, configurationImportMessages(t));
@@ -230,8 +232,18 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
                     for (const [key, value] of Object.entries(after)) compare((before as Record<string, unknown> | undefined)?.[key], value, prefix ? `${prefix}.${key}` : key);
                 } else if (before !== after) changes.push(t("transfers.settingChange", { setting: settingLabel(prefix.split(".").at(-1)!, t), before: settingValue(before, t, number), after: settingValue(after, t, number) }));
             }
-            compare(status?.managedConfig, imported, "");
-            return changes.length ? changes : [t("transfers.thisFileMatchesYourCurrentSettings")];
+            compare(status.managedConfig, imported, "");
+            if (changes.length === 0) changes.push(t("transfers.thisFileMatchesYourCurrentSettings"));
+            // Any retained value outside the mirrored range is informational in the preview.
+            for (const option of MANAGED_CONFIG_CATALOG_OPTIONS) {
+                const value = imported.modConfig.modOptions[option.key as keyof typeof imported.modConfig.modOptions];
+                const { min, max } = managedConfigNumericBounds(option, 12_000);
+                if (typeof value === "number" && min !== undefined && max !== undefined && (value < min || value > max)) {
+                    const range = t("configEditor.enterAValueFromMinToMax", { min: number(min), max: number(max) });
+                    changes.push(`${settingLabel(option.key, t)}: ${t("configEditor.savedValueOutsideEditRange", { range })}`);
+                }
+            }
+            return changes;
         }
         if (![1, 2].includes(files.length) || files.some((file) => file.size === 0)
             || files.reduce((total, file) => total + file.size, 0) > MAXIMUM_WEB_SAVE_BYTES) throw new Error(t("transfers.chooseABlcexportOrAMatchingSavAndJsonPair"));
@@ -401,7 +413,7 @@ function TransferSession({ userId, serverId, serverName, status, canImportConfig
             saveName={status ? status.activeSave?.displayName ?? t("transfers.noActiveCampaignSave") : undefined}
             campaigns={campaigns}
             configuration={status?.managedConfig}
-            configAccess={canEditConfig ? { serverId, userId, canEdit: true } : undefined}
+             configAccess={canEditConfig ? { serverId, userId, canEdit: true, installedVersion } : undefined}
             saveActions={<>
                 <DisabledControlHint disabled={importSaveDisabled} message={importSaveHint}>
                     <button className={buttonClass} disabled={importSaveDisabled} onClick={() => openImport("import-save")}><Upload aria-hidden className="size-4" />{t("transfers.importSave")}</button>

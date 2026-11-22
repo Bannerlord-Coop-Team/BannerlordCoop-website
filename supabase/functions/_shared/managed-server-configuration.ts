@@ -1,16 +1,110 @@
+import rawCatalog from './managed-config-catalog-generated.ts';
+
+type CatalogOption = { key: string; type: string; default: unknown; min?: number; max?: number;
+  itemPattern?: string; itemFormat?: 'steamId64'; uniqueItems?: boolean;
+  availableSince: string; values?: readonly string[]; coerceRanges?: readonly (readonly [number, number, number])[] };
+type Catalog = { contentDigest: string; options: readonly CatalogOption[] };
+const catalog: Catalog = rawCatalog;
+const STEAM_ID_64 = /^[0-9]{17}$/u;
+const CATALOG_MAX_OPTIONS = 128;
+const CATALOG_MAX_KEY_LENGTH = 64;
+const CATALOG_MAX_STRING_LENGTH = 128;
+const CATALOG_MAX_ENUM_VALUES = 32;
+const CATALOG_MAX_RULES = 8;
+const MANAGED_LIST_MAX_ITEMS = 32;
+const CATALOG_MAX_NUMERIC_BOUND = 1_000_000_000;
+
+function catalogEnumValues<const T extends readonly string[]>(key: string): T {
+  const option = catalog.options.find(candidate => candidate.key === key);
+  if (option?.type !== 'enum' || option.values === undefined) throw new Error(`Managed configuration enum is missing: ${key}`);
+  return option.values as T;
+}
+
+function managedConfigListItemMatches(option: CatalogOption, entry: string): boolean {
+  return (option.itemFormat !== 'steamId64' || STEAM_ID_64.test(entry))
+    && (option.itemPattern === undefined || new RegExp(option.itemPattern, 'u').test(entry));
+}
+
+export function validateManagedConfigCatalog(value: unknown): asserts value is Catalog {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new Error('Managed configuration catalog is malformed');
+  const candidate = value as Catalog;
+  if (Object.keys(candidate).length !== 2 || typeof candidate.contentDigest !== 'string'
+    || !/^[0-9a-f]{64}$/u.test(candidate.contentDigest)
+    || !Array.isArray(candidate.options) || candidate.options.length === 0 || candidate.options.length > CATALOG_MAX_OPTIONS) throw new Error('Managed configuration catalog is malformed');
+  const keys = new Set<string>();
+  for (const option of candidate.options) {
+    if (typeof option !== 'object' || option === null || Array.isArray(option)
+      || typeof option.key !== 'string' || option.key.length > CATALOG_MAX_KEY_LENGTH || !/^[a-z][A-Za-z0-9]*$/u.test(option.key) || keys.has(option.key)
+      || !['boolean', 'integer', 'number', 'enum', 'stringList'].includes(option.type)
+      || typeof option.availableSince !== 'string' || !/^\d+\.\d+\.\d+$/u.test(option.availableSince)
+      || option.default === undefined) throw new Error(`Managed configuration catalog option is malformed: ${option.key}`);
+    keys.add(option.key);
+    if (option.type === 'boolean' && typeof option.default !== 'boolean') throw new Error(`Managed configuration catalog default is malformed: ${option.key}`);
+    if (option.type === 'integer' && !Number.isSafeInteger(option.default)) throw new Error(`Managed configuration catalog default is malformed: ${option.key}`);
+    if (option.type === 'number' && (typeof option.default !== 'number' || !Number.isFinite(option.default))) throw new Error(`Managed configuration catalog default is malformed: ${option.key}`);
+    if (option.type === 'enum' && (!Array.isArray(option.values) || option.values.length === 0 || option.values.length > CATALOG_MAX_ENUM_VALUES
+      || option.values.some((candidate: unknown) => typeof candidate !== 'string' || candidate.length === 0 || candidate.length > CATALOG_MAX_STRING_LENGTH)
+      || new Set(option.values).size !== option.values.length || !option.values.includes(String(option.default)))) throw new Error(`Managed configuration catalog enum is malformed: ${option.key}`);
+    if (option.type !== 'enum' && option.values !== undefined) throw new Error(`Managed configuration catalog enum is malformed: ${option.key}`);
+    if (option.min !== undefined && (typeof option.min !== 'number' || !Number.isFinite(option.min) || Math.abs(option.min) > CATALOG_MAX_NUMERIC_BOUND || option.type === 'integer' && !Number.isSafeInteger(option.min))) throw new Error(`Managed configuration catalog bounds are malformed: ${option.key}`);
+    if (option.max !== undefined && (typeof option.max !== 'number' || !Number.isFinite(option.max) || Math.abs(option.max) > CATALOG_MAX_NUMERIC_BOUND || option.type === 'integer' && !Number.isSafeInteger(option.max))) throw new Error(`Managed configuration catalog bounds are malformed: ${option.key}`);
+    if (option.min !== undefined && option.max !== undefined && option.min > option.max) throw new Error(`Managed configuration catalog bounds are malformed: ${option.key}`);
+    if ((option.itemPattern !== undefined || option.itemFormat !== undefined || option.uniqueItems !== undefined) && option.type !== 'stringList'
+      || option.itemFormat !== undefined && option.itemFormat !== 'steamId64'
+      || option.uniqueItems !== undefined && typeof option.uniqueItems !== 'boolean') throw new Error(`Managed configuration catalog list rules are malformed: ${option.key}`);
+    if (option.itemPattern !== undefined) {
+      if (typeof option.itemPattern !== 'string' || option.itemPattern.length === 0 || option.itemPattern.length > CATALOG_MAX_STRING_LENGTH) throw new Error(`Managed configuration catalog pattern is malformed: ${option.key}`);
+      try { new RegExp(option.itemPattern, 'u'); } catch { throw new Error(`Managed configuration catalog pattern is malformed: ${option.key}`); }
+    }
+    if (option.coerceRanges !== undefined && ((option.type !== 'integer' && option.type !== 'number') || !Array.isArray(option.coerceRanges) || option.coerceRanges.length > CATALOG_MAX_RULES || option.coerceRanges.some((range: unknown) => !Array.isArray(range) || range.length !== 3 || range.some(part => typeof part !== 'number' || !Number.isFinite(part)) || !Number.isSafeInteger(range[0]) || !Number.isSafeInteger(range[1]) || range[0] > range[1]))) throw new Error(`Managed configuration catalog coercion rules are malformed: ${option.key}`);
+    if (option.type === 'stringList') {
+      const list = option.default;
+      if (!Array.isArray(list) || list.some((entry) => typeof entry !== 'string' || !managedConfigListItemMatches(option, entry))
+        || option.uniqueItems === true && new Set(list).size !== list.length) throw new Error(`Managed configuration catalog list default is malformed: ${option.key}`);
+    }
+    if (option.min !== undefined && (option.default as number) < option.min || option.max !== undefined && (option.default as number) > option.max) throw new Error(`Managed configuration catalog bounds are malformed: ${option.key}`);
+  }
+
+}
+
+validateManagedConfigCatalog(catalog);
+export const MANAGED_CONFIG_CATALOG_OPTIONS = catalog.options;
+
+// Mirror the direct parser at ControlPlane 8e5c511d while that runner is supported.
+const RELEASED_NUMERIC_BOUNDS: Readonly<Record<string, readonly [number, number] | undefined>> = Object.freeze({
+  battleSize: [200, 1000],
+  playerBattleAiJoinWindowHours: [0, 8760],
+  wandererLimit: [0, 1000],
+  playerKingdomClanTierRequired: [0, 6],
+  smithingStaminaRecoveryMultiplier: [0, 100],
+  maximumLootersMultiplier: [0, 100],
+  looterPartySizeMultiplier: [0, 100],
+});
+
+export function managedConfigNumericBounds(option: CatalogOption, battleSizeLimit: number) {
+  const released = Object.hasOwn(RELEASED_NUMERIC_BOUNDS, option.key) ? RELEASED_NUMERIC_BOUNDS[option.key] : undefined;
+  return {
+    min: released === undefined ? option.min : Math.max(option.min ?? released[0], released[0]),
+    // The editor receives the actual Limitless limit. Reads must also decode values within that expanded range.
+    max: option.key === 'battleSize' ? battleSizeLimit
+      : released === undefined ? option.max : Math.min(option.max ?? released[1], released[1]),
+  };
+}
+
+
 export const MANAGED_DIFFICULTY_LEVELS = ['VeryEasy', 'Easy', 'Realistic'] as const;
 export type ManagedDifficultyLevel = (typeof MANAGED_DIFFICULTY_LEVELS)[number];
 
-export const MANAGED_GOLD_FOOD_CHANGE_MODES = ['Disabled', 'OneDayMax', 'Enabled'] as const;
+export const MANAGED_GOLD_FOOD_CHANGE_MODES = catalogEnumValues<readonly ['Disabled', 'OneDayMax', 'Enabled']>('goldFoodInfluenceChangeInBattles');
 export type ManagedGoldFoodChangeMode = (typeof MANAGED_GOLD_FOOD_CHANGE_MODES)[number];
 
-export const MANAGED_LORD_DEFECTION_RETRY_MODES = [
-  'Vanilla',
-  'NeverExpire',
-  'AlwaysRetry',
-] as const;
+export const MANAGED_LORD_DEFECTION_RETRY_MODES = catalogEnumValues<readonly ['Vanilla', 'NeverExpire', 'AlwaysRetry']>('lordDefectionRetries');
 export type ManagedLordDefectionRetryMode =
   (typeof MANAGED_LORD_DEFECTION_RETRY_MODES)[number];
+
+export const MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES = catalogEnumValues<readonly ['Vanilla', 'KeepClans']>('clansAfterKingdomDestruction');
+export type ManagedClansAfterKingdomDestructionMode =
+  (typeof MANAGED_CLANS_AFTER_KINGDOM_DESTRUCTION_MODES)[number];
 
 export interface ManagedServerProcessConfiguration {
   autosaveMinutes: number;
@@ -20,7 +114,6 @@ export interface ManagedServerProcessConfiguration {
   tracePublish: boolean;
   traceBandits: boolean;
 }
-
 export interface ManagedDifficultyConfiguration {
   playerReceivedDamage: ManagedDifficultyLevel;
   playerTroopsReceivedDamage: ManagedDifficultyLevel;
@@ -45,6 +138,7 @@ export interface ManagedVoiceConfiguration {
 export interface ManagedModOptionsConfiguration {
   fastForwardEnabled: boolean;
   autoPauseEnabled: boolean;
+  allowClientTimeControls: boolean;
   clientsCanUseCheats: boolean;
   goldFoodInfluenceChangeInSettlements: boolean;
   goldFoodInfluenceChangeInBattles: ManagedGoldFoodChangeMode;
@@ -53,9 +147,11 @@ export interface ManagedModOptionsConfiguration {
   battleSize: number;
   blockAiWarDeclarationsOnOfflinePlayers: boolean;
   playerBattleAiJoinWindowHours: number;
+  postBattleAiAmnestySeconds: number;
   speedLimitWhilePlayersInBattle: boolean;
   ensureUnaffiliatedWanderers: boolean;
   wandererLimit: number;
+  spawnRateWanderers: number;
   wandererLimitScalesWithPlayers: boolean;
   playerKingdomClanTierRequired: number;
   coopClansEnabled: boolean;
@@ -67,6 +163,15 @@ export interface ManagedModOptionsConfiguration {
   enableHeroExecutions: boolean;
   enablePlayerClanMemberExecutions: boolean;
   enablePlayerExecutions: boolean;
+  playerWoundedBattleEntry: boolean;
+  showPlayerNameplates: boolean;
+  kingdomDecisionVoteTimeoutSeconds: number;
+  clansAfterKingdomDestruction: ManagedClansAfterKingdomDestructionMode;
+  preferredBattleHosts: readonly string[];
+  pvpBlockLeave: boolean;
+  pvpResponseTimerSeconds: number;
+  maxClansPerKingdom: number;
+  maxClansPerKingdomCountsMercenaries: boolean;
   /** Coop's War Sails (NavalDLC) mode; the dedicated server reads it from mod-config.json. */
   warSails: boolean;
 }
@@ -80,6 +185,23 @@ export interface ManagedServerConfiguration {
     modOptions: ManagedModOptionsConfiguration;
   };
 }
+
+const CATALOG_DEFAULT_MOD_OPTIONS = Object.freeze(Object.fromEntries(
+  catalog.options.map((option) => [option.key, option.default]),
+)) as unknown as ManagedModOptionsConfiguration;
+// Required keys of the released runner 8e5c511d. The other options can be
+// absent in older website backups and runner replies.
+const RELEASED_REQUIRED_MOD_OPTION_KEYS = new Set<string>([
+  'fastForwardEnabled', 'autoPauseEnabled', 'clientsCanUseCheats',
+  'goldFoodInfluenceChangeInSettlements', 'goldFoodInfluenceChangeInBattles', 'goldFoodInfluenceChangeForDisconnectedPlayers',
+  'playerBattleAiJoinWindowHours', 'speedLimitWhilePlayersInBattle', 'wandererLimit',
+  'wandererLimitScalesWithPlayers', 'playerKingdomClanTierRequired', 'smithingStaminaRecoveryOutsideSettlements',
+  'smithingStaminaRecoveryMultiplier', 'maximumLootersMultiplier', 'looterPartySizeMultiplier',
+  'lordDefectionRetries', 'enableHeroExecutions', 'enablePlayerClanMemberExecutions',
+]);
+const CATALOG_ADDED_MOD_OPTION_DEFAULTS = Object.freeze(Object.fromEntries(
+  catalog.options.filter(({ key }) => !RELEASED_REQUIRED_MOD_OPTION_KEYS.has(key)).map(({ key, default: value }) => [key, value]),
+));
 
 export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfiguration> =
   deepFreeze({
@@ -112,35 +234,23 @@ export const DEFAULT_MANAGED_SERVER_CONFIGURATION: Readonly<ManagedServerConfigu
         birthAndDeath: false,
         autoAllocateClanMemberPerks: false,
       },
-      modOptions: {
-        voiceEnabled: true,
-        battleSize: 1000,
-        fastForwardEnabled: true,
-        autoPauseEnabled: true,
-        clientsCanUseCheats: false,
-        goldFoodInfluenceChangeInSettlements: true,
-        goldFoodInfluenceChangeInBattles: 'OneDayMax',
-        goldFoodInfluenceChangeForDisconnectedPlayers: false,
-        blockAiWarDeclarationsOnOfflinePlayers: false,
-        playerBattleAiJoinWindowHours: 24,
-        speedLimitWhilePlayersInBattle: true,
-        ensureUnaffiliatedWanderers: true,
-        wandererLimit: 32,
-        wandererLimitScalesWithPlayers: false,
-        playerKingdomClanTierRequired: 4,
-        coopClansEnabled: true,
-        smithingStaminaRecoveryOutsideSettlements: true,
-        smithingStaminaRecoveryMultiplier: 0.1,
-        maximumLootersMultiplier: 1,
-        looterPartySizeMultiplier: 1,
-        lordDefectionRetries: 'Vanilla',
-        enableHeroExecutions: true,
-        enablePlayerClanMemberExecutions: false,
-        enablePlayerExecutions: false,
-        warSails: false,
-      },
+      modOptions: CATALOG_DEFAULT_MOD_OPTIONS,
     },
   });
+
+/** Returns null when the installed version is unknown or cannot be compared. */
+export function isManagedConfigOptionAvailable(
+  option: CatalogOption,
+  installedVersion: string | null | undefined,
+): boolean | null {
+  const installed = installedVersion?.match(/(?:^|[^0-9])v?(\d+)\.(\d+)\.(\d+)(?:$|[^0-9])/u);
+  if (!installed) return null;
+  const required = option.availableSince.split('.').map(Number);
+  for (const [index, part] of installed.slice(1).map(Number).entries()) {
+    if (part !== required[index]) return part > required[index];
+  }
+  return true;
+}
 
 export type ManagedConfigurationMessages = {
   root: string;
@@ -162,10 +272,14 @@ const defaultConfigurationMessages: ManagedConfigurationMessages = {
   choice: 'Managed server configuration choice is invalid',
 };
 
+/** An observed baseline enables released range checks only for changed options. */
+export type ManagedConfigValidation = 'edit' | 'read' | Readonly<ManagedModOptionsConfiguration>;
+
 // Validates and freezes configuration using caller-provided diagnostics without request dependencies.
 export function parseManagedServerConfiguration(
   value: unknown,
   messages: ManagedConfigurationMessages = defaultConfigurationMessages,
+  mode: ManagedConfigValidation = 'edit',
 ): ManagedServerConfiguration {
   if (!isExactRecord(value, ['schemaVersion', 'serverConfig', 'modConfig'])) {
     throw new Error(messages.root);
@@ -195,34 +309,8 @@ export function parseManagedServerConfiguration(
     'birthAndDeath',
     'autoAllocateClanMemberPerks',
   ], messages);
-  const modOptions = requireCompatibleRecord(modConfig.modOptions, [
-    'fastForwardEnabled',
-    'autoPauseEnabled',
-    'clientsCanUseCheats',
-    'goldFoodInfluenceChangeInSettlements',
-    'goldFoodInfluenceChangeInBattles',
-    'goldFoodInfluenceChangeForDisconnectedPlayers',
-    'playerBattleAiJoinWindowHours',
-    'speedLimitWhilePlayersInBattle',
-    'wandererLimit',
-    'wandererLimitScalesWithPlayers',
-    'playerKingdomClanTierRequired',
-    'smithingStaminaRecoveryOutsideSettlements',
-    'smithingStaminaRecoveryMultiplier',
-    'maximumLootersMultiplier',
-    'looterPartySizeMultiplier',
-    'lordDefectionRetries',
-    'enableHeroExecutions',
-    'enablePlayerClanMemberExecutions',
-  ], {
-    voiceEnabled: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.voiceEnabled,
-    blockAiWarDeclarationsOnOfflinePlayers: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.blockAiWarDeclarationsOnOfflinePlayers,
-    ensureUnaffiliatedWanderers: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.ensureUnaffiliatedWanderers,
-    coopClansEnabled: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.coopClansEnabled,
-    enablePlayerExecutions: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.enablePlayerExecutions,
-    battleSize: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.battleSize,
-    warSails: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.warSails,
-  }, messages);
+  const modOptions = requireCompatibleRecord(modConfig.modOptions, [...RELEASED_REQUIRED_MOD_OPTION_KEYS], CATALOG_ADDED_MOD_OPTION_DEFAULTS, messages);
+  const validatedModOptions = validateCatalogManagedOptions(modOptions, messages, catalog.options, mode);
   return deepFreeze({
     schemaVersion: 1,
     serverConfig: {
@@ -253,64 +341,43 @@ export function parseManagedServerConfiguration(
         birthAndDeath: requireBoolean(difficulty.birthAndDeath, messages),
         autoAllocateClanMemberPerks: requireBoolean(difficulty.autoAllocateClanMemberPerks, messages),
       },
-      modOptions: {
-        voiceEnabled: requireBoolean(modOptions.voiceEnabled, messages),
-        // The game clamps battle size to this range.
-        battleSize: requireInteger(modOptions.battleSize, 200, 12_000, messages),
-        fastForwardEnabled: requireBoolean(modOptions.fastForwardEnabled, messages),
-        autoPauseEnabled: requireBoolean(modOptions.autoPauseEnabled, messages),
-        clientsCanUseCheats: requireBoolean(modOptions.clientsCanUseCheats, messages),
-        goldFoodInfluenceChangeInSettlements: requireBoolean(
-          modOptions.goldFoodInfluenceChangeInSettlements, messages,
-        ),
-        goldFoodInfluenceChangeInBattles: requireEnum(
-          modOptions.goldFoodInfluenceChangeInBattles,
-          MANAGED_GOLD_FOOD_CHANGE_MODES, messages,
-        ),
-        goldFoodInfluenceChangeForDisconnectedPlayers: requireBoolean(
-          modOptions.goldFoodInfluenceChangeForDisconnectedPlayers, messages,
-        ),
-        blockAiWarDeclarationsOnOfflinePlayers: requireBoolean(
-          modOptions.blockAiWarDeclarationsOnOfflinePlayers, messages,
-        ),
-        playerBattleAiJoinWindowHours: requireInteger(
-          modOptions.playerBattleAiJoinWindowHours,
-          0,
-          8_760, messages,
-        ),
-        speedLimitWhilePlayersInBattle: requireBoolean(modOptions.speedLimitWhilePlayersInBattle, messages),
-        ensureUnaffiliatedWanderers: requireBoolean(modOptions.ensureUnaffiliatedWanderers, messages),
-        wandererLimit: requireInteger(modOptions.wandererLimit, 0, 1_000, messages),
-        wandererLimitScalesWithPlayers: requireBoolean(modOptions.wandererLimitScalesWithPlayers, messages),
-        playerKingdomClanTierRequired: requireInteger(
-          modOptions.playerKingdomClanTierRequired,
-          0,
-          6, messages,
-        ),
-        coopClansEnabled: requireBoolean(modOptions.coopClansEnabled, messages),
-        smithingStaminaRecoveryOutsideSettlements: requireBoolean(
-          modOptions.smithingStaminaRecoveryOutsideSettlements, messages,
-        ),
-        smithingStaminaRecoveryMultiplier: requireNumber(
-          modOptions.smithingStaminaRecoveryMultiplier,
-          0,
-          100, messages,
-        ),
-        maximumLootersMultiplier: requireNumber(modOptions.maximumLootersMultiplier, 0, 100, messages),
-        looterPartySizeMultiplier: requireNumber(modOptions.looterPartySizeMultiplier, 0, 100, messages),
-        lordDefectionRetries: requireEnum(
-          modOptions.lordDefectionRetries,
-          MANAGED_LORD_DEFECTION_RETRY_MODES, messages,
-        ),
-        enableHeroExecutions: requireBoolean(modOptions.enableHeroExecutions, messages),
-        enablePlayerClanMemberExecutions: requireBoolean(
-          modOptions.enablePlayerClanMemberExecutions, messages,
-        ),
-        enablePlayerExecutions: requireBoolean(modOptions.enablePlayerExecutions, messages),
-        warSails: requireBoolean(modOptions.warSails, messages),
-      },
+      modOptions: validatedModOptions,
     },
   });
+}
+
+export function validateCatalogManagedOptions(
+  value: Record<string, unknown>,
+  messages: ManagedConfigurationMessages,
+  options: readonly CatalogOption[] = catalog.options,
+  mode: ManagedConfigValidation = 'edit',
+): ManagedModOptionsConfiguration {
+  const validated: Record<string, unknown> = {};
+  const baseline = typeof mode === 'object' ? mode as unknown as Record<string, unknown> : undefined;
+  for (const option of options) {
+    const raw = value[option.key];
+    if (raw === undefined) throw new Error(messages.shape);
+    if (option.type === 'integer' && !Number.isSafeInteger(raw)) throw new Error(messages.integer);
+    const coercion = option.coerceRanges?.find(([from, to]) => typeof raw === 'number' && raw >= from && raw <= to);
+    const actual = coercion === undefined ? raw : coercion[2];
+    if (option.type === 'boolean' && typeof actual !== 'boolean') throw new Error(messages.boolean);
+    if (option.type === 'number' && (typeof actual !== 'number' || !Number.isFinite(actual))) throw new Error(messages.number);
+    if (option.type === 'enum' && (typeof actual !== 'string' || option.values?.includes(actual) !== true)) throw new Error(messages.choice);
+    if (option.type === 'stringList' && (!Array.isArray(actual) || actual.some((entry) => typeof entry !== 'string'))) throw new Error(messages.shape);
+    const checkReleasedRange = mode === 'edit' || baseline !== undefined && actual !== baseline[option.key];
+    const { min, max } = checkReleasedRange ? managedConfigNumericBounds(option, 12_000)
+      : { min: option.min, max: option.key === 'battleSize' ? 12_000 : option.max };
+    if (min !== undefined && (actual as number) < min || max !== undefined && (actual as number) > max) {
+      throw new Error(option.type === 'integer' ? messages.integer : messages.number);
+    }
+    if (option.type === 'stringList') {
+      const list = actual as string[];
+      if (list.length > MANAGED_LIST_MAX_ITEMS || option.uniqueItems === true && new Set(list).size !== list.length) throw new Error(messages.shape);
+      if (list.some((entry) => !managedConfigListItemMatches(option, entry))) throw new Error(messages.shape);
+    }
+    validated[option.key] = actual;
+  }
+  return validated as unknown as ManagedModOptionsConfiguration;
 }
 
 export function cloneManagedServerConfiguration(

@@ -56,7 +56,7 @@ export async function submitManagedServerFile(form: FormData, expectedUserId: st
             if (!(file instanceof File) || file.size < 1 || file.size > MAXIMUM_WEB_CONFIG_BYTES) throw new Error("Invalid config file");
             const part = form.get("configPart") ?? "combined";
             if (part !== "server" && part !== "mod" && part !== "combined") throw new Error("Invalid configuration selection");
-            input = { ...common, ...readConfigurationFile(await file.text(), part).input };
+            input = { ...common, ...readConfigurationFile(await file.text(), part, undefined, "read").input };
         } else if (common.action === "import-save") {
             const files = form.getAll("files");
             if (![1, 2].includes(files.length) || files.some((file) => !(file instanceof File))
