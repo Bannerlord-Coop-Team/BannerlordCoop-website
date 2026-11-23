@@ -9,9 +9,10 @@ A complete creator-authenticated Patreon read adds `nonqualifying` evidence with
 remaining paid tiers, for example a $5 tier, and drops $0 tiers. It is the
 observation time, not a guessed billing or historical expiration date. A
 still-entitled $20+ tier, a pending charge, incomplete or conflicting data, free
-trials, gifts, outages and OAuth reads never produce it. Boosty's rules are in
+trials, gifts, outages and OAuth reads never produce it. A member with
+`patron_status: null` (free, never paid) stays `review_required`, not loss. Boosty's rules are in
 [Boosty membership adapter](boosty-membership.md#evidence).
-`20261122120000_membership_qualifies_by_price.sql` lets the Patreon and Boosty
+`20261123000000_membership_qualifies_by_price.sql` lets the Patreon and Boosty
 validators accept loss with paid `tierIds` and Patreon qualifying evidence on any tier.
 
 `202609280006_membership_paid_access_end.sql` accepts this bounded evidence through

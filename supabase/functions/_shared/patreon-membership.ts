@@ -45,11 +45,9 @@ class IncompleteProviderRead extends Error {}
 function incomplete(message: string): never { throw new IncompleteProviderRead(message); }
 export type MembershipVerification = { patreonUserId: string; evidence: Evidence; failure: string | null };
 const LOSS_STATUSES: unknown[] = ["active_patron", "declined_patron", "former_patron"];
-// Decides loss for a validated creator-read member: a known patron status, no charge still
-// Pending, and no currently entitled tier listed at the policy minimum or more.
-function lostPaidAccess(member: Record<string, unknown>, hasQualifyingTier: boolean): boolean {
-    if (!LOSS_STATUSES.includes(member.patron_status) || member.last_charge_status === "Pending") return false;
-    return !hasQualifyingTier;
+// Whether a validated member's status can confirm loss: a known patron status with no charge still Pending.
+function lossObservable(member: Record<string, unknown>): boolean {
+    return LOSS_STATUSES.includes(member.patron_status) && member.last_charge_status !== "Pending";
 }
 
 // This is current subscription-benefit evidence, NOT proof of a settled charge.
@@ -110,9 +108,9 @@ export async function verifyPatreonMembership(body: unknown, policy: Policy | nu
                 if (Date.parse(a.last_charge_date) > Date.parse(now) || a.is_free_trial || a.is_gifted) throw new Error("Payment/status evidence conflicts with policy");
                 // Only a complete creator-authenticated read confirms loss: no qualifying tier is
                 // still entitled. Loss evidence keeps the remaining paid tiers and drops $0 tiers.
-                if (confirmEndedAccess && lostPaidAccess(a, hasQualifyingTier)) {
+                if (confirmEndedAccess && !hasQualifyingTier && lossObservable(a)) {
                     evidence.verification = "nonqualifying";
-                    evidence.tierIds = tierIds.filter(id => paidTierIds.includes(id));
+                    evidence.tierIds = paidTierIds.sort();
                     evidence.paidAccessEndedAt = now;
                 }
                 else if (a.patron_status === "declined_patron" || a.last_charge_status === "Declined") evidence.verification = "nonqualifying";

@@ -290,13 +290,13 @@ test("a complete creator read without an entitled tier listed at $20+ confirms p
     }
 
     // Any tier listed at $20+ qualifies: the listed one, an unlisted $25 tier, and a discounted $20 pledge.
-    for (const [cents, tiers] of [[2000, ["20"]], [2500, ["25"]], [1500, ["20"]]] as const) {
+    for (const [cents, tiers] of [[2000, ["20"]], [2500, ["25"]], [1500, ["20"]], [2000, ["20", "21"]]] as const) {
         const qualifying = await read(member("active_patron", cents, [...tiers]));
         assert.deepEqual([qualifying.verification, qualifying.paidAccessEndedAt], ["qualifying", undefined], `${tiers} at ${cents}`);
     }
     // A still-entitled $20+ tier or a charge in flight is never loss.
     for (const [status, cents, tiers, charge] of [["former_patron", 2000, ["20", "21"], "Paid"], ["declined_patron", 2000, ["20"], "Declined"],
-        ["active_patron", 1000, ["22"], "Pending"], ["declined_patron", 0, [], "Pending"]] as const) {
+        ["active_patron", 1000, ["22"], "Pending"], ["declined_patron", 0, [], "Pending"], ["former_patron", 0, [], "Pending"]] as const) {
         assert.equal((await read(member(status, cents, [...tiers], charge))).paidAccessEndedAt, undefined, `${status} ${charge}`);
     }
 
@@ -327,8 +327,11 @@ test("confirmed former membership with no remaining benefits emits loss, never c
     assert.equal((await verifyPatreonMembership(body, fifty, now)).evidence.paidAccessEndedAt, undefined);
     assert.deepEqual(parseSnapshot({ version: 1, accountId, discordUserId: "123456789012345678",
         patreonUserId: "1", linkGeneration: "1", revision: "1", linkState: "linked", ...ended }).paidAccessEndedAt, now);
-    body.included[0].attributes.patron_status = "unsupported";
-    assert.equal((await read()).paidAccessEndedAt, undefined);
+    // A free member who never paid (null status), or an unknown status, is review, never loss.
+    for (const status of ["unsupported", null]) {
+        (body.included[0].attributes as Record<string, unknown>).patron_status = status;
+        assert.deepEqual([(await read()).verification, (await read()).paidAccessEndedAt], ["review_required", undefined], String(status));
+    }
     body.included[0].attributes.patron_status = "former_patron";
     const incomplete = { data: body.included[0], included: body.included.slice(1), links: { next: "https://untrusted.invalid" } };
     assert.equal((await verifyPatreonAllocation(incomplete, fifty, now)).paidAccessEndedAt, undefined);

@@ -35,7 +35,7 @@ before(async () => {
     // Stand-in for the Boosty adapter this suite does not install; tests/boosty-membership.test.ts covers the real one.
     await db.exec(`create schema boosty_membership; create function boosty_membership.valid_evidence(e jsonb, p_blog text) returns boolean
         language sql as $$ select true and e->'tierIds'='[]'::jsonb $$`);
-    await db.exec(await readFile(new URL("../../migrations/20261122120000_membership_qualifies_by_price.sql", import.meta.url), "utf8"));
+    await db.exec(await readFile(new URL("../../migrations/20261123000000_membership_qualifies_by_price.sql", import.meta.url), "utf8"));
 });
 after(async () => { await db?.close(); });
 beforeEach(async () => {
