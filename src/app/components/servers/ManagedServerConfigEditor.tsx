@@ -69,6 +69,14 @@ function withReadWarSails(settings: Settings, read: Settings | null): Settings {
     if (!read || settings.modConfig.modOptions.warSails === read.modConfig.modOptions.warSails) return settings;
     return withValue(settings, "modOptions", "warSails", read.modConfig.modOptions.warSails);
 }
+// Returns the War Sails value JSON text asks for when it differs from the one the active campaign set, otherwise null.
+function requestedWarSailsChange(text: string, read: Settings | null): boolean | null {
+    if (!read) return null;
+    let requested: unknown;
+    try { requested = JSON.parse(text)?.modConfig?.modOptions?.warSails; } catch { return null; }
+    if (typeof requested !== "boolean" || requested === read.modConfig.modOptions.warSails) return null;
+    return requested;
+}
 // Keeps the editor's layout visible while live values are being fetched.
 function ConfigLoadingSkeleton({ groups, label }: { groups: readonly { title: string; fields: readonly Field[] }[]; label: string }) {
     return <div role="status" aria-label={label} className="space-y-6" data-config-loading-skeleton>
@@ -225,6 +233,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
     ]) : [];
     // JSON that does not parse yet is still an edit the user may want to discard.
     const dirty = dirtyParts.length > 0 || jsonError !== "";
+    const warSailsRequest = mode === "json" ? requestedWarSailsChange(jsonText, baseline) : null;
     const problems = draft ? GROUPS.flatMap(({ group, fields }) => fields.filter((field) => numberProblem(field, groupValues(draft, group)[field.key], t, number) !== null)) : [];
 
     // Reloads current configuration, confirming first when that would discard unsaved edits.
@@ -340,6 +349,7 @@ function ConfigSession({ configuration, access, notice }: { configuration?: Mana
             <label htmlFor="config-json" className="mb-2 block text-xs text-foreground-muted">{t("configEditor.managedConfigurationJson")}</label>
             <textarea id="config-json" spellCheck={false} disabled={!editable} value={jsonText} onChange={(event) => editJson(event.target.value)} aria-invalid={jsonError ? true : undefined} aria-describedby={jsonError ? "config-json-error config-help" : "config-help"} className="min-h-64 w-full resize-y rounded-md border border-white/15 bg-background px-3 py-2.5 font-mono text-sm leading-7 text-foreground disabled:cursor-not-allowed disabled:opacity-50 aria-[invalid=true]:border-red-400" />
             {jsonError && <p id="config-json-error" role="alert" className="mt-2 text-sm text-red-200">{jsonError}</p>}
+            {warSailsRequest !== null && <p id="config-json-war-sails" role="status" className={`mt-2 ${workspaceNoticeClass}`}>{t(warSailsRequest ? "configEditor.warSailsSetByCampaignOn" : "configEditor.warSailsSetByCampaignOff")}</p>}
         </>}
         {loadState !== "loading" && draft && mode === "form" && <div className="space-y-6">
             {GROUPS.map(({ group, title, fields }) => <fieldset key={group} disabled={!editable} className="min-w-0">
