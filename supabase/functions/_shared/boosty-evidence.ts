@@ -10,7 +10,8 @@ export type BoostyEvidence = {
     verification: "qualifying" | "nonqualifying" | "unknown"; programId: string; memberId: null; tierIds: string[];
     verifiedAt: string; paidThroughAt: string | null; paidAccessEndedAt?: string; policyVersion: typeof BOOSTY_POLICY_VERSION; evidenceSha256: string;
 };
-export type LinkedBoostyHead = { accountId: string; providerUserId: string; linkGeneration: string; absentSince: string | null };
+/** One linked head to decide; `lost` says its current evidence already records paid-access loss. */
+export type LinkedBoostyHead = { accountId: string; providerUserId: string; linkGeneration: string; absentSince: string | null; lost: boolean };
 export type BoostyDecision = { accountId: string; providerUserId: string; linkGeneration: string; evidence: BoostyEvidence; absentSince: string | null };
 
 type Outcome = { verification: BoostyEvidence["verification"]; tierIds: string[]; paidThroughAt: string | null; endedAt: string | null; absentSince: string | null };

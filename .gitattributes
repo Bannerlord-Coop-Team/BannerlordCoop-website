@@ -13,4 +13,4 @@ supabase/migrations/202611100001_patreon_lapse_report_emails.sql text eol=lf
 supabase/migrations/20261112090000_membership_funding_providers.sql text eol=lf
 supabase/migrations/20261112090100_boosty_membership_adapter.sql text eol=lf
 supabase/migrations/20261112090200_patreon_lapse_report_patreon_funding.sql text eol=lf
-supabase/migrations/20261123000000_membership_qualifies_by_price.sql text eol=lf
+supabase/migrations/20261123000000_membership_price_and_loss_breaker.sql text eol=lf

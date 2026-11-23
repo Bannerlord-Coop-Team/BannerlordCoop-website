@@ -2,6 +2,7 @@ import { ALLOCATION_POLICY_VERSION, POLICY_VERSION, parsePolicy, timestamp, type
 import { verifyPatreonAllocation } from "./patreon-membership.ts";
 import { checkDatabaseContention, DatabaseContention } from "./database-contention.ts";
 import { fetchWithCreatorToken, type CreatorTokenProvider } from "./patreon-creator-token.ts";
+import { massLossTripped, type LossBreaker } from "./loss-breaker.ts";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Buffer } from "node:buffer";
 
@@ -28,7 +29,13 @@ export interface PatreonRoleOptions {
     rpc: Rpc;
     fetchImplementation?: typeof fetch;
     now?: () => number;
+    /** Mass-loss breaker; without one a trip still withholds new loss but nobody is alerted. */
+    lossBreaker?: LossBreaker;
+    alert?: () => Promise<void>;
 }
+
+/** One member read in a run, kept until the mass-loss breaker has seen the whole run. */
+type MemberRead = { job: ObjectValue; snapshot: ObjectValue; evidence?: { paidAccessEndedAt?: string | null } };
 
 function object(value: unknown): ObjectValue {
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid_response");
@@ -167,6 +174,18 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
     if (allocationPolicy && (allocationPolicy.campaignId !== options.campaignId || (allocationPolicy.policyVersion !== ALLOCATION_POLICY_VERSION && allocationPolicy.policyVersion !== POLICY_VERSION))) throw new Error("invalid_allocation_policy");
     const fetcher = options.fetchImplementation ?? fetch;
     const now = options.now ?? Date.now;
+    const lossBreaker = options.lossBreaker ?? (async () => ({ bypass: false, alert: false }));
+    /** Picks the linked reads whose new loss is withheld because the run tripped the breaker and no operator allows it. */
+    async function withheldLoss(token: string, reads: MemberRead[]): Promise<Set<MemberRead>> {
+        const linked = reads.filter(read => read.evidence !== undefined && read.job.allocationFence !== undefined && read.job.allocationFence !== null);
+        const newLoss = linked.filter(read => typeof read.evidence?.paidAccessEndedAt === "string" && read.job.allocationLost !== true);
+        if (!massLossTripped(newLoss.length, linked.length)) return new Set();
+        const breaker = await lossBreaker(token);
+        if (breaker.bypass) return new Set();
+        console.warn("Patreon run newly lost too many members; their loss is withheld");
+        if (breaker.alert) await options.alert?.().catch(() => console.warn("Patreon operator alert could not be sent"));
+        return new Set(newLoss);
+    }
     async function patreon(path: string, params: Record<string, string>) {
         const url = new URL(path, PATREON);
         for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
@@ -197,6 +216,9 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
                 // Drain existing work before discovery, so a failing scan cannot block revocations.
                 let failed = false;
                 let deferred = false;
+                let failedJob: ObjectValue | null = null;
+                // Every job is read before any completes, so the breaker sees the whole run first.
+                const reads: MemberRead[] = [];
                 for (const rawJob of lease.jobs) {
                     if (now() - started > 25_000) break;
                     const job = object(rawJob);
@@ -209,22 +231,36 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
                             ...(allocationPolicy ? { "fields[campaign]": "currency", "fields[tier]": "amount_cents" } : {}),
                         });
                         const snapshot = parsePatreonMembership(result, options.campaignId, options.tierId, job.memberId);
-                        const allocationEvidence = allocationPolicy ? await verifyPatreonAllocation(result, allocationPolicy, lease.allocationVerifiedAt as string) : undefined;
-                        await options.rpc("complete", { token, generation: job.generation, ...snapshot,
-                            ...(allocationPolicy ? { allocationEvidence, allocationFence: job.allocationFence ?? null } : {}),
+                        const evidence = allocationPolicy ? await verifyPatreonAllocation(result, allocationPolicy, lease.allocationVerifiedAt as string) : undefined;
+                        reads.push({ job, snapshot, evidence });
+                    } catch (error) {
+                        if (error instanceof DatabaseContention) throw error;
+                        failedJob = job;
+                        break; // Bound load after token expiry, throttling or network failure.
+                    }
+                }
+                const withheld = await withheldLoss(token, reads);
+                for (const read of reads) {
+                    try {
+                        // A withheld read completes its role sync and keeps the account's current evidence.
+                        await options.rpc("complete", { token, generation: read.job.generation, ...read.snapshot,
+                            ...(allocationPolicy && !withheld.has(read) ? { allocationEvidence: read.evidence, allocationFence: read.job.allocationFence ?? null } : {}),
                         });
                     } catch (error) {
                         if (error instanceof DatabaseContention) throw error;
-                        failed = true;
-                        // Retry the durable job. Never interpret HTTP errors as lost membership.
-                        try {
-                            deferred = object(await options.rpc("failed", {
-                                token, memberId: job.memberId, generation: job.generation,
-                            })).deferred === true;
-                        } catch (recordError) {
-                            if (!(recordError instanceof DatabaseContention)) throw recordError;
-                        }
-                        break; // Bound load after token expiry, throttling or network failure.
+                        failedJob = read.job;
+                        break;
+                    }
+                }
+                if (failedJob !== null) {
+                    failed = true;
+                    // Retry the durable job. Never interpret HTTP errors as lost membership.
+                    try {
+                        deferred = object(await options.rpc("failed", {
+                            token, memberId: failedJob.memberId, generation: failedJob.generation,
+                        })).deferred === true;
+                    } catch (recordError) {
+                        if (!(recordError instanceof DatabaseContention)) throw recordError;
                     }
                 }
                 if (!failed && lease.scanDue === true && now() - started < 20_000) {

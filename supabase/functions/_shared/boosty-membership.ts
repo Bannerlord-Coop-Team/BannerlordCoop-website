@@ -7,12 +7,13 @@ import { boundedJson, record, timestamp, UUID } from "./membership.ts";
 import { checkDatabaseContention, DatabaseContention } from "./database-contention.ts";
 import { BoostyAuthError, MAX_SUBSCRIBER_PAGES, type BoostyApi, type BoostySubscriber } from "./boosty-api.ts";
 import { BoostyCredentialUnavailable, serviceRpcEndpoint, type BoostyCredential } from "./boosty-credential.ts";
-import { circuitBreakerTripped, decideBoostyEvidence, type LinkedBoostyHead } from "./boosty-evidence.ts";
+import { circuitBreakerTripped, decideBoostyEvidence, type BoostyDecision, type LinkedBoostyHead } from "./boosty-evidence.ts";
+import { massLossTripped, type LossBreaker } from "./loss-breaker.ts";
 import type { BoostyPolicy } from "./boosty-policy.ts";
 import { BOOSTY_IDENTIFIER } from "./funding-provider.ts";
 
 export type BoostySyncRpc = (operation: string, input: Record<string, unknown>) => Promise<unknown>;
-export type BoostyAlert = "breaker_tripped";
+export type BoostyAlert = "breaker_tripped" | "mass_loss_tripped";
 /** A configured adapter: reviewed policy, creator credential and the bounded API client. */
 export type BoostyAdapter = { policy: BoostyPolicy; credential: BoostyCredential; api: BoostyApi };
 const MAX_LINKED_HEADS = 5000;
@@ -47,8 +48,8 @@ function parseLinked(value: unknown): LinkedBoostyHead[] {
     if (value.length > MAX_LINKED_HEADS) throw new IncompletePoll("too_many_linked_heads");
     return value.map(row => {
         if (!record(row) || typeof row.accountId !== "string" || !UUID.test(row.accountId) || typeof row.providerUserId !== "string" || !BOOSTY_IDENTIFIER.test(row.providerUserId)
-            || typeof row.linkGeneration !== "string" || !DECIMAL.test(row.linkGeneration) || !(row.absentSince === null || timestamp(row.absentSince))) throw new Error("invalid_boosty_linked");
-        return { accountId: row.accountId, providerUserId: row.providerUserId, linkGeneration: row.linkGeneration, absentSince: row.absentSince as string | null };
+            || typeof row.linkGeneration !== "string" || !DECIMAL.test(row.linkGeneration) || !(row.absentSince === null || timestamp(row.absentSince)) || typeof row.lost !== "boolean") throw new Error("invalid_boosty_linked");
+        return { accountId: row.accountId, providerUserId: row.providerUserId, linkGeneration: row.linkGeneration, absentSince: row.absentSince as string | null, lost: row.lost };
     });
 }
 
@@ -74,11 +75,12 @@ export async function fetchCompleteSubscribers(api: BoostyApi, deadline: number,
 /** Builds the scheduled handler; dependencies are injected so tests assert every request. */
 export function createBoostyMembershipHandler(options: {
     adapter: BoostyAdapter | null; syncSecret: string; rpc: BoostySyncRpc;
-    alert: (kind: BoostyAlert) => Promise<void>; now?: () => number; log?: (message: string) => void;
+    alert: (kind: BoostyAlert) => Promise<void>; lossBreaker?: LossBreaker; now?: () => number; log?: (message: string) => void;
 }) {
     if (options.syncSecret.length < 16 || options.syncSecret.length > 4096) throw new Error("invalid_boosty_sync_secret");
     const now = options.now ?? Date.now;
     const log = options.log ?? ((message: string) => console.warn(message));
+    const lossBreaker = options.lossBreaker ?? (async () => ({ bypass: false, alert: false }));
 
     /** Binds one configured adapter to the run phases below. */
     function runnerFor(adapter: BoostyAdapter) {
@@ -91,6 +93,17 @@ export function createBoostyMembershipHandler(options: {
             for (let index = 0; index < unique.length; index += MATCH_BATCH) {
                 await options.rpc("match", { token, subscribers: unique.slice(index, index + MATCH_BATCH) });
             }
+        }
+
+        /** Withholds new loss from a poll that tripped the mass-loss breaker unless an operator allows it. */
+        async function withholdMassLoss(token: string, heads: LinkedBoostyHead[], decisions: BoostyDecision[]) {
+            const isNewLoss = (decision: BoostyDecision, index: number) => decision.evidence.paidAccessEndedAt !== undefined && !heads[index].lost;
+            if (!massLossTripped(decisions.filter(isNewLoss).length, heads.length)) return decisions;
+            const breaker = await lossBreaker(token);
+            if (breaker.bypass) return decisions;
+            log("Boosty poll newly lost too many members; their loss is withheld");
+            if (breaker.alert) await options.alert("mass_loss_tripped").catch(() => log("Boosty operator alert could not be sent"));
+            return decisions.filter((decision, index) => !isNewLoss(decision, index));
         }
 
         /** Polls the complete subscriber list, matches emails and writes evidence, or freezes evidence when it cannot. */
@@ -113,7 +126,8 @@ export function createBoostyMembershipHandler(options: {
                 return false;
             }
             const polledAt = new Date(now()).toISOString();
-            const decisions = await Promise.all(heads.map(head => decideBoostyEvidence(adapter.policy, head, subscribers.get(head.providerUserId), polledAt)));
+            const decided = await Promise.all(heads.map(head => decideBoostyEvidence(adapter.policy, head, subscribers.get(head.providerUserId), polledAt)));
+            const decisions = await withholdMassLoss(token, heads, decided);
             for (let index = 0; index < decisions.length; index += EVIDENCE_BATCH) {
                 await options.rpc("evidence", { token, results: decisions.slice(index, index + EVIDENCE_BATCH) });
             }

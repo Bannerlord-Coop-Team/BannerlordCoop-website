@@ -6,6 +6,7 @@ import { manualRoleMetadata } from "../../../src/app/lib/auth/manual-role";
 import { staticCreatorToken } from "../_shared/patreon-creator-token.ts";
 import { createPatreonRoleHandler } from "../_shared/patreon-roles.ts";
 import { createHmac } from "node:crypto";
+import { BOOSTY_ADAPTER_STAND_IN } from "../../../tests/boosty-adapter-stand-in.ts";
 
 const campaign = "12345", tier = "28995946";
 const member = "11111111-1111-4111-8111-111111111111";
@@ -42,10 +43,9 @@ before(async () => {
     await db.exec(await readFile(new URL("../../migrations/202609220001_patreon_allocation_webhooks.sql", import.meta.url), "utf8"));
     await db.exec(await readFile(new URL("../../migrations/202609280006_membership_paid_access_end.sql", import.meta.url), "utf8"));
     await db.exec(await readFile(new URL("../../migrations/202610020001_membership_allocation_usd20.sql", import.meta.url), "utf8"));
-    // Stand-in for the Boosty adapter this suite does not install; tests/boosty-membership.test.ts covers the real one.
-    await db.exec(`create schema boosty_membership; create function boosty_membership.valid_evidence(e jsonb, p_blog text) returns boolean
-        language sql as $$ select true and e->'tierIds'='[]'::jsonb $$`);
-    await db.exec(await readFile(new URL("../../migrations/20261123000000_membership_qualifies_by_price.sql", import.meta.url), "utf8"));
+    // This suite does not install the Boosty adapter; tests/boosty-membership.test.ts covers the real one.
+    await db.exec(BOOSTY_ADAPTER_STAND_IN);
+    await db.exec(await readFile(new URL("../../migrations/20261123000000_membership_price_and_loss_breaker.sql", import.meta.url), "utf8"));
     assert.equal((await metadata()).role, "Standard Server");
     assert.equal((await db.query("select * from public.patreon_accounts")).rows.length, 1);
 });
@@ -401,4 +401,9 @@ test("allocation loss migration accepts bounded explicit evidence and rolls malf
         "select evidence,revision from public.membership_heads where account_id=$1", [user])).rows[0];
     assert.deepEqual(head.evidence, evidence);
     assert.equal(Number(head.revision), 2);
+    // The next lease tells the mass-loss breaker this member's loss is already recorded.
+    await rpc("release", { token: lease.token });
+    await rpc("queue", { memberId: member });
+    const next = await rpc("acquire", { allocationPolicy: policy });
+    assert.equal((next?.jobs as (Job & { allocationLost: unknown })[]).find(job => job.memberId === member)?.allocationLost, true);
 });

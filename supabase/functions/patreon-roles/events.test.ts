@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
+import { BOOSTY_ADAPTER_STAND_IN } from "../../../tests/boosty-adapter-stand-in.ts";
 import { readFile } from "node:fs/promises";
 import { after, before, beforeEach, test } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
@@ -32,10 +33,9 @@ before(async () => {
     for (const name of ["20260907212654_create_patreon_links", "20260907220000_patreon_website_roles", "202609080002_membership_onboarding", "202609080003_membership_role_locking", "20260908030000_patreon_event_reconciliation", "20260910200000_membership_receipt_claims", "20260919010000_actionable_patreon_retries", "202609220001_patreon_allocation_webhooks", "202609280006_membership_paid_access_end", "202610020001_membership_allocation_usd20"]) {
         await db.exec(await readFile(new URL(`../../migrations/${name}.sql`, import.meta.url), "utf8"));
     }
-    // Stand-in for the Boosty adapter this suite does not install; tests/boosty-membership.test.ts covers the real one.
-    await db.exec(`create schema boosty_membership; create function boosty_membership.valid_evidence(e jsonb, p_blog text) returns boolean
-        language sql as $$ select true and e->'tierIds'='[]'::jsonb $$`);
-    await db.exec(await readFile(new URL("../../migrations/20261123000000_membership_qualifies_by_price.sql", import.meta.url), "utf8"));
+    // This suite does not install the Boosty adapter; tests/boosty-membership.test.ts covers the real one.
+    await db.exec(BOOSTY_ADAPTER_STAND_IN);
+    await db.exec(await readFile(new URL("../../migrations/20261123000000_membership_price_and_loss_breaker.sql", import.meta.url), "utf8"));
 });
 after(async () => { await db?.close(); });
 beforeEach(async () => {

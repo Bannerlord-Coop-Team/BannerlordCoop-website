@@ -95,7 +95,7 @@ test("Boosty adapter links by email, decides evidence conservatively and serves 
         const before = (await query("select * from public.membership_provider_heads order by account_id")).rows;
         const outbox = (await query("select * from public.membership_outbox order by sequence")).rows;
         await db.exec(await readFile(`supabase/migrations/${migration}`, "utf8"));
-        await db.exec(await readFile("supabase/migrations/20261123000000_membership_qualifies_by_price.sql", "utf8"));
+        await db.exec(await readFile("supabase/migrations/20261123000000_membership_price_and_loss_breaker.sql", "utf8"));
 
         await t.test("upgrade keeps provider heads and hints; unlinked accounts still answer the constant head", async () => {
             assert.deepEqual((await query("select * from public.membership_provider_heads order by account_id")).rows, before);
