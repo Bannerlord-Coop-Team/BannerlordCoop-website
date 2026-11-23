@@ -288,6 +288,10 @@ test("a complete creator read without an entitled tier listed at $20+ confirms p
         const ended = await read(member(status, cents, [...tiers], charge));
         assert.deepEqual([ended.verification, ended.paidAccessEndedAt, ended.tierIds, ended.paidThroughAt], ["nonqualifying", now, kept, null], `${status} ${charge}`);
     }
+    // The campaign allows no custom pledges, so an active Paid patron with no tier at all is loss,
+    // even with an entitled amount; a mass glitch of empty tiers is caught by the mass-loss breaker.
+    const noTier = await read(member("active_patron", 2000, []));
+    assert.deepEqual([noTier.verification, noTier.paidAccessEndedAt, noTier.tierIds], ["nonqualifying", now, []]);
 
     // Any tier listed at $20+ qualifies: the listed one, an unlisted $25 tier, and a discounted $20 pledge.
     for (const [cents, tiers] of [[2000, ["20"]], [2500, ["25"]], [1500, ["20"]], [2000, ["20", "21"]]] as const) {

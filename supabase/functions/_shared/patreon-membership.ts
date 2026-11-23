@@ -108,6 +108,8 @@ export async function verifyPatreonMembership(body: unknown, policy: Policy | nu
                 if (Date.parse(a.last_charge_date) > Date.parse(now) || a.is_free_trial || a.is_gifted) throw new Error("Payment/status evidence conflicts with policy");
                 // Only a complete creator-authenticated read confirms loss: no qualifying tier is
                 // still entitled. Loss evidence keeps the remaining paid tiers and drops $0 tiers.
+                // An active Paid patron with no tier at all is loss too: the campaign allows no custom
+                // pledges, and an API glitch returning empty tiers for many members trips the mass-loss breaker.
                 if (confirmEndedAccess && !hasQualifyingTier && lossObservable(a)) {
                     evidence.verification = "nonqualifying";
                     evidence.tierIds = paidTierIds.sort();
