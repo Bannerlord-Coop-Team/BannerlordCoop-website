@@ -18,8 +18,8 @@ are excluded, matching the existing allocation policy. This is current benefit
 eligibility, not proof that a specific payment settled. Downgrades, loss of
 qualification and cancellation/expiry updates withdraw the membership allowance.
 A cancellation event is only a refresh signal; the current API evidence decides
-eligibility. A former patron without reliable paid-access evidence becomes
-`review_required` and cannot fund a new allocation. No next-charge date is treated
+eligibility. A member with no entitled qualifying tier records [confirmed
+loss](subscription-expiry-evidence.md) and cannot fund an allocation. No next-charge date is treated
 as paid-through access.
 
 Evidence stays valid for less than 24 hours. The existing six-hour linked-member

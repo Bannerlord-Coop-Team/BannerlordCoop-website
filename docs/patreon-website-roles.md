@@ -40,9 +40,10 @@ OAuth tokens are still discarded.
   grant in the same database transaction. New links schedule verification;
   cached membership records do not transfer a grant to another account.
 - The role policy changes website roles only. The optional [allocation webhook
-  integration](patreon-allocation-webhooks.md) independently refreshes the $50+
-  allocation allowance. Neither policy claims slots or deletes servers. Existing
-  server ownership and lifecycle rules continue to apply after role revocation.
+  integration](patreon-allocation-webhooks.md) independently refreshes the $20+
+  allocation allowance. A complete creator read without an entitled $20+ qualifying
+  tier records [confirmed loss](subscription-expiry-evidence.md), which starts the
+  control plane's 72-hour grace; role revocation alone never deletes servers.
 
 ## Worker and persistence
 

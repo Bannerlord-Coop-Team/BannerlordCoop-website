@@ -44,6 +44,13 @@ function relationship(value: Record<string, unknown>, name: string): unknown {
 class IncompleteProviderRead extends Error {}
 function incomplete(message: string): never { throw new IncompleteProviderRead(message); }
 export type MembershipVerification = { patreonUserId: string; evidence: Evidence; failure: string | null };
+const LOSS_STATUSES: unknown[] = ["active_patron", "declined_patron", "former_patron"];
+// Decides loss for a validated creator-read member: a known patron status, no charge still
+// Pending, and no currently entitled tier from the reviewed qualifying set.
+function lostPaidAccess(member: Record<string, unknown>, tierIds: string[], policy: Policy): boolean {
+    if (!LOSS_STATUSES.includes(member.patron_status) || member.last_charge_status === "Pending") return false;
+    return !tierIds.some(id => policy.qualifyingTierIds.includes(id));
+}
 
 // This is current subscription-benefit evidence, NOT proof of a settled charge.
 // Patreon documents entitled tiers/amount as including a current pledge. An upgrade
@@ -84,7 +91,7 @@ export async function verifyPatreonMembership(body: unknown, policy: Policy | nu
                 const tiers = relationship(member, "currently_entitled_tiers");
                 if (!Array.isArray(tiers) || tiers.length > 50) incomplete("Incomplete entitled tiers");
                 const tierIds: string[] = [];
-                let hasPaidTier = false;
+                const paidTierIds: string[] = [];
                 for (const ref of tiers) {
                     if (!resource(ref, "tier") || tierIds.includes(ref.id)) incomplete("Ambiguous tier");
                     const tier = included.get(`tier:${ref.id}`);
@@ -93,21 +100,18 @@ export async function verifyPatreonMembership(body: unknown, policy: Policy | nu
                     const tierCampaign = relationship(tier, "campaign");
                     if (!resource(tierCampaign, "campaign") || tierCampaign.id !== policy.campaignId) throw new Error("Tier belongs to another campaign");
                     if (policy.qualifyingTierIds.includes(ref.id) && (tier.attributes.amount_cents as number) < policy.minimumCents) throw new Error("Policy mapping disagrees with provider");
-                    if ((tier.attributes.amount_cents as number) > 0) hasPaidTier = true;
+                    if ((tier.attributes.amount_cents as number) > 0) paidTierIds.push(ref.id);
                     tierIds.push(ref.id);
                 }
                 evidence.tierIds = tierIds.sort();
                 const a = member.attributes;
                 if (!record(a) || !Number.isSafeInteger(a.currently_entitled_amount_cents) || (a.currently_entitled_amount_cents as number) < 0 || typeof a.last_charge_date !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|\+00:00)$/u.test(a.last_charge_date) || !Number.isFinite(Date.parse(a.last_charge_date)) || new Date(a.last_charge_date).toISOString().slice(0,19) !== a.last_charge_date.slice(0,19) || typeof a.is_free_trial !== "boolean" || typeof a.is_gifted !== "boolean") incomplete("Missing payment/status evidence");
                 if (Date.parse(a.last_charge_date) > Date.parse(now) || a.is_free_trial || a.is_gifted) throw new Error("Payment/status evidence conflicts with policy");
-                // A cancellation can retain paid benefits. Only a complete creator-authenticated
-                // read proving former membership AND no remaining paid entitlement confirms loss.
-                // Patreon keeps cancelled patrons on a $0 tier, which is not a paid benefit, so
-                // those tiers are dropped: confirmed-loss evidence carries no tiers.
-                if (confirmEndedAccess && a.patron_status === "former_patron" && a.last_charge_status === "Paid"
-                    && a.currently_entitled_amount_cents === 0 && !hasPaidTier) {
+                // Only a complete creator-authenticated read confirms loss: no qualifying tier is
+                // still entitled. Loss evidence keeps the remaining paid tiers and drops $0 tiers.
+                if (confirmEndedAccess && lostPaidAccess(a, tierIds, policy)) {
                     evidence.verification = "nonqualifying";
-                    evidence.tierIds = [];
+                    evidence.tierIds = tierIds.filter(id => paidTierIds.includes(id));
                     evidence.paidAccessEndedAt = now;
                 }
                 else if (a.patron_status === "declined_patron" || a.last_charge_status === "Declined") evidence.verification = "nonqualifying";

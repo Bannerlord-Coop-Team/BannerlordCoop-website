@@ -29,7 +29,7 @@ before(async () => {
         returns bigint language sql as $$
             insert into net.requests(url,headers,body,timeout_ms) values(url,headers,body,timeout_milliseconds) returning id;
         $$;`);
-    for (const name of ["20260907212654_create_patreon_links", "20260907220000_patreon_website_roles", "202609080002_membership_onboarding", "202609080003_membership_role_locking", "20260908030000_patreon_event_reconciliation", "20260910200000_membership_receipt_claims", "20260919010000_actionable_patreon_retries", "202609220001_patreon_allocation_webhooks"]) {
+    for (const name of ["20260907212654_create_patreon_links", "20260907220000_patreon_website_roles", "202609080002_membership_onboarding", "202609080003_membership_role_locking", "20260908030000_patreon_event_reconciliation", "20260910200000_membership_receipt_claims", "20260919010000_actionable_patreon_retries", "202609220001_patreon_allocation_webhooks", "202609280006_membership_paid_access_end"]) {
         await db.exec(await readFile(new URL(`../../migrations/${name}.sql`, import.meta.url), "utf8"));
     }
 });
@@ -355,7 +355,7 @@ async function allocationLink() {
     await db.query("insert into public.membership_heads(account_id,discord_user_id,patreon_user_id,link_state,link_generation,revision) values($1,'123456789012345678',$2,'linked',1,1)", [user, patreonUser]);
 }
 async function allocationHead() {
-    return (await db.query<{ revision: number; evidence: { verification: string; policyVersion: string }; link_state: string }>("select revision,evidence,link_state from public.membership_heads where account_id=$1", [user])).rows[0];
+    return (await db.query<{ revision: number; evidence: { verification: string; policyVersion: string; tierIds?: string[]; paidAccessEndedAt?: string }; link_state: string }>("select revision,evidence,link_state from public.membership_heads where account_id=$1", [user])).rows[0];
 }
 async function allocationEvent(worker = allocationHandler()) {
     const body = JSON.stringify(snapshot());
@@ -390,7 +390,8 @@ test("cancelled or expired members lose allocation evidence; transport failures 
     cancelled.data.relationships.currently_entitled_tiers.data = [];
     const worker = allocationHandler(async () => Response.json(cancelled));
     await allocationEvent(worker); await runWorker(worker);
-    assert.notEqual((await allocationHead()).evidence.verification, "qualifying");
+    const { verification, tierIds, paidAccessEndedAt } = (await allocationHead()).evidence;
+    assert.deepEqual([verification, tierIds, typeof paidAccessEndedAt], ["nonqualifying", [], "string"]);
 });
 
 test("an in-flight member response cannot restore an unlinked account or replace newer OAuth evidence", async () => {

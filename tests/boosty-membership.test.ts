@@ -95,6 +95,7 @@ test("Boosty adapter links by email, decides evidence conservatively and serves 
         const before = (await query("select * from public.membership_provider_heads order by account_id")).rows;
         const outbox = (await query("select * from public.membership_outbox order by sequence")).rows;
         await db.exec(await readFile(`supabase/migrations/${migration}`, "utf8"));
+        await db.exec(await readFile("supabase/migrations/20261122120000_paid_access_end_keeps_paid_tiers.sql", "utf8"));
 
         await t.test("upgrade keeps provider heads and hints; unlinked accounts still answer the constant head", async () => {
             assert.deepEqual((await query("select * from public.membership_provider_heads order by account_id")).rows, before);
@@ -158,12 +159,13 @@ test("Boosty adapter links by email, decides evidence conservatively and serves 
             assert.deepEqual(await write([{ accountId: id, providerUserId: "3131", linkGeneration: 0, evidence, absentSince: null }]), { written: 0 }, "a stale link generation is skipped");
             const earlier = new Date(Date.parse(verifiedAt) - 86_400_000).toISOString(), later = new Date(Date.parse(verifiedAt) + 86_400_000).toISOString();
             const loss = { ...evidence, verification: "nonqualifying", tierIds: [], paidAccessEndedAt: earlier };
-            for (const bad of [{ ...evidence, programId: "other" }, { ...evidence, tierIds: [] }, { ...loss, paidAccessEndedAt: later }, { ...loss, paidThroughAt: later },
+            for (const bad of [{ ...evidence, programId: "other" }, { ...evidence, tierIds: [] }, { ...loss, paidAccessEndedAt: later }, { ...loss, paidThroughAt: later }, { ...evidence, paidAccessEndedAt: earlier },
                 { ...evidence, paidThroughAt: earlier }, { ...evidence, verification: "nonqualifying", paidThroughAt: later }, { ...evidence, extra: 1 }]) {
                 await assert.rejects(write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence: bad, absentSince: null }]), /invalid_boosty_result/u, JSON.stringify(bad));
             }
             assert.deepEqual(await write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence: { ...evidence, paidThroughAt: later }, absentSince: null }]), { written: 1 });
             assert.equal((await cpSnapshot(id)).paidThroughAt, later);
+            assert.deepEqual(await write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence: { ...loss, tierIds: ["555"] }, absentSince: null }]), { written: 1 }, "loss may keep a paid tier");
             await write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence: loss, absentSince: verifiedAt }]);
             const lost = await cpSnapshot(id);
             assert.equal(lost.paidAccessEndedAt, earlier); assert.deepEqual(lost.tierIds, []);

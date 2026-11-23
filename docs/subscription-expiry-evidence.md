@@ -1,13 +1,14 @@
 # Confirmed paid-access loss for managed hosting
 
-The creator-authenticated Patreon allocation refresh can now add optional
-`paidAccessEndedAt` evidence after validating a former patron with a paid charge
-history, no currently entitled paid tiers and zero entitlement amount. Patreon keeps
-cancelled patrons on the campaign's $0 tier, so a $0 tier does not count as a remaining
-benefit; confirmed-loss evidence records an empty `tierIds`. It is the
-observation time, not a guessed billing or historical expiration date. Cancellation
-with remaining benefits, declined charges, ambiguous data, outages and stale
-observations do not produce it. OAuth linking remains unchanged.
+A complete creator-authenticated Patreon allocation read adds `nonqualifying`
+evidence with `paidAccessEndedAt` when an `active_patron`, `declined_patron` or
+`former_patron` (any last charge status except `Pending`) has no currently entitled
+tier from the reviewed $20+ qualifying set. `tierIds` keeps the remaining paid tiers,
+for example a $5 tier, and drops $0 tiers. It is the observation time, not a guessed
+billing or historical expiration date. A still-entitled qualifying tier, a pending
+charge, incomplete or conflicting data, free trials, gifts, outages and OAuth reads
+never produce it. `20261122120000_paid_access_end_keeps_paid_tiers.sql` lets the
+Patreon and Boosty validators accept loss with non-empty paid `tierIds`.
 
 `202609280006_membership_paid_access_end.sql` accepts this bounded evidence through
 the existing worker lease, account and link-generation fence. Old eight-field

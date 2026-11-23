@@ -42,6 +42,10 @@ before(async () => {
     await db.exec(await readFile(new URL("../../migrations/202609220001_patreon_allocation_webhooks.sql", import.meta.url), "utf8"));
     await db.exec(await readFile(new URL("../../migrations/202609280006_membership_paid_access_end.sql", import.meta.url), "utf8"));
     await db.exec(await readFile(new URL("../../migrations/202610020001_membership_allocation_usd20.sql", import.meta.url), "utf8"));
+    // Stand-in for the Boosty adapter this suite does not install; tests/boosty-membership.test.ts covers the real one.
+    await db.exec(`create schema boosty_membership; create function boosty_membership.valid_evidence(e jsonb, p_blog text) returns boolean
+        language sql as $$ select true and e->'tierIds'='[]'::jsonb $$`);
+    await db.exec(await readFile(new URL("../../migrations/20261122120000_paid_access_end_keeps_paid_tiers.sql", import.meta.url), "utf8"));
     assert.equal((await metadata()).role, "Standard Server");
     assert.equal((await db.query("select * from public.patreon_accounts")).rows.length, 1);
 });
@@ -380,10 +384,11 @@ test("allocation loss migration accepts bounded explicit evidence and rolls malf
     const fence = (job as Job & { allocationFence: unknown }).allocationFence;
     assert.deepEqual(fence, { accountId: user, generation: "1", revision: "1" });
     const verifiedAt = lease.allocationVerifiedAt;
-    const evidence = { verification: "nonqualifying", campaignId: campaign, memberId: member, tierIds: [],
+    // Loss may keep a remaining paid tier below the policy minimum.
+    const evidence = { verification: "nonqualifying", campaignId: campaign, memberId: member, tierIds: ["28995943"],
         verifiedAt, paidThroughAt: null, policyVersion: policy.policyVersion, evidenceSha256: "a".repeat(64), paidAccessEndedAt: verifiedAt };
     for (const invalid of [{ paidAccessEndedAt: "2030-01-01T00:00:00.000Z" }, { paidAccessEndedAt: null },
-        { verification: "review_required" }, { tierIds: [tier] }, { extra: true }]) {
+        { verification: "review_required" }, { verification: "qualifying", tierIds: [tier] }, { extra: true }]) {
         await assert.rejects(rpc("complete", { token: lease.token, ...job, userId: "123", eligible: false,
             allocationEvidence: { ...evidence, ...invalid }, allocationFence: fence }));
     }
