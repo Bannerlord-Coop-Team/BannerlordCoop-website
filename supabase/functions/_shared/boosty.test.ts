@@ -108,8 +108,8 @@ test("evidence: real subscriber states, two-poll absence, no-loss uncertainty an
     assert.deepEqual({ ...qualifying.evidence, evidenceSha256: "x" }, { verification: "qualifying", programId: "bannerlordcoop", memberId: null, tierIds: ["4035410"], verifiedAt: polledAt, paidThroughAt: null, policyVersion: "boosty-paid-v1", evidenceSha256: "x" });
     assert.match(qualifying.evidence.evidenceSha256, /^[a-f0-9]{64}$/u); assert.equal(qualifying.absentSince, null);
     assert.equal((await decide(listed())).evidence.evidenceSha256, qualifying.evidence.evidenceSha256, "the digest is deterministic");
-    assert.deepEqual(await facts(real.get("9000002")!), ["nonqualifying", ["4018927"], null, undefined], "a free follower");
-    assert.deepEqual(await facts(real.get("9000004")!), ["nonqualifying", [], null, undefined], "paused is not loss");
+    assert.deepEqual(await facts(real.get("9000002")!), ["nonqualifying", [], null, polledAt], "a free follower is loss");
+    assert.deepEqual(await facts(real.get("9000004")!), ["nonqualifying", [], null, polledAt], "paused is loss");
     assert.deepEqual(await facts(real.get("9000005")!), ["qualifying", ["4035410"], "2026-11-11T12:00:00.000Z", undefined], "cancelled but paid until its offTime");
     const lapsed = await decide(real.get("9000006"));
     assert.deepEqual([lapsed.evidence.verification, lapsed.evidence.tierIds, lapsed.evidence.paidThroughAt, lapsed.evidence.paidAccessEndedAt, lapsed.absentSince],
@@ -120,14 +120,21 @@ test("evidence: real subscriber states, two-poll absence, no-loss uncertainty an
     assert.deepEqual([soon.evidence.paidAccessEndedAt, soon.absentSince], [undefined, polledAt]);
     const confirmed = await decide(undefined, "2026-11-10T13:00:00.000Z", polledAt);
     assert.deepEqual([confirmed.evidence.verification, confirmed.evidence.tierIds, confirmed.evidence.paidAccessEndedAt, confirmed.absentSince], ["nonqualifying", [], "2026-11-10T13:00:00.000Z", polledAt]);
-    for (const [name, overrides, verification, tiers] of [
-        ["blacklisted", { blacklisted: true }, "nonqualifying", []], ["other level", { levelId: "999" }, "nonqualifying", ["999"]], ["cheap", { price: 4 }, "nonqualifying", ["4035410"]],
-        ["unknown subscribed", { subscribed: null }, "unknown", []], ["unknown blacklist", { blacklisted: null }, "unknown", []], ["no level", { levelId: null }, "unknown", []], ["no price", { price: null }, "unknown", []],
-        ["unknown status", { status: null }, "unknown", []], ["unsubscribed but active", { subscribed: false }, "unknown", []],
-        ["inactive without offTime", { subscribed: false, status: "inactive" }, "unknown", []], ["inactive until later", { subscribed: false, status: "inactive", offTime: "2026-11-11T12:00:00.000Z" }, "unknown", []],
+    for (const [name, overrides, verification, tiers, ended] of [
+        ["blacklisted", { blacklisted: true }, "nonqualifying", [], polledAt], ["unlisted level", { levelId: "999" }, "qualifying", ["999"], undefined], ["cheap", { price: 4 }, "nonqualifying", ["4035410"], polledAt],
+        ["unknown subscribed", { subscribed: null }, "unknown", [], undefined], ["unknown blacklist", { blacklisted: null }, "unknown", [], undefined], ["no level", { levelId: null }, "unknown", [], undefined],
+        ["no price", { price: null }, "unknown", [], undefined], ["unknown status", { status: null }, "unknown", [], undefined], ["unsubscribed but active", { subscribed: false }, "unknown", [], undefined],
+        ["inactive without offTime", { subscribed: false, status: "inactive" }, "unknown", [], undefined], ["inactive until later", { subscribed: false, status: "inactive", offTime: "2026-11-11T12:00:00.000Z" }, "unknown", [], undefined],
     ] as const) {
         const decision = await decide(listed(overrides));
-        assert.deepEqual([decision.evidence.verification, decision.evidence.tierIds, decision.evidence.paidAccessEndedAt, decision.absentSince], [verification, tiers, undefined, null], name);
+        assert.deepEqual([decision.evidence.verification, decision.evidence.tierIds, decision.evidence.paidAccessEndedAt, decision.absentSince], [verification, tiers, ended, null], name);
+    }
+    // The $20 USD policy: any level priced at $20 or more qualifies; the real $5 level is loss that keeps it.
+    const usd20: BoostyPolicy = { ...realPolicy, minimumPrice: 20 };
+    for (const [overrides, verification, tiers, ended] of [[{}, "nonqualifying", ["4035410"], polledAt], [{ levelId: "999", price: 20 }, "qualifying", ["999"], undefined],
+        [{ levelId: "123", price: 25 }, "qualifying", ["123"], undefined], [{ levelId: "999", price: 19.99 }, "nonqualifying", ["999"], polledAt]] as const) {
+        const { evidence } = await decideBoostyEvidence(usd20, head, listed(overrides), polledAt);
+        assert.deepEqual([evidence.verification, evidence.tierIds, evidence.paidAccessEndedAt], [verification, tiers, ended], JSON.stringify(overrides));
     }
     // Every decided evidence object satisfies the CP version 2 Boosty grammar exactly.
     for (const decision of [qualifying, lapsed, await decide(real.get("9000005")), firstAbsence, confirmed]) {

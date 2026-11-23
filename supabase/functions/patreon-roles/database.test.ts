@@ -45,7 +45,7 @@ before(async () => {
     // Stand-in for the Boosty adapter this suite does not install; tests/boosty-membership.test.ts covers the real one.
     await db.exec(`create schema boosty_membership; create function boosty_membership.valid_evidence(e jsonb, p_blog text) returns boolean
         language sql as $$ select true and e->'tierIds'='[]'::jsonb $$`);
-    await db.exec(await readFile(new URL("../../migrations/20261122120000_paid_access_end_keeps_paid_tiers.sql", import.meta.url), "utf8"));
+    await db.exec(await readFile(new URL("../../migrations/20261122120000_membership_qualifies_by_price.sql", import.meta.url), "utf8"));
     assert.equal((await metadata()).role, "Standard Server");
     assert.equal((await db.query("select * from public.patreon_accounts")).rows.length, 1);
 });
@@ -359,8 +359,10 @@ test("USD20 allocation policy pins and funds qualifying evidence while mismatche
     assert.equal(lease.allocationPolicyVersion, "patreon-paid-usd20-v1");
     const job = (lease.jobs as Job[]).find(job => job.memberId === member)!;
     const fence = (job as Job & { allocationFence: unknown }).allocationFence;
-    const evidence = { verification: "qualifying", campaignId: campaign, memberId: member, tierIds: [tier],
+    // Qualifying evidence may name any priced tier, even one outside qualifyingTierIds, but needs one.
+    const evidence = { verification: "qualifying", campaignId: campaign, memberId: member, tierIds: ["28995999"],
         verifiedAt: lease.allocationVerifiedAt, paidThroughAt: null, policyVersion: usd20.policyVersion, evidenceSha256: "b".repeat(64) };
+    await assert.rejects(rpc("complete", { token: lease.token, ...job, userId: "123", eligible: true, allocationEvidence: { ...evidence, tierIds: [] }, allocationFence: fence }), /invalid_allocation_evidence/);
     const applied = await rpc("complete", { token: lease.token, ...job, userId: "123", eligible: true, allocationEvidence: evidence, allocationFence: fence });
     assert.equal(applied?.applied, true);
     await rpc("release", { token: lease.token });

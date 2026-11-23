@@ -95,7 +95,7 @@ test("Boosty adapter links by email, decides evidence conservatively and serves 
         const before = (await query("select * from public.membership_provider_heads order by account_id")).rows;
         const outbox = (await query("select * from public.membership_outbox order by sequence")).rows;
         await db.exec(await readFile(`supabase/migrations/${migration}`, "utf8"));
-        await db.exec(await readFile("supabase/migrations/20261122120000_paid_access_end_keeps_paid_tiers.sql", "utf8"));
+        await db.exec(await readFile("supabase/migrations/20261122120000_membership_qualifies_by_price.sql", "utf8"));
 
         await t.test("upgrade keeps provider heads and hints; unlinked accounts still answer the constant head", async () => {
             assert.deepEqual((await query("select * from public.membership_provider_heads order by account_id")).rows, before);
@@ -165,6 +165,7 @@ test("Boosty adapter links by email, decides evidence conservatively and serves 
             }
             assert.deepEqual(await write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence: { ...evidence, paidThroughAt: later }, absentSince: null }]), { written: 1 });
             assert.equal((await cpSnapshot(id)).paidThroughAt, later);
+            assert.deepEqual(await write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence: { ...evidence, tierIds: ["777"] }, absentSince: null }]), { written: 1 }, "any priced level qualifies");
             assert.deepEqual(await write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence: { ...loss, tierIds: ["555"] }, absentSince: null }]), { written: 1 }, "loss may keep a paid tier");
             await write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence: loss, absentSince: verifiedAt }]);
             const lost = await cpSnapshot(id);

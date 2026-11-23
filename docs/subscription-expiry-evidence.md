@@ -1,14 +1,18 @@
 # Confirmed paid-access loss for managed hosting
 
-A complete creator-authenticated Patreon allocation read adds `nonqualifying`
-evidence with `paidAccessEndedAt` when an `active_patron`, `declined_patron` or
-`former_patron` (any last charge status except `Pending`) has no currently entitled
-tier from the reviewed $20+ qualifying set. `tierIds` keeps the remaining paid tiers,
-for example a $5 tier, and drops $0 tiers. It is the observation time, not a guessed
-billing or historical expiration date. A still-entitled qualifying tier, a pending
-charge, incomplete or conflicting data, free trials, gifts, outages and OAuth reads
-never produce it. `20261122120000_paid_access_end_keeps_paid_tiers.sql` lets the
-Patreon and Boosty validators accept loss with non-empty paid `tierIds`.
+A member qualifies only while entitled to a paid tier or level whose list price is at
+least $20 (`minimumCents` / `minimumPrice`), whatever its id and whatever discount they
+pay; `qualifyingTierIds`/`qualifyingLevelIds` stay in the policy but no longer gate.
+A complete creator-authenticated Patreon read adds `nonqualifying` evidence with
+`paidAccessEndedAt` when an `active_patron`, `declined_patron` or `former_patron`
+(any last charge status except `Pending`) has no such tier. `tierIds` keeps the
+remaining paid tiers, for example a $5 tier, and drops $0 tiers. It is the
+observation time, not a guessed billing or historical expiration date. A
+still-entitled $20+ tier, a pending charge, incomplete or conflicting data, free
+trials, gifts, outages and OAuth reads never produce it. Boosty's rules are in
+[Boosty membership adapter](boosty-membership.md#evidence).
+`20261122120000_membership_qualifies_by_price.sql` lets the Patreon and Boosty
+validators accept loss with paid `tierIds` and Patreon qualifying evidence on any tier.
 
 `202609280006_membership_paid_access_end.sql` accepts this bounded evidence through
 the existing worker lease, account and link-generation fence. Old eight-field

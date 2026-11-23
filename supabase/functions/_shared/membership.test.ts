@@ -53,7 +53,8 @@ test("wrong campaign/tier, pending, declined, former, missing, future and incomp
         ["UUID campaign", b => { b.included[1].id = memberId; }, "unknown"],
         ["UUID tier", b => { b.included[2].id = memberId; }, "unknown"],
         ["wrong campaign", b => { b.included[0].relationships!.campaign!.data.id = "11"; }, "nonqualifying"],
-        ["wrong tier", b => { b.included[0].relationships!.currently_entitled_tiers!.data[0].id = "21"; b.included[2].id = "21"; }, "nonqualifying"],
+        ["unlisted $20 tier", b => { b.included[0].relationships!.currently_entitled_tiers!.data[0].id = "21"; b.included[2].id = "21"; }, "qualifying"],
+        ["cheap tier", b => { b.included[2].attributes.amount_cents = 1999; }, "nonqualifying"],
         ["declined", b => { b.included[0].attributes.last_charge_status = "Declined"; }, "nonqualifying"],
         ["pending", b => { b.included[0].attributes.last_charge_status = "Pending"; }, "review_required"],
         ["former without paid-through", b => { b.included[0].attributes.patron_status = "former_patron"; }, "review_required"],
@@ -250,21 +251,22 @@ test("$50 allocation policy checks provider amounts and versions for OAuth and w
     for (const bad of [{ ...fifty, minimumCents: 2000 }, { ...policy, minimumCents: 5000 }]) assert.throws(() => parsePolicy(JSON.stringify(bad)));
     const body = identity();
     body.included[2].attributes.amount_cents = 5000;
-    for (const [amount, expected] of [[4999, "nonqualifying"], [5000, "qualifying"], [10000, "qualifying"]] as const) {
-        body.included[0].attributes.currently_entitled_amount_cents = amount;
+    // The tier's list price decides; the entitled (possibly discounted) amount does not.
+    for (const [price, expected] of [[4999, "nonqualifying"], [5000, "qualifying"], [10000, "qualifying"]] as const) {
+        body.included[2].attributes.amount_cents = price;
+        body.included[0].attributes.currently_entitled_amount_cents = 1000;
         const result = await verifyPatreonMembership(body, fifty, now);
         assert.equal(result.evidence.verification, expected);
         assert.equal(result.evidence.policyVersion, fifty.policyVersion);
     }
-    body.included[2].attributes.amount_cents = 2000;
-    assert.equal((await verifyPatreonMembership(body, fifty, now)).evidence.verification, "review_required");
 });
 
 
-test("a complete creator read without an entitled $20+ qualifying tier confirms paid-access loss", async () => {
+test("a complete creator read without an entitled tier listed at $20+ confirms paid-access loss", async () => {
     const campaign = { data: { type: "campaign", id: "10" } };
     const freeTier = { type: "tier", id: "21", attributes: { amount_cents: 0 }, relationships: { campaign } };
-    const lowTier = { type: "tier", id: "22", attributes: { amount_cents: 500 }, relationships: { campaign } };
+    const lowTier = { type: "tier", id: "22", attributes: { amount_cents: 1000 }, relationships: { campaign } };
+    const unlistedTier = { type: "tier", id: "25", attributes: { amount_cents: 2500 }, relationships: { campaign } };
     // Builds one creator-read member holding the given tiers with the given charge outcome.
     const member = (patronStatus: string, entitledCents: number, tierIds: string[], lastChargeStatus = "Paid") => {
         const body = identity();
@@ -275,31 +277,34 @@ test("a complete creator read without an entitled $20+ qualifying tier confirms 
         const tiers = body.included[0].relationships?.currently_entitled_tiers;
         assert.ok(tiers);
         tiers.data = tierIds.map((id) => ({ type: "tier", id }));
-        return { data: body.included[0], included: [...body.included.slice(1), freeTier, lowTier] };
+        return { data: body.included[0], included: [...body.included.slice(1), freeTier, lowTier, unlistedTier] };
     };
     const read = (body: ReturnType<typeof member>) => verifyPatreonAllocation(body, policy, now);
 
-    // Declined, refunded or lapsed members, and a paid tier below $20, all start grace; $0 tiers are dropped.
+    // Declined, refunded or lapsed members, and a $10 paid tier, all start grace; $0 tiers are dropped.
     for (const [status, charge, cents, tiers, kept] of [["declined_patron", "Declined", 0, [], []], ["former_patron", "Paid", 0, ["21"], []],
         ["former_patron", "Refunded", 0, ["21"], []], ["former_patron", "Declined", 0, [], []], ["former_patron", "Paid", 500, ["21"], []],
-        ["active_patron", "Paid", 500, ["21", "22"], ["22"]]] as const) {
+        ["active_patron", "Paid", 1000, ["21", "22"], ["22"]]] as const) {
         const ended = await read(member(status, cents, [...tiers], charge));
         assert.deepEqual([ended.verification, ended.paidAccessEndedAt, ended.tierIds, ended.paidThroughAt], ["nonqualifying", now, kept, null], `${status} ${charge}`);
     }
 
-    // An entitled $20+ qualifying tier keeps access, as does a charge still in flight.
-    const qualifying = await read(member("active_patron", 2000, ["20"]));
-    assert.deepEqual([qualifying.verification, qualifying.paidAccessEndedAt], ["qualifying", undefined]);
+    // Any tier listed at $20+ qualifies: the listed one, an unlisted $25 tier, and a discounted $20 pledge.
+    for (const [cents, tiers] of [[2000, ["20"]], [2500, ["25"]], [1500, ["20"]]] as const) {
+        const qualifying = await read(member("active_patron", cents, [...tiers]));
+        assert.deepEqual([qualifying.verification, qualifying.paidAccessEndedAt], ["qualifying", undefined], `${tiers} at ${cents}`);
+    }
+    // A still-entitled $20+ tier or a charge in flight is never loss.
     for (const [status, cents, tiers, charge] of [["former_patron", 2000, ["20", "21"], "Paid"], ["declined_patron", 2000, ["20"], "Declined"],
-        ["active_patron", 500, ["22"], "Pending"], ["declined_patron", 0, [], "Pending"]] as const) {
+        ["active_patron", 1000, ["22"], "Pending"], ["declined_patron", 0, [], "Pending"]] as const) {
         assert.equal((await read(member(status, cents, [...tiers], charge))).paidAccessEndedAt, undefined, `${status} ${charge}`);
     }
 
     // OAuth identity reads never confirm loss, even for the same member.
-    for (const oauth of [member("former_patron", 0, ["21"]), member("declined_patron", 0, [], "Declined"), member("active_patron", 500, ["22"])]) {
+    for (const oauth of [member("former_patron", 0, ["21"]), member("declined_patron", 0, [], "Declined"), member("active_patron", 1000, ["22"])]) {
         const linked = identity();
         linked.included[0] = oauth.data;
-        linked.included.push(freeTier as never, lowTier as never);
+        linked.included.push(freeTier as never, lowTier as never, unlistedTier as never);
         const identityRead = await verifyPatreonMembership(linked, policy, now);
         assert.equal(identityRead.evidence.paidAccessEndedAt, undefined);
         assert.notEqual(identityRead.evidence.verification, "qualifying");

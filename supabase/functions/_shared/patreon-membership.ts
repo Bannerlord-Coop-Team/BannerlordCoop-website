@@ -46,10 +46,10 @@ function incomplete(message: string): never { throw new IncompleteProviderRead(m
 export type MembershipVerification = { patreonUserId: string; evidence: Evidence; failure: string | null };
 const LOSS_STATUSES: unknown[] = ["active_patron", "declined_patron", "former_patron"];
 // Decides loss for a validated creator-read member: a known patron status, no charge still
-// Pending, and no currently entitled tier from the reviewed qualifying set.
-function lostPaidAccess(member: Record<string, unknown>, tierIds: string[], policy: Policy): boolean {
+// Pending, and no currently entitled tier listed at the policy minimum or more.
+function lostPaidAccess(member: Record<string, unknown>, hasQualifyingTier: boolean): boolean {
     if (!LOSS_STATUSES.includes(member.patron_status) || member.last_charge_status === "Pending") return false;
-    return !tierIds.some(id => policy.qualifyingTierIds.includes(id));
+    return !hasQualifyingTier;
 }
 
 // This is current subscription-benefit evidence, NOT proof of a settled charge.
@@ -92,14 +92,15 @@ export async function verifyPatreonMembership(body: unknown, policy: Policy | nu
                 if (!Array.isArray(tiers) || tiers.length > 50) incomplete("Incomplete entitled tiers");
                 const tierIds: string[] = [];
                 const paidTierIds: string[] = [];
+                let hasQualifyingTier = false;
                 for (const ref of tiers) {
                     if (!resource(ref, "tier") || tierIds.includes(ref.id)) incomplete("Ambiguous tier");
                     const tier = included.get(`tier:${ref.id}`);
-                    // Require both the provider tier/campaign relationship and reviewed mapping.
+                    // A tier qualifies by its list price, so discounted pledges and new tiers need no policy edit.
                     if (!tier || !record(tier.attributes) || !Number.isSafeInteger(tier.attributes.amount_cents) || (tier.attributes.amount_cents as number) < 0) incomplete("Missing tier amount");
                     const tierCampaign = relationship(tier, "campaign");
                     if (!resource(tierCampaign, "campaign") || tierCampaign.id !== policy.campaignId) throw new Error("Tier belongs to another campaign");
-                    if (policy.qualifyingTierIds.includes(ref.id) && (tier.attributes.amount_cents as number) < policy.minimumCents) throw new Error("Policy mapping disagrees with provider");
+                    if ((tier.attributes.amount_cents as number) >= policy.minimumCents) hasQualifyingTier = true;
                     if ((tier.attributes.amount_cents as number) > 0) paidTierIds.push(ref.id);
                     tierIds.push(ref.id);
                 }
@@ -109,14 +110,14 @@ export async function verifyPatreonMembership(body: unknown, policy: Policy | nu
                 if (Date.parse(a.last_charge_date) > Date.parse(now) || a.is_free_trial || a.is_gifted) throw new Error("Payment/status evidence conflicts with policy");
                 // Only a complete creator-authenticated read confirms loss: no qualifying tier is
                 // still entitled. Loss evidence keeps the remaining paid tiers and drops $0 tiers.
-                if (confirmEndedAccess && lostPaidAccess(a, tierIds, policy)) {
+                if (confirmEndedAccess && lostPaidAccess(a, hasQualifyingTier)) {
                     evidence.verification = "nonqualifying";
                     evidence.tierIds = tierIds.filter(id => paidTierIds.includes(id));
                     evidence.paidAccessEndedAt = now;
                 }
                 else if (a.patron_status === "declined_patron" || a.last_charge_status === "Declined") evidence.verification = "nonqualifying";
                 else if (a.patron_status !== "active_patron" || a.last_charge_status !== "Paid") evidence.verification = "review_required";
-                else evidence.verification = tierIds.some(id => policy.qualifyingTierIds.includes(id)) && (a.currently_entitled_amount_cents as number) >= policy.minimumCents ? "qualifying" : "nonqualifying";
+                else evidence.verification = hasQualifyingTier ? "qualifying" : "nonqualifying";
             }
         } catch (error) {
             failure = error instanceof Error && error.message ? error.message : "Unexpected verification failure";

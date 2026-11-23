@@ -42,10 +42,11 @@ listed, so `status` and `offTime` decide loss. After a complete poll:
 
 | Observation | Evidence |
 | --- | --- |
-| `subscribed`, `status: "active"`, not blacklisted, qualifying level, price ≥ `minimumPrice` | `qualifying`; `paidThroughAt` = `offTime` when it is in the future (cancelled, still paid) |
-| same, with another level (a free follower), a lower price or blacklisted | `nonqualifying`, not loss |
+| `subscribed`, `status: "active"`, not blacklisted, any level priced ≥ `minimumPrice` | `qualifying`; `paidThroughAt` = `offTime` when it is in the future (cancelled, still paid) |
+| same, with a lower price (the level is kept) or a free follower | `nonqualifying` with `paidAccessEndedAt` = poll time (loss) |
+| same, blacklisted | `nonqualifying` with `paidAccessEndedAt` = poll time (loss) |
 | `subscribed: false`, `status: "inactive"`, `offTime` at or before the poll | `nonqualifying` with `paidAccessEndedAt` = `offTime` (loss) |
-| `status: "paused"` | `nonqualifying`, not loss |
+| `status: "paused"` | `nonqualifying` with `paidAccessEndedAt` = poll time (loss) |
 | any other combination, or a missing or malformed field | `unknown` |
 | absent from the first complete poll | `nonqualifying`, not loss; absence recorded |
 | still absent in a complete poll at least an hour later | `nonqualifying` with `paidAccessEndedAt` (loss) |
@@ -59,7 +60,8 @@ shorter than the last one) writes no evidence and changes no link; only evidence
 
 - `BOOSTY_MEMBERSHIP_POLICY_JSON` (Edge, read by `website-account` and `boosty-membership`):
   `{"blog","qualifyingLevelIds","minimumPrice","priceField":"price"|"RUB"|"USD"|"EUR","maximumDropFraction","policyVersion":"boosty-paid-v1"}`.
-  The blog and level ids must match the control plane's Boosty policy entry.
+  The blog must match the control plane's Boosty policy entry. Qualification uses only
+  `minimumPrice` in `priceField` (`"USD"`, `20`); `qualifyingLevelIds` is still required but ignored.
 - Website server: `BOOSTY_STATUS_ENABLED=true` shows the read-only Boosty status on `/account`;
   it gates only that display, never linking.
 - `boosty-membership` only: `BOOSTY_SYNC_SECRET` (header `x-boosty-sync-key`),

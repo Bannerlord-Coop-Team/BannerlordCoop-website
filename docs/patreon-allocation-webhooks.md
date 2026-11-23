@@ -11,9 +11,9 @@ in the same transaction as role reconciliation. The control plane consumes that
 outbox through its existing receipt/claim synchronizer (normally once per
 minute). Website roles and manual allocation grants remain independent.
 
-A qualifying member needs a reviewed campaign/tier mapping, a tier priced at least
-2,000 USD cents, current entitlement of at least 2,000 cents, `active_patron`, a
-`Paid` charge status, and complete valid billing evidence. Free trials and gifts
+A qualifying member needs an entitled tier of the configured campaign listed at
+2,000 USD cents or more (any tier id; a discounted pledge still counts), `active_patron`,
+a `Paid` charge status, and complete valid billing evidence. Free trials and gifts
 are excluded, matching the existing allocation policy. This is current benefit
 eligibility, not proof that a specific payment settled. Downgrades, loss of
 qualification and cancellation/expiry updates withdraw the membership allowance.

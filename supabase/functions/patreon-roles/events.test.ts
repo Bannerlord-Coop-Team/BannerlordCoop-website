@@ -29,9 +29,13 @@ before(async () => {
         returns bigint language sql as $$
             insert into net.requests(url,headers,body,timeout_ms) values(url,headers,body,timeout_milliseconds) returning id;
         $$;`);
-    for (const name of ["20260907212654_create_patreon_links", "20260907220000_patreon_website_roles", "202609080002_membership_onboarding", "202609080003_membership_role_locking", "20260908030000_patreon_event_reconciliation", "20260910200000_membership_receipt_claims", "20260919010000_actionable_patreon_retries", "202609220001_patreon_allocation_webhooks", "202609280006_membership_paid_access_end"]) {
+    for (const name of ["20260907212654_create_patreon_links", "20260907220000_patreon_website_roles", "202609080002_membership_onboarding", "202609080003_membership_role_locking", "20260908030000_patreon_event_reconciliation", "20260910200000_membership_receipt_claims", "20260919010000_actionable_patreon_retries", "202609220001_patreon_allocation_webhooks", "202609280006_membership_paid_access_end", "202610020001_membership_allocation_usd20"]) {
         await db.exec(await readFile(new URL(`../../migrations/${name}.sql`, import.meta.url), "utf8"));
     }
+    // Stand-in for the Boosty adapter this suite does not install; tests/boosty-membership.test.ts covers the real one.
+    await db.exec(`create schema boosty_membership; create function boosty_membership.valid_evidence(e jsonb, p_blog text) returns boolean
+        language sql as $$ select true and e->'tierIds'='[]'::jsonb $$`);
+    await db.exec(await readFile(new URL("../../migrations/20261122120000_membership_qualifies_by_price.sql", import.meta.url), "utf8"));
 });
 after(async () => { await db?.close(); });
 beforeEach(async () => {
@@ -373,9 +377,13 @@ test("signed events grant one allocation evidence source and remove it after a d
     assert.equal((await allocationHead()).evidence.policyVersion, "patreon-paid-usd50-v1");
     assert.equal(Number((await allocationHead()).revision), 2);
     assert.equal((await db.query("select * from public.membership_outbox")).rows.length, 1);
-    const downgraded = allocationHandler(async () => Response.json(allocationSnapshot(4999)));
+    // A downgrade lowers the entitled tier's list price; a lower entitled amount alone is a discount.
+    const cheaper = allocationSnapshot(4999);
+    cheaper.included[1].attributes.amount_cents = 4999;
+    const downgraded = allocationHandler(async () => Response.json(cheaper));
     await allocationEvent(downgraded); await runWorker(downgraded);
-    assert.equal((await allocationHead()).evidence.verification, "nonqualifying");
+    const { verification, tierIds, paidAccessEndedAt } = (await allocationHead()).evidence;
+    assert.deepEqual([verification, tierIds, typeof paidAccessEndedAt], ["nonqualifying", [tier], "string"]);
     assert.equal(await role(), "Premium Server");
 });
 
