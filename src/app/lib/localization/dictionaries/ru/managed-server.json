@@ -202,6 +202,8 @@
   "configEditor.reloadSettings": "Загрузить настройки заново",
   "configEditor.managedConfigurationJson": "Конфигурация управляемого сервера · JSON",
   "configEditor.noPendingChanges": "Нет несохранённых изменений",
+  "configEditor.warSailsSetByCampaignOn": "Не сохранится — War Sails задаётся кампанией. Остановите сервер: «Campaigns» → «New campaign» → War Sails (удалит текущие кампании; сначала экспортируйте сохранение). Если его нет, обновите сервер. Игрокам нужно включить War Sails (NavalDLC).",
+  "configEditor.warSailsSetByCampaignOff": "Не сохранится — War Sails задаётся кампанией. Остановите сервер и выберите или начните классическую кампанию в «Campaigns».",
   "configEditor.discard": "Отменить изменения",
   "configEditor.saving": "Сохранение…",
   "configEditor.saveConfig": "Сохранить настройки",

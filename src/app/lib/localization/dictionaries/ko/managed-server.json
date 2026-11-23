@@ -202,6 +202,8 @@
   "configEditor.reloadSettings": "설정 다시 불러오기",
   "configEditor.managedConfigurationJson": "관리형 서버 설정 · JSON",
   "configEditor.noPendingChanges": "변경 사항 없음",
+  "configEditor.warSailsSetByCampaignOn": "캠페인이 War Sails를 결정하므로 저장되지 않습니다. 서버 중지 후 Campaigns → New campaign → War Sails(현재 캠페인이 삭제되니 먼저 저장 파일을 내보내세요). 보이지 않으면 서버를 업데이트하세요. 플레이어는 War Sails(NavalDLC)를 활성화해야 합니다.",
+  "configEditor.warSailsSetByCampaignOff": "캠페인이 War Sails를 결정하므로 저장되지 않습니다. 서버를 중지하고 Campaigns에서 클래식 캠페인을 선택하거나 시작하세요.",
   "configEditor.discard": "변경 취소",
   "configEditor.saving": "저장 중…",
   "configEditor.saveConfig": "설정 저장",

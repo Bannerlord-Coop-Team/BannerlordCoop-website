@@ -202,6 +202,8 @@
   "configEditor.reloadSettings": "Recharger les paramètres",
   "configEditor.managedConfigurationJson": "Configuration gérée · JSON",
   "configEditor.noPendingChanges": "Aucune modification en attente",
+  "configEditor.warSailsSetByCampaignOn": "Non enregistré — votre campagne définit War Sails. Arrêtez le serveur : « Campaigns » → « New campaign » → War Sails (supprime vos campagnes actuelles ; exportez d’abord votre sauvegarde). S’il n’est pas proposé, mettez le serveur à jour. Les joueurs doivent activer War Sails (NavalDLC).",
+  "configEditor.warSailsSetByCampaignOff": "Non enregistré — votre campagne définit War Sails. Arrêtez le serveur et sélectionnez ou démarrez une campagne classique dans « Campaigns ».",
   "configEditor.discard": "Annuler les modifications",
   "configEditor.saving": "Enregistrement…",
   "configEditor.saveConfig": "Enregistrer la configuration",

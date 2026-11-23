@@ -101,6 +101,26 @@ it("sends back the War Sails value it read when saving gameplay settings, even a
     expect((mocks.save.mock.calls[0]![0] as { settings: typeof saved }).settings.modOptions.warSails).toBe(true);
 });
 
+it("explains how to start a War Sails campaign when a JSON edit tries to turn War Sails on", async () => {
+    const live = liveWarSails(false);
+    await render();
+    await click("JSON");
+    expect(container.querySelector("#config-json-war-sails")).toBeNull();
+    await type("config-json", JSON.stringify({ serverConfig: liveServer, modConfig: { ...live, modOptions: { ...live.modOptions, warSails: true } } }));
+    expect(field<HTMLElement>("config-json-war-sails").textContent).toContain("New campaign");
+    expect(container.textContent).toContain("No pending changes");
+    await type("config-json", JSON.stringify({ serverConfig: liveServer, modConfig: live }));
+    expect(container.querySelector("#config-json-war-sails")).toBeNull();
+});
+
+it("explains how to leave War Sails when a JSON edit tries to turn it off", async () => {
+    const live = liveWarSails(true);
+    await render();
+    await click("JSON");
+    await type("config-json", JSON.stringify({ serverConfig: liveServer, modConfig: { ...live, modOptions: { ...live.modOptions, warSails: false } } }));
+    expect(field<HTMLElement>("config-json-war-sails").textContent).toContain("Classic campaign");
+});
+
 it("shows a form-shaped skeleton while the live configuration is loading", async () => {
     let resolveServer!: (value: unknown) => void;
     let resolveMod!: (value: unknown) => void;

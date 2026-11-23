@@ -202,6 +202,8 @@
   "configEditor.reloadSettings": "設定を再読み込み",
   "configEditor.managedConfigurationJson": "管理対象の設定 · JSON",
   "configEditor.noPendingChanges": "保留中の変更なし",
+  "configEditor.warSailsSetByCampaignOn": "保存されません（War Sails はキャンペーンで決まります）。サーバー停止後、「Campaigns」→「New campaign」→ War Sails（現在のキャンペーンは削除されるため、先にセーブをエクスポート）。選択肢にない場合はサーバーを更新してください。プレイヤーは War Sails (NavalDLC) の有効化が必要です。",
+  "configEditor.warSailsSetByCampaignOff": "保存されません（War Sails はキャンペーンで決まります）。サーバーを停止し、「Campaigns」でクラシックのキャンペーンを選択または開始してください。",
   "configEditor.discard": "破棄",
   "configEditor.saving": "保存中…",
   "configEditor.saveConfig": "設定を保存",
