@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { BOOSTY_ADAPTER_STAND_IN } from "../../../tests/boosty-adapter-stand-in.ts";
+import { sqlLossBreaker } from "../../../tests/loss-breaker-database.ts";
 import { readFile } from "node:fs/promises";
 import { after, before, beforeEach, test } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
@@ -352,7 +353,7 @@ function allocationSnapshot(amount = 5000) {
 }
 function allocationHandler(fetchImplementation: typeof fetch = async () => Response.json(allocationSnapshot())) {
     return createPatreonRoleHandler({ campaignId: campaign, tierId: tier, allocationPolicy,
-        creatorToken: staticCreatorToken("fixture-creator-token"), syncSecret, webhookSecret, rpc, fetchImplementation });
+        creatorToken: staticCreatorToken("fixture-creator-token"), syncSecret, webhookSecret, rpc, fetchImplementation, lossBreaker: sqlLossBreaker(db, "patreon") });
 }
 async function allocationLink() {
     await known(); await link();

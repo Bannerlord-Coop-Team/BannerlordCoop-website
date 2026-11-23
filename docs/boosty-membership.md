@@ -54,9 +54,9 @@ listed, so `status` and `offTime` decide loss. After a complete poll:
 Safeguards: nothing else writes loss. A failed page, incomplete list, budget overrun,
 credential failure or circuit-breaker trip (a complete list more than `maximumDropFraction`
 shorter than the last one) writes no evidence and changes no link; only evidence older than 24 hours becomes
-`unknown`. A trip holds the baseline and alerts operators at most every 6 hours. A complete
-poll that newly loses more than 25% of at least 10 linked subscribers trips the shared
-[mass-loss breaker](subscription-expiry-evidence.md) and writes none of that new loss.
+`unknown`. A trip holds the baseline and alerts operators at most every 6 hours. When more
+than 25% of at least 10 linked subscribers have newly lost access within 6 hours, the shared
+[mass-loss breaker](subscription-expiry-evidence.md) withholds the polling run's new loss.
 
 ## Configuration
 

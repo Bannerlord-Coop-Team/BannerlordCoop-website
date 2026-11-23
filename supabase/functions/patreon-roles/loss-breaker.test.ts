@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { MASS_LOSS_FRACTION, MASS_LOSS_MINIMUM_SAMPLE, massLossTripped } from "../_shared/loss-breaker.ts";
+import type { LossBreaker, LossBreakerVerdict, MassLossAlert } from "../_shared/loss-breaker.ts";
 import { staticCreatorToken } from "../_shared/patreon-creator-token.ts";
 import { createPatreonRoleHandler } from "../_shared/patreon-roles.ts";
+import { lossBreakerDatabase } from "../../../tests/loss-breaker-database.ts";
 
 const campaign = "12345", tier = "28995946", syncSecret = "patreon-sync-secret-fixture", webhookSecret = "patreon-webhook-secret-fixture";
+const token = "aaaaaaaa-1111-4111-8111-111111111111";
 const policy = { campaignId: campaign, qualifyingTierIds: [tier], currency: "USD" as const, minimumCents: 5000 as const, policyVersion: "patreon-paid-usd50-v1" as const };
 const memberId = (i: number) => `11111111-1111-4111-8111-${String(i).padStart(12, "0")}`;
+const accountId = (i: number) => `22222222-2222-4222-8222-${String(i).padStart(12, "0")}`;
 
 // Builds one creator member read: a $50 qualifying patron, or one with no tier left (a former patron,
 // or with `emptyTiers` an active $50 patron whose tiers an API glitch dropped).
@@ -21,52 +24,64 @@ function memberRead(id: string, qualifying: boolean, emptyTiers = false) {
             { type: "tier", id: tier, attributes: { amount_cents: 5000 }, relationships: { campaign: { data: { type: "campaign", id: campaign } } } }] };
 }
 
-// Runs one worker pass over `lapsing` newly lost and `renewing` qualifying linked members.
-async function run(lapsing: number, renewing: number, breakerReply = { bypass: false, alert: true }, alreadyLost = false, emptyTiers = false) {
-    const total = lapsing + renewing;
-    const completes: Record<string, unknown>[] = [];
-    let trips = 0, alerts = 0;
+type Run = { lapsing: number; renewing: number; breaker?: LossBreaker; alreadyLost?: boolean; emptyTiers?: boolean; first?: number };
+// Runs one worker pass over `lapsing` newly lost and `renewing` qualifying linked members, numbered from `first`.
+async function run({ lapsing, renewing, breaker, alreadyLost = false, emptyTiers = false, first = 0 }: Run) {
+    const completes: Record<string, unknown>[] = [], alerts: MassLossAlert[] = [], reported: string[][] = [];
     const handler = createPatreonRoleHandler({ campaignId: campaign, tierId: tier, allocationPolicy: policy, creatorToken: staticCreatorToken("fixture-creator-token"),
-        syncSecret, webhookSecret, alert: async () => { alerts++; }, lossBreaker: async () => { trips++; return breakerReply; },
+        syncSecret, webhookSecret, alert: async kind => { alerts.push(kind); },
+        ...(breaker ? { lossBreaker: async (lease: string, ids: string[]) => { reported.push(ids); return breaker(lease, ids); } } : {}),
         rpc: async (operation, input) => {
-            if (operation === "acquire") return { token: "aaaaaaaa-1111-4111-8111-111111111111", scanDue: false, allocationPolicyVersion: policy.policyVersion,
-                allocationVerifiedAt: new Date().toISOString(), jobs: Array.from({ length: total }, (_, i) => ({ memberId: memberId(i), generation: 1,
-                    allocationFence: { accountId: memberId(i), generation: "1", revision: "1" }, allocationLost: alreadyLost && i < lapsing })) };
+            if (operation === "acquire") return { token, scanDue: false, allocationPolicyVersion: policy.policyVersion, allocationVerifiedAt: new Date().toISOString(),
+                jobs: Array.from({ length: lapsing + renewing }, (_, i) => ({ memberId: memberId(first + i), generation: 1,
+                    allocationFence: { accountId: accountId(first + i), generation: "1", revision: "1" }, allocationLost: alreadyLost && i < lapsing })) };
             if (operation === "complete") completes.push(input);
             return {};
         },
         fetchImplementation: async input => {
             const id = new URL(String(input)).pathname.split("/").at(-1)!;
-            return Response.json(memberRead(id, Number(id.slice(-12)) >= lapsing, emptyTiers));
+            return Response.json(memberRead(id, Number(id.slice(-12)) - first >= lapsing, emptyTiers));
         } });
     const response = await handler(new Request("https://edge.invalid/patreon-roles", { method: "POST", headers: { "x-patreon-sync-key": syncSecret } }));
     assert.equal(response.status, 200);
     const evidence = completes.map(input => input.allocationEvidence as { verification: string; paidAccessEndedAt?: string } | undefined);
-    return { trips, alerts, completed: completes.length, losses: evidence.filter(row => row?.paidAccessEndedAt !== undefined).length,
+    return { reported, alerts, losses: evidence.filter(row => row?.paidAccessEndedAt !== undefined).length,
         qualifying: evidence.filter(row => row?.verification === "qualifying").length, withheld: evidence.filter(row => row === undefined).length };
 }
+// A fake breaker answering one fixed verdict.
+const answering = (verdict: LossBreakerVerdict): LossBreaker => async () => verdict;
+const ids = (count: number, first = 0) => Array.from({ length: count }, (_, i) => accountId(first + i));
 
-test("the shared breaker trips only above its fraction of a large enough sample", () => {
-    assert.deepEqual([MASS_LOSS_FRACTION, MASS_LOSS_MINIMUM_SAMPLE], [0.25, 10]);
-    assert.equal(massLossTripped(9, 9), false, "a run under the minimum sample never trips");
-    assert.equal(massLossTripped(3, 12), false, "exactly 25% does not trip");
-    assert.equal(massLossTripped(4, 12), true);
-    assert.equal(massLossTripped(6, 20), true);
-    assert.equal(massLossTripped(5, 20), false);
+test("a Patreon run reports its newly lost accounts and withholds only their loss when the breaker says so", async () => {
+    assert.deepEqual(await run({ lapsing: 6, renewing: 14, breaker: answering({ withhold: true, bypass: false, alert: true }) }),
+        { reported: [ids(6)], alerts: ["mass_loss_tripped"], losses: 0, qualifying: 14, withheld: 6 });
+    assert.deepEqual(await run({ lapsing: 6, renewing: 14, breaker: answering({ withhold: true, bypass: false, alert: false }) }),
+        { reported: [ids(6)], alerts: [], losses: 0, qualifying: 14, withheld: 6 }, "a throttled trip still withholds");
+    assert.deepEqual(await run({ lapsing: 6, renewing: 14, breaker: answering({ withhold: false, bypass: true, alert: true }) }),
+        { reported: [ids(6)], alerts: ["mass_loss_allowed"], losses: 6, qualifying: 14, withheld: 0 }, "an allowance writes the loss and still alerts");
+    assert.deepEqual(await run({ lapsing: 1, renewing: 3, breaker: answering({ withhold: false, bypass: false, alert: false }) }),
+        { reported: [ids(1)], alerts: [], losses: 1, qualifying: 3, withheld: 0 }, "an untripped window writes the loss");
+    assert.deepEqual(await run({ lapsing: 0, renewing: 4, breaker: answering({ withhold: true, bypass: false, alert: true }) }),
+        { reported: [], alerts: [], losses: 0, qualifying: 4, withheld: 0 }, "a run without new loss never asks");
+    assert.deepEqual((await run({ lapsing: 6, renewing: 14, alreadyLost: true, breaker: answering({ withhold: true, bypass: false, alert: true }) })).reported, [], "recorded loss is not new");
+    assert.deepEqual(await run({ lapsing: 1, renewing: 1 }), { reported: [], alerts: [], losses: 0, qualifying: 1, withheld: 1 }, "without a breaker new loss is withheld");
 });
 
-test("a Patreon run that newly loses too many linked members completes them without loss evidence and still writes renewals", async () => {
-    assert.deepEqual(await run(6, 14), { trips: 1, alerts: 1, completed: 20, losses: 0, qualifying: 14, withheld: 6 }, "6 of 20 trips");
-    assert.deepEqual(await run(6, 14, { bypass: false, alert: false }), { trips: 1, alerts: 0, completed: 20, losses: 0, qualifying: 14, withheld: 6 }, "a throttled trip still withholds");
-    assert.deepEqual(await run(5, 15), { trips: 0, alerts: 0, completed: 20, losses: 5, qualifying: 15, withheld: 0 }, "5 of 20 is under the threshold");
-    assert.deepEqual(await run(1, 0), { trips: 0, alerts: 0, completed: 1, losses: 1, qualifying: 0, withheld: 0 }, "one real loss in a small run is written");
-    assert.deepEqual(await run(9, 0), { trips: 0, alerts: 0, completed: 9, losses: 9, qualifying: 0, withheld: 0 }, "fewer than 10 linked never trips");
-    assert.deepEqual(await run(6, 14, undefined, true), { trips: 0, alerts: 0, completed: 20, losses: 6, qualifying: 14, withheld: 0 }, "loss already recorded is not new");
-    assert.deepEqual(await run(6, 14, { bypass: true, alert: false }), { trips: 1, alerts: 0, completed: 20, losses: 6, qualifying: 14, withheld: 0 }, "an operator window writes the loss");
-});
-
-test("an API glitch that suddenly returns empty tiers for many active Paid patrons is frozen by the breaker", async () => {
-    // No custom pledges exist, so one tierless active patron is loss; many at once look like a glitch.
-    assert.deepEqual(await run(1, 0, undefined, false, true), { trips: 0, alerts: 0, completed: 1, losses: 1, qualifying: 0, withheld: 0 }, "one tierless patron is loss");
-    assert.deepEqual(await run(15, 5, undefined, false, true), { trips: 1, alerts: 1, completed: 20, losses: 0, qualifying: 5, withheld: 15 }, "15 of 20 suddenly tierless trips");
+test("the real breaker freezes an empty-tier glitch and small runs that together pass 25% of the linked members", async () => {
+    const { db, link, lease, breaker } = await lossBreakerDatabase();
+    try {
+        await lease("patreon", token);
+        await link("patreon", 20);
+        // No custom pledges exist, so one tierless active patron is loss; many at once look like a glitch.
+        assert.equal((await run({ lapsing: 1, renewing: 0, emptyTiers: true, breaker: breaker("patreon") })).losses, 1, "one tierless patron is loss");
+        assert.deepEqual(await run({ lapsing: 15, renewing: 5, emptyTiers: true, first: 100, breaker: breaker("patreon") }),
+            { reported: [ids(15, 100)], alerts: ["mass_loss_tripped"], losses: 0, qualifying: 5, withheld: 15 }, "15 of 20 suddenly tierless trips");
+        await db.exec("truncate public.membership_loss_observations; update public.membership_loss_breakers set alerted_at = null");
+        // Runs of 3 reads, each far below a 10-read floor, still trip once 6 of the 20 linked members newly lost.
+        for (const first of [200, 210]) assert.equal((await run({ lapsing: 2, renewing: 1, first, breaker: breaker("patreon") })).losses, 2, `run from ${first}`);
+        assert.deepEqual(await run({ lapsing: 2, renewing: 1, first: 220, breaker: breaker("patreon") }),
+            { reported: [ids(2, 220)], alerts: ["mass_loss_tripped"], losses: 0, qualifying: 1, withheld: 2 });
+    } finally {
+        await db.close();
+    }
 });

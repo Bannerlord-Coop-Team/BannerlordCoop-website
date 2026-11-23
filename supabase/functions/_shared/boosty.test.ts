@@ -10,6 +10,8 @@ import { parseBoostyPolicy, type BoostyPolicy } from "./boosty-policy.ts";
 import { parseFundingSnapshot } from "./funding-provider.ts";
 import type { CreatorTokenProvider } from "./patreon-creator-token.ts";
 import { createWebsiteAccountHandler } from "./website-account.ts";
+import type { LossBreaker } from "./loss-breaker.ts";
+import { lossBreakerDatabase } from "../../../tests/loss-breaker-database.ts";
 
 const policy: BoostyPolicy = { blog: "coop-team", qualifyingLevelIds: ["555", "556"], minimumPrice: 500, priceField: "RUB", maximumDropFraction: 0.25, policyVersion: "boosty-paid-v1" };
 const accountId = "aaaaaaaa-1111-4111-8111-111111111111";
@@ -262,33 +264,42 @@ test("worker failures freeze evidence without links or loss; a complete poll mat
     assert.deepEqual(notDue.operations(), ["acquire", "release"]);
 });
 
-test("a poll that newly loses too many linked subscribers withholds only that loss and alerts when the breaker says so", async () => {
-    const syncSecret = "boosty-sync-secret-fixture";
+test("a poll reports its newly lost accounts; the real breaker withholds only that loss over 25% of the linked subscribers", async () => {
+    const syncSecret = "boosty-sync-secret-fixture", token = "bbbbbbbb-1111-4111-8111-111111111111";
     // Runs one poll over `paused` newly lapsing and `active` qualifying subscribers; `lost` heads already record loss.
-    const poll = async (paused: number, active: number, breakerReply = { bypass: false, alert: true }, lost = false) => {
+    const poll = async (paused: number, active: number, breaker?: LossBreaker, lost = false) => {
         const subscribers = Array.from({ length: paused + active }, (_, i): BoostySubscriber => ({ id: String(5001 + i), emailSha256: null, subscribed: true,
             status: i < paused ? "paused" : "active", offTime: null, blacklisted: false, levelId: "555", price: 500 }));
-        const written: { evidence: { verification: string; paidAccessEndedAt?: string } }[] = [], alerts: string[] = [];
-        let trips = 0;
+        const written: { evidence: { verification: string; paidAccessEndedAt?: string } }[] = [], alerts: string[] = [], reported: string[][] = [];
         const rpc: BoostySyncRpc = async (operation, input) => {
-            if (operation === "acquire") return { token: "bbbbbbbb-1111-4111-8111-111111111111", pollDue: true, lastCompleteCount: null, now: polledAt };
+            if (operation === "acquire") return { token, pollDue: true, lastCompleteCount: null, now: polledAt };
             if (operation === "linked") return subscribers.map((s, i) => ({ accountId: `aaaaaaaa-1111-4111-8111-${String(i).padStart(12, "0")}`, providerUserId: s.id, linkGeneration: "1", absentSince: null, lost: lost && i < paused }));
             if (operation === "evidence") written.push(...input.results as typeof written);
             return operation === "polled" ? { alert: false } : {};
         };
         const handler = createBoostyMembershipHandler({ adapter: { policy, api: { subscribers: async () => ({ subscribers, total: subscribers.length }) },
             credential: { current: async () => "a", replace: async () => null, reportFailure: async () => undefined } },
-            syncSecret, rpc, alert: async kind => { alerts.push(kind); }, lossBreaker: async () => { trips++; return breakerReply; }, log: () => undefined });
+            syncSecret, rpc, alert: async kind => { alerts.push(kind); }, log: () => undefined,
+            ...(breaker ? { lossBreaker: async (lease: string, ids: string[]) => { reported.push(ids); return breaker(lease, ids); } } : {}) });
         const response = await handler(new Request("https://edge.invalid/boosty-membership", { method: "POST", headers: { "x-boosty-sync-key": syncSecret } }));
         assert.equal(response.status, 200);
-        return { trips, alerts, losses: written.filter(row => row.evidence.paidAccessEndedAt !== undefined).length, qualifying: written.filter(row => row.evidence.verification === "qualifying").length };
+        return { reported: reported.map(ids => ids.length), alerts, losses: written.filter(row => row.evidence.paidAccessEndedAt !== undefined).length, qualifying: written.filter(row => row.evidence.verification === "qualifying").length };
     };
-    assert.deepEqual(await poll(4, 8), { trips: 1, alerts: ["mass_loss_tripped"], losses: 0, qualifying: 8 }, "4 of 12 is over 25%: loss withheld, renewals written");
-    assert.deepEqual(await poll(4, 8, { bypass: false, alert: false }), { trips: 1, alerts: [], losses: 0, qualifying: 8 }, "a throttled trip still withholds");
-    assert.deepEqual(await poll(3, 9), { trips: 0, alerts: [], losses: 3, qualifying: 9 }, "3 of 12 is at the threshold");
-    assert.deepEqual(await poll(9, 0), { trips: 0, alerts: [], losses: 9, qualifying: 0 }, "fewer than 10 linked never trips");
-    assert.deepEqual(await poll(4, 8, undefined, true), { trips: 0, alerts: [], losses: 4, qualifying: 8 }, "loss already recorded is not new");
-    assert.deepEqual(await poll(4, 8, { bypass: true, alert: false }), { trips: 1, alerts: [], losses: 4, qualifying: 8 }, "an operator window writes the loss");
+    const { db, link, lease, breaker } = await lossBreakerDatabase();
+    try {
+        await lease("boosty", token);
+        await link("boosty", 12);
+        assert.deepEqual(await poll(3, 9, breaker("boosty")), { reported: [3], alerts: [], losses: 3, qualifying: 9 }, "3 of 12 is at the threshold");
+        await db.exec("truncate public.membership_loss_observations");
+        assert.deepEqual(await poll(4, 8, breaker("boosty")), { reported: [4], alerts: ["mass_loss_tripped"], losses: 0, qualifying: 8 }, "4 of 12 is over 25%: loss withheld, renewals written");
+        assert.deepEqual(await poll(4, 8, breaker("boosty")), { reported: [4], alerts: [], losses: 0, qualifying: 8 }, "a throttled trip still withholds");
+        assert.deepEqual(await poll(4, 8, breaker("boosty"), true), { reported: [], alerts: [], losses: 4, qualifying: 8 }, "loss already recorded is not new");
+        const allowed: LossBreaker = async () => ({ withhold: false, bypass: true, alert: true });
+        assert.deepEqual(await poll(4, 8, allowed), { reported: [4], alerts: ["mass_loss_allowed"], losses: 4, qualifying: 8 }, "an allowance writes the loss and alerts");
+        assert.deepEqual(await poll(1, 1), { reported: [], alerts: [], losses: 0, qualifying: 1 }, "without a breaker new loss is withheld");
+    } finally {
+        await db.close();
+    }
 });
 
 test("website-account Boosty status is strict and inert while the adapter is unconfigured", async () => {

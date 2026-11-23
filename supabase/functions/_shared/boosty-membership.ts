@@ -8,12 +8,12 @@ import { checkDatabaseContention, DatabaseContention } from "./database-contenti
 import { BoostyAuthError, MAX_SUBSCRIBER_PAGES, type BoostyApi, type BoostySubscriber } from "./boosty-api.ts";
 import { BoostyCredentialUnavailable, serviceRpcEndpoint, type BoostyCredential } from "./boosty-credential.ts";
 import { circuitBreakerTripped, decideBoostyEvidence, type BoostyDecision, type LinkedBoostyHead } from "./boosty-evidence.ts";
-import { massLossTripped, type LossBreaker } from "./loss-breaker.ts";
+import { WITHHOLD_ALL_NEW_LOSS, type LossBreaker, type MassLossAlert } from "./loss-breaker.ts";
 import type { BoostyPolicy } from "./boosty-policy.ts";
 import { BOOSTY_IDENTIFIER } from "./funding-provider.ts";
 
 export type BoostySyncRpc = (operation: string, input: Record<string, unknown>) => Promise<unknown>;
-export type BoostyAlert = "breaker_tripped" | "mass_loss_tripped";
+export type BoostyAlert = "breaker_tripped" | MassLossAlert;
 /** A configured adapter: reviewed policy, creator credential and the bounded API client. */
 export type BoostyAdapter = { policy: BoostyPolicy; credential: BoostyCredential; api: BoostyApi };
 const MAX_LINKED_HEADS = 5000;
@@ -80,7 +80,7 @@ export function createBoostyMembershipHandler(options: {
     if (options.syncSecret.length < 16 || options.syncSecret.length > 4096) throw new Error("invalid_boosty_sync_secret");
     const now = options.now ?? Date.now;
     const log = options.log ?? ((message: string) => console.warn(message));
-    const lossBreaker = options.lossBreaker ?? (async () => ({ bypass: false, alert: false }));
+    const lossBreaker = options.lossBreaker ?? WITHHOLD_ALL_NEW_LOSS;
 
     /** Binds one configured adapter to the run phases below. */
     function runnerFor(adapter: BoostyAdapter) {
@@ -95,14 +95,16 @@ export function createBoostyMembershipHandler(options: {
             }
         }
 
-        /** Withholds new loss from a poll that tripped the mass-loss breaker unless an operator allows it. */
+        /** Reports the poll's newly lost accounts to the breaker and drops their loss when it withholds it. */
         async function withholdMassLoss(token: string, heads: LinkedBoostyHead[], decisions: BoostyDecision[]) {
+            // Whether a decision records loss that the head's current evidence does not already record.
             const isNewLoss = (decision: BoostyDecision, index: number) => decision.evidence.paidAccessEndedAt !== undefined && !heads[index].lost;
-            if (!massLossTripped(decisions.filter(isNewLoss).length, heads.length)) return decisions;
-            const breaker = await lossBreaker(token);
-            if (breaker.bypass) return decisions;
-            log("Boosty poll newly lost too many members; their loss is withheld");
-            if (breaker.alert) await options.alert("mass_loss_tripped").catch(() => log("Boosty operator alert could not be sent"));
+            const newLoss = decisions.filter(isNewLoss);
+            if (newLoss.length === 0) return decisions;
+            const verdict = await lossBreaker(token, newLoss.map(decision => decision.accountId));
+            if (verdict.alert) await options.alert(verdict.bypass ? "mass_loss_allowed" : "mass_loss_tripped").catch(() => log("Boosty operator alert could not be sent"));
+            if (!verdict.withhold) return decisions;
+            log("Boosty subscribers newly lost too fast; their loss is withheld");
             return decisions.filter((decision, index) => !isNewLoss(decision, index));
         }
 

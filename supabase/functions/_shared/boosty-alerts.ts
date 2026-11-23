@@ -2,13 +2,13 @@
 // through the shared site mail account. Fixed text only: no tokens, bodies or account data.
 import type { BoostyFailure } from "./boosty-credential.ts";
 import type { BoostyAlert } from "./boosty-membership.ts";
-import { massLossAlertMessage } from "./loss-breaker.ts";
+import { massLossAlertMessage, type MassLossAlert } from "./loss-breaker.ts";
 import type { RegionAlertConfig } from "./region-alerts.ts";
 import type { SmtpMessage } from "./smtp.ts";
 
 export type BoostyOperatorAlert = BoostyFailure | BoostyAlert;
 
-const TEXT: Record<Exclude<BoostyOperatorAlert, "mass_loss_tripped">, { subject: string; body: string }> = {
+const TEXT: Record<Exclude<BoostyOperatorAlert, MassLossAlert>, { subject: string; body: string }> = {
     rejected: {
         subject: "Boosty creator credential rejected",
         body: "Boosty refused the creator credential (refresh or API request). Membership evidence is frozen: nothing is recorded as loss, and evidence older than 24 hours becomes unknown. Sign in to Boosty, capture a new refresh token and device id, update the BOOSTY_REFRESH_TOKEN and BOOSTY_DEVICE_ID function secrets, then reset the credential store as described in docs/boosty-membership.md.",
@@ -25,7 +25,7 @@ const TEXT: Record<Exclude<BoostyOperatorAlert, "mass_loss_tripped">, { subject:
 
 /** Builds the fixed operator email for one alert kind. */
 export function boostyOperatorAlertMessage(kind: BoostyOperatorAlert, config: Pick<RegionAlertConfig, "from" | "fromName" | "recipients">): SmtpMessage {
-    if (kind === "mass_loss_tripped") return massLossAlertMessage("boosty", config);
+    if (kind === "mass_loss_tripped" || kind === "mass_loss_allowed") return massLossAlertMessage("boosty", kind, config);
     return {
         from: config.from, ...(config.fromName === undefined ? {} : { fromName: config.fromName }), to: [...config.recipients],
         subject: `[BannerlordCoop] ${TEXT[kind].subject}`, text: TEXT[kind].body,

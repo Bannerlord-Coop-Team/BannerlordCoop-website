@@ -2,7 +2,7 @@ import { ALLOCATION_POLICY_VERSION, POLICY_VERSION, parsePolicy, timestamp, type
 import { verifyPatreonAllocation } from "./patreon-membership.ts";
 import { checkDatabaseContention, DatabaseContention } from "./database-contention.ts";
 import { fetchWithCreatorToken, type CreatorTokenProvider } from "./patreon-creator-token.ts";
-import { massLossTripped, type LossBreaker } from "./loss-breaker.ts";
+import { WITHHOLD_ALL_NEW_LOSS, type LossBreaker, type MassLossAlert } from "./loss-breaker.ts";
 import { createHmac, timingSafeEqual } from "node:crypto";
 import { Buffer } from "node:buffer";
 
@@ -29,13 +29,13 @@ export interface PatreonRoleOptions {
     rpc: Rpc;
     fetchImplementation?: typeof fetch;
     now?: () => number;
-    /** Mass-loss breaker; without one a trip still withholds new loss but nobody is alerted. */
+    /** Mass-loss breaker; without one every new loss is withheld and nobody is alerted. */
     lossBreaker?: LossBreaker;
-    alert?: () => Promise<void>;
+    alert?: (kind: MassLossAlert) => Promise<void>;
 }
 
 /** One member read in a run, kept until the mass-loss breaker has seen the whole run. */
-type MemberRead = { job: ObjectValue; snapshot: ObjectValue; evidence?: { paidAccessEndedAt?: string | null } };
+type MemberRead = { job: ObjectValue; snapshot: ObjectValue; evidence?: Awaited<ReturnType<typeof verifyPatreonAllocation>> };
 
 function object(value: unknown): ObjectValue {
     if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid_response");
@@ -174,16 +174,16 @@ export function createPatreonRoleHandler(options: PatreonRoleOptions) {
     if (allocationPolicy && (allocationPolicy.campaignId !== options.campaignId || (allocationPolicy.policyVersion !== ALLOCATION_POLICY_VERSION && allocationPolicy.policyVersion !== POLICY_VERSION))) throw new Error("invalid_allocation_policy");
     const fetcher = options.fetchImplementation ?? fetch;
     const now = options.now ?? Date.now;
-    const lossBreaker = options.lossBreaker ?? (async () => ({ bypass: false, alert: false }));
-    /** Picks the linked reads whose new loss is withheld because the run tripped the breaker and no operator allows it. */
+    const lossBreaker = options.lossBreaker ?? WITHHOLD_ALL_NEW_LOSS;
+    /** Reports the run's newly lost linked accounts to the breaker and returns the reads whose loss it withholds. */
     async function withheldLoss(token: string, reads: MemberRead[]): Promise<Set<MemberRead>> {
-        const linked = reads.filter(read => read.evidence !== undefined && read.job.allocationFence !== undefined && read.job.allocationFence !== null);
-        const newLoss = linked.filter(read => typeof read.evidence?.paidAccessEndedAt === "string" && read.job.allocationLost !== true);
-        if (!massLossTripped(newLoss.length, linked.length)) return new Set();
-        const breaker = await lossBreaker(token);
-        if (breaker.bypass) return new Set();
-        console.warn("Patreon run newly lost too many members; their loss is withheld");
-        if (breaker.alert) await options.alert?.().catch(() => console.warn("Patreon operator alert could not be sent"));
+        const newLoss = reads.filter(read => typeof read.evidence?.paidAccessEndedAt === "string" && read.job.allocationLost !== true
+            && typeof (read.job.allocationFence as ObjectValue | null | undefined)?.accountId === "string");
+        if (newLoss.length === 0) return new Set();
+        const verdict = await lossBreaker(token, newLoss.map(read => (read.job.allocationFence as ObjectValue).accountId as string));
+        if (verdict.alert) await options.alert?.(verdict.bypass ? "mass_loss_allowed" : "mass_loss_tripped").catch(() => console.warn("Patreon operator alert could not be sent"));
+        if (!verdict.withhold) return new Set();
+        console.warn("Patreon members newly lost too fast; their loss is withheld");
         return new Set(newLoss);
     }
     async function patreon(path: string, params: Record<string, string>) {

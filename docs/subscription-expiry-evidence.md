@@ -15,18 +15,28 @@ trials, gifts, outages and OAuth reads never produce it. A member with
 `20261123000000_membership_price_and_loss_breaker.sql` lets the Patreon and Boosty
 validators accept loss with paid `tierIds` and Patreon qualifying evidence on any tier.
 
-**Mass-loss breaker.** If more than 25% of the linked members read in one Boosty poll
-or one Patreon worker run (up to 20 members) newly flip to loss, that run writes none of
-the new loss. Those members keep their current evidence, while qualifying and other
-evidence, including renewals that cancel grace, is still written. Members whose loss was
-already recorded don't count. A run reading fewer than 10 linked members never trips, so
-webhook-driven runs of one or two members and the small Boosty list are unaffected. A trip
-records `tripped_at` in `public.membership_loss_breakers` and alerts operators at most every
-6 hours. Once operators have confirmed the losses are real (for example, the first refresh
-after this policy change), they allow them for a bounded window:
-`update public.membership_loss_breakers set allowed_until = now() + interval '3 hours' where provider = 'patreon';`
-then mark every linked Patreon member due (`update patreon_roles.memberships set due_at = now(), priority = 2;`).
-At 20 members per 5-minute run, 513 linked members take about 26 runs (2h10m).
+**Mass-loss breaker.** Each Patreon worker run and Boosty poll reports the linked accounts
+that newly flipped to loss. Accounts whose loss was already recorded don't count.
+`public.membership_loss_breaker` keeps one row per newly lost account for 6 hours. A provider
+trips while those accounts are more than 25% of the members its worker re-reads: linked
+Patreon members with a campaign membership (306 on 2026-11-23), or linked Boosty heads. Below
+10 such members it never trips. Because the window spans runs, short or failing runs and
+webhook runs of one or two members add up. A trip withholds the reporting run's new loss:
+those members keep their current evidence, while qualifying and other evidence, including
+renewals that cancel grace, is still written. It records `tripped_at` in
+`public.membership_loss_breakers` and alerts operators at most every 6 hours. After a
+glitch, withheld members are re-read on their next refresh, and new loss resumes once the
+window drains.
+
+Once operators have confirmed the losses are real (for example, the first refresh after this
+policy change), an administrator allows them for 1-24 hours from the SQL editor. Edge
+functions cannot call this:
+`select public.membership_loss_breaker_allow('patreon', 3, '<operator>', '<why these losses are real>');`
+It records `allowed_at`, `allowed_until`, `allowed_by` and `allowed_reason`. A check rejects
+any allowance longer than 24 hours or without who and why. Trips still alert during an
+allowance. Then mark only the linked Patreon members due:
+`update patreon_roles.memberships m set due_at = now(), priority = 2 from public.patreon_accounts a where a.patreon_user_id = m.patreon_user_id;`
+At 20 members per 5-minute run, 306 members take 16 runs (about 80 minutes).
 
 `202609280006_membership_paid_access_end.sql` accepts this bounded evidence through
 the existing worker lease, account and link-generation fence. Old eight-field

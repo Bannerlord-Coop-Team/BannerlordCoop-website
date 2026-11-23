@@ -49,8 +49,8 @@ Deno.serve(createPatreonRoleHandler({
     syncSecret,
     rpc: createPatreonRoleRpc({ campaignId, tierId, supabaseUrl, serviceKey }),
     lossBreaker: createLossBreakerRpc({ supabaseUrl, serviceKey, provider: "patreon" }),
-    alert: async () => {
+    alert: async (kind) => {
         if (alertConfig === null) return console.error("Patreon mass-loss alert skipped: SMTP_PASS is not set");
-        await sendSmtpMail(denoSmtpTransport, alertConfig.smtp, massLossAlertMessage("patreon", alertConfig));
+        await sendSmtpMail(denoSmtpTransport, alertConfig.smtp, massLossAlertMessage("patreon", kind, alertConfig));
     },
 }));

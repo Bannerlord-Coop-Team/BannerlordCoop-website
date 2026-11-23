@@ -13,6 +13,7 @@ import { parseBoostyStatus } from "../supabase/functions/_shared/boosty-account"
 import type { BoostyApi, BoostySubscriber } from "../supabase/functions/_shared/boosty-api";
 import type { BoostyCredential } from "../supabase/functions/_shared/boosty-credential";
 import type { BoostyPolicy } from "../supabase/functions/_shared/boosty-policy";
+import { sqlLossBreaker } from "./loss-breaker-database";
 
 const history = ["20260907212654_create_patreon_links.sql", "20260907220000_patreon_website_roles.sql", "20260907230000_atomic_live_console_assignments.sql",
     "202609080002_membership_onboarding.sql", "202609080003_membership_role_locking.sql", "20260908030000_patreon_event_reconciliation.sql",
@@ -234,7 +235,7 @@ test("Boosty adapter links by email, decides evidence conservatively and serves 
             const credential: BoostyCredential = { current: async () => "access", replace: async () => null, reportFailure: async () => undefined };
             const adapter: BoostyAdapter = { policy, credential, api };
             const alerts: string[] = [];
-            const worker = createBoostyMembershipHandler({ adapter, syncSecret, rpc: sync, alert: async kind => { alerts.push(kind); } });
+            const worker = createBoostyMembershipHandler({ adapter, syncSecret, rpc: sync, alert: async kind => { alerts.push(kind); }, lossBreaker: sqlLossBreaker(db, "boosty") });
             const wake = () => worker(new Request("https://edge-runtime.supabase.com/boosty-membership", { method: "POST", headers: { "x-boosty-sync-key": syncSecret } }));
             assert.equal((await wake()).status, 200);
             assert.deepEqual(calls, ["subscribers:0"]);
