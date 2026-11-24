@@ -101,7 +101,7 @@ The website does not query the private `control_plane` schema, call a VPS provid
 
 The administrator presentation resolves Discord usernames only from bounded Supabase Auth accounts that signed in with Discord. Numeric Discord IDs remain visible and accepted as a fallback. Dates and provider-check times render only after browser hydration so they use the administrator's browser locale and time zone rather than the Netlify or Oracle server time zone.
 
-VPS onboarding lives in the VPS view's **Add capacity** dialog, opened from the **Adding capacity** banner. It has two tabs: **Provider account** (the **Onboard provider-account VPS** form) and **Manual entry** (the **Add manual VPS** form). The banner's **Onboard VPS** button opens it on the Provider account tab and **Add manual VPS** on the Manual entry tab. The dialog is a native modal `<dialog>`: it focuses the selected tab when it opens, the arrow, Home and End keys move between tabs, Escape or the close button dismisses it, and focus returns to the button that opened it. Both tabs stay mounted while it is open, so a half-typed form or a submission result survives switching tabs. A successful submission on either tab refreshes the VPS view in place behind the dialog and keeps the result and its progress links visible; closing the dialog discards both forms. The Operations view no longer carries either form and no longer reads provider account inventory; its `vps-hosts` read is `{ includeLiveData: false }`, which is all Create server needs.
+VPS onboarding lives in the VPS view's **Add capacity** dialog, opened from the **Adding capacity** banner. It has two tabs: **Provider account** (the **Onboard provider-account VPS** form) and **Manual entry** (the **Add manual VPS** form). The banner's **Onboard VPS** button opens it on the Provider account tab and **Add manual VPS** on the Manual entry tab. The dialog is a native modal `<dialog>`: it focuses the selected tab when it opens, the arrow, Home and End keys move between tabs, Escape or the close button dismisses it, and focus returns to the button that opened it. Both tabs stay mounted while it is open, so a half-typed form or a submission result survives switching tabs. A successful submission on either tab refreshes the VPS view in place behind the dialog and keeps the result and its progress links visible; closing the dialog discards both forms. VPS onboarding is only in the VPS view. The Operations view reads no provider account inventory: its `vps-hosts` read is `{ includeLiveData: false }`, which is all Create server needs.
 
 The **Provider account** tab is the normal additive host-ingestion path for providers with an account API (OVHcloud and Contabo). Its choices are the `availableHosts` of the VPS view's provider billing read (unregistered hosts from every enabled provider account, labelled `<provider> · <service name>`); each option carries that host's `provider` and `serviceName`, and the form sends both. While that read is still loading the tab says so and its submit stays disabled; if it fails before any result, the tab explains that unregistered VPS products cannot be listed and that Manual entry still works, with the read error; a billing response that lists no hosts counts as a failed read, with that as its error, on both the page banner and this tab. A later failure keeps the last listed hosts with a notice.
 Both notices offer **Retry provider inventory**, which reads billing again at
@@ -339,10 +339,9 @@ revocation checks, request IDs, origin restrictions, and `Cache-Control: no-stor
 Deploy the `control-plane-admin` Edge Function separately after merging this change.
 
 Operations requests only registered VPS capacity, with `includeLiveData: false`,
-for Create server's provider choices. It no longer reads provider account
-inventory: VPS onboarding moved to the VPS view's Add capacity dialog, which
-takes its available hosts from the VPS view's provider billing read. The VPS
-pane's live readings and billing remain unchanged.
+for Create server's provider choices. It reads no provider account inventory:
+VPS onboarding is in the VPS view's Add capacity dialog, which takes its
+available hosts from the VPS view's provider billing read.
 
 The bottom of the VPS view also loads the pending region-request queue through
 the `region-requests` operation. Each row shows the requested region, the

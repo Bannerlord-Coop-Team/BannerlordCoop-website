@@ -509,11 +509,13 @@ const AVAILABLE = { provider: "contabo-vps" as const, serviceName: "203779521", 
 const BENELUX: HostingRegionCatalogRead = { regions: [{ region: "benelux", placement: { countryCodes: ["NL"] }, available: false }], error: null };
 const UNREADABLE: HostingRegionCatalogRead = { regions: null, error: "The operation is not supported." };
 
+const TRIGGERS = { "Onboard VPS": "Provider account", "Add manual VPS": "Manual entry" } as const;
+
 it.each([
-    ["Onboard VPS", "Provider account", BENELUX, "Add manual VPS"],
-    ["Add manual VPS", "Manual entry", BENELUX, "Add manual VPS"],
-    ["Add manual VPS", "Manual entry", UNREADABLE, "Unavailable"],
-] as const)("opens the Add capacity dialog from %s on its %s tab and closes it", async (label, tabLabel, hostingRegions, manualSubmit) => {
+    ["Onboard VPS", "Add manual VPS", BENELUX, "Add manual VPS"],
+    ["Add manual VPS", "Onboard VPS", BENELUX, "Add manual VPS"],
+    ["Add manual VPS", "Onboard VPS", UNREADABLE, "Unavailable"],
+] as const)("opens the Add capacity dialog from %s on its own tab, closes it, then reopens it from %s on that tab", async (label, otherLabel, hostingRegions, manualSubmit) => {
     stubDialog();
     mocks.resources.mockReturnValue(new Promise(() => {}));
     mocks.billing.mockResolvedValue({ ...inventory(), availableHosts: [AVAILABLE] });
@@ -524,7 +526,7 @@ it.each([
     await openFrom(label);
     const dialog = container.querySelector("dialog")!;
     expect(dialog.open).toBe(true);
-    expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe(tabLabel);
+    expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe(TRIGGERS[label]);
     // The provider tab lists the billing read's unregistered hosts; the manual tab, the inventory's manual-entry providers and the catalog read.
     expect(dialog.querySelector('select[name="host"] option[value*="203779521"]')).not.toBeNull();
     expect(dialog.querySelector<HTMLSelectElement>('select[name="provider"]')!.value).toBe("hosthatch-vps");
@@ -532,6 +534,8 @@ it.each([
     expect(manual.querySelector<HTMLButtonElement>('button[type="submit"]')!.textContent).toBe(manualSubmit);
     await act(async () => dialog.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click());
     expect(container.querySelector("dialog")).toBeNull();
+    await openFrom(otherLabel);
+    expect(container.querySelector('dialog [role="tab"][aria-selected="true"]')?.textContent).toBe(TRIGGERS[otherLabel]);
 });
 
 it("shows a billing response without a host list as a failed read in the banner and the dialog", async () => {

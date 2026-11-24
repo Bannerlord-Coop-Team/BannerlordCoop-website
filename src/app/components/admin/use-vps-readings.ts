@@ -2,16 +2,9 @@
 
 import { useCallback, useState } from "react";
 import { usePolling, type PollingSchedule, type ReadingOutcome, type ReadingSpec } from "@/app/lib/use-polling";
-import {
-    awaitsLiveData,
-    failedLiveInventoryReading,
-    failedSupplementaryReading,
-    liveInventoryView,
-    supplementaryView,
-    type LiveInventoryReading,
-    type ReadingView,
-    type SupplementaryReading,
-} from "@/app/lib/control-plane/vps-readings";
+import { awaitsLiveData } from "@/app/lib/control-plane/vps-readings";
+import { failedSupplementaryReading, supplementaryView, type ReadingView, type SupplementaryReading } from "@/app/lib/reading-state";
+import { failedLiveInventoryReading, liveInventoryView, type LiveInventoryReading } from "./live-inventory-reading";
 import type { HostingAdminVpsInventory } from "@/app/lib/control-plane/types";
 
 /** A supplementary reading's spec plus the value a complete registered inventory already carries for it. */

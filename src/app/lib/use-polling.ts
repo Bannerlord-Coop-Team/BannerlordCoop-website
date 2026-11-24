@@ -22,7 +22,7 @@ export type PollingSchedule = { readImmediately: boolean; restartKey: unknown };
 export function usePolling<T>(spec: ReadingSpec<T>, settle: (outcome: ReadingOutcome<T>) => void, { readImmediately, restartKey }: PollingSchedule) {
     const [attempt, setAttempt] = useState(0);
     // Refs keep a caller's new spec or settle object from restarting the loop; only the schedule and retries restart it.
-    // A passive effect declared before the loop updates them only after the previous loop's cleanup has cancelled it.
+    // Effects run in declaration order after all cleanups, so the refs hold the new spec and settle before the loop below restarts.
     const specRef = useRef(spec);
     const settleRef = useRef(settle);
     useEffect(() => {

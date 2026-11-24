@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ProviderVpsOnboardingCard, providerAccountNotice, providerAccountUnavailableReason } from "./ProviderVpsOnboardingCard";
 import type { HostingAdminVpsAvailableHost } from "@/app/lib/control-plane/types";
-import type { BillingReadState } from "@/app/lib/control-plane/vps-readings";
+import type { BillingReadState } from "@/app/lib/control-plane/vps-billing-state";
 
 const { request, session, refresh, push } = vi.hoisted(() => ({ request: vi.fn(), session: vi.fn(), refresh: vi.fn(), push: vi.fn() }));
 vi.mock("@/app/lib/control-plane/client", async (importOriginal) => ({
@@ -42,8 +42,6 @@ function submitButton() { return container.querySelector<HTMLButtonElement>('but
 it("onboards the only listed VPS with its provider and keeps the result visible after refreshing in place", async () => {
     request.mockResolvedValueOnce({ onboarding: { state: "queued", progressStage: "queued" } });
     await render(LOADED);
-    expect(container.textContent).toContain("Onboard provider-account VPS");
-    expect(container.textContent).toContain("For OVHcloud and Contabo");
     // A single listed VPS is preselected; its value carries the provider so onboarding never guesses it.
     expect(hostSelect().value).toBe(JSON.stringify({ provider: "contabo-vps", serviceName: "203779521" }));
     await act(async () => container.querySelector("form")!.requestSubmit());
@@ -74,8 +72,7 @@ it("lists several VPSes without preselecting one", async () => {
 });
 
 it("blocks submission only while no hosts are listed, naming whether the read is loading or failed", () => {
-    expect(providerAccountUnavailableReason(LOADED)).toBeUndefined();
-    expect(providerAccountUnavailableReason({ kind: "ok", availableHosts: [] })).toBeUndefined();
+    for (const listed of [LOADED, STALE, PARTIAL]) expect(providerAccountUnavailableReason(listed)).toBeUndefined();
     expect(providerAccountUnavailableReason(PENDING)).toBe("Loading provider account inventory…");
     expect(providerAccountUnavailableReason(UNLISTED)).toBe("Provider account inventory is unavailable.");
 });

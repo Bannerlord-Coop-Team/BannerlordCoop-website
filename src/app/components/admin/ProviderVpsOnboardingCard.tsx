@@ -3,7 +3,7 @@
 import { ControlPlaneActionCard, type AdminActionField, type AdminActionOption } from "./ControlPlaneActionCard";
 import { operationExplanation } from "@/app/lib/control-plane/explanations";
 import { PROVIDER_VPS_OPERATION, vpsHostSelectionValue } from "@/app/lib/control-plane/vps-providers";
-import { billingListedHosts, type BillingReadState } from "@/app/lib/control-plane/vps-readings";
+import { billingListedHosts, type BillingReadState } from "@/app/lib/control-plane/vps-billing-state";
 
 /** A notice explaining a failed or partial provider-account read; `retryable` when reading again could recover it. */
 export type ProviderAccountNotice = { summary: string; detail: string; retryable: boolean };
