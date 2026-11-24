@@ -658,6 +658,26 @@ counts and website fake-timer/component checks demonstrate reduced scheduled wor
 not production timing or bandwidth savings. Linux API coverage and control-plane
 verification remain separate from native Windows website tests/builds and live evidence.
 
+## Change server region
+
+The **Relocate** tab offers a separate **Change region** action when
+`HOSTING_ADMIN_REGION_CHANGE_ENABLED=true` is set in the Website server
+environment. Enable it only after deploying the ControlPlane release that
+supports `change-server-region`. The setting defaults to off.
+
+The form shows the server's current region and provider. Choose a different
+published region, an eligible provider and optionally one VPS. Give a reason
+and confirm the downtime and join-address change. The Website submits one
+version-1 administrator request through the existing Edge function. It reuses
+the request ID when retrying the same intent and asks the administrator to
+review the assignment again if the server revision changed.
+
+A running server gets one hour's notice before it saves and stops. The new
+join address appears on the owner's server page when the move settles. The
+ordinary **Relocate** action stays within the server's region and provider.
+The shared endpoint fixture, capture and provenance are in
+[`test/fixtures/admin-region-change`](../test/fixtures/admin-region-change).
+
 ## Placement planner
 
 The **Placement** tab shows, in this order, the **measured host overlap** (what
