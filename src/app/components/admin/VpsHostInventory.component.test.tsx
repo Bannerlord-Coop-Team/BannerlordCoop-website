@@ -1,5 +1,6 @@
 import { act } from "react";
 import shared from "../../../../test/fixtures/slot-storage/v1.json";
+import capture from "../../../../test/fixtures/slot-storage/capture-v1.json";
 import { decodeControlPlaneAdminResponse } from "@/app/lib/control-plane/client";
 import { readSlotStorage } from "@/app/lib/control-plane/slot-storage";
 import { createRoot, type Root } from "react-dom/client";
@@ -39,6 +40,14 @@ afterEach(async () => {
 });
 
 describe("compact VPS host inventory", () => {
+    it("decodes and renders the captured CP HTTP/IPC response and rejects an incompatible envelope", async () => {
+        const decoded = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify(capture), capture.requestId, true);
+        await act(async () => root.render(<VpsHostInventory hosts={decoded.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')!.click());
+        expect(container.querySelector('[data-label="Storage"]')?.textContent).toBe(shared.cases[0]!.text);
+        expect(() => decodeControlPlaneAdminResponse(JSON.stringify({ ...capture, version: 99 }), capture.requestId, true)).toThrow();
+    });
+
     it.each(shared.cases)("consumes shared v1 storage case $name through the real decoder and table", async ({ storage, text, tone }) => {
         expect(shared.schemaVersion).toBe(1);
         const inventoryHost = host("host-storage", resources(60, 40), 0);
