@@ -1,13 +1,16 @@
 "use client";
 
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 
-/** Shows a native dialog modally with page scroll locked and `initialFocus` focused; on close, restores the scroll and a still-usable opener's focus. */
-export function useModalDialog(dialogRef: RefObject<HTMLDialogElement | null>, initialFocus: RefObject<HTMLElement | null>) {
+/** Shows a native dialog modally with page scroll locked and `initialFocus` focused; on close, restores the scroll and the opener's focus. */
+export function useModalDialog(dialogRef: RefObject<HTMLDialogElement | null>, initialFocus: RefObject<HTMLElement | null>, onFocusNotRestored?: () => void) {
+    // Captured on open, like the opener, so a caller's new callback identity never reopens the dialog.
+    const fallback = useRef(onFocusNotRestored);
     useEffect(() => {
         const dialog = dialogRef.current;
         if (dialog === null) return;
         const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const notRestored = fallback.current;
         const previousOverflow = document.body.style.overflow;
         document.body.style.overflow = "hidden";
         if (!dialog.open) dialog.showModal();
@@ -15,13 +18,14 @@ export function useModalDialog(dialogRef: RefObject<HTMLDialogElement | null>, i
         return () => {
             if (dialog.open) dialog.close();
             document.body.style.overflow = previousOverflow;
-            if (canRestoreFocus(opener)) opener.focus();
+            if (!restoreFocus(opener)) notRestored?.();
         };
     }, [dialogRef, initialFocus]);
 }
 
-/** Whether focus can return to the element that opened a dialog: it is still in the page and not disabled. */
-function canRestoreFocus(opener: HTMLElement | null): opener is HTMLElement {
-    if (opener === null || !opener.isConnected) return false;
-    return !opener.matches(":disabled");
+/** Refocuses the element that opened a dialog when it is still in the page and enabled; reports whether focus landed there. */
+function restoreFocus(opener: HTMLElement | null): boolean {
+    if (opener === null || !opener.isConnected || opener.matches(":disabled")) return false;
+    opener.focus();
+    return document.activeElement === opener;
 }

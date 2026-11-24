@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { AddCapacityPanel } from "./AddCapacityPanel";
-import type { ProviderAccountInventory } from "./ProviderVpsOnboardingCard";
-import { useLiveInventoryReading, useSupplementaryReading, type PolledReading } from "./use-vps-readings";
+import { ManualVpsOnboardingCard } from "./ManualVpsOnboardingCard";
+import { ProviderVpsOnboardingCard, providerAccountInventory } from "./ProviderVpsOnboardingCard";
+import { BILLING_READING, ORACLE_READING, useLiveInventoryReading, useSupplementaryReading } from "./use-vps-readings";
 import { LocalDateTime } from "./LocalDateTime";
 import { OutOfAdmissionBanner } from "./OutOfAdmissionBanner";
 import { VpsInventoryBrowser } from "./VpsInventoryBrowser";
@@ -14,15 +15,15 @@ import { stateExplanation } from "@/app/lib/control-plane/explanations";
 import { failedVpsProviderReadsMessage } from "@/app/lib/control-plane/vps-providers";
 import { manualEntryProviders } from "@/app/lib/control-plane/manual-vps";
 import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
-import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminRegionRequestNotification, HostingAdminVpsInventory, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
+import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminRegionRequestNotification, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 
 
 /** Shows registered VPS capacity, labelled by the stored region catalog, with live readings and region requests. */
 export function VpsView({ inventory: initialInventory, hostingRegions, accounts }: VpsViewData & { accounts: WebsiteAccountSummary[] }) {
     const readings = useLiveInventoryReading(initialInventory);
-    const billing = useSupplementaryReading(initialInventory, "billing");
-    const oracle = useSupplementaryReading(initialInventory, "oracle");
+    const billing = useSupplementaryReading(initialInventory, BILLING_READING);
+    const oracle = useSupplementaryReading(initialInventory, ORACLE_READING);
     const inventory = readings.result ?? initialInventory;
     const pending = readings.pending;
     // A service name is unique only within its provider, so billing rows are matched by both.
@@ -52,8 +53,10 @@ export function VpsView({ inventory: initialInventory, hostingRegions, accounts 
             {billing.error && <p role="alert" className="mt-3 text-xs text-red-200">Billing unavailable. {billing.error} {billing.result ? "Showing the last billing readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={billing.refreshReadings}>Retry billing</button></p>}
             <OutOfAdmissionBanner hosts={hosts} />
             <VpsSlotSummary hosts={hosts} regionCatalog={hostingRegions.regions} />
-            <AddCapacityPanel providerAccount={providerAccountInventory(billing, failedProviderReads)} onRetryProviderAccount={billing.refreshReadings}
-                manualProviders={manualEntryProviders(inventory)} hostingRegions={hostingRegions} />
+            <AddCapacityPanel
+                provider={<ProviderVpsOnboardingCard inventory={providerAccountInventory(billing, failedProviderReads)} onRetry={billing.refreshReadings} />}
+                manual={<ManualVpsOnboardingCard providers={manualEntryProviders(inventory)} hostingRegions={hostingRegions} />}
+            />
             <div className="mt-6">
                 {oracle.error && <p role="alert" className="mb-3 text-xs text-red-200">Oracle readings unavailable. {oracle.error} {oracle.result ? "Showing the last Oracle readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={oracle.refreshReadings}>Retry Oracle readings</button></p>}
                 <HostResourcesCard name="Oracle control plane" resources={controlPlaneHost} pending={oracle.pending} />
@@ -202,12 +205,6 @@ function formatRequesterEmail(request: HostingAdminRegionRequest, accounts: read
 function formatAllocatedRegions(regions: readonly string[]) {
     if (regions.length === 0) return "—";
     return regions.map(hostingRegionLabel).join(", ");
-}
-
-/** Maps the billing reading onto the provider form's inventory; a malformed host list counts as not yet listed. */
-function providerAccountInventory(billing: PolledReading<HostingAdminVpsInventory>, failedProviderReads: string | null): ProviderAccountInventory {
-    const hosts = billing.result?.availableHosts;
-    return { availableHosts: Array.isArray(hosts) ? hosts : null, pending: billing.pending, error: billing.error ?? null, failedProviderReads };
 }
 
 function HostResourcesCard({ name, resources, pending }: { name: string; resources: HostingAdminHostResources | null; pending: boolean }) {

@@ -15,6 +15,9 @@ const TABS: ReadonlyArray<{ tab: AddCapacityTab; label: string }> = [
     { tab: "provider", label: "Provider account" },
     { tab: "manual", label: "Manual entry" },
 ];
+const TAB_CLASS = "inline-flex min-h-10 shrink-0 items-center border px-4 font-label text-[0.68rem] font-semibold uppercase tracking-[0.12em] focus-visible:outline-2 focus-visible:outline-gold";
+const SELECTED_TAB_CLASS = "border-gold/40 bg-gold/10 text-gold";
+const IDLE_TAB_CLASS = "border-white/10 text-foreground-muted hover:border-white/25 hover:text-foreground";
 
 /** The "Add capacity" modal: opens on one tab, switches between the provider and manual panels, and closes. */
 export function AddCapacityDialog({ initialTab, provider, manual, onClose }: {
@@ -34,7 +37,8 @@ export function AddCapacityDialog({ initialTab, provider, manual, onClose }: {
 
     /** Moves the selection and focus between tabs with the arrow, Home and End keys. */
     function moveTab(event: KeyboardEvent<HTMLButtonElement>) {
-        const step = tabKeyStep(event.key, TABS.findIndex((entry) => entry.tab === tab), TABS.length);
+        const position = TABS.findIndex((entry) => entry.tab === tab);
+        const step = tabKeyStep(event.key, position, TABS.length);
         if (step === null) return;
         event.preventDefault();
         const next = TABS[step]!.tab;
@@ -64,9 +68,19 @@ export function AddCapacityDialog({ initialTab, provider, manual, onClose }: {
                 <p id={`${id}-description`} className="mt-3 text-xs leading-5 text-foreground-muted">{ADD_CAPACITY_SUMMARY}</p>
                 <div role="tablist" aria-label="Onboarding source" className="mt-5 flex gap-2 overflow-x-auto border-b border-white/10 pb-3">
                     {TABS.map(({ tab: value, label }) => (
-                        <button key={value} ref={value === initialTab ? openingTabRef : undefined} type="button" role="tab" id={tabId(value)} aria-selected={tab === value} aria-controls={panelId(value)}
-                            tabIndex={tab === value ? 0 : -1} onClick={() => setTab(value)} onKeyDown={moveTab}
-                            className={`inline-flex min-h-10 shrink-0 items-center border px-4 font-label text-[0.68rem] font-semibold uppercase tracking-[0.12em] focus-visible:outline-2 focus-visible:outline-gold ${tab === value ? "border-gold/40 bg-gold/10 text-gold" : "border-white/10 text-foreground-muted hover:border-white/25 hover:text-foreground"}`}>
+                        <button
+                            key={value}
+                            ref={value === initialTab ? openingTabRef : undefined}
+                            type="button"
+                            role="tab"
+                            id={tabId(value)}
+                            aria-selected={tab === value}
+                            aria-controls={panelId(value)}
+                            tabIndex={tab === value ? 0 : -1}
+                            onClick={() => setTab(value)}
+                            onKeyDown={moveTab}
+                            className={`${TAB_CLASS} ${tab === value ? SELECTED_TAB_CLASS : IDLE_TAB_CLASS}`}
+                        >
                             {label}
                         </button>
                     ))}

@@ -3,11 +3,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
     ProviderVpsOnboardingCard,
+    providerAccountInventory,
     providerAccountNotice,
     providerAccountUnavailableReason,
     type ProviderAccountInventory,
 } from "./ProviderVpsOnboardingCard";
-import type { HostingAdminVpsAvailableHost } from "@/app/lib/control-plane/types";
+import type { HostingAdminVpsAvailableHost, HostingAdminVpsInventory } from "@/app/lib/control-plane/types";
 
 const { request, session, refresh, push } = vi.hoisted(() => ({ request: vi.fn(), session: vi.fn(), refresh: vi.fn(), push: vi.fn() }));
 vi.mock("@/app/lib/control-plane/client", async (importOriginal) => ({
@@ -88,13 +89,6 @@ it.each([
     expect(onRetry).toHaveBeenCalledOnce();
 });
 
-it("offers no retry while loading, when complete, or for failed provider accounts alone", async () => {
-    for (const inventory of [PENDING, LOADED, { ...LOADED, failedProviderReads: "The Contabo account read failed." }]) {
-        await render(inventory);
-        expect(retryButton()).toBeUndefined();
-    }
-});
-
 it("blocks submission only while no hosts are listed, naming whether the read is loading or failed", () => {
     expect(providerAccountUnavailableReason(LOADED)).toBeUndefined();
     expect(providerAccountUnavailableReason({ ...LOADED, availableHosts: [] })).toBeUndefined();
@@ -105,9 +99,25 @@ it("blocks submission only while no hosts are listed, naming whether the read is
 it("notices a failed read before a retained listing before failed provider accounts, and stays silent when complete", () => {
     expect(providerAccountNotice(LOADED)).toBeNull();
     expect(providerAccountNotice(PENDING)).toBeNull();
-    expect(providerAccountNotice({ ...PENDING, pending: false, error: null })?.detail).toBe("The provider account inventory could not be read.");
+    expect(providerAccountNotice({ availableHosts: null, pending: false, error: "Down.", failedProviderReads: null })?.detail).toBe("Down.");
     expect(providerAccountNotice({ ...LOADED, error: "Billing readings timed out.", failedProviderReads: "The Contabo account read failed." }))
         .toEqual({ summary: "Showing the last provider account inventory; retrying automatically.", detail: "Billing readings timed out.", retryable: true });
     expect(providerAccountNotice({ ...LOADED, failedProviderReads: "The Contabo account read failed." }))
         .toEqual({ summary: "The Contabo account read failed.", detail: "Manual entry still works.", retryable: false });
+});
+
+it("maps a billing reading onto the form's inventory, passing failed provider reads through", () => {
+    const listed = { availableHosts: [CONTABO] } as HostingAdminVpsInventory;
+    expect(providerAccountInventory({ pending: true }, null)).toEqual(PENDING);
+    expect(providerAccountInventory({ result: listed, error: "Timed out.", pending: false }, "The Contabo account read failed.")).toEqual({
+        availableHosts: [CONTABO], pending: false, error: "Timed out.", failedProviderReads: "The Contabo account read failed.",
+    });
+    expect(providerAccountInventory({ error: "Timed out.", pending: false }, null)).toEqual({ availableHosts: null, pending: false, error: "Timed out.", failedProviderReads: null });
+});
+
+it("treats a malformed host list as not yet listed", () => {
+    const malformed = { availableHosts: "not-a-list" } as unknown as HostingAdminVpsInventory;
+    expect(providerAccountInventory({ result: malformed, pending: false }, null)).toEqual({
+        availableHosts: null, pending: false, error: "The provider account inventory response did not list hosts.", failedProviderReads: null,
+    });
 });

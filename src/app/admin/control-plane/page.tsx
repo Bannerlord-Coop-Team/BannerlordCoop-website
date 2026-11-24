@@ -308,7 +308,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                     accessToken: token, signal, ...identity, operation: "jobs", input: { filter: {}, cursor, limit: ADMIN_READ_PAGE_LIMIT },
                 })),
                 // Create server needs only the registered hosts' providers.
-                readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false } }),
+                readRegisteredVpsHosts(token, signal, identity),
                 serverId
                     ? readControlPlaneAdmin<ServerDashboardResult>({
                         accessToken: token, signal, ...identity,
@@ -327,7 +327,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
         }
         case "vps": {
             const [inventory, hostingRegions] = await Promise.all([
-                readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false } }),
+                readRegisteredVpsHosts(token, signal, identity),
                 loadHostingRegionCatalog(token, signal, identity),
             ]);
             // Host labels match the stored placements; an unreadable catalog leaves the hosts listed without regions
@@ -376,7 +376,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                     operation: "servers",
                     input: { filter: query ? { query } : {}, cursor, limit: ADMIN_READ_PAGE_LIMIT },
                 }), jobCursor),
-                readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false } }),
+                readRegisteredVpsHosts(token, signal, identity),
                 loadHostingRegionCatalog(token, signal, identity),
                 readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<HostingJob>>({ accessToken: token, signal, ...identity, operation: "jobs", input: { filter: { activeOnly: true }, cursor, limit: ADMIN_READ_PAGE_LIMIT } })),
             ]);
@@ -387,7 +387,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             // The dry run itself is slow and rate limited, so the browser requests it on demand.
             // These reads let each planned step open a relocation against current slots and jobs.
             const [inventory, hostingRegions, activeJobs] = await Promise.all([
-                readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false } }),
+                readRegisteredVpsHosts(token, signal, identity),
                 loadHostingRegionCatalog(token, signal, identity),
                 readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<HostingJob>>({ accessToken: token, signal, ...identity, operation: "jobs", input: { filter: { activeOnly: true }, cursor, limit: ADMIN_READ_PAGE_LIMIT } })),
             ]);
@@ -407,6 +407,11 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             return { servers } satisfies NoticesViewData;
         }
     }
+}
+
+/** Reads the registered VPS hosts without live or provider data, the fast inventory every server-rendered view starts from. */
+function readRegisteredVpsHosts(token: string, signal: AbortSignal, identity: ReadIdentity) {
+    return readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false } });
 }
 
 /** Reads the stored hosting-region catalog; a failed read becomes a message so the rest of the view still loads. */

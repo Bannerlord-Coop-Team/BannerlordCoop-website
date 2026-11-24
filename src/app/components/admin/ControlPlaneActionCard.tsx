@@ -84,6 +84,7 @@ export function ControlPlaneActionCard({
     ));
     const blockedReason = unavailableReason
         ?? (unavailableField ? `No eligible ${unavailableField.label.toLowerCase()} is currently available.` : null);
+    const buttonLabel = submitButtonLabel(pending, blockedReason, submitLabel);
 
     async function submit(formData: FormData) {
         if (pending) return;
@@ -173,11 +174,7 @@ export function ControlPlaneActionCard({
                         className="inline-flex min-h-10 w-full items-center justify-center gap-2 border border-crimson bg-crimson px-4 font-label text-[0.68rem] font-semibold uppercase tracking-[0.12em] text-white transition-colors hover:bg-crimson-hover disabled:cursor-wait disabled:opacity-60"
                     >
                         {pending ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : <Play aria-hidden="true" className="size-3.5" />}
-                        {pending
-                            ? "Working"
-                            : blockedReason !== null
-                                ? "Unavailable"
-                                : submitLabel}
+                        {buttonLabel}
                     </button>
                 </div>
             </form>
@@ -205,6 +202,13 @@ export function ControlPlaneActionCard({
         </article>
     );
 }
+/** The submit button's text: working while pending, unavailable while blocked, else the action's own label. */
+function submitButtonLabel(pending: boolean, blockedReason: string | null, submitLabel: string) {
+    if (pending) return "Working";
+    if (blockedReason !== null) return "Unavailable";
+    return submitLabel;
+}
+
 /** Scrolls to, focuses and briefly highlights an operation card whenever the URL hash names its operation. */
 function useOperationTarget(operation: string) {
     const cardRef = useRef<HTMLElement>(null);

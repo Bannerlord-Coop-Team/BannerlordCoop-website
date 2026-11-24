@@ -1,21 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ADD_CAPACITY_SUMMARY, AddCapacityDialog, type AddCapacityTab } from "./AddCapacityDialog";
-import { ManualVpsOnboardingCard } from "./ManualVpsOnboardingCard";
-import { ProviderVpsOnboardingCard, type ProviderAccountInventory } from "./ProviderVpsOnboardingCard";
-import type { ManualEntryProvider } from "@/app/lib/control-plane/manual-vps";
-import type { HostingRegionCatalogRead } from "@/app/lib/control-plane/types";
 
 const BUTTON_CLASS = "cursor-pointer border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-gold";
 
 /** The VPS view's "Adding capacity" banner: its two buttons open the Add capacity dialog on the provider or manual tab. */
-export function AddCapacityPanel({ providerAccount, onRetryProviderAccount, manualProviders, hostingRegions }: {
-    providerAccount: ProviderAccountInventory;
-    onRetryProviderAccount: () => void;
-    manualProviders: ManualEntryProvider[];
-    hostingRegions: HostingRegionCatalogRead;
-}) {
+export function AddCapacityPanel({ provider, manual }: { provider: ReactNode; manual: ReactNode }) {
     const [openTab, setOpenTab] = useState<AddCapacityTab | null>(null);
     return <>
         <div className="mt-5 flex flex-col justify-between gap-3 border border-gold/25 bg-gold/8 p-4 sm:flex-row sm:items-center">
@@ -27,8 +18,8 @@ export function AddCapacityPanel({ providerAccount, onRetryProviderAccount, manu
         </div>
         {openTab !== null && <AddCapacityDialog
             initialTab={openTab}
-            provider={<ProviderVpsOnboardingCard inventory={providerAccount} onRetry={onRetryProviderAccount} />}
-            manual={<ManualVpsOnboardingCard providers={manualProviders} hostingRegions={hostingRegions} />}
+            provider={provider}
+            manual={manual}
             onClose={() => setOpenTab(null)}
         />}
     </>;

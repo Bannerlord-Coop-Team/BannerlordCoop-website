@@ -14,6 +14,7 @@ import { HOSTING_CONTINENTS, HOSTING_REGIONS, type HostingContinent, type Hostin
 import { localizedContinentLabel, localizedRegionLabel } from "@/app/lib/hosting/region-labels";
 import { NIGHTLY_INSTALLER_GUIDE_URL } from "@/app/lib/nightly/links";
 import { tabKeyStep } from "@/app/lib/tab-navigation";
+import { useModalDialog } from "@/app/lib/use-modal-dialog";
 
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 const primaryButton = `inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-gold px-5 py-3 font-label text-sm font-semibold uppercase tracking-[0.1em] text-background transition-colors hover:bg-[#c3b07b] disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`;
@@ -233,7 +234,6 @@ function SetupDialog({ summary, catalog, canOffer, disabled, pending, result, re
     const nameRef = useRef<HTMLInputElement>(null);
     const resultRef = useRef<HTMLDivElement>(null);
     const closeRef = useRef<HTMLButtonElement>(null);
-    const fallback = useRef(fallbackFocus);
     const [name, setName] = useState("");
     const [releaseChannel, setReleaseChannel] = useState<OnboardingReleaseChannel>("stable");
     const [selected, setSelected] = useState<string | null>(() => offeredRegions(summary, catalog)[0] ?? null);
@@ -250,22 +250,7 @@ function SetupDialog({ summary, catalog, canOffer, disabled, pending, result, re
     // An outstanding request for any other region, including one no longer offered, is replaced on request.
     const priorRequest = summary?.regions.find((region) => region.request !== null && region.region !== selected)?.request
         ?? summary?.otherRequests[0] ?? null;
-    useEffect(() => {
-        const dialog = dialogRef.current!;
-        const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const restoreFallback = fallback.current;
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = "hidden";
-        dialog.showModal();
-        nameRef.current?.focus();
-        return () => {
-            dialog.close();
-            document.body.style.overflow = previousOverflow;
-            const canRestore = previousFocus?.isConnected && !previousFocus.matches(":disabled");
-            if (canRestore) previousFocus.focus();
-            if (!canRestore || document.activeElement !== previousFocus) restoreFallback();
-        };
-    }, []);
+    useModalDialog(dialogRef, nameRef, fallbackFocus);
     useEffect(() => {
         if (result) resultRef.current?.focus();
         else if (pending) closeRef.current?.focus();

@@ -5,6 +5,7 @@ import {
     failedLiveInventoryReading,
     failedSupplementaryReading,
     liveInventoryView,
+    readingErrorMessage,
     supplementaryView,
     type LiveInventoryReading,
     type SupplementaryReading,
@@ -46,13 +47,22 @@ test("supplementary readings keep their result and error regardless of the inven
         ["a null result overrides the seed", { result: null }, complete, complete, { result: null, error: undefined, pending: false }],
         ["failed first read", { error: "Down." }, undefined, registered, { result: undefined, error: "Down.", pending: false }],
     ];
-    for (const [name, reading, seed, initial, expected] of cases) assert.deepEqual(supplementaryView(reading, seed, initial), expected, name);
+    for (const [name, reading, seed, initial, expected] of cases) assert.deepEqual(supplementaryView(reading, seed, initial.liveDataIncluded === false), expected, name);
 });
 
-test("billing that resolves, then fails after a refreshed inventory, still shows its last result with the error", () => {
+test("a failed supplementary read keeps its last result", () => {
     const billing = inventory(false, "billing");
-    const resolved: SupplementaryReading<HostingAdminVpsInventory> = { result: billing };
-    const failed = failedSupplementaryReading(resolved, "Billing readings timed out.");
-    assert.deepEqual(supplementaryView(failed, undefined, refreshed), { result: billing, error: "Billing readings timed out.", pending: false });
+    assert.deepEqual(failedSupplementaryReading({ result: billing }, "Down."), { result: billing, error: "Down." });
     assert.deepEqual(failedSupplementaryReading(undefined, "Down."), { result: undefined, error: "Down." });
+});
+
+test("a failed read names its timeout, else its own error, else a generic cause", () => {
+    const timeout = { milliseconds: 15_000, message: "Billing readings timed out." };
+    const cases: Array<[string, unknown, boolean, typeof timeout | undefined, string]> = [
+        ["deadline passed", new Error("aborted"), true, timeout, "Billing readings timed out."],
+        ["aborted without a deadline", new Error("aborted"), true, undefined, "aborted"],
+        ["ordinary failure", new Error("Billing provider down."), false, timeout, "Billing provider down."],
+        ["non-error rejection", "nope", false, timeout, "VPS readings could not be loaded."],
+    ];
+    for (const [name, error, timedOut, deadline, expected] of cases) assert.equal(readingErrorMessage(error, timedOut, deadline), expected, name);
 });

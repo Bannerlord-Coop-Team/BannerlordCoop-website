@@ -81,13 +81,3 @@ it("closes on Escape and the close button, unlocking page scroll and refocusing 
     expect(document.activeElement).toBe(opener);
     opener.remove();
 });
-
-it("does not refocus an opener that left the page while the dialog was open", async () => {
-    const opener = document.createElement("button");
-    document.body.append(opener);
-    opener.focus();
-    await render();
-    opener.remove();
-    await act(async () => root.render(null));
-    expect(document.activeElement).not.toBe(opener);
-});
