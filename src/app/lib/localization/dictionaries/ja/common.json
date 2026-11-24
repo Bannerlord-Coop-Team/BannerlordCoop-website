@@ -42,6 +42,12 @@
   "download.options": "ダウンロードオプション",
   "download.heading": "プラットフォームを選択",
   "download.description": "公開リリースは以下から入手できます。ナイトリービルドには、Testerロール、Patreon、Boosty、Afdianのいずれかの支援者ロール、または対象メンバーが提供する10個のDiscordアカウント用スポンサー枠のいずれかが必要です。",
+  "download.direct.mod": "MODをダウンロード",
+  "download.direct.modDetail": "最新リリース · .zip",
+  "download.direct.server": "専用サーバーをダウンロード",
+  "download.direct.serverDetail": "Windows · .7z",
+  "download.or": "または",
+  "download.unavailable": "利用不可",
   "download.recommended": "おすすめ",
   "download.supporterOnly": "支援者限定",
   "download.installer.name": "ガイド付きインストーラー",
@@ -50,6 +56,7 @@
   "download.steam.description": "サブスクライブして、Steam経由で更新を受け取りましょう。",
   "download.nexus.name": "Nexus Mods",
   "download.nexus.description": "Nexus ModsからBannerlord Co-opをダウンロードできます。",
+  "download.nexus.unavailable": "Bannerlord Co-opは現在Nexus Modsでは入手できません。",
   "download.moddb.name": "ModDB",
   "download.moddb.description": "ModDBでリリースとプロジェクトの最新情報をご覧いただけます。"
 }

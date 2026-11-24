@@ -42,6 +42,12 @@
   "download.options": "Options de téléchargement",
   "download.heading": "Choisissez une plateforme",
   "download.description": "Les versions publiques sont disponibles ci-dessous. Les versions nocturnes nécessitent le rôle Tester, un rôle de supporter Patreon, Boosty ou Afdian, ou l’une des 10 places de compte Discord parrainé d’un membre éligible.",
+  "download.direct.mod": "Télécharger le mod",
+  "download.direct.modDetail": "Dernière version · .zip",
+  "download.direct.server": "Télécharger le serveur dédié",
+  "download.direct.serverDetail": "Windows · .7z",
+  "download.or": "ou",
+  "download.unavailable": "Indisponible",
   "download.recommended": "Recommandé",
   "download.supporterOnly": "Réservé aux supporters",
   "download.installer.name": "Installateur guidé",
@@ -50,6 +56,7 @@
   "download.steam.description": "Abonnez-vous et recevez les mises à jour via Steam.",
   "download.nexus.name": "Nexus Mods",
   "download.nexus.description": "Téléchargez Bannerlord Co-op depuis Nexus Mods.",
+  "download.nexus.unavailable": "Bannerlord Co-op n’est actuellement pas disponible sur Nexus Mods.",
   "download.moddb.name": "ModDB",
   "download.moddb.description": "Consultez les versions et les actualités du projet sur ModDB."
 }
