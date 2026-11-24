@@ -23,6 +23,23 @@ function isAdminLinkActive(link: AdminLink, pathname: string) {
     return pathname.startsWith(`${link.href}/`);
 }
 
+/** Renders one admin section link, marking it as the current page and styling it gold when active. */
+function AdminSubNavLink({ link, active }: { link: AdminLink; active: boolean }) {
+    const Icon = link.icon;
+
+    return (
+        <li className="shrink-0">
+            <Link
+                href={link.href}
+                aria-current={active ? "page" : undefined}
+                className={`${linkClassName} ${active ? activeLinkClassName : inactiveLinkClassName}`}
+            >
+                <Icon aria-hidden="true" className="size-4" /> {link.label}
+            </Link>
+        </li>
+    );
+}
+
 /** Renders the admin section links under the site navbar, marking the current section. */
 export function AdminSubNav() {
     const pathname = usePathname();
@@ -32,21 +49,7 @@ export function AdminSubNav() {
             <div className="site-container flex min-h-14 items-center justify-between gap-3">
                 <nav aria-label="Administration" className="min-w-0 overflow-x-auto">
                     <ul className="flex items-center gap-2 p-1">
-                        {ADMIN_LINKS.map((link) => {
-                            const active = isAdminLinkActive(link, pathname);
-                            const Icon = link.icon;
-                            return (
-                                <li key={link.href} className="shrink-0">
-                                    <Link
-                                        href={link.href}
-                                        aria-current={active ? "page" : undefined}
-                                        className={`${linkClassName} ${active ? activeLinkClassName : inactiveLinkClassName}`}
-                                    >
-                                        <Icon aria-hidden="true" className="size-4" /> {link.label}
-                                    </Link>
-                                </li>
-                            );
-                        })}
+                        {ADMIN_LINKS.map((link) => <AdminSubNavLink key={link.href} link={link} active={isAdminLinkActive(link, pathname)} />)}
                     </ul>
                 </nav>
                 <span className="inline-flex shrink-0 items-center gap-2 text-gold" title="Admin access">

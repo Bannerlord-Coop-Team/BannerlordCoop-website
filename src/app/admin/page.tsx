@@ -71,7 +71,7 @@ function formatDate(value: string | undefined) {
 export default async function AdminPage({ searchParams }: AdminPageProps) {
     const impersonationEnabled = process.env.ADMIN_IMPERSONATION_ENABLED === "true";
     // Shared with the admin layout's navigation, so the request looks the administrator up once.
-    const { actor: currentUser } = await getAdminActor();
+    const currentUser = await getAdminActor();
     const params = await searchParams;
 
     if (!currentUser) redirect(getLoginRedirect("/admin", params));

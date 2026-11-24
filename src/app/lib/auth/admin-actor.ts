@@ -12,10 +12,25 @@ export async function hasImpersonationSelection() {
     return Boolean(cookieStore.get(IMPERSONATION_COOKIE));
 }
 
-/** Resolves the original (non-impersonated) signed-in user once per request; lookup failures throw to the caller. */
-export const getAdminActor = cache(async (): Promise<AdminActor> => {
-    const impersonating = await hasImpersonationSelection();
+/**
+ * Resolves the original (non-impersonated) signed-in user once per request. Client or session-context
+ * failures throw; an Auth `getUser` error (including a missing session) reads as signed out, like `getSupabaseServerViewer`.
+ */
+export const getAdminActor = cache(async (): Promise<User | null> => {
     const client = await getSupabaseServerClient({ impersonation: "actor" });
-    const { data: { user } } = await client.auth.getUser();
-    return { actor: user, impersonating };
+    const { data: { user }, error } = await client.auth.getUser();
+    if (error) return null;
+    return user;
 });
+
+/** Loads the admin navigation viewer fail-soft: a failed lookup is logged and reads as signed out, keeping the impersonation state. */
+export async function loadAdminNavigationViewer(): Promise<AdminActor> {
+    // Read outside the lookup, so an impersonating navbar still resolves its own viewer when the lookup fails.
+    const impersonating = await hasImpersonationSelection();
+    try {
+        return { actor: await getAdminActor(), impersonating };
+    } catch (error) {
+        console.error("Admin navigation viewer failed to load", error);
+        return { actor: null, impersonating };
+    }
+}

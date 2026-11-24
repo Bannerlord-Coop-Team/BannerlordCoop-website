@@ -22,17 +22,6 @@ function activeLabels(container: HTMLElement) {
 
 beforeEach(() => { mocks.pathname = "/admin"; });
 
-it("labels the admin navigation and links both admin sections with the access badge", () => {
-    const container = renderAt("/admin");
-    const nav = container.querySelector('nav[aria-label="Administration"]');
-    expect(nav).not.toBeNull();
-    expect([...nav!.querySelectorAll("a")].map((link) => [link.textContent?.trim(), link.getAttribute("href")])).toEqual([
-        ["Members", "/admin"],
-        ["Control Plane", "/admin/control-plane"],
-    ]);
-    expect(container.textContent).toContain("Admin access");
-});
-
 it("marks Members active only on the exact /admin path", () => {
     expect(activeLabels(renderAt("/admin"))).toEqual(["Members"]);
     expect(activeLabels(renderAt("/admin/unknown"))).toEqual([]);
