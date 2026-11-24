@@ -1,6 +1,11 @@
 import { parsePolicy } from "../_shared/membership.ts";
 import { createCreatorTokenProvider, createCreatorTokenRpc, staticCreatorToken } from "../_shared/patreon-creator-token.ts";
 import { createPatreonRoleHandler, createPatreonRoleRpc } from "../_shared/patreon-roles.ts";
+import { createLossBreakerRpc, massLossAlertMessage } from "../_shared/loss-breaker.ts";
+import { denoSmtpTransport } from "../_shared/mail.ts";
+import { resolveRegionAlertConfig } from "../_shared/region-alerts.ts";
+import { sendSmtpMail } from "../_shared/smtp.ts";
+import { REGION_ALERTS } from "../my-servers/alerts.ts";
 
 declare const Deno: {
     env: { get(name: string): string | undefined };
@@ -25,6 +30,8 @@ const syncSecret = required("PATREON_SYNC_SECRET");
 const creatorRefreshToken = Deno.env.get("PATREON_CREATOR_REFRESH_TOKEN")?.trim();
 const secrets = [creatorAccessToken, webhookSecret, syncSecret, ...(creatorRefreshToken ? [creatorRefreshToken] : [])];
 if (new Set(secrets).size !== secrets.length) throw new Error("patreon_secrets_must_be_distinct");
+// Mass-loss alerts share the region alert recipients; without SMTP_PASS loss is still withheld, only unannounced.
+const alertConfig = resolveRegionAlertConfig(REGION_ALERTS, (name) => Deno.env.get(name));
 
 Deno.serve(createPatreonRoleHandler({
     campaignId,
@@ -41,4 +48,9 @@ Deno.serve(createPatreonRoleHandler({
     webhookSecret,
     syncSecret,
     rpc: createPatreonRoleRpc({ campaignId, tierId, supabaseUrl, serviceKey }),
+    lossBreaker: createLossBreakerRpc({ supabaseUrl, serviceKey, provider: "patreon" }),
+    alert: async (kind) => {
+        if (alertConfig === null) return console.error("Patreon mass-loss alert skipped: SMTP_PASS is not set");
+        await sendSmtpMail(denoSmtpTransport, alertConfig.smtp, massLossAlertMessage("patreon", kind, alertConfig));
+    },
 }));

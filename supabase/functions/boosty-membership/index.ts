@@ -6,6 +6,7 @@ import { createBoostyApi } from "../_shared/boosty-api.ts";
 import { createBoostyCredential, createBoostyCredentialRpc } from "../_shared/boosty-credential.ts";
 import { createBoostyMembershipHandler, createBoostySyncRpc, type BoostyAdapter } from "../_shared/boosty-membership.ts";
 import { parseBoostyPolicy } from "../_shared/boosty-policy.ts";
+import { createLossBreakerRpc } from "../_shared/loss-breaker.ts";
 import { REGION_ALERTS } from "../my-servers/alerts.ts";
 
 declare const Deno: {
@@ -31,6 +32,7 @@ Deno.serve(createBoostyMembershipHandler({
     syncSecret,
     rpc: createBoostySyncRpc({ supabaseUrl, serviceKey }),
     alert,
+    lossBreaker: createLossBreakerRpc({ supabaseUrl, serviceKey, provider: "boosty" }),
 }));
 
 // Wires the Vault-backed credential and the bounded API client for the configured blog.

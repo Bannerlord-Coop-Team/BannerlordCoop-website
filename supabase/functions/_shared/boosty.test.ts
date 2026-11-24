@@ -10,10 +10,12 @@ import { parseBoostyPolicy, type BoostyPolicy } from "./boosty-policy.ts";
 import { parseFundingSnapshot } from "./funding-provider.ts";
 import type { CreatorTokenProvider } from "./patreon-creator-token.ts";
 import { createWebsiteAccountHandler } from "./website-account.ts";
+import type { LossBreaker } from "./loss-breaker.ts";
+import { lossBreakerDatabase } from "../../../tests/loss-breaker-database.ts";
 
 const policy: BoostyPolicy = { blog: "coop-team", qualifyingLevelIds: ["555", "556"], minimumPrice: 500, priceField: "RUB", maximumDropFraction: 0.25, policyVersion: "boosty-paid-v1" };
 const accountId = "aaaaaaaa-1111-4111-8111-111111111111";
-const head: LinkedBoostyHead = { accountId, providerUserId: "4242", linkGeneration: "3", absentSince: null };
+const head: LinkedBoostyHead = { accountId, providerUserId: "4242", linkGeneration: "3", absentSince: null, lost: false };
 const polledAt = "2026-11-10T12:00:00.000Z";
 // Sanitized real responses (tests/fixtures/boosty/README.md); their timestamps are relative to polledAt.
 const fixture = (name: string): unknown => JSON.parse(readFileSync(`tests/fixtures/boosty/${name}.json`, "utf8"));
@@ -108,8 +110,8 @@ test("evidence: real subscriber states, two-poll absence, no-loss uncertainty an
     assert.deepEqual({ ...qualifying.evidence, evidenceSha256: "x" }, { verification: "qualifying", programId: "bannerlordcoop", memberId: null, tierIds: ["4035410"], verifiedAt: polledAt, paidThroughAt: null, policyVersion: "boosty-paid-v1", evidenceSha256: "x" });
     assert.match(qualifying.evidence.evidenceSha256, /^[a-f0-9]{64}$/u); assert.equal(qualifying.absentSince, null);
     assert.equal((await decide(listed())).evidence.evidenceSha256, qualifying.evidence.evidenceSha256, "the digest is deterministic");
-    assert.deepEqual(await facts(real.get("9000002")!), ["nonqualifying", ["4018927"], null, undefined], "a free follower");
-    assert.deepEqual(await facts(real.get("9000004")!), ["nonqualifying", [], null, undefined], "paused is not loss");
+    assert.deepEqual(await facts(real.get("9000002")!), ["nonqualifying", [], null, polledAt], "a free follower is loss");
+    assert.deepEqual(await facts(real.get("9000004")!), ["nonqualifying", [], null, polledAt], "paused is loss");
     assert.deepEqual(await facts(real.get("9000005")!), ["qualifying", ["4035410"], "2026-11-11T12:00:00.000Z", undefined], "cancelled but paid until its offTime");
     const lapsed = await decide(real.get("9000006"));
     assert.deepEqual([lapsed.evidence.verification, lapsed.evidence.tierIds, lapsed.evidence.paidThroughAt, lapsed.evidence.paidAccessEndedAt, lapsed.absentSince],
@@ -120,14 +122,21 @@ test("evidence: real subscriber states, two-poll absence, no-loss uncertainty an
     assert.deepEqual([soon.evidence.paidAccessEndedAt, soon.absentSince], [undefined, polledAt]);
     const confirmed = await decide(undefined, "2026-11-10T13:00:00.000Z", polledAt);
     assert.deepEqual([confirmed.evidence.verification, confirmed.evidence.tierIds, confirmed.evidence.paidAccessEndedAt, confirmed.absentSince], ["nonqualifying", [], "2026-11-10T13:00:00.000Z", polledAt]);
-    for (const [name, overrides, verification, tiers] of [
-        ["blacklisted", { blacklisted: true }, "nonqualifying", []], ["other level", { levelId: "999" }, "nonqualifying", ["999"]], ["cheap", { price: 4 }, "nonqualifying", ["4035410"]],
-        ["unknown subscribed", { subscribed: null }, "unknown", []], ["unknown blacklist", { blacklisted: null }, "unknown", []], ["no level", { levelId: null }, "unknown", []], ["no price", { price: null }, "unknown", []],
-        ["unknown status", { status: null }, "unknown", []], ["unsubscribed but active", { subscribed: false }, "unknown", []],
-        ["inactive without offTime", { subscribed: false, status: "inactive" }, "unknown", []], ["inactive until later", { subscribed: false, status: "inactive", offTime: "2026-11-11T12:00:00.000Z" }, "unknown", []],
+    for (const [name, overrides, verification, tiers, ended] of [
+        ["blacklisted", { blacklisted: true }, "nonqualifying", [], polledAt], ["unlisted level", { levelId: "999" }, "qualifying", ["999"], undefined], ["cheap", { price: 4 }, "nonqualifying", ["4035410"], polledAt],
+        ["unknown subscribed", { subscribed: null }, "unknown", [], undefined], ["unknown blacklist", { blacklisted: null }, "unknown", [], undefined], ["no level", { levelId: null }, "unknown", [], undefined],
+        ["no price", { price: null }, "unknown", [], undefined], ["unknown status", { status: null }, "unknown", [], undefined], ["unsubscribed but active", { subscribed: false }, "unknown", [], undefined],
+        ["inactive without offTime", { subscribed: false, status: "inactive" }, "unknown", [], undefined], ["inactive until later", { subscribed: false, status: "inactive", offTime: "2026-11-11T12:00:00.000Z" }, "unknown", [], undefined],
     ] as const) {
         const decision = await decide(listed(overrides));
-        assert.deepEqual([decision.evidence.verification, decision.evidence.tierIds, decision.evidence.paidAccessEndedAt, decision.absentSince], [verification, tiers, undefined, null], name);
+        assert.deepEqual([decision.evidence.verification, decision.evidence.tierIds, decision.evidence.paidAccessEndedAt, decision.absentSince], [verification, tiers, ended, null], name);
+    }
+    // The $20 USD policy: any level priced at $20 or more qualifies; the real $5 level is loss that keeps it.
+    const usd20: BoostyPolicy = { ...realPolicy, minimumPrice: 20 };
+    for (const [overrides, verification, tiers, ended] of [[{}, "nonqualifying", ["4035410"], polledAt], [{ levelId: "999", price: 20 }, "qualifying", ["999"], undefined],
+        [{ levelId: "123", price: 25 }, "qualifying", ["123"], undefined], [{ levelId: "999", price: 19.99 }, "nonqualifying", ["999"], polledAt]] as const) {
+        const { evidence } = await decideBoostyEvidence(usd20, head, listed(overrides), polledAt);
+        assert.deepEqual([evidence.verification, evidence.tierIds, evidence.paidAccessEndedAt], [verification, tiers, ended], JSON.stringify(overrides));
     }
     // Every decided evidence object satisfies the CP version 2 Boosty grammar exactly.
     for (const decision of [qualifying, lapsed, await decide(real.get("9000005")), firstAbsence, confirmed]) {
@@ -208,7 +217,7 @@ test("worker failures freeze evidence without links or loss; a complete poll mat
         const rpc: BoostySyncRpc = async (operation, input) => {
             calls.push({ operation, input });
             if (operation === "acquire") return lease;
-            if (operation === "linked") return [{ accountId, providerUserId: "4242", linkGeneration: "3", absentSince: null }];
+            if (operation === "linked") return [{ accountId, providerUserId: "4242", linkGeneration: "3", absentSince: null, lost: false }];
             if (operation === "polled") return { alert: true };
             return {};
         };
@@ -253,6 +262,44 @@ test("worker failures freeze evidence without links or loss; a complete poll mat
     lease.pollDue = false;
     assert.deepEqual(await notDue.wake(), { status: 200, code: "synced" });
     assert.deepEqual(notDue.operations(), ["acquire", "release"]);
+});
+
+test("a poll reports its newly lost accounts; the real breaker withholds only that loss over 25% of the linked subscribers", async () => {
+    const syncSecret = "boosty-sync-secret-fixture", token = "bbbbbbbb-1111-4111-8111-111111111111";
+    // Runs one poll over `paused` newly lapsing and `active` qualifying subscribers; `lost` heads already record loss.
+    const poll = async (paused: number, active: number, breaker?: LossBreaker, lost = false) => {
+        const subscribers = Array.from({ length: paused + active }, (_, i): BoostySubscriber => ({ id: String(5001 + i), emailSha256: null, subscribed: true,
+            status: i < paused ? "paused" : "active", offTime: null, blacklisted: false, levelId: "555", price: 500 }));
+        const written: { evidence: { verification: string; paidAccessEndedAt?: string } }[] = [], alerts: string[] = [], reported: string[][] = [];
+        const rpc: BoostySyncRpc = async (operation, input) => {
+            if (operation === "acquire") return { token, pollDue: true, lastCompleteCount: null, now: polledAt };
+            if (operation === "linked") return subscribers.map((s, i) => ({ accountId: `aaaaaaaa-1111-4111-8111-${String(i).padStart(12, "0")}`, providerUserId: s.id, linkGeneration: "1", absentSince: null, lost: lost && i < paused }));
+            if (operation === "evidence") written.push(...input.results as typeof written);
+            return operation === "polled" ? { alert: false } : {};
+        };
+        const handler = createBoostyMembershipHandler({ adapter: { policy, api: { subscribers: async () => ({ subscribers, total: subscribers.length }) },
+            credential: { current: async () => "a", replace: async () => null, reportFailure: async () => undefined } },
+            syncSecret, rpc, alert: async kind => { alerts.push(kind); }, log: () => undefined,
+            ...(breaker ? { lossBreaker: async (lease: string, ids: string[]) => { reported.push(ids); return breaker(lease, ids); } } : {}) });
+        const response = await handler(new Request("https://edge.invalid/boosty-membership", { method: "POST", headers: { "x-boosty-sync-key": syncSecret } }));
+        assert.equal(response.status, 200);
+        return { reported: reported.map(ids => ids.length), alerts, losses: written.filter(row => row.evidence.paidAccessEndedAt !== undefined).length, qualifying: written.filter(row => row.evidence.verification === "qualifying").length };
+    };
+    const { db, link, lease, breaker } = await lossBreakerDatabase();
+    try {
+        await lease("boosty", token);
+        await link("boosty", 12);
+        assert.deepEqual(await poll(3, 9, breaker("boosty")), { reported: [3], alerts: [], losses: 3, qualifying: 9 }, "3 of 12 is at the threshold");
+        await db.exec("truncate public.membership_loss_observations");
+        assert.deepEqual(await poll(4, 8, breaker("boosty")), { reported: [4], alerts: ["mass_loss_tripped"], losses: 0, qualifying: 8 }, "4 of 12 is over 25%: loss withheld, renewals written");
+        assert.deepEqual(await poll(4, 8, breaker("boosty")), { reported: [4], alerts: [], losses: 0, qualifying: 8 }, "a throttled trip still withholds");
+        assert.deepEqual(await poll(4, 8, breaker("boosty"), true), { reported: [], alerts: [], losses: 4, qualifying: 8 }, "loss already recorded is not new");
+        const allowed: LossBreaker = async () => ({ withhold: false, bypass: true, alert: true });
+        assert.deepEqual(await poll(4, 8, allowed), { reported: [4], alerts: ["mass_loss_allowed"], losses: 4, qualifying: 8 }, "an allowance writes the loss and alerts");
+        assert.deepEqual(await poll(1, 1), { reported: [], alerts: [], losses: 0, qualifying: 1 }, "without a breaker new loss is withheld");
+    } finally {
+        await db.close();
+    }
 });
 
 test("website-account Boosty status is strict and inert while the adapter is unconfigured", async () => {

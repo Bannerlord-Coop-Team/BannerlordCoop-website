@@ -13,6 +13,7 @@ import { parseBoostyStatus } from "../supabase/functions/_shared/boosty-account"
 import type { BoostyApi, BoostySubscriber } from "../supabase/functions/_shared/boosty-api";
 import type { BoostyCredential } from "../supabase/functions/_shared/boosty-credential";
 import type { BoostyPolicy } from "../supabase/functions/_shared/boosty-policy";
+import { sqlLossBreaker } from "./loss-breaker-database";
 
 const history = ["20260907212654_create_patreon_links.sql", "20260907220000_patreon_website_roles.sql", "20260907230000_atomic_live_console_assignments.sql",
     "202609080002_membership_onboarding.sql", "202609080003_membership_role_locking.sql", "20260908030000_patreon_event_reconciliation.sql",
@@ -95,6 +96,7 @@ test("Boosty adapter links by email, decides evidence conservatively and serves 
         const before = (await query("select * from public.membership_provider_heads order by account_id")).rows;
         const outbox = (await query("select * from public.membership_outbox order by sequence")).rows;
         await db.exec(await readFile(`supabase/migrations/${migration}`, "utf8"));
+        await db.exec(await readFile("supabase/migrations/20261123000000_membership_price_and_loss_breaker.sql", "utf8"));
 
         await t.test("upgrade keeps provider heads and hints; unlinked accounts still answer the constant head", async () => {
             assert.deepEqual((await query("select * from public.membership_provider_heads order by account_id")).rows, before);
@@ -158,12 +160,14 @@ test("Boosty adapter links by email, decides evidence conservatively and serves 
             assert.deepEqual(await write([{ accountId: id, providerUserId: "3131", linkGeneration: 0, evidence, absentSince: null }]), { written: 0 }, "a stale link generation is skipped");
             const earlier = new Date(Date.parse(verifiedAt) - 86_400_000).toISOString(), later = new Date(Date.parse(verifiedAt) + 86_400_000).toISOString();
             const loss = { ...evidence, verification: "nonqualifying", tierIds: [], paidAccessEndedAt: earlier };
-            for (const bad of [{ ...evidence, programId: "other" }, { ...evidence, tierIds: [] }, { ...loss, paidAccessEndedAt: later }, { ...loss, paidThroughAt: later },
+            for (const bad of [{ ...evidence, programId: "other" }, { ...evidence, tierIds: [] }, { ...loss, paidAccessEndedAt: later }, { ...loss, paidThroughAt: later }, { ...evidence, paidAccessEndedAt: earlier },
                 { ...evidence, paidThroughAt: earlier }, { ...evidence, verification: "nonqualifying", paidThroughAt: later }, { ...evidence, extra: 1 }]) {
                 await assert.rejects(write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence: bad, absentSince: null }]), /invalid_boosty_result/u, JSON.stringify(bad));
             }
             assert.deepEqual(await write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence: { ...evidence, paidThroughAt: later }, absentSince: null }]), { written: 1 });
             assert.equal((await cpSnapshot(id)).paidThroughAt, later);
+            assert.deepEqual(await write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence: { ...evidence, tierIds: ["777"] }, absentSince: null }]), { written: 1 }, "any priced level qualifies");
+            assert.deepEqual(await write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence: { ...loss, tierIds: ["555"] }, absentSince: null }]), { written: 1 }, "loss may keep a paid tier");
             await write([{ accountId: id, providerUserId: "3131", linkGeneration: 1, evidence: loss, absentSince: verifiedAt }]);
             const lost = await cpSnapshot(id);
             assert.equal(lost.paidAccessEndedAt, earlier); assert.deepEqual(lost.tierIds, []);
@@ -231,7 +235,7 @@ test("Boosty adapter links by email, decides evidence conservatively and serves 
             const credential: BoostyCredential = { current: async () => "access", replace: async () => null, reportFailure: async () => undefined };
             const adapter: BoostyAdapter = { policy, credential, api };
             const alerts: string[] = [];
-            const worker = createBoostyMembershipHandler({ adapter, syncSecret, rpc: sync, alert: async kind => { alerts.push(kind); } });
+            const worker = createBoostyMembershipHandler({ adapter, syncSecret, rpc: sync, alert: async kind => { alerts.push(kind); }, lossBreaker: sqlLossBreaker(db, "boosty") });
             const wake = () => worker(new Request("https://edge-runtime.supabase.com/boosty-membership", { method: "POST", headers: { "x-boosty-sync-key": syncSecret } }));
             assert.equal((await wake()).status, 200);
             assert.deepEqual(calls, ["subscribers:0"]);
