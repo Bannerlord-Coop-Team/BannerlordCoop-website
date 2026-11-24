@@ -56,6 +56,43 @@ describe("compact VPS host inventory", () => {
             expect(parseSlotAvailability({ ...details, ...invalid })).toBeUndefined();
         }
     });
+    it.each([
+        ["host_memory", "Host memory evidence is missing, stale, or below the admission minimum."],
+        ["shared_image_commission", "Shared game image commissioning holds admission."],
+        ["slot_health", "Slot health checks hold admission."],
+    ])("decodes and explains %s without hiding ready capacity", async (reason, label) => {
+        const requestId = "11111111-1111-4111-8111-111111111111";
+        const result = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify({
+            version: 1, requestId, ok: true, result: { hosts: [{ ...host("blocked-host", resources(60, 40), 0),
+                totalSlots: 8, runningServers: 0, availableServers: 0, provenServers: 0,
+                slotAvailability: { ready: 5, launchProven: 2, storageObservedAt: "2026-11-11T03:32:28.000Z", reasons: [reason] },
+            }] },
+        }), requestId, true);
+        expect(parseSlotAvailability(result.hosts[0].slotAvailability)).toEqual(result.hosts[0].slotAvailability);
+        await act(async () => root.render(<VpsHostInventory hosts={result.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 admissible"]')?.textContent)
+            .toBe("Slots8Running0Ready5Admissible0");
+        expect(container.textContent).toContain(label);
+    });
+
+    it("keeps legacy admission visible when a future reason makes optional details unreadable", async () => {
+        const details = { ready: 5, launchProven: 2, storageObservedAt: null, reasons: ["host_memory", "future_gate"] };
+        for (const reason of ["future_gate", "host-memory", "SLOT_HEALTH", "shared_image_commission_extra"]) {
+            expect(parseSlotAvailability({ ...details, reasons: [reason] })).toBeUndefined();
+        }
+        expect(parseSlotAvailability(details)).toBeUndefined();
+        const requestId = "11111111-1111-4111-8111-111111111111";
+        const result = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify({
+            version: 1, requestId, ok: true, result: { hosts: [{ ...host("future-host", resources(60, 40), 0),
+                totalSlots: 8, runningServers: 0, availableServers: 0, slotAvailability: details,
+            }] },
+        }), requestId, true);
+        await act(async () => root.render(<VpsHostInventory hosts={result.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 admissible"]')?.textContent)
+            .toBe("Slots8Running0Admissible0");
+        expect(container.textContent).toContain("future-host");
+        expect(container.textContent).not.toContain("future_gate");
+    });
     it("renders healthy hosts beside a timed-out host and retains its inventory", async () => {
         const timedOut: HostingAdminVpsHost = { ...host("host-frozen", resources(60, 40), 1),
             resources: null, liveData: { status: "unavailable", reason: "timeout" } };

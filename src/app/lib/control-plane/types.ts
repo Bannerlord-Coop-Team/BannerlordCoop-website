@@ -252,6 +252,7 @@ export type HostingAdminVpsHost = {
         launchProven: number;
         storageObservedAt: string | null;
         reasons: Array<"storage_evidence_missing" | "storage_evidence_stale" | "storage_identity_changed" | "storage_reserve"
+            | "host_memory" | "shared_image_commission" | "slot_health"
             | "slot_target" | "runner_onboarding" | "runner_update" | "host_decommission" | "native_ram_commission">;
     };
     occupiedSlots: Array<{
