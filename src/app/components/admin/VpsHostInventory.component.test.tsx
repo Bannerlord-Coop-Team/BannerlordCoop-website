@@ -1,4 +1,7 @@
 import { act } from "react";
+import shared from "../../../../test/fixtures/slot-storage/v1.json";
+import { decodeControlPlaneAdminResponse } from "@/app/lib/control-plane/client";
+import { readSlotStorage } from "@/app/lib/control-plane/slot-storage";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HostingAdminHostResources, HostingAdminVpsHost } from "@/app/lib/control-plane/types";
@@ -36,6 +39,37 @@ afterEach(async () => {
 });
 
 describe("compact VPS host inventory", () => {
+    it.each(shared.cases)("consumes shared v1 storage case $name through the real decoder and table", async ({ storage, text, tone }) => {
+        expect(shared.schemaVersion).toBe(1);
+        const inventoryHost = host("host-storage", resources(60, 40), 0);
+        inventoryHost.occupiedSlots[0]!.storage = storage;
+        const decoded = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify({
+            version: 1, requestId: shared.requestId, ok: true, result: { hosts: [inventoryHost] },
+        }), shared.requestId, true);
+        await act(async () => root.render(<VpsHostInventory hosts={decoded.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-storage"]')!.click());
+        const cell = container.querySelector('[data-label="Storage"]');
+        expect(cell?.textContent).toBe(text);
+        expect(cell?.querySelector("p")?.classList.contains(tone)).toBe(true);
+        expect(container.querySelectorAll('[aria-label="Occupied slots for host-storage"] [role="columnheader"]')).toHaveLength(6);
+    });
+
+    it.each(shared.invalidStorage)("rejects incompatible storage: %j", storage => {
+        expect(readSlotStorage(storage)).toBeNull();
+    });
+
+    it.each([
+        { storage: undefined, pending: false, text: "Unknown" },
+        { storage: shared.usedOnly, pending: false, text: "2.1 GiB" },
+        { storage: shared.cases[0]!.storage, pending: true, text: "Loading…" },
+    ])("renders storage $text for missing limits, older peers and pending reads", async ({ storage, pending, text }) => {
+        const inventoryHost = host("host-storage", resources(60, 40), 0);
+        inventoryHost.occupiedSlots[0]!.storage = storage;
+        await act(async () => root.render(<VpsHostInventory hosts={[inventoryHost]} ownerLabels={{}} runnerTargetSourceCommit={null} liveDataPending={pending} />));
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-storage"]')!.click());
+        expect(container.querySelector('[data-label="Storage"]')?.textContent).toBe(text);
+    });
+
     it("renders healthy hosts beside a timed-out host and retains its inventory", async () => {
         const timedOut: HostingAdminVpsHost = { ...host("host-frozen", resources(60, 40), 1),
             resources: null, liveData: { status: "unavailable", reason: "timeout" } };
