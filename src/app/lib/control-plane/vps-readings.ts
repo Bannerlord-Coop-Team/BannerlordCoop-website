@@ -10,9 +10,6 @@ export type SupplementaryReading<T> = { result?: T; error?: string };
 /** What a reading hook shows: its result (if any), its last error, and whether its first read is still loading. */
 export type ReadingView<T> = { result?: T; error?: string; pending: boolean };
 
-/** A deadline that bounds one slow read, and the message shown when it passes. */
-export type ReadingTimeout = { milliseconds: number; message: string };
-
 /** Whether the registered inventory arrived without live data, so its readings load before they show anything. */
 export function awaitsLiveData(initial: HostingAdminVpsInventory): boolean {
     return initial.liveDataIncluded === false;
@@ -46,13 +43,6 @@ export function supplementaryView<T>(reading: SupplementaryReading<T> | undefine
 /** Records a failed supplementary read, keeping its last result. */
 export function failedSupplementaryReading<T>(previous: SupplementaryReading<T> | undefined, error: string): SupplementaryReading<T> {
     return { result: previous?.result, error };
-}
-
-/** The message a failed read shows: its timeout's when the deadline passed, else the error's own, else a generic one. */
-export function readingErrorMessage(error: unknown, timedOut: boolean, timeout: ReadingTimeout | undefined): string {
-    if (timedOut && timeout !== undefined) return timeout.message;
-    if (error instanceof Error) return error.message;
-    return "VPS readings could not be loaded.";
 }
 
 /** Why a `vps-hosts` response's live-data flag contradicts the request, naming which way; null when it matches. */

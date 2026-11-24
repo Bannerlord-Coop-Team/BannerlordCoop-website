@@ -498,12 +498,10 @@ function stubDialog() {
     Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value() { this.open = false; } });
 }
 
-/** Focuses and clicks the page button with the given label, as a keyboard or pointer user would, and returns it. */
+/** Clicks the page button with the given label. */
 async function openFrom(label: string) {
     const trigger = [...container.querySelectorAll("button")].find(button => button.textContent === label)!;
-    trigger.focus();
     await act(async () => trigger.click());
-    return trigger;
 }
 
 const AVAILABLE = { provider: "contabo-vps" as const, serviceName: "203779521", label: "Contabo VPS · 203779521" };

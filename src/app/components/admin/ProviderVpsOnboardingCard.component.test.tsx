@@ -117,7 +117,7 @@ it("maps a billing reading onto the form's inventory with its read state", () =>
     expect(providerAccountInventory({ error: "Timed out.", pending: false })).toEqual({ availableHosts: null, readState: { kind: "failed", error: "Timed out." } });
 });
 
-it("treats a malformed host list as not yet listed", () => {
+it("treats a malformed host list as a failed read with an explicit error", () => {
     const malformed = { availableHosts: "not-a-list" } as unknown as HostingAdminVpsInventory;
     expect(providerAccountInventory({ result: malformed, pending: false })).toEqual({
         availableHosts: null, readState: { kind: "failed", error: "The provider account inventory response did not list hosts." },

@@ -7,7 +7,6 @@ import {
     billingReadState,
     liveDataMismatchError,
     liveInventoryView,
-    readingErrorMessage,
     supplementaryView,
     type LiveInventoryReading,
     type SupplementaryReading,
@@ -56,17 +55,6 @@ test("a failed supplementary read keeps its last result", () => {
     const billing = inventory(false, "billing");
     assert.deepEqual(failedSupplementaryReading({ result: billing }, "Down."), { result: billing, error: "Down." });
     assert.deepEqual(failedSupplementaryReading(undefined, "Down."), { result: undefined, error: "Down." });
-});
-
-test("a failed read names its timeout, else its own error, else a generic cause", () => {
-    const timeout = { milliseconds: 15_000, message: "Billing readings timed out." };
-    const cases: Array<[string, unknown, boolean, typeof timeout | undefined, string]> = [
-        ["deadline passed", new Error("aborted"), true, timeout, "Billing readings timed out."],
-        ["aborted without a deadline", new Error("aborted"), true, undefined, "aborted"],
-        ["ordinary failure", new Error("Billing provider down."), false, timeout, "Billing provider down."],
-        ["non-error rejection", "nope", false, timeout, "VPS readings could not be loaded."],
-    ];
-    for (const [name, error, timedOut, deadline, expected] of cases) assert.equal(readingErrorMessage(error, timedOut, deadline), expected, name);
 });
 
 test("a live-data mismatch names which way the response differs from the request", () => {

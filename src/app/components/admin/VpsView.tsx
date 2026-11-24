@@ -12,7 +12,7 @@ import { VpsSlotSummary } from "./VpsSlotSummary";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
-import { billingReadState } from "@/app/lib/control-plane/vps-readings";
+import { billingReadState, type BillingReadState } from "@/app/lib/control-plane/vps-readings";
 import { manualEntryProviders } from "@/app/lib/control-plane/manual-vps";
 import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminRegionRequestNotification, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
@@ -48,9 +48,7 @@ export function VpsView({ inventory: initialInventory, hostingRegions, accounts 
             </p>
             {pending && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading live resource readings…</p>}
             {readings.error && <p role="alert" className="mt-3 text-xs text-red-200">{readings.error} {readings.result ? "Showing the last resource readings; retrying automatically." : "Registered inventory remains visible; retrying automatically."} <button type="button" className="underline" onClick={readings.refreshReadings}>Retry live readings</button></p>}
-            {billingState.kind === "loading" && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading billing readings…</p>}
-            {billingState.kind === "partial" && <p role="status" className="mt-3 text-xs text-amber-200">{billingState.failedProviderReads}</p>}
-            {(billingState.kind === "failed" || billingState.kind === "stale") && <p role="alert" className="mt-3 text-xs text-red-200">Billing unavailable. {billingState.error} {billingState.kind === "stale" ? "Showing the last billing readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={billing.refreshReadings}>Retry billing</button></p>}
+            <BillingBanner state={billingState} onRetry={billing.refreshReadings} />
             <OutOfAdmissionBanner hosts={hosts} />
             <VpsSlotSummary hosts={hosts} regionCatalog={hostingRegions.regions} />
             <AddCapacityPanel
@@ -65,8 +63,8 @@ export function VpsView({ inventory: initialInventory, hostingRegions, accounts 
                 hosts={hosts}
                 accounts={accounts}
                 liveDataPending={pending}
-                billingPending={billing.pending}
-                billingUnavailable={!!billing.error && !billing.result}
+                billingPending={billingState.kind === "loading"}
+                billingUnavailable={billingState.kind === "failed"}
                 onRefresh={readings.refreshReadings}
                 ownerLabels={Object.fromEntries(ownerLabels)}
                 runnerTargetSourceCommit={runnerTargetSourceCommit}
@@ -205,6 +203,18 @@ function formatRequesterEmail(request: HostingAdminRegionRequest, accounts: read
 function formatAllocatedRegions(regions: readonly string[]) {
     if (regions.length === 0) return "—";
     return regions.map(hostingRegionLabel).join(", ");
+}
+
+/** The page's billing status line for one read state: loading, failed provider accounts, or a failed read with a retry. */
+function BillingBanner({ state, onRetry }: { state: BillingReadState; onRetry: () => void }) {
+    const retry = <button type="button" className="underline" onClick={onRetry}>Retry billing</button>;
+    switch (state.kind) {
+        case "loading": return <p role="status" className="mt-3 text-xs text-foreground-muted">Loading billing readings…</p>;
+        case "partial": return <p role="status" className="mt-3 text-xs text-amber-200">{state.failedProviderReads}</p>;
+        case "failed": return <p role="alert" className="mt-3 text-xs text-red-200">Billing unavailable. {state.error} Retrying automatically. {retry}</p>;
+        case "stale": return <p role="alert" className="mt-3 text-xs text-red-200">Billing unavailable. {state.error} Showing the last billing readings; retrying automatically. {retry}</p>;
+        case "ok": return null;
+    }
 }
 
 function HostResourcesCard({ name, resources, pending }: { name: string; resources: HostingAdminHostResources | null; pending: boolean }) {
