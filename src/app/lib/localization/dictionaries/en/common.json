@@ -6,6 +6,7 @@
   "metadata.description": "Play the Mount & Blade II: Bannerlord campaign with friends in a shared multiplayer world.",
   "nav.homeLabel": "Bannerlord Co-op home",
   "nav.primary": "Primary navigation",
+  "nav.loading": "Loading navigation",
   "nav.mobile": "Mobile navigation",
   "nav.home": "Home",
   "nav.servers": "Servers",

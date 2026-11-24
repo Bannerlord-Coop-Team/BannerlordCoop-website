@@ -27,6 +27,8 @@ test("the route-level skeleton exposes one accessible loading state", () => {
 
     assert.match(html, /aria-busy="true"/);
     assert.match(html, /aria-label="Loading control plane"/);
+    // Navigation comes from the admin layout, so the skeleton must not draw a second header.
+    assert.doesNotMatch(html, /<header/);
 });
 
 test("every control-plane view has a view-specific skeleton", () => {

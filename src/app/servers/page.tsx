@@ -7,6 +7,7 @@ import { Suspense } from "react";
 import { MembershipNextStep } from "@/app/components/servers/MembershipNextStep";
 import { composeOnboarding, identityStep, type AccountStatus } from "@/app/lib/hosting/membership-onboarding";
 import { Navbar } from "@/app/components/layout/Navbar";
+import { NavbarFallback } from "@/app/components/layout/NavbarFallback";
 import { AllServersDirectory } from "@/app/components/servers/AllServersDirectory";
 import {
     ServerDirectoryTable,
@@ -44,12 +45,14 @@ export default async function ServersPage() {
     const hostingStatus = viewer.then(({ user, accessToken, accountRead }) => loadHostingStatus(user, accessToken, accountRead));
 
     const locale = await getLocale();
-    const [{ t, number }, messages] = await Promise.all([getTranslations("servers", locale), getMessages(["servers", "server-common"], locale)]);
+    const [{ t, number }, messages] = await Promise.all([
+        getTranslations("servers", locale), getMessages(["servers", "server-common"], locale),
+    ]);
 
     const managedInventory = viewer.then(({ user, accessToken, inventory }) => loadManagedInventory(user, accessToken, inventory, t));
     return (
         <LocalizationProvider locale={locale} messages={messages}>
-            <Suspense fallback={<div role="status" aria-label={t("page.navigation")} className="h-16 border-b border-white/10 bg-background" />}>
+            <Suspense fallback={<NavbarFallback />}>
                 <Navbar viewer={viewer.then(({ user }) => ({ user }))} />
             </Suspense>
             <main className="min-h-svh bg-background">

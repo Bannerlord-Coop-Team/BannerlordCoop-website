@@ -20,6 +20,11 @@ const aliceId = "22222222-2222-4222-8222-222222222222";
 const secret = "isolated-browser-impersonation-key";
 let server, browser, log = "";
 async function write(path, value) { await mkdir(dirname(join(fixture, path)), { recursive: true }); await writeFile(join(fixture, path), value); }
+/** Applies one targeted source patch, failing loudly when the real file no longer matches the pattern. */
+function patch(source, pattern, replacement) {
+    if (source.search(pattern) === -1) throw new Error(`Fixture patch no longer matches: ${pattern}`);
+    return source.replace(pattern, replacement);
+}
 try {
     await cp("src", join(fixture, "src"), { recursive: true });
     await cp("supabase/functions/_shared", join(fixture, "supabase/functions/_shared"), { recursive: true });
@@ -30,10 +35,15 @@ try {
     await copyFile("tests/fixtures/impersonation-auth.mjs", join(fixture, "fixture-auth.mjs"));
     await write("src/app/lib/supabase/admin.ts", `export {getSupabaseAdminClient} from '../../../../fixture-auth.mjs';`);
     // Replace only the external transport; keep the real API parser and caller.
-    await write("src/app/lib/hosting/my-servers.ts", 'import {fixtureFetch} from "../../../../fixture-auth.mjs";\n' + (await readFile("src/app/lib/hosting/my-servers.ts", "utf8")).replace("await fetch(endpoint,", "await fixtureFetch(endpoint,"));
+    await write("src/app/lib/hosting/my-servers.ts", 'import {fixtureFetch} from "../../../../fixture-auth.mjs";\n' + patch(await readFile("src/app/lib/hosting/my-servers.ts", "utf8"), /await fetchMyServersEdge\(endpoint,/, "await fixtureFetch(endpoint,"));
     await write("src/app/fixture-state/route.ts", `import {fixtureResult} from '../../../fixture-auth.mjs';export function GET(){return Response.json(fixtureResult())}`);
     await write("src/app/lib/hosting/public-servers.ts", "export async function listPublicServers(){return []}");
-    await write("src/app/layout.tsx", `import {ImpersonationBanner} from '@/app/components/admin/ImpersonationBanner';import './globals.css';export default function Layout({children}){return <html><body><ImpersonationBanner/>{children}</body></html>}`);
+    // Keep the real root layout (localization the site navbar needs, banner); strip only the Google font downloads.
+    let layout = await readFile("src/app/layout.tsx", "utf8");
+    layout = patch(layout, /^import [^\r\n]* from "next\/font\/google";\r?\n/m, "");
+    layout = patch(layout, /^const \w+ = (?:Inter|Cormorant_Garamond|Barlow_Condensed)\(\{[^}]*\}\);\r?\n/gm, "");
+    layout = patch(layout, /\$\{inter\.variable\} \$\{cormorantGaramond\.variable\} \$\{barlowCondensed\.variable\} /, "");
+    await write("src/app/layout.tsx", layout);
     execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", join(fixture, "key.pem"), "-out", join(fixture, "cert.pem"), "-days", "1", "-subj", "/CN=localhost", "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost"], { stdio: "ignore" });
     server = spawn(process.execPath, [join(root, "node_modules/next/dist/bin/next"), "dev", "--webpack", "--hostname", "127.0.0.1", "--port", String(port), "--experimental-https", "--experimental-https-key", join(fixture, "key.pem"), "--experimental-https-cert", join(fixture, "cert.pem")], {
         cwd: fixture, env: { PATH: process.env.PATH, HOME: process.env.HOME, NODE_EXTRA_CA_CERTS: join(fixture, "cert.pem"), NEXT_TELEMETRY_DISABLED: "1", ADMIN_IMPERSONATION_ENABLED: "true", NEXT_PUBLIC_SUPABASE_URL: "https://fixture.invalid", NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "isolated-publishable-fixture-key", SUPABASE_SECRET_KEY: secret }, stdio: ["ignore", "pipe", "pipe"],
@@ -69,6 +79,11 @@ try {
     assert.equal(fixtureState.events.some(event => event.action === "unlink" && event.userId === adminId), false);
     console.log("PASS native target identity, inventory, and real account mutation through the existing UI");
     await page.getByRole("link", { name: "Choose another user" }).click();
+    // The original administrator keeps admin navigation while the site navbar shows the impersonated user.
+    await page.getByRole("navigation", { name: "Administration" }).waitFor();
+    await page.getByRole("button", { name: "Account menu for Alice", exact: true }).waitFor();
+    assert.equal(await page.getByRole("button", { name: "Account menu for Administrator", exact: true }).count(), 0);
+    console.log("PASS admin navigation stays with the administrator while the navbar shows the impersonated user");
     await page.getByRole("button", { name: "Impersonate Bob", exact: true }).click();
     await page.getByText("Bob campaign", { exact: true }).waitFor();
     assert.equal(await page.getByText("Alice campaign", { exact: true }).count(), 0);
