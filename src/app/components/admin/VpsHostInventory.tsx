@@ -6,6 +6,7 @@ import { VpsSlotCapacityRaise } from "@/app/components/admin/VpsSlotCapacityRais
 import { VpsSlotDecommission } from "@/app/components/admin/VpsSlotDecommission";
 import { formatAccountOwner, hostPlacementLabel } from "@/app/lib/control-plane/presentation";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
+import { readSlotStorage } from "@/app/lib/control-plane/slot-storage";
 import { vpsProviderLabel } from "@/app/lib/control-plane/vps-providers";
 import type {
     HostingAdminHostResources,
@@ -35,7 +36,7 @@ type VpsHostInventoryProps = {
 };
 
 const SUMMARY_GRID = "grid-cols-2 @min-[70rem]:grid-cols-[minmax(0,12fr)_minmax(0,7fr)_minmax(0,15fr)_minmax(0,12fr)_minmax(0,8fr)_minmax(0,12fr)_2.5rem] [&>*]:min-w-0 [overflow-wrap:anywhere]";
-const SLOT_GRID = "grid-cols-2 @min-[45rem]:grid-cols-[minmax(0,10fr)_minmax(0,20fr)_minmax(0,11fr)_minmax(0,13fr)_minmax(0,8fr)] [&>*]:min-w-0 [overflow-wrap:anywhere]";
+const SLOT_GRID = "grid-cols-2 @min-[45rem]:grid-cols-[minmax(0,10fr)_minmax(0,20fr)_minmax(0,11fr)_minmax(0,13fr)_minmax(0,13fr)_minmax(0,8fr)] [&>*]:min-w-0 [overflow-wrap:anywhere]";
 const SUMMARY_LABEL = "before:mb-2 before:block before:text-[0.62rem] before:uppercase before:text-foreground-dim before:content-[attr(data-label)] @min-[70rem]:before:hidden";
 /** A host's row identity: a service name is unique only within its provider, as `VpsView` joins billing. */
 function hostKey(host: HostingAdminVpsHost): string {
@@ -141,8 +142,16 @@ export function diskPressureLevel(resources: HostingAdminHostResources | null): 
     const usedPercent = Math.min(100, Math.floor((used / total) * 100));
     return {
         usedPercent,
-        level: usedPercent >= 90 ? "critical" : usedPercent >= 80 ? "warning" : "normal",
+        level: pressureLevel(usedPercent),
     };
+}
+
+function pressureLevel(usedPercent: number): DiskPressure["level"] {
+    return usedPercent >= 90 ? "critical" : usedPercent >= 80 ? "warning" : "normal";
+}
+
+function diskTone(level: DiskPressure["level"]) {
+    return level === "critical" ? "text-red-200" : level === "warning" ? "text-amber-300" : "text-foreground-muted";
 }
 
 /** Shows a host's name and its stored-catalog regions, country and zone. */
@@ -175,11 +184,10 @@ function SystemSummary({ resources, pending }: { resources: HostingAdminHostReso
     const pressure = diskPressureLevel(resources);
     if (!resources || !pressure) return <StateBadge value={pending ? "loading" : "unavailable"} />;
     const alert = pressure.level !== "normal";
-    const diskTone = pressure.level === "critical" ? "text-red-200" : pressure.level === "warning" ? "text-amber-300" : "text-foreground-muted";
     return <dl className="space-y-1 text-xs text-foreground-muted">
         <div className="flex gap-2" title="CPU time used across all host CPUs during a short sample. Excludes idle time, I/O waits and time taken by the hypervisor."><dt>CPU</dt><dd>{resources.cpuPercent.toFixed(1)}%</dd></div>
         <div className="flex gap-2"><dt>Mem</dt><dd>{formatStorageBytes(resources.memoryUsedBytes)} / {formatStorageBytes(resources.memoryTotalBytes)}</dd></div>
-        <div className={`flex items-center gap-2 ${diskTone}`} aria-label={`Disk ${pressure.level}: ${pressure.usedPercent}% used, ${formatStorageBytes(resources.diskFreeBytes)} free`}>
+        <div className={`flex items-center gap-2 ${diskTone(pressure.level)}`} aria-label={`Disk ${pressure.level}: ${pressure.usedPercent}% used, ${formatStorageBytes(resources.diskFreeBytes)} free`}>
             {alert && <AlertTriangle aria-hidden="true" className="size-3.5 shrink-0" />}
             <dt>Disk</dt><dd className={alert ? "font-semibold" : undefined}>{pressure.usedPercent}%{alert && ` · ${formatStorageBytes(resources.diskFreeBytes)} free`}</dd>
         </div>
@@ -195,7 +203,7 @@ function ExpandedHost({ id, host, ownerLabels, runnerTargetSourceCommit, pending
                     {slots.length > 0 ? <div role="table" aria-label={`Occupied slots for ${host.name}`}>
                         <div role="rowgroup">
                             <div role="row" className={`hidden @min-[45rem]:grid ${SLOT_GRID} justify-center gap-x-4 border-b border-white/10 px-6 py-2 font-label text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-foreground-dim`}>
-                                <span role="columnheader">Slot / UDP</span><span role="columnheader">Player / Server</span><span role="columnheader">CPU</span><span role="columnheader">Memory</span><span role="columnheader">Status</span>
+                                <span role="columnheader">Slot / UDP</span><span role="columnheader">Player / Server</span><span role="columnheader">CPU</span><span role="columnheader">Memory</span><span role="columnheader">Storage</span><span role="columnheader">Status</span>
                             </div>
                         </div>
                         <div role="rowgroup" className="divide-y divide-white/10">
@@ -204,7 +212,7 @@ function ExpandedHost({ id, host, ownerLabels, runnerTargetSourceCommit, pending
                                 <div role="cell" data-label="Player / Server" className={SLOT_LABEL}><p className="truncate font-semibold text-foreground" title={formatAccountOwner(slot, ownerLabels)}>{formatAccountOwner(slot, ownerLabels)}</p><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="block truncate font-mono text-[0.62rem] text-foreground-muted hover:text-gold hover:underline" title={slot.displayName}>{slot.displayName}</Link></div>
                                 <div role="cell" data-label="CPU" className={SLOT_LABEL}><p className="text-foreground-muted">{pending ? "Loading…" : formatCpu(slot.resources)}</p></div>
                                 <div role="cell" data-label="Memory" className={SLOT_LABEL}><p className="text-foreground-muted">{pending ? "Loading…" : formatMemory(slot.resources)}</p></div>
-
+                                <div role="cell" data-label="Storage" className={SLOT_LABEL}><SlotStorage storage={slot.storage} pending={pending} /></div>
                                 <div role="cell" data-label="Status" className={SLOT_LABEL}><StateBadge value={slot.operationState} /></div>
                             </div>)}
                         </div>
@@ -216,6 +224,16 @@ function ExpandedHost({ id, host, ownerLabels, runnerTargetSourceCommit, pending
             </div>
         </div>
     );
+}
+
+function SlotStorage({ storage: value, pending }: { storage: unknown; pending: boolean }) {
+    const storage = readSlotStorage(value);
+    if (pending || storage === null) return <p className="text-foreground-muted">{pending ? "Loading…" : "Unknown"}</p>;
+    const level = storage.quotaBytes === null ? "normal"
+        : pressureLevel(storage.quotaBytes === 0 ? 100 : Math.floor(storage.usedBytes / storage.quotaBytes * 100));
+    return <p className={diskTone(level)} title="Managed slot files / effective quota (slot share, server limit and available disk space).">
+        {formatStorageBytes(storage.usedBytes)}{storage.quotaBytes !== null && ` / ${formatStorageBytes(storage.quotaBytes)}`}
+    </p>;
 }
 
 function HostDetailFooter({ host, runnerTargetSourceCommit }: { host: HostingAdminVpsHost; runnerTargetSourceCommit: string | null }) {

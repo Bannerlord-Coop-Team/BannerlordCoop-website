@@ -262,6 +262,8 @@ export type HostingAdminVpsHost = {
         ownerAccountId?: string | null;
         operationState: string;
         resources?: HostingServerResources | null;
+        /** Effective runner quota; absent on older control planes. */
+        storage?: { usedBytes: number; quotaBytes: number | null } | null;
     }>;
     cost: {
         priceInMicrocents: number;
