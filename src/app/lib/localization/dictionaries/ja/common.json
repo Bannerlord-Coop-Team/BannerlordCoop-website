@@ -6,6 +6,7 @@
   "metadata.description": "Mount & Blade II: Bannerlordのキャンペーンを、共有のマルチプレイ世界でフレンドとともに楽しみましょう。",
   "nav.homeLabel": "Bannerlord Co-opのホーム",
   "nav.primary": "メインナビゲーション",
+  "nav.loading": "ナビゲーションを読み込み中",
   "nav.mobile": "モバイルナビゲーション",
   "nav.home": "ホーム",
   "nav.servers": "サーバー",

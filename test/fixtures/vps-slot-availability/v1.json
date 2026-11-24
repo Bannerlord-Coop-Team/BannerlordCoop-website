@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "scenario": "Storage sampler stalled from 03:24 until 03:34 while five empty slots remained ready",
+  "checkedAt": "2026-11-11T03:32:28.000Z",
+  "request": { "operation": "vps-hosts", "input": { "includeLiveData": false, "includeProviderInventory": false } },
+  "expectedHost": {
+    "totalSlots": 8,
+    "runningServers": 0,
+    "availableServers": 0,
+    "provenServers": 0,
+    "slotAvailability": {
+      "ready": 5,
+      "launchProven": 2,
+      "storageObservedAt": "2026-11-11T03:24:11.000Z",
+      "reasons": ["storage_evidence_stale"]
+    }
+  }
+}
