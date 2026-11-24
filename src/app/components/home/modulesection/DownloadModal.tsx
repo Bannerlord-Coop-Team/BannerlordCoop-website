@@ -1,9 +1,15 @@
 "use client";
 
 import { useTranslations } from "@/app/lib/localization/client";
-import { Download, ExternalLink, X } from "lucide-react";
+import { Download, ExternalLink, Server, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+
+/** Same-origin routes that redirect to the newest public release's archives. */
+const directDownloads = [
+    { name: "download.direct.mod", detail: "download.direct.modDetail", href: "/download/mod", Icon: Download },
+    { name: "download.direct.server", detail: "download.direct.serverDetail", href: "/download/server", Icon: Server },
+] as const;
 
 const downloadSources = [
     {
@@ -22,6 +28,8 @@ const downloadSources = [
         name: "download.nexus.name",
         description: "download.nexus.description",
         href: "https://www.nexusmods.com/mountandblade2bannerlord/mods/2387",
+        // Nexus Mods removed the mod page; the entry stays visible but unlinked, with this reason, until it returns.
+        unavailable: "download.nexus.unavailable",
     },
     {
         name: "download.moddb.name",
@@ -29,6 +37,8 @@ const downloadSources = [
         href: "https://www.moddb.com/mods/bannerlord-coop",
     },
 ] as const;
+
+const sourceCardClass = "flex items-start justify-between gap-3 rounded-sm border border-white/10 bg-background/60 p-4 text-left sm:items-center sm:gap-6 sm:p-6";
 
 const triggerVariants = {
     navbar: {
@@ -180,41 +190,30 @@ export function DownloadModal({trigger = "section", detail} : DownloadModalProps
                                 {t("download.description")}
                             </p>
 
-                            <div className="mt-6 grid gap-3 sm:mt-8">
-                                {downloadSources.map((source) => (
+                            <div className="mt-6 grid gap-3 sm:mt-8 sm:grid-cols-2">
+                                {directDownloads.map(({ name, detail, href, Icon }) => (
                                     <a
-                                        key={source.name}
-                                        href={source.href}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="group flex items-start justify-between gap-3 rounded-sm border border-white/10 bg-background/60 p-4 text-left transition-colors duration-300 hover:border-gold/50 hover:bg-white/2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised sm:items-center sm:gap-6 sm:p-6"
+                                        key={name}
+                                        href={href}
+                                        className="group flex min-h-16 items-center gap-3 rounded-sm border border-crimson/40 bg-crimson/30 px-5 py-3 text-left transition-colors duration-300 hover:border-crimson-hover hover:bg-crimson-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-crimson focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised"
                                     >
-                                        <span>
-                                            <span className="flex flex-wrap items-center gap-2 sm:gap-3">
-                                                <span className="font-display text-xl font-semibold text-foreground transition-colors duration-300 group-hover:text-gold sm:text-2xl">
-                                                    {t(source.name)}
-                                                </span>
-                                                {"recommended" in source && source.recommended && (
-                                                    <span className="rounded-sm border border-crimson/60 px-2 py-1 font-label text-[0.65rem] font-semibold uppercase tracking-widest text-crimson-hover sm:text-xs sm:tracking-[0.12em]">
-                                                        {t("download.recommended")}
-                                                    </span>
-                                                )}
-                                                {"supporterOnly" in source && source.supporterOnly && (
-                                                    <span className="rounded-sm border border-[#ff8181]/60 px-2 py-1 font-label text-[0.65rem] font-semibold uppercase tracking-widest text-[#ff8181] sm:text-xs sm:tracking-[0.12em]">
-                                                        {t("download.supporterOnly")}
-                                                    </span>
-                                                )}
-                                            </span>
-                                            <span className="mt-2 block font-sans text-sm leading-5 text-foreground-muted">
-                                                {t(source.description)}
-                                            </span>
+                                        <Icon aria-hidden="true" className="size-5 shrink-0 text-white" strokeWidth={1.75} />
+                                        <span className="flex flex-col leading-tight">
+                                            <span className="font-label text-sm font-semibold uppercase tracking-[0.14em] text-white">{t(name)}</span>
+                                            <span className="mt-1 font-sans text-xs text-foreground-muted group-hover:text-white/80">{t(detail)}</span>
                                         </span>
-                                        <ExternalLink
-                                            aria-hidden="true"
-                                            className="size-5 shrink-0 text-foreground-dim transition-colors duration-300 group-hover:text-gold"
-                                        />
                                     </a>
                                 ))}
+                            </div>
+
+                            <div aria-hidden="true" className="my-6 flex items-center gap-4 sm:my-8">
+                                <span className="h-px flex-1 bg-white/10" />
+                                <span className="font-label text-xs font-semibold uppercase tracking-[0.2em] text-foreground-dim">{t("download.or")}</span>
+                                <span className="h-px flex-1 bg-white/10" />
+                            </div>
+
+                            <div className="grid gap-3">
+                                {downloadSources.map((source) => <DownloadSourceCard key={source.name} source={source} />)}
                             </div>
                         </div>
                     </div>
@@ -222,5 +221,61 @@ export function DownloadModal({trigger = "section", detail} : DownloadModalProps
                 document.body,
             )}
         </>
+    );
+}
+
+/** Renders one store or installer entry: an external link, or an inert card with its reason when unavailable. */
+function DownloadSourceCard({ source }: { source: (typeof downloadSources)[number] }) {
+    const { t } = useTranslations("common");
+    const unavailable = "unavailable" in source ? source.unavailable : null;
+    const content = (
+        <>
+            <span>
+                <span className="flex flex-wrap items-center gap-2 sm:gap-3">
+                    <span className={`font-display text-xl font-semibold text-foreground sm:text-2xl ${unavailable ? "" : "transition-colors duration-300 group-hover:text-gold"}`}>
+                        {t(source.name)}
+                    </span>
+                    {unavailable && (
+                        <span className="rounded-sm border border-white/20 px-2 py-1 font-label text-[0.65rem] font-semibold uppercase tracking-widest text-foreground-dim sm:text-xs sm:tracking-[0.12em]">
+                            {t("download.unavailable")}
+                        </span>
+                    )}
+                    {"recommended" in source && source.recommended && (
+                        <span className="rounded-sm border border-crimson/60 px-2 py-1 font-label text-[0.65rem] font-semibold uppercase tracking-widest text-crimson-hover sm:text-xs sm:tracking-[0.12em]">
+                            {t("download.recommended")}
+                        </span>
+                    )}
+                    {"supporterOnly" in source && source.supporterOnly && (
+                        <span className="rounded-sm border border-[#ff8181]/60 px-2 py-1 font-label text-[0.65rem] font-semibold uppercase tracking-widest text-[#ff8181] sm:text-xs sm:tracking-[0.12em]">
+                            {t("download.supporterOnly")}
+                        </span>
+                    )}
+                </span>
+                <span className="mt-2 block font-sans text-sm leading-5 text-foreground-muted">
+                    {t(unavailable ?? source.description)}
+                </span>
+            </span>
+            {!unavailable && (
+                <ExternalLink
+                    aria-hidden="true"
+                    className="size-5 shrink-0 text-foreground-dim transition-colors duration-300 group-hover:text-gold"
+                />
+            )}
+        </>
+    );
+
+    if (unavailable) {
+        return <div aria-disabled="true" className={`${sourceCardClass} cursor-not-allowed opacity-50`}>{content}</div>;
+    }
+
+    return (
+        <a
+            href={source.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`group ${sourceCardClass} transition-colors duration-300 hover:border-gold/50 hover:bg-white/2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised`}
+        >
+            {content}
+        </a>
     );
 }

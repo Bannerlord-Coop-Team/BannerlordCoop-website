@@ -42,6 +42,12 @@
   "download.options": "Варианты скачивания",
   "download.heading": "Выберите платформу",
   "download.description": "Общедоступные релизы представлены ниже. Для доступа к ночным сборкам нужна роль Tester, роль участника, поддерживающего проект на Patreon, Boosty или Afdian, либо одно из 10 спонсируемых мест для учётных записей Discord, предоставляемых участнику с соответствующими правами.",
+  "download.direct.mod": "Скачать мод",
+  "download.direct.modDetail": "Последний релиз · .zip",
+  "download.direct.server": "Скачать выделенный сервер",
+  "download.direct.serverDetail": "Windows · .7z",
+  "download.or": "или",
+  "download.unavailable": "Недоступно",
   "download.recommended": "Рекомендуем",
   "download.supporterOnly": "Только для поддержавших проект",
   "download.installer.name": "Пошаговый установщик",
@@ -50,6 +56,7 @@
   "download.steam.description": "Подпишитесь и получайте обновления через Steam.",
   "download.nexus.name": "Nexus Mods",
   "download.nexus.description": "Скачайте Bannerlord Co-op с Nexus Mods.",
+  "download.nexus.unavailable": "Bannerlord Co-op сейчас недоступен на Nexus Mods.",
   "download.moddb.name": "ModDB",
   "download.moddb.description": "Просматривайте релизы и новости проекта на ModDB."
 }
