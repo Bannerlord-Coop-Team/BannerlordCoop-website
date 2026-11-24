@@ -89,7 +89,9 @@ it("opens a real target session, performs a server write as the target, and rest
 it("keeps the admin navigation on the saved administrator while the site client stays the impersonated target", async () => {
     await start();
     await expect(loadAdminNavigationIdentity()).resolves.toEqual({ actor, siteViewer: NAVBAR_LOOKUP });
-    expect((await (await getSupabaseServerClient()).auth.getUser()).data.user).toBe(target);
+    const siteClient = await getSupabaseServerClient();
+    const { data } = await siteClient.auth.getUser();
+    expect(data.user).toBe(target);
 });
 
 it("rejects expired selection and revoked administrator authority while keeping Exit functional", async () => {
