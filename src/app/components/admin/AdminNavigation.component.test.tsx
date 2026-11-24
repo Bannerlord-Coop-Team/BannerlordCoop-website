@@ -8,18 +8,18 @@ const member = { id: "22222222-2222-4222-8222-222222222222", app_metadata: { rol
 beforeEach(() => { vi.stubEnv("SUPABASE_ADMIN_EMAILS", ""); });
 
 it.each([["administrator", admin, true], ["member", member, false], ["signed-out", null, false]] as const)(
-    "reuses the %s viewer for the navbar and shows the sub-navigation only to administrators",
+    "passes the known %s site viewer to the navbar and shows the sub-navigation only to administrators",
     async (_label, actor, expectedSubNav) => {
-        const { navbarViewer, showSubNav } = resolveAdminNavigation({ actor, impersonating: false });
+        const { navbarViewer, showSubNav } = resolveAdminNavigation({ actor, siteViewer: actor });
         expect(showSubNav).toBe(expectedSubNav);
         expect(await navbarViewer).toEqual({ user: actor });
     },
 );
 
-it("keeps the administrator's sub-navigation while impersonating but lets the navbar resolve the impersonated user", () => {
-    expect(resolveAdminNavigation({ actor: admin, impersonating: true })).toEqual({ navbarViewer: undefined, showSubNav: true });
+it("keeps the administrator's sub-navigation while the navbar resolves an unknown site viewer itself", () => {
+    expect(resolveAdminNavigation({ actor: admin, siteViewer: undefined })).toEqual({ navbarViewer: undefined, showSubNav: true });
 });
 
-it("leaves an impersonating navbar to its own lookup when the actor is unknown", () => {
-    expect(resolveAdminNavigation({ actor: null, impersonating: true })).toEqual({ navbarViewer: undefined, showSubNav: false });
+it("leaves the navbar to its own lookup without the sub-navigation when neither identity is known", () => {
+    expect(resolveAdminNavigation({ actor: null, siteViewer: undefined })).toEqual({ navbarViewer: undefined, showSubNav: false });
 });
