@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { AddCapacityPanel } from "./AddCapacityPanel";
 import { ManualVpsOnboardingCard } from "./ManualVpsOnboardingCard";
-import { ProviderVpsOnboardingCard, providerAccountInventory } from "./ProviderVpsOnboardingCard";
+import { ProviderVpsOnboardingCard } from "./ProviderVpsOnboardingCard";
 import { useLiveInventoryReading, useSupplementaryReading } from "./use-vps-readings";
 import { BILLING_READING, ORACLE_READING, RESOURCES_READING } from "./vps-reading-specs";
 import { LocalDateTime } from "./LocalDateTime";
@@ -13,12 +13,11 @@ import { VpsSlotSummary } from "./VpsSlotSummary";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
-import { billingReadState, type BillingReadState } from "@/app/lib/control-plane/vps-readings";
+import { billingListedHosts, billingReadState, type BillingReadState } from "@/app/lib/control-plane/vps-readings";
 import { manualEntryProviders } from "@/app/lib/control-plane/manual-vps";
 import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminRegionRequestNotification, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
-
 
 /** Shows registered VPS capacity, labelled by the stored region catalog, with live readings and region requests. */
 export function VpsView({ inventory: initialInventory, hostingRegions, accounts }: VpsViewData & { accounts: WebsiteAccountSummary[] }) {
@@ -37,15 +36,14 @@ export function VpsView({ inventory: initialInventory, hostingRegions, accounts 
     const controlPlaneHost = oracle.result ?? null;
     const ownerLabels = new Map(accounts.map(account => [account.accountId, account.label]));
     const billingState = billingReadState(billing);
-    const providerAccount = providerAccountInventory(billingState, billing.result?.availableHosts);
-    const availableHostCount = providerAccount.availableHosts?.length ?? 0;
+    const listedHosts = billingListedHosts(billingState);
     const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
     const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
     return (
         <section className="mt-8">
             <SectionHeading eyebrow="VPS inventory" title="VPS hosts" count={hosts.length} />
             <p className="mt-3 text-xs text-foreground-muted">
-                Registered VPS capacity and server assignments. {providerAccount.availableHosts !== null && <>{availableHostCount} authenticated provider {availableHostCount === 1 ? "VPS is" : "VPS products are"} available to onboard.</>}
+                Registered VPS capacity and server assignments. {listedHosts !== null && <>{listedHosts.length} authenticated provider {listedHosts.length === 1 ? "VPS is" : "VPS products are"} available to onboard.</>}
                 {checkedAt && <> Provider data checked <LocalDateTime value={checkedAt} />.</>}
             </p>
             {pending && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading live resource readings…</p>}
@@ -54,7 +52,7 @@ export function VpsView({ inventory: initialInventory, hostingRegions, accounts 
             <OutOfAdmissionBanner hosts={hosts} />
             <VpsSlotSummary hosts={hosts} regionCatalog={hostingRegions.regions} />
             <AddCapacityPanel
-                provider={<ProviderVpsOnboardingCard inventory={providerAccount} onRetry={billing.refreshReadings} />}
+                provider={<ProviderVpsOnboardingCard state={billingState} onRetry={billing.refreshReadings} />}
                 manual={<ManualVpsOnboardingCard providers={manualEntryProviders(inventory)} hostingRegions={hostingRegions} />}
             />
             <div className="mt-6">

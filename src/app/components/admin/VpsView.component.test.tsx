@@ -534,6 +534,20 @@ it.each([
     expect(container.querySelector("dialog")).toBeNull();
 });
 
+it("shows a billing response without a host list as a failed read in the banner and the dialog", async () => {
+    stubDialog();
+    mocks.resources.mockReturnValue(new Promise(() => {}));
+    mocks.billing.mockResolvedValue({ ...inventory(), availableHosts: "not-a-list" });
+    await act(async () => root.render(<VpsView hostingRegions={NO_REGIONS} inventory={inventory()} accounts={[]} />));
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Billing unavailable. The provider account inventory response did not list hosts.");
+    expect(container.textContent).not.toContain("available to onboard");
+    await openFrom("Onboard VPS");
+    const provider = container.querySelector<HTMLElement>('dialog [role="tabpanel"]:not([hidden])')!;
+    expect(provider.textContent).toContain("Provider account inventory is unavailable, so unregistered VPS products cannot be listed");
+    expect(provider.textContent).toContain("The provider account inventory response did not list hosts.");
+    expect(provider.querySelector<HTMLButtonElement>('button[type="submit"]')!.textContent).toBe("Unavailable");
+});
+
 it("retries the billing read from the Provider account tab", async () => {
     stubDialog();
     mocks.resources.mockReturnValue(new Promise(() => {}));

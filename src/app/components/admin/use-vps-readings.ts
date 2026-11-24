@@ -1,12 +1,11 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { usePolling, type ReadingOutcome, type ReadingSpec } from "@/app/lib/use-polling";
+import { usePolling, type PollingSchedule, type ReadingOutcome, type ReadingSpec } from "@/app/lib/use-polling";
 import {
     awaitsLiveData,
     failedLiveInventoryReading,
     failedSupplementaryReading,
-    inventoryPollingSchedule,
     liveInventoryView,
     supplementaryView,
     type LiveInventoryReading,
@@ -20,6 +19,11 @@ export type SupplementarySpec<T> = ReadingSpec<T> & { seed: (initial: HostingAdm
 
 /** A reading hook's view plus a control that reads again now. */
 export type PolledReading<T> = ReadingView<T> & { refreshReadings: () => void };
+
+/** A reading's polling schedule: at once when the inventory awaits live data, restarting whenever the server sends a new one. */
+function inventoryPollingSchedule(initial: HostingAdminVpsInventory): PollingSchedule {
+    return { readImmediately: awaitsLiveData(initial), restartKey: initial };
+}
 
 /** The registered inventory with live telemetry; a refreshed inventory resets it, so newly registered hosts show at once. */
 export function useLiveInventoryReading(initialInventory: HostingAdminVpsInventory, spec: ReadingSpec<HostingAdminVpsInventory>): PolledReading<HostingAdminVpsInventory> {

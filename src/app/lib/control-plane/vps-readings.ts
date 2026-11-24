@@ -1,6 +1,5 @@
-import type { HostingAdminVpsInventory } from "./types";
+import type { HostingAdminVpsAvailableHost, HostingAdminVpsInventory } from "./types";
 import { failedVpsProviderReadsMessage } from "./vps-providers";
-import type { PollingSchedule } from "../use-polling";
 
 /** A live-telemetry reading, tied to the registered inventory it was read for. */
 export type LiveInventoryReading = { initial: HostingAdminVpsInventory; result?: HostingAdminVpsInventory; error?: string };
@@ -16,19 +15,15 @@ export function awaitsLiveData(initial: HostingAdminVpsInventory): boolean {
     return initial.liveDataIncluded === false;
 }
 
-/** A reading's polling schedule: at once when the inventory awaits live data, restarting whenever the server sends a new one. */
-export function inventoryPollingSchedule(initial: HostingAdminVpsInventory): PollingSchedule {
-    return { readImmediately: awaitsLiveData(initial), restartKey: initial };
-}
-
 /** Shows the live reading for exactly this inventory, else the inventory itself when it already carries live data. */
 export function liveInventoryView(reading: LiveInventoryReading | undefined, initial: HostingAdminVpsInventory): ReadingView<HostingAdminVpsInventory> {
     const current = reading?.initial === initial ? reading : undefined;
-    const inventoryFallback = awaitsLiveData(initial) ? undefined : initial;
+    const awaiting = awaitsLiveData(initial);
+    const inventoryFallback = awaiting ? undefined : initial;
     return {
         result: current?.result ?? inventoryFallback,
         error: current?.error,
-        pending: awaitsLiveData(initial) && current === undefined,
+        pending: awaiting && current === undefined,
     };
 }
 
@@ -58,26 +53,37 @@ export function liveDataMismatchError(result: Pick<HostingAdminVpsInventory, "li
     return "The provider inventory read returned an unexpected live-data response.";
 }
 
-/** The billing reading's condition, in precedence order: loading, failed with nothing to show, stale, some provider accounts failed, or ok. */
+/** Why a provider-inventory `vps-hosts` response cannot be offered for onboarding: it lists no host array; null when it does or was not asked to. */
+export function unlistedHostsError(result: Pick<HostingAdminVpsInventory, "availableHosts">, includeProviderInventory: boolean): string | null {
+    if (!includeProviderInventory || Array.isArray(result.availableHosts)) return null;
+    return "The provider account inventory response did not list hosts.";
+}
+
+type ListedHosts = { availableHosts: readonly HostingAdminVpsAvailableHost[] };
+
+/** The billing reading's condition, in precedence order: loading, failed with nothing to show, stale, some provider accounts failed, or ok; the last three carry the hosts to offer. */
 export type BillingReadState =
     | { kind: "loading" }
     | { kind: "failed"; error: string }
-    | { kind: "stale"; error: string }
-    | { kind: "partial"; failedProviderReads: string }
-    | { kind: "ok" };
+    | ({ kind: "stale"; error: string } & ListedHosts)
+    | ({ kind: "partial"; failedProviderReads: string } & ListedHosts)
+    | ({ kind: "ok" } & ListedHosts);
 
-/** Billing states in which no provider host list is available: still loading, or failed with nothing to show. */
-export type BillingReadWithoutHosts = Extract<BillingReadState, { kind: "loading" | "failed" }>;
-
-/** Billing states that come with a provider host list: current, stale after a failed read, or missing failed accounts. */
-export type BillingReadWithHosts = Exclude<BillingReadState, BillingReadWithoutHosts>;
-
-/** Classifies the billing reading so the page banners and the provider form apply one precedence. */
+/** Classifies the billing reading so the page banners, host count and provider form apply one precedence. */
 export function billingReadState(billing: ReadingView<HostingAdminVpsInventory>): BillingReadState {
     if (billing.pending) return { kind: "loading" };
-    if (billing.error !== undefined && billing.result === undefined) return { kind: "failed", error: billing.error };
-    if (billing.error !== undefined) return { kind: "stale", error: billing.error };
-    const failedProviderReads = failedVpsProviderReadsMessage(billing.result?.providerReads);
-    if (failedProviderReads !== null) return { kind: "partial", failedProviderReads };
-    return { kind: "ok" };
+    // Settled with no result means the first read failed, so its error is always set.
+    if (billing.result === undefined) return { kind: "failed", error: billing.error ?? "The provider account inventory could not be read." };
+    // Fetched results are checked by the read; only an older backend's seeded inventory can lack the list, and it then lists none.
+    const availableHosts = Array.isArray(billing.result.availableHosts) ? billing.result.availableHosts : [];
+    if (billing.error !== undefined) return { kind: "stale", error: billing.error, availableHosts };
+    const failedProviderReads = failedVpsProviderReadsMessage(billing.result.providerReads);
+    if (failedProviderReads !== null) return { kind: "partial", failedProviderReads, availableHosts };
+    return { kind: "ok", availableHosts };
+}
+
+/** The hosts a billing state offers for onboarding, or null while loading or failed. */
+export function billingListedHosts(state: BillingReadState): readonly HostingAdminVpsAvailableHost[] | null {
+    if (state.kind === "loading" || state.kind === "failed") return null;
+    return state.availableHosts;
 }
