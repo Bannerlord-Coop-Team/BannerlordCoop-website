@@ -23,7 +23,7 @@ import { bindLinkedImpersonationSession } from "@/app/lib/auth/impersonation";
 import { startImpersonation, stopImpersonation } from "./impersonation-actions";
 import { setManagedServerPassword } from "@/app/servers/managed-server-actions";
 import { ImpersonationBanner } from "@/app/components/admin/ImpersonationBanner";
-import { loadAdminNavigationIdentity } from "@/app/lib/auth/admin-actor";
+import { loadAdminNavigationIdentity, NAVBAR_LOOKUP } from "@/app/lib/auth/admin-actor";
 
 const actorId = "11111111-1111-4111-8111-111111111111", targetId = "22222222-2222-4222-8222-222222222222";
 const actorSessionId = "33333333-3333-4333-8333-333333333333", targetSessionId = "44444444-4444-4444-8444-444444444444";
@@ -88,7 +88,7 @@ it("opens a real target session, performs a server write as the target, and rest
 
 it("keeps the admin navigation on the saved administrator while the site client stays the impersonated target", async () => {
     await start();
-    await expect(loadAdminNavigationIdentity()).resolves.toEqual({ actor, siteViewer: undefined });
+    await expect(loadAdminNavigationIdentity()).resolves.toEqual({ actor, siteViewer: NAVBAR_LOOKUP });
     expect((await (await getSupabaseServerClient()).auth.getUser()).data.user).toBe(target);
 });
 
