@@ -81,10 +81,11 @@ optional so today's control plane keeps working:
 - **Launch failures** `war_sails_save_mismatch` and `war_sails_unsupported` are
   accepted as Start refusals, failed-Start codes and runtime-insight codes, and
   shown with localized owner copy.
-- **Configuration** keeps `modOptions.warSails` in the contract, but the editor no
-  longer offers a toggle: it shows "War Sails: On / Off — set by the active
-  campaign" and every save (form or JSON) sends back the value it read. Imports
-  never change it either.
+- **Configuration** keeps `modOptions.warSails` in the contract, but the form has
+  no War Sails field and every save (form or JSON) sends back the value it read.
+  When the JSON view asks for the other value, a note under the editor says the
+  campaign sets War Sails and how to switch (New campaign → War Sails, or a
+  Classic campaign to turn it off). Imports never change it either.
 
 ## Inline configuration editing
 

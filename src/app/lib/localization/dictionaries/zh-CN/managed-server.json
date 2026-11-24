@@ -202,6 +202,8 @@
   "configEditor.reloadSettings": "重新加载设置",
   "configEditor.managedConfigurationJson": "托管配置 · JSON",
   "configEditor.noPendingChanges": "无待保存的更改",
+  "configEditor.warSailsSetByCampaignOn": "不会保存（War Sails 由战役决定）。停止服务器：“Campaigns”→“New campaign”→ War Sails（会删除当前战役，请先导出存档）。若无此选项，请更新服务器。玩家需启用 War Sails (NavalDLC)。",
+  "configEditor.warSailsSetByCampaignOff": "不会保存（War Sails 由战役决定）。请停止服务器，在“Campaigns”中选择或开始经典战役。",
   "configEditor.discard": "放弃更改",
   "configEditor.saving": "正在保存…",
   "configEditor.saveConfig": "保存配置",
