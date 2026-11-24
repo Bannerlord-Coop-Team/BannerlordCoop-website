@@ -13,6 +13,7 @@ import { normalizeOnboardingName, type OnboardingReleaseChannel, type Onboarding
 import { HOSTING_CONTINENTS, HOSTING_REGIONS, type HostingContinent, type HostingRegionDefinition } from "../../../../supabase/functions/_shared/hosting-regions";
 import { localizedContinentLabel, localizedRegionLabel } from "@/app/lib/hosting/region-labels";
 import { NIGHTLY_INSTALLER_GUIDE_URL } from "@/app/lib/nightly/links";
+import { tabKeyStep } from "@/app/lib/tab-navigation";
 
 const focusRing = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold focus-visible:ring-offset-2 focus-visible:ring-offset-surface";
 const primaryButton = `inline-flex min-h-11 items-center justify-center gap-2 rounded-sm bg-gold px-5 py-3 font-label text-sm font-semibold uppercase tracking-[0.1em] text-background transition-colors hover:bg-[#c3b07b] disabled:cursor-not-allowed disabled:opacity-60 ${focusRing}`;
@@ -221,17 +222,6 @@ function activeContinent(continents: readonly ContinentTab[], selected: string |
     if (firstEnabled >= 0) return firstEnabled;
     return 0;
 }
-/** Maps a tab-navigation key to the next enabled-tab position, wrapping at both ends; null for other keys. */
-function continentStep(key: string, position: number, count: number): number | null {
-    if (count === 0) return null;
-    switch (key) {
-        case "Home": return 0;
-        case "End": return count - 1;
-        case "ArrowRight": return (position + 1) % count;
-        case "ArrowLeft": return (position + count - 1) % count;
-        default: return null;
-    }
-}
 
 /** Collects validated server details while preserving native dialog focus and submission rules. */
 function SetupDialog({ summary, catalog, canOffer, disabled, pending, result, recovery, onSubmit, onRequest, onDismiss, onRefresh, fallbackFocus }: {
@@ -353,7 +343,7 @@ function SetupDialog({ summary, catalog, canOffer, disabled, pending, result, re
                                 tabIndex={continent === index ? 0 : -1} disabled={!item.regions.length}
                                 onClick={() => { setSelected(item.regions[0]); setReplacement(null); setError(""); }}
                                 onKeyDown={(event) => {
-                                    const step = continentStep(event.key, enabledContinents.indexOf(continent), enabledContinents.length);
+                                    const step = tabKeyStep(event.key, enabledContinents.indexOf(continent), enabledContinents.length);
                                     if (step === null) return;
                                     event.preventDefault();
                                     const next = enabledContinents[step];

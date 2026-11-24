@@ -11,7 +11,7 @@ import {
     presentControlPlaneOperationResult,
     type ControlPlaneOperationResultLink,
 } from "@/app/lib/control-plane/presentation";
-import { parseVpsHostSelection } from "@/app/lib/control-plane/vps-providers";
+import { parseVpsHostSelection, PROVIDER_VPS_OPERATION } from "@/app/lib/control-plane/vps-providers";
 import { ControlPlaneBackupPicker } from "./ControlPlaneBackupPicker";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -160,7 +160,7 @@ export function ControlPlaneActionCard({
                 <div className="grid gap-3">
                     {fields.map((field) => field.kind === "backup"
                         ? <ControlPlaneBackupPicker key={`${serverValue}:${formRevision}`} serverId={selectedServer?.value ?? null} onReady={setBackupReady} />
-                        : <ActionField key={`${field.name}:${formRevision}`} field={field} />)}
+                        : <ActionField key={`${field.name}:${formRevision}:${defaultValueKey(field)}`} field={field} />)}
                 </div>
                 {blockedReason !== null && <p className="mt-3 text-xs leading-5 text-amber-300">{blockedReason}</p>}
                 <div className="mt-auto pt-4">
@@ -174,7 +174,7 @@ export function ControlPlaneActionCard({
                             ? "Working"
                             : blockedReason !== null
                                 ? "Unavailable"
-                                : operation === "onboard-vps-host"
+                                : operation === PROVIDER_VPS_OPERATION
                                     ? "Onboard VPS"
                                     : "Run"}
                     </button>
@@ -205,7 +205,7 @@ export function ControlPlaneActionCard({
     );
 }
 /** Scrolls to, focuses and briefly highlights an operation card whenever the URL hash names its operation. */
-export function useOperationTarget(operation: string) {
+function useOperationTarget(operation: string) {
     const cardRef = useRef<HTMLElement>(null);
     const [isTargeted, setIsTargeted] = useState(false);
     useEffect(() => {
@@ -318,6 +318,14 @@ function ActionField({ field }: { field: AdminActionField }) {
         </label>
     );
 }
+/** Identifies a field's default so its control remounts when the default changes; server and job fields key on the
+ *  target id alone, because a refreshed generation of the same target must not discard the administrator's choice. */
+function defaultValueKey(field: AdminActionField): string {
+    const value = String(field.defaultValue ?? "");
+    if (field.kind === "server" || field.kind === "job") return selectedTargetId(value) ?? "";
+    return value;
+}
+
 function selectedTargetId(value: string): string | null {
     if (!value) return null;
     return (JSON.parse(value) as { id: string }).id;
@@ -391,7 +399,7 @@ function setPath(target: Record<string, unknown>, path: string, value: unknown) 
 
 /** Reshapes collected form values into the exact wire input each operation expects. */
 function normalizeOperationInput(operation: string, input: Record<string, unknown>) {
-    if (operation === "onboard-vps-host") {
+    if (operation === PROVIDER_VPS_OPERATION) {
         const { provider, serviceName } = parseVpsHostSelection(input.host);
         delete input.host;
         Object.assign(input, { provider, serviceName, mode: "enroll" });

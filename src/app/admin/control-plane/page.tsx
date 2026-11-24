@@ -307,7 +307,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                 readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<HostingJob>>({
                     accessToken: token, signal, ...identity, operation: "jobs", input: { filter: {}, cursor, limit: ADMIN_READ_PAGE_LIMIT },
                 })),
-                // Create server needs only the registered hosts' providers; provider-account onboarding lives in the VPS view.
+                // Create server needs only the registered hosts' providers.
                 readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false } }),
                 serverId
                     ? readControlPlaneAdmin<ServerDashboardResult>({
@@ -332,7 +332,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             ]);
             // Host labels match the stored placements; an unreadable catalog leaves the hosts listed without regions
             // and the Add capacity dialog's manual entry explains why it is unavailable.
-            return { inventory, regionCatalog: hostingRegions.regions, regionCatalogError: hostingRegions.error } satisfies VpsViewData;
+            return { inventory, hostingRegions } satisfies VpsViewData;
         }
         case "servers":
             return readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<ManagedServer>>({
@@ -679,7 +679,6 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
     const reasonField: AdminActionField = { name: "reason", label: "Reason", kind: "textarea", placeholder: "Optional context for this action", help: "Optional context stored in the immutable administrative audit event. When blank, the control plane records a fixed portal-action reason." };
     const serverField: AdminActionField = { name: "serverId", label: "Server", kind: "server", required: true, options: serverOptions, defaultValue: selectedServerOption === undefined ? "" : adminActionOptionValue("server", selectedServerOption), help: "The selected row carries its current update generation so a stale action fails safely." };
     const plainServerField: AdminActionField = { name: "serverId", label: "Server", kind: "select", required: true, options: serverPlainOptions, defaultValue: selectedServerOption?.value ?? "" };
-    // VPS onboarding (provider account and manual entry) is the VPS view's Add capacity dialog, not a card here.
     const cards: Array<{ group: string; operation: string; title: string; description: string; fields: AdminActionField[]; destructive?: boolean; layoutPriority?: number; unavailableReason?: string }> = [
         { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered VPS capacity in stopped state. New servers use Public by default; choose Nightly later with Change release settings if needed. Copy the generated password, then use Lifecycle operation → Start; that durable job reports live progress. The owner's current entitlement comes from an explicit administrator grant. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.",
             ...createUnavailable,

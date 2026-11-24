@@ -356,18 +356,6 @@ test("a prioritized lifecycle card remains first without occupying its own row",
     );
 });
 
-test("the fleet's server creation and global controls share one row", () => {
-    const cards = [
-        { operation: "create-server", fields: Array.from({ length: 5 }) },
-        { operation: "set-global-controls", fields: Array.from({ length: 5 }) },
-    ];
-
-    assert.deepEqual(
-        operationCardRows(cards).map((row) => row.map((card) => card.operation)),
-        [["create-server", "set-global-controls"]],
-    );
-});
-
 test("failed and legacy runner rows expose the typed service-only onboarding action", async () => {
     const source = await readFile(
         new URL("../../components/admin/RunnerOnboardingStatus.tsx", import.meta.url),

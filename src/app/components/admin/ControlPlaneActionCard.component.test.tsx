@@ -126,7 +126,7 @@ it("refreshes non-replayable stale actions without clearing the form or resubmit
     expect(container.querySelector<HTMLSelectElement>('select[name="serverId"]')!.selectedIndex).toBe(1);
 });
 it("onboards the selected VPS with the provider the inventory listed it under", async () => {
-    request.mockResolvedValueOnce({ outcome: "registered" });
+    request.mockResolvedValueOnce({ onboarding: { state: "queued", progressStage: "queued" } });
     const value = JSON.stringify({ provider: "contabo-vps", serviceName: "203779521" });
     await act(async () => root.render(<ControlPlaneActionCard operation="onboard-vps-host" title="Onboard" description="Onboard"
         fields={[{ name: "host", label: "Available VPS", kind: "select", required: true, defaultValue: value,
@@ -141,7 +141,7 @@ it("onboards the selected VPS with the provider the inventory listed it under", 
     // The card lives in the VPS view's Add capacity dialog, so it refreshes in place and keeps the result visible.
     expect(refresh).toHaveBeenCalledOnce();
     expect(push).not.toHaveBeenCalled();
-    expect(container.querySelector('[role="status"]')).not.toBeNull();
+    expect(container.textContent).toContain("VPS onboarding queued: queued.");
 });
 
 it("names an optional select's empty choice and sends a provider pin only when one is chosen", async () => {

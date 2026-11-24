@@ -404,12 +404,10 @@ export type HostingRegionCatalogRead =
     | { regions: HostingAdminRegionEntry[]; error: null }
     | { regions: null; error: string };
 
-/** The VPS view's data: registered hosts and the stored catalog placements that label them (null, with the read error, when unreadable). */
+/** The VPS view's data: registered hosts and the stored catalog read whose placements label them and feed manual entry. */
 export type VpsViewData = {
     inventory: HostingAdminVpsInventory;
-    regionCatalog: HostingRegionPayload[] | null;
-    /** Why the catalog could not be read; null when `regionCatalog` is present. */
-    regionCatalogError: string | null;
+    hostingRegions: HostingRegionCatalogRead;
 };
 
 /** The Relocate view's data: servers, the slots they occupy, the catalog that places hosts in regions, and active jobs. */

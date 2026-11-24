@@ -14,6 +14,9 @@ export function isVpsProviderId(value: unknown): value is VpsProviderId {
     return typeof value === "string" && (VPS_PROVIDERS as readonly string[]).includes(value);
 }
 
+/** The administrator operation that verifies and onboards a host listed by its provider's account API. */
+export const PROVIDER_VPS_OPERATION = "onboard-vps-host";
+
 /** Encodes one listed host as a single form value so its provider travels with its service name. */
 export function vpsHostSelectionValue(host: VpsHostTarget): string {
     return JSON.stringify({ provider: host.provider, serviceName: host.serviceName });

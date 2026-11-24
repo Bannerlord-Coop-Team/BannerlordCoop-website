@@ -1,16 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AddCapacityDialog, type AddCapacityTab } from "./AddCapacityDialog";
+import { useCallback, useEffect, useState } from "react";
+import { ADD_CAPACITY_SUMMARY, AddCapacityDialog, type AddCapacityTab } from "./AddCapacityDialog";
+import { ManualVpsOnboardingCard } from "./ManualVpsOnboardingCard";
+import { ProviderVpsOnboardingCard, providerAccountInventory } from "./ProviderVpsOnboardingCard";
 import { LocalDateTime } from "./LocalDateTime";
 import { OutOfAdmissionBanner } from "./OutOfAdmissionBanner";
 import { VpsInventoryBrowser } from "./VpsInventoryBrowser";
 import { VpsSlotSummary } from "./VpsSlotSummary";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
-import { stateExplanation } from "@/app/lib/control-plane/explanations";
+import { operationExplanation, stateExplanation } from "@/app/lib/control-plane/explanations";
 import { failedVpsProviderReadsMessage } from "@/app/lib/control-plane/vps-providers";
-import { manualEntryProviders } from "@/app/lib/control-plane/manual-vps";
+import { MANUAL_VPS_OPERATION, manualEntryProviders } from "@/app/lib/control-plane/manual-vps";
 import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminRegionRequestNotification, HostingAdminVpsInventory, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
@@ -19,7 +21,8 @@ const FLEET_RESOURCE_REFRESH_INTERVAL_MILLISECONDS = 15_000;
 const ADD_CAPACITY_BUTTON_CLASS = "cursor-pointer border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-gold";
 
 /** Shows registered VPS capacity, labelled by the stored region catalog, with live readings and region requests. */
-export function VpsView({ inventory: initialInventory, regionCatalog, regionCatalogError, accounts }: VpsViewData & { accounts: WebsiteAccountSummary[] }) {
+export function VpsView({ inventory: initialInventory, hostingRegions, accounts }: VpsViewData & { accounts: WebsiteAccountSummary[] }) {
+    const regionCatalog = hostingRegions.regions;
     const readings = useVpsReadings(initialInventory, "resources");
     const billing = useVpsReadings(initialInventory, "billing");
     const oracle = useVpsReadings(initialInventory, "oracle");
@@ -39,12 +42,6 @@ export function VpsView({ inventory: initialInventory, regionCatalog, regionCata
     const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
     const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
     const [capacityTab, setCapacityTab] = useState<AddCapacityTab | null>(null);
-    const capacityTrigger = useRef<HTMLButtonElement | null>(null);
-    /** Opens the Add capacity dialog on one tab, remembering the button to refocus when it closes. */
-    function openAddCapacity(tab: AddCapacityTab, trigger: HTMLButtonElement) {
-        capacityTrigger.current = trigger;
-        setCapacityTab(tab);
-    }
     return (
         <section className="mt-8">
             <SectionHeading eyebrow="VPS inventory" title="VPS hosts" count={hosts.length} />
@@ -60,25 +57,18 @@ export function VpsView({ inventory: initialInventory, regionCatalog, regionCata
             <OutOfAdmissionBanner hosts={hosts} />
             <VpsSlotSummary hosts={hosts} regionCatalog={regionCatalog} />
             <div className="mt-5 flex flex-col justify-between gap-3 border border-gold/25 bg-gold/8 p-4 sm:flex-row sm:items-center">
-                <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> onboard an already-purchased VPS, from a provider account (OVHcloud, Contabo) or by manual entry for a provider without an account API. The durable workflow verifies the host, installs the reviewed runner, prepares every isolated slot, establishes private mTLS routes, and exposes capacity only after health proof.</p>
+                <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> {ADD_CAPACITY_SUMMARY}</p>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                    <button type="button" aria-haspopup="dialog" onClick={(event) => openAddCapacity("provider", event.currentTarget)} className={ADD_CAPACITY_BUTTON_CLASS}>Onboard VPS</button>
-                    <button type="button" aria-haspopup="dialog" onClick={(event) => openAddCapacity("manual", event.currentTarget)} className={ADD_CAPACITY_BUTTON_CLASS}>Add manual VPS</button>
+                    <button type="button" aria-haspopup="dialog" onClick={() => setCapacityTab("provider")} className={ADD_CAPACITY_BUTTON_CLASS}>Onboard VPS</button>
+                    <button type="button" aria-haspopup="dialog" onClick={() => setCapacityTab("manual")} className={ADD_CAPACITY_BUTTON_CLASS}>Add manual VPS</button>
                 </div>
             </div>
             {capacityTab !== null && <AddCapacityDialog
                 initialTab={capacityTab}
-                providerAccount={{
-                    availableHosts: billing.result?.availableHosts ?? null,
-                    pending: billing.pending,
-                    error: billing.error ?? null,
-                    failedProviderReads: billing.error ? null : failedProviderReads,
-                }}
-                manualProviders={manualEntryProviders(inventory)}
-                regions={regionCatalog}
-                regionsError={regionCatalogError}
+                provider={<ProviderVpsOnboardingCard inventory={providerAccountInventory(billing, failedProviderReads)} />}
+                manual={<ManualVpsOnboardingCard providers={manualEntryProviders(inventory)} regions={hostingRegions.regions}
+                    regionsError={hostingRegions.error} help={operationExplanation(MANUAL_VPS_OPERATION)} />}
                 onClose={() => setCapacityTab(null)}
-                returnFocusTo={capacityTrigger}
             />}
             <div className="mt-6">
                 {oracle.error && <p role="alert" className="mb-3 text-xs text-red-200">Oracle readings unavailable. {oracle.error} {oracle.result?.controlPlaneHost ? "Showing the last Oracle readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={oracle.refreshReadings}>Retry Oracle readings</button></p>}
@@ -230,11 +220,17 @@ function formatAllocatedRegions(regions: readonly string[]) {
     return regions.map(hostingRegionLabel).join(", ");
 }
 
-function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: "resources" | "billing" | "oracle") {
-    const [refresh, setRefresh] = useState<{ initial: HostingAdminVpsInventory; result?: HostingAdminVpsInventory; error?: string }>();
+type VpsReadingKind = "resources" | "billing" | "oracle";
+type VpsReadingState = { initial: HostingAdminVpsInventory; result?: HostingAdminVpsInventory; error?: string };
+
+/** Polls one kind of VPS reading; billing and Oracle keep their last result across a refreshed inventory, resources never do. */
+function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: VpsReadingKind) {
+    const [refresh, setRefresh] = useState<VpsReadingState>();
     const [attempt, setAttempt] = useState(0);
     const current = refresh?.initial === initialInventory ? refresh : undefined;
-    const pending = initialInventory.liveDataIncluded === false && current === undefined;
+    // Resources replace the registered inventory, so a refreshed server inventory must win over an older live result.
+    const retained = current === undefined && retainsAcrossRefresh(kind) ? refresh?.result : undefined;
+    const pending = initialInventory.liveDataIncluded === false && current === undefined && retained === undefined;
     const refreshReadings = useCallback(() => setAttempt(value => value + 1), []);
     useEffect(() => {
         let cancelled = false;
@@ -265,8 +261,7 @@ function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: "resou
             } catch (error) {
                 if (!cancelled) setRefresh(previous => ({
                     initial: initialInventory,
-                    result: previous?.initial === initialInventory ? previous.result
-                        : initialInventory.liveDataIncluded !== false ? initialInventory : undefined,
+                    result: resultAfterFailure(previous, initialInventory, kind),
                     error: requestController.signal.aborted ? `${kind === "oracle" ? "Oracle" : "Billing"} readings timed out.`
                         : error instanceof Error ? error.message : "VPS readings could not be loaded.",
                 }));
@@ -290,9 +285,20 @@ function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: "resou
             document.removeEventListener("visibilitychange", visibilityChanged);
         };
     }, [initialInventory, attempt, kind]);
-    return { result: current?.result ?? (initialInventory.liveDataIncluded !== false ? initialInventory : undefined),
+    return { result: current?.result ?? (initialInventory.liveDataIncluded !== false ? initialInventory : retained),
         error: current?.error, pending, refreshReadings };
+}
 
+/** Whether a reading supplements the registered inventory (billing, Oracle) rather than replacing it (resources). */
+function retainsAcrossRefresh(kind: VpsReadingKind) {
+    return kind !== "resources";
+}
+
+/** What a failed read keeps: this inventory's earlier result, a supplementary result from before a refresh, else live initial data. */
+function resultAfterFailure(previous: VpsReadingState | undefined, initialInventory: HostingAdminVpsInventory, kind: VpsReadingKind) {
+    if (previous?.initial === initialInventory) return previous.result;
+    if (retainsAcrossRefresh(kind) && previous?.result !== undefined) return previous.result;
+    return initialInventory.liveDataIncluded !== false ? initialInventory : undefined;
 }
 
 function HostResourcesCard({ name, resources, pending }: { name: string; resources: HostingAdminHostResources | null; pending: boolean }) {

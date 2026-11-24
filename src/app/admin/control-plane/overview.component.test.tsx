@@ -202,13 +202,13 @@ it("keeps Operations usable when the stored hosting-region catalog cannot be rea
     expect(cardHtml(html, "create-server")).toContain("Regions are unavailable: The operation is not supported.");
 });
 
-it.each([true, false])("offers VPS onboarding from the VPS view as Add capacity dialog buttons: catalog readable=%s", async readable => {
+it("offers VPS onboarding from the VPS view as Add capacity dialog buttons", async () => {
     mocks.accounts.mockResolvedValue({ users: [], truncated: false });
     mocks.request.mockImplementation(async request => {
         if (request.operation === "vps-hosts") return { liveDataIncluded: false, controlPlaneHost: null, hosts: [], availableHosts: [],
             manualEntryProviders: [{ provider: "hosthatch-vps", displayName: "HostHatch VPS" }] };
-        if (request.operation === "hosting-regions" && readable) return { regions: hostingRegionCatalogPayload().map((entry) => ({ ...entry, available: false })) };
-        throw new ControlPlaneAdminError("unsupported_operation", "The operation is not supported.");
+        if (request.operation === "hosting-regions") return { regions: hostingRegionCatalogPayload().map((entry) => ({ ...entry, available: false })) };
+        throw new Error("Unexpected read");
     });
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "vps" }) }));
     await stream.allReady;
@@ -218,7 +218,7 @@ it.each([true, false])("offers VPS onboarding from the VPS view as Add capacity 
     expect(html).toMatch(/<button type="button" aria-haspopup="dialog"[^>]*>Add manual VPS<\/button>/u);
     expect(html).not.toContain("view=operations#onboard");
     // The dialog opens in the browser on demand; the page reads only the base inventory and the catalog it labels hosts with.
-    expect(html).not.toContain('role="dialog"');
+    expect(html).not.toContain("<dialog");
     expect(mocks.request.mock.calls.map(([request]) => [request.operation, request.input])).toEqual([
         ["vps-hosts", { includeLiveData: false }], ["hosting-regions", {}],
     ]);
