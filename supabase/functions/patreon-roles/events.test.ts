@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
+import { BOOSTY_ADAPTER_STAND_IN } from "../../../tests/boosty-adapter-stand-in.ts";
+import { sqlLossBreaker } from "../../../tests/loss-breaker-database.ts";
 import { readFile } from "node:fs/promises";
 import { after, before, beforeEach, test } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
@@ -29,9 +31,12 @@ before(async () => {
         returns bigint language sql as $$
             insert into net.requests(url,headers,body,timeout_ms) values(url,headers,body,timeout_milliseconds) returning id;
         $$;`);
-    for (const name of ["20260907212654_create_patreon_links", "20260907220000_patreon_website_roles", "202609080002_membership_onboarding", "202609080003_membership_role_locking", "20260908030000_patreon_event_reconciliation", "20260910200000_membership_receipt_claims", "20260919010000_actionable_patreon_retries", "202609220001_patreon_allocation_webhooks"]) {
+    for (const name of ["20260907212654_create_patreon_links", "20260907220000_patreon_website_roles", "202609080002_membership_onboarding", "202609080003_membership_role_locking", "20260908030000_patreon_event_reconciliation", "20260910200000_membership_receipt_claims", "20260919010000_actionable_patreon_retries", "202609220001_patreon_allocation_webhooks", "202609280006_membership_paid_access_end", "202610020001_membership_allocation_usd20"]) {
         await db.exec(await readFile(new URL(`../../migrations/${name}.sql`, import.meta.url), "utf8"));
     }
+    // This suite does not install the Boosty adapter; tests/boosty-membership.test.ts covers the real one.
+    await db.exec(BOOSTY_ADAPTER_STAND_IN);
+    await db.exec(await readFile(new URL("../../migrations/20261123000000_membership_price_and_loss_breaker.sql", import.meta.url), "utf8"));
 });
 after(async () => { await db?.close(); });
 beforeEach(async () => {
@@ -348,14 +353,14 @@ function allocationSnapshot(amount = 5000) {
 }
 function allocationHandler(fetchImplementation: typeof fetch = async () => Response.json(allocationSnapshot())) {
     return createPatreonRoleHandler({ campaignId: campaign, tierId: tier, allocationPolicy,
-        creatorToken: staticCreatorToken("fixture-creator-token"), syncSecret, webhookSecret, rpc, fetchImplementation });
+        creatorToken: staticCreatorToken("fixture-creator-token"), syncSecret, webhookSecret, rpc, fetchImplementation, lossBreaker: sqlLossBreaker(db, "patreon") });
 }
 async function allocationLink() {
     await known(); await link();
     await db.query("insert into public.membership_heads(account_id,discord_user_id,patreon_user_id,link_state,link_generation,revision) values($1,'123456789012345678',$2,'linked',1,1)", [user, patreonUser]);
 }
 async function allocationHead() {
-    return (await db.query<{ revision: number; evidence: { verification: string; policyVersion: string }; link_state: string }>("select revision,evidence,link_state from public.membership_heads where account_id=$1", [user])).rows[0];
+    return (await db.query<{ revision: number; evidence: { verification: string; policyVersion: string; tierIds?: string[]; paidAccessEndedAt?: string }; link_state: string }>("select revision,evidence,link_state from public.membership_heads where account_id=$1", [user])).rows[0];
 }
 async function allocationEvent(worker = allocationHandler()) {
     const body = JSON.stringify(snapshot());
@@ -373,9 +378,13 @@ test("signed events grant one allocation evidence source and remove it after a d
     assert.equal((await allocationHead()).evidence.policyVersion, "patreon-paid-usd50-v1");
     assert.equal(Number((await allocationHead()).revision), 2);
     assert.equal((await db.query("select * from public.membership_outbox")).rows.length, 1);
-    const downgraded = allocationHandler(async () => Response.json(allocationSnapshot(4999)));
+    // A downgrade lowers the entitled tier's list price; a lower entitled amount alone is a discount.
+    const cheaper = allocationSnapshot(4999);
+    cheaper.included[1].attributes.amount_cents = 4999;
+    const downgraded = allocationHandler(async () => Response.json(cheaper));
     await allocationEvent(downgraded); await runWorker(downgraded);
-    assert.equal((await allocationHead()).evidence.verification, "nonqualifying");
+    const { verification, tierIds, paidAccessEndedAt } = (await allocationHead()).evidence;
+    assert.deepEqual([verification, tierIds, typeof paidAccessEndedAt], ["nonqualifying", [tier], "string"]);
     assert.equal(await role(), "Premium Server");
 });
 
@@ -390,7 +399,8 @@ test("cancelled or expired members lose allocation evidence; transport failures 
     cancelled.data.relationships.currently_entitled_tiers.data = [];
     const worker = allocationHandler(async () => Response.json(cancelled));
     await allocationEvent(worker); await runWorker(worker);
-    assert.notEqual((await allocationHead()).evidence.verification, "qualifying");
+    const { verification, tierIds, paidAccessEndedAt } = (await allocationHead()).evidence;
+    assert.deepEqual([verification, tierIds, typeof paidAccessEndedAt], ["nonqualifying", [], "string"]);
 });
 
 test("an in-flight member response cannot restore an unlinked account or replace newer OAuth evidence", async () => {

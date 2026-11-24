@@ -6,6 +6,7 @@ import { manualRoleMetadata } from "../../../src/app/lib/auth/manual-role";
 import { staticCreatorToken } from "../_shared/patreon-creator-token.ts";
 import { createPatreonRoleHandler } from "../_shared/patreon-roles.ts";
 import { createHmac } from "node:crypto";
+import { BOOSTY_ADAPTER_STAND_IN } from "../../../tests/boosty-adapter-stand-in.ts";
 
 const campaign = "12345", tier = "28995946";
 const member = "11111111-1111-4111-8111-111111111111";
@@ -42,6 +43,9 @@ before(async () => {
     await db.exec(await readFile(new URL("../../migrations/202609220001_patreon_allocation_webhooks.sql", import.meta.url), "utf8"));
     await db.exec(await readFile(new URL("../../migrations/202609280006_membership_paid_access_end.sql", import.meta.url), "utf8"));
     await db.exec(await readFile(new URL("../../migrations/202610020001_membership_allocation_usd20.sql", import.meta.url), "utf8"));
+    // This suite does not install the Boosty adapter; tests/boosty-membership.test.ts covers the real one.
+    await db.exec(BOOSTY_ADAPTER_STAND_IN);
+    await db.exec(await readFile(new URL("../../migrations/20261123000000_membership_price_and_loss_breaker.sql", import.meta.url), "utf8"));
     assert.equal((await metadata()).role, "Standard Server");
     assert.equal((await db.query("select * from public.patreon_accounts")).rows.length, 1);
 });
@@ -355,8 +359,10 @@ test("USD20 allocation policy pins and funds qualifying evidence while mismatche
     assert.equal(lease.allocationPolicyVersion, "patreon-paid-usd20-v1");
     const job = (lease.jobs as Job[]).find(job => job.memberId === member)!;
     const fence = (job as Job & { allocationFence: unknown }).allocationFence;
-    const evidence = { verification: "qualifying", campaignId: campaign, memberId: member, tierIds: [tier],
+    // Qualifying evidence may name any priced tier, even one outside qualifyingTierIds, but needs one.
+    const evidence = { verification: "qualifying", campaignId: campaign, memberId: member, tierIds: ["28995999"],
         verifiedAt: lease.allocationVerifiedAt, paidThroughAt: null, policyVersion: usd20.policyVersion, evidenceSha256: "b".repeat(64) };
+    await assert.rejects(rpc("complete", { token: lease.token, ...job, userId: "123", eligible: true, allocationEvidence: { ...evidence, tierIds: [] }, allocationFence: fence }), /invalid_allocation_evidence/);
     const applied = await rpc("complete", { token: lease.token, ...job, userId: "123", eligible: true, allocationEvidence: evidence, allocationFence: fence });
     assert.equal(applied?.applied, true);
     await rpc("release", { token: lease.token });
@@ -380,10 +386,11 @@ test("allocation loss migration accepts bounded explicit evidence and rolls malf
     const fence = (job as Job & { allocationFence: unknown }).allocationFence;
     assert.deepEqual(fence, { accountId: user, generation: "1", revision: "1" });
     const verifiedAt = lease.allocationVerifiedAt;
-    const evidence = { verification: "nonqualifying", campaignId: campaign, memberId: member, tierIds: [],
+    // Loss may keep a remaining paid tier below the policy minimum.
+    const evidence = { verification: "nonqualifying", campaignId: campaign, memberId: member, tierIds: ["28995943"],
         verifiedAt, paidThroughAt: null, policyVersion: policy.policyVersion, evidenceSha256: "a".repeat(64), paidAccessEndedAt: verifiedAt };
     for (const invalid of [{ paidAccessEndedAt: "2030-01-01T00:00:00.000Z" }, { paidAccessEndedAt: null },
-        { verification: "review_required" }, { tierIds: [tier] }, { extra: true }]) {
+        { verification: "review_required" }, { verification: "qualifying", tierIds: [tier] }, { extra: true }]) {
         await assert.rejects(rpc("complete", { token: lease.token, ...job, userId: "123", eligible: false,
             allocationEvidence: { ...evidence, ...invalid }, allocationFence: fence }));
     }
@@ -394,4 +401,9 @@ test("allocation loss migration accepts bounded explicit evidence and rolls malf
         "select evidence,revision from public.membership_heads where account_id=$1", [user])).rows[0];
     assert.deepEqual(head.evidence, evidence);
     assert.equal(Number(head.revision), 2);
+    // The next lease tells the mass-loss breaker this member's loss is already recorded.
+    await rpc("release", { token: lease.token });
+    await rpc("queue", { memberId: member });
+    const next = await rpc("acquire", { allocationPolicy: policy });
+    assert.equal((next?.jobs as (Job & { allocationLost: unknown })[]).find(job => job.memberId === member)?.allocationLost, true);
 });
