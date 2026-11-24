@@ -3,13 +3,13 @@
 import { ControlPlaneActionCard, type AdminActionField, type AdminActionOption } from "./ControlPlaneActionCard";
 import { operationExplanation } from "@/app/lib/control-plane/explanations";
 import { PROVIDER_VPS_OPERATION, vpsHostSelectionValue } from "@/app/lib/control-plane/vps-providers";
-import { billingReadState, type BillingReadState, type ReadingView } from "@/app/lib/control-plane/vps-readings";
-import type { HostingAdminVpsAvailableHost, HostingAdminVpsInventory } from "@/app/lib/control-plane/types";
+import type { BillingReadState, BillingReadWithHosts, BillingReadWithoutHosts } from "@/app/lib/control-plane/vps-readings";
+import type { HostingAdminVpsAvailableHost } from "@/app/lib/control-plane/types";
 
 /** The provider-account inventory the form offers: listed hosts with the billing read's state, or no hosts while loading or failed. */
 export type ProviderAccountInventory =
-    | { availableHosts: readonly HostingAdminVpsAvailableHost[]; readState: Exclude<BillingReadState, { kind: "loading" | "failed" }> }
-    | { availableHosts: null; readState: Extract<BillingReadState, { kind: "loading" | "failed" }> };
+    | { availableHosts: readonly HostingAdminVpsAvailableHost[]; readState: BillingReadWithHosts }
+    | { availableHosts: null; readState: BillingReadWithoutHosts };
 
 /** A notice explaining a failed or partial provider-account read; `retryable` when reading again could recover it. */
 export type ProviderAccountNotice = { summary: string; detail: string; retryable: boolean };
@@ -34,13 +34,12 @@ export function ProviderVpsOnboardingCard({ inventory, onRetry }: { inventory: P
     </>;
 }
 
-/** Maps the billing reading onto the form's inventory; a read without a host list counts as failed with an explicit error. */
-export function providerAccountInventory(billing: ReadingView<HostingAdminVpsInventory>): ProviderAccountInventory {
-    const readState = billingReadState(billing);
-    const hosts = billing.result?.availableHosts;
+/** Pairs the billing read state with the hosts its result lists; a result without a host list counts as failed with an explicit error. */
+export function providerAccountInventory(readState: BillingReadState, availableHosts: unknown): ProviderAccountInventory {
     if (readState.kind === "loading" || readState.kind === "failed") return { availableHosts: null, readState };
-    if (Array.isArray(hosts)) return { availableHosts: hosts, readState };
-    return { availableHosts: null, readState: { kind: "failed", error: billing.error ?? UNLISTED_HOSTS } };
+    if (Array.isArray(availableHosts)) return { availableHosts, readState };
+    const error = readState.kind === "stale" ? readState.error : UNLISTED_HOSTS;
+    return { availableHosts: null, readState: { kind: "failed", error } };
 }
 
 /** Why the form cannot submit while no hosts are listed (loading or failed), or undefined once they are. */

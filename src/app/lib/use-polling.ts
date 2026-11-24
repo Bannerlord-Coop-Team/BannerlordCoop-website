@@ -73,7 +73,7 @@ export function readingErrorMessage(error: unknown, timedOut: boolean, timeout: 
 }
 
 /** Reads once under `signal` plus the spec's deadline, turning any failure into a reading outcome. */
-async function readWithinDeadline<T>(spec: ReadingSpec<T>, signal: AbortSignal): Promise<ReadingOutcome<T>> {
+export async function readWithinDeadline<T>(spec: ReadingSpec<T>, signal: AbortSignal): Promise<ReadingOutcome<T>> {
     const deadlineController = new AbortController();
     let deadline: ReturnType<typeof setTimeout> | undefined;
     if (spec.timeout !== undefined) deadline = setTimeout(() => deadlineController.abort(), spec.timeout.milliseconds);

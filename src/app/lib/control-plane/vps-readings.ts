@@ -1,5 +1,6 @@
 import type { HostingAdminVpsInventory } from "./types";
 import { failedVpsProviderReadsMessage } from "./vps-providers";
+import type { PollingSchedule } from "../use-polling";
 
 /** A live-telemetry reading, tied to the registered inventory it was read for. */
 export type LiveInventoryReading = { initial: HostingAdminVpsInventory; result?: HostingAdminVpsInventory; error?: string };
@@ -13,6 +14,11 @@ export type ReadingView<T> = { result?: T; error?: string; pending: boolean };
 /** Whether the registered inventory arrived without live data, so its readings load before they show anything. */
 export function awaitsLiveData(initial: HostingAdminVpsInventory): boolean {
     return initial.liveDataIncluded === false;
+}
+
+/** A reading's polling schedule: at once when the inventory awaits live data, restarting whenever the server sends a new one. */
+export function inventoryPollingSchedule(initial: HostingAdminVpsInventory): PollingSchedule {
+    return { readImmediately: awaitsLiveData(initial), restartKey: initial };
 }
 
 /** Shows the live reading for exactly this inventory, else the inventory itself when it already carries live data. */
@@ -59,6 +65,12 @@ export type BillingReadState =
     | { kind: "stale"; error: string }
     | { kind: "partial"; failedProviderReads: string }
     | { kind: "ok" };
+
+/** Billing states in which no provider host list is available: still loading, or failed with nothing to show. */
+export type BillingReadWithoutHosts = Extract<BillingReadState, { kind: "loading" | "failed" }>;
+
+/** Billing states that come with a provider host list: current, stale after a failed read, or missing failed accounts. */
+export type BillingReadWithHosts = Exclude<BillingReadState, BillingReadWithoutHosts>;
 
 /** Classifies the billing reading so the page banners and the provider form apply one precedence. */
 export function billingReadState(billing: ReadingView<HostingAdminVpsInventory>): BillingReadState {

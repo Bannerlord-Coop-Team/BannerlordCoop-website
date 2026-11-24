@@ -150,8 +150,7 @@ it("renders Operations with create-server capacity choices and no provider-accou
         if (request.operation === "vps-hosts") return {
             availableHosts: [],
             hosts: [{ provider: "vpstc-vps", locationId: "nyc", countryCode: "US", region: null, availableServers: 1, totalSlots: 1 },
-                { provider: "ovhcloud-vps", locationId: "os-us-east-va-2", countryCode: "US", region: null, availableServers: 1, totalSlots: 2 }],
-            manualEntryProviders: [{ provider: "hosthatch-vps", displayName: "HostHatch VPS" }] };
+                { provider: "ovhcloud-vps", locationId: "os-us-east-va-2", countryCode: "US", region: null, availableServers: 1, totalSlots: 2 }] };
         // Only US-East has a free slot in the stored catalog, so it is the only Create region offered.
         if (request.operation === "hosting-regions") return { revision: 4, updatedAt: "2026-10-09T12:00:00.000Z", updatedBy: "supabase:admin",
             regions: hostingRegionCatalogPayload()

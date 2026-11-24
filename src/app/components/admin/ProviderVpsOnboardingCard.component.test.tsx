@@ -8,7 +8,7 @@ import {
     providerAccountUnavailableReason,
     type ProviderAccountInventory,
 } from "./ProviderVpsOnboardingCard";
-import type { HostingAdminVpsAvailableHost, HostingAdminVpsInventory } from "@/app/lib/control-plane/types";
+import type { HostingAdminVpsAvailableHost } from "@/app/lib/control-plane/types";
 
 const { request, session, refresh, push } = vi.hoisted(() => ({ request: vi.fn(), session: vi.fn(), refresh: vi.fn(), push: vi.fn() }));
 vi.mock("@/app/lib/control-plane/client", async (importOriginal) => ({
@@ -35,14 +35,9 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 
-/** Renders the card over the given inventory, with an optional retry handler. */
-async function render(inventory: ProviderAccountInventory, onRetry = vi.fn()) {
-    await act(async () => root.render(<ProviderVpsOnboardingCard inventory={inventory} onRetry={onRetry} />));
-}
-
-/** The notice's retry button, if shown. */
-function retryButton() {
-    return [...container.querySelectorAll("button")].find((button) => button.textContent === "Retry provider inventory");
+/** Renders the card over the given inventory. */
+async function render(inventory: ProviderAccountInventory) {
+    await act(async () => root.render(<ProviderVpsOnboardingCard inventory={inventory} onRetry={vi.fn()} />));
 }
 
 /** The host select and the submit button. */
@@ -83,16 +78,6 @@ it("lists several VPSes without preselecting one", async () => {
     expect(hostSelect().value).toBe("");
 });
 
-it.each([
-    ["an unlisted inventory", UNLISTED],
-    ["a failed later read", STALE],
-] as Array<[string, ProviderAccountInventory]>)("offers a retry from the notice for %s", async (_name, inventory) => {
-    const onRetry = vi.fn();
-    await render(inventory, onRetry);
-    await act(async () => retryButton()!.click());
-    expect(onRetry).toHaveBeenCalledOnce();
-});
-
 it("blocks submission only while no hosts are listed, naming whether the read is loading or failed", () => {
     expect(providerAccountUnavailableReason(LOADED)).toBeUndefined();
     expect(providerAccountUnavailableReason({ ...LOADED, availableHosts: [] })).toBeUndefined();
@@ -108,18 +93,17 @@ it("builds one notice per read state and stays silent while loading or complete"
     expect(providerAccountNotice(PARTIAL)).toEqual({ summary: "The Contabo account read failed.", detail: "Manual entry still works.", retryable: false });
 });
 
-it("maps a billing reading onto the form's inventory with its read state", () => {
-    const listed = { availableHosts: [CONTABO] } as HostingAdminVpsInventory;
-    const partial = { availableHosts: [CONTABO], providerReads: [{ provider: "contabo-vps", status: "failed", code: null }] } as HostingAdminVpsInventory;
-    expect(providerAccountInventory({ pending: true })).toEqual(PENDING);
-    expect(providerAccountInventory({ result: listed, error: "Timed out.", pending: false })).toEqual({ availableHosts: [CONTABO], readState: { kind: "stale", error: "Timed out." } });
-    expect(providerAccountInventory({ result: partial, pending: false }).readState.kind).toBe("partial");
-    expect(providerAccountInventory({ error: "Timed out.", pending: false })).toEqual({ availableHosts: null, readState: { kind: "failed", error: "Timed out." } });
+it("pairs the billing read state with the hosts its result lists", () => {
+    expect(providerAccountInventory({ kind: "loading" }, undefined)).toEqual(PENDING);
+    expect(providerAccountInventory({ kind: "failed", error: "Timed out." }, undefined)).toEqual({ availableHosts: null, readState: { kind: "failed", error: "Timed out." } });
+    expect(providerAccountInventory({ kind: "stale", error: "Timed out." }, [CONTABO])).toEqual({ availableHosts: [CONTABO], readState: { kind: "stale", error: "Timed out." } });
+    expect(providerAccountInventory({ kind: "ok" }, [CONTABO])).toEqual(LOADED);
+    // A stale result without a host list keeps the read's own error.
+    expect(providerAccountInventory({ kind: "stale", error: "Timed out." }, undefined)).toEqual({ availableHosts: null, readState: { kind: "failed", error: "Timed out." } });
 });
 
 it("treats a malformed host list as a failed read with an explicit error", () => {
-    const malformed = { availableHosts: "not-a-list" } as unknown as HostingAdminVpsInventory;
-    expect(providerAccountInventory({ result: malformed, pending: false })).toEqual({
+    expect(providerAccountInventory({ kind: "ok" }, "not-a-list")).toEqual({
         availableHosts: null, readState: { kind: "failed", error: "The provider account inventory response did not list hosts." },
     });
 });

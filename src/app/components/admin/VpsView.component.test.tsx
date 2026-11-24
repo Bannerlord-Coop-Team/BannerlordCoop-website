@@ -546,24 +546,14 @@ it("retries the billing read from the Provider account tab", async () => {
     expect(container.querySelector<HTMLSelectElement>('dialog select[name="host"]')!.value).toContain("203779521");
 });
 
-it("keeps the listed provider host beside a retained-inventory notice when a later billing read fails", async () => {
+it("keeps billing and the open Add capacity dialog across a server refresh while the refreshed inventory replaces stale resources", async () => {
     stubDialog();
-    mocks.resources.mockReturnValue(new Promise(() => {}));
-    mocks.billing.mockResolvedValueOnce({ ...inventory(), availableHosts: [AVAILABLE] }).mockRejectedValueOnce(new Error("Billing provider timed out."));
-    await act(async () => root.render(<VpsView hostingRegions={NO_REGIONS} inventory={inventory()} accounts={[]} />));
-    await act(async () => vi.advanceTimersByTimeAsync(60_000));
-    expect(container.textContent).toContain("Showing the last billing readings");
-    await openFrom("Onboard VPS");
-    const provider = container.querySelector<HTMLElement>('dialog [role="tabpanel"]:not([hidden])')!;
-    expect(provider.querySelector('[role="status"]')!.textContent).toContain("Showing the last provider account inventory");
-    expect(provider.querySelector<HTMLSelectElement>('select[name="host"]')!.value).toContain("203779521");
-});
-
-it("keeps billing across a server refresh while the refreshed registered inventory replaces stale resources", async () => {
     mocks.resources.mockResolvedValueOnce(inventory(true)).mockReturnValue(new Promise(() => {}));
     mocks.billing.mockResolvedValueOnce({ ...inventory(), availableHosts: [AVAILABLE] }).mockReturnValue(new Promise(() => {}));
     await act(async () => root.render(<VpsView hostingRegions={NO_REGIONS} inventory={inventory()} accounts={[]} />));
     expect(container.textContent).toContain("1 authenticated provider VPS is available to onboard.");
+    await openFrom("Onboard VPS");
+    const focused = document.activeElement;
     // router.refresh() after onboarding hands the view a new registered inventory with the new host.
     const refreshed = { ...inventory(), hosts: [...inventory().hosts, inventory(false, "host-new").hosts[0]!] };
     await act(async () => root.render(<VpsView hostingRegions={NO_REGIONS} inventory={refreshed} accounts={[]} />));
@@ -571,6 +561,10 @@ it("keeps billing across a server refresh while the refreshed registered invento
     expect(container.textContent).toContain("Loading live resource readings");
     expect(container.textContent).not.toContain("Loading billing readings");
     expect(container.textContent).toContain("1 authenticated provider VPS is available to onboard.");
+    const dialog = container.querySelector("dialog")!;
+    expect(dialog.open).toBe(true);
+    expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Provider account");
+    expect(document.activeElement).toBe(focused);
 });
 
 it("keeps the last billing host list and its error when the read after a server refresh fails", async () => {
@@ -583,4 +577,9 @@ it("keeps the last billing host list and its error when the read after a server 
     expect(mocks.billing).toHaveBeenCalledTimes(2);
     expect(container.textContent).toContain("1 authenticated provider VPS is available to onboard.");
     expect(container.textContent).toContain("Showing the last billing readings");
+    stubDialog();
+    await openFrom("Onboard VPS");
+    const provider = container.querySelector<HTMLElement>('dialog [role="tabpanel"]:not([hidden])')!;
+    expect(provider.querySelector('[role="status"]')!.textContent).toContain("Showing the last provider account inventory");
+    expect(provider.querySelector<HTMLSelectElement>('select[name="host"]')!.value).toContain("203779521");
 });
