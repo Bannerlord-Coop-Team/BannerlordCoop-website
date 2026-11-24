@@ -12,9 +12,8 @@ import {
     listSupabaseUsers,
 } from "@/app/lib/supabase/users";
 import type { User } from "@supabase/supabase-js";
-import { ArrowLeft, CloudCog, Search, ShieldCheck, Users } from "lucide-react";
+import { Search, Users } from "lucide-react";
 import type { Metadata } from "next";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
@@ -67,6 +66,7 @@ function formatDate(value: string | undefined) {
     }).format(new Date(value));
 }
 
+/** Lists members for the original administrator; the admin layout supplies site and admin navigation. */
 export default async function AdminPage({ searchParams }: AdminPageProps) {
     const impersonationEnabled = process.env.ADMIN_IMPERSONATION_ENABLED === "true";
     const sessionClient = await getSupabaseServerClient({ impersonation: "actor" });
@@ -128,27 +128,6 @@ export default async function AdminPage({ searchParams }: AdminPageProps) {
 
     return (
         <main className="min-h-svh bg-background">
-            <header className="border-b border-white/10 bg-surface">
-                <div className="site-container flex min-h-18 items-center justify-between gap-4 py-3">
-                    <Link
-                        href="/"
-                        className="inline-flex items-center gap-2 font-label text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted transition-colors hover:text-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
-                    >
-                        <ArrowLeft aria-hidden="true" className="size-4" />
-                        Back to site
-                    </Link>
-                    <div className="flex items-center gap-2">
-                        <Link href="/admin/control-plane" className="inline-flex items-center gap-2 border border-white/15 px-3 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted transition-colors hover:border-gold/40 hover:text-gold">
-                            <CloudCog aria-hidden="true" className="size-4" /> Control Plane
-                        </Link>
-                        <span className="inline-flex items-center gap-2 text-gold">
-                            <ShieldCheck aria-hidden="true" className="size-5" />
-                            <span className="font-label text-xs font-semibold uppercase tracking-[0.18em]">Admin access</span>
-                        </span>
-                    </div>
-                </div>
-            </header>
-
             <section className="site-container py-10 sm:py-14" aria-labelledby="admin-heading">
                 <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
                     <div>

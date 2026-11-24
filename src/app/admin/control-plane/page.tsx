@@ -69,19 +69,16 @@ import { getWebsiteAccount, listWebsiteAccounts } from "@/app/lib/supabase/users
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 import {
     Activity,
-    ArrowLeft,
     ArrowLeftRight,
     BriefcaseBusiness,
     ChartNetwork,
     Cloud,
-    CloudCog,
     Gauge,
     History,
     ListChecks,
     Megaphone,
     PackageCheck,
     ServerCog,
-    ShieldCheck,
 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -119,6 +116,7 @@ type PageProps = {
     }>;
 };
 
+/** Authorizes the viewer and renders the selected control-plane view; the admin layout supplies navigation. */
 export default async function ControlPlaneAdminPage({ searchParams }: PageProps) {
     const params = await searchParams;
     const loginRedirect = getLoginRedirect("/admin/control-plane", params);
@@ -166,35 +164,13 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
 
     return (
         <main className="min-h-svh bg-background">
-            <header className="border-b border-white/10 bg-surface">
-                <div className="site-container flex min-h-18 flex-wrap items-center justify-between gap-4 py-3">
-                    <Link href="/" className="inline-flex items-center gap-2 font-label text-xs font-semibold uppercase tracking-[0.14em] text-foreground-muted transition-colors hover:text-gold">
-                        <ArrowLeft aria-hidden="true" className="size-4" /> Back to site
-                    </Link>
-                    <nav aria-label="Administration" className="flex items-center gap-2">
-                        <Link href="/admin" className="border border-white/15 px-3 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted hover:border-gold/40 hover:text-gold">
-                            Members
-                        </Link>
-                        <span className="inline-flex items-center gap-2 border border-gold/30 bg-gold/8 px-3 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold">
-                            <CloudCog aria-hidden="true" className="size-4" /> Control Plane
-                        </span>
-                    </nav>
-                </div>
-            </header>
-
             <div className="site-container py-10 sm:py-14">
-                <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-                    <div>
-                        <p className="font-label text-xs font-semibold uppercase tracking-[0.22em] text-gold">Managed hosting command</p>
-                        <h1 className="mt-3 font-display text-4xl font-semibold text-foreground sm:text-5xl">Control Plane</h1>
-                        <p className="mt-3 max-w-3xl text-sm leading-6 text-foreground-muted">
-                            Fleet state and every supported administrator operation come from the durable control plane. Requests are reauthorized, generation-checked, idempotent, and audited at execution time.
-                        </p>
-                    </div>
-                    <div className="flex items-center gap-2 text-gold">
-                        <ShieldCheck aria-hidden="true" className="size-5" />
-                        <span className="font-label text-xs font-semibold uppercase tracking-[0.16em]">Admin only</span>
-                    </div>
+                <div>
+                    <p className="font-label text-xs font-semibold uppercase tracking-[0.22em] text-gold">Managed hosting command</p>
+                    <h1 className="mt-3 font-display text-4xl font-semibold text-foreground sm:text-5xl">Control Plane</h1>
+                    <p className="mt-3 max-w-3xl text-sm leading-6 text-foreground-muted">
+                        Fleet state and every supported administrator operation come from the durable control plane. Requests are reauthorized, generation-checked, idempotent, and audited at execution time.
+                    </p>
                 </div>
 
                 <ViewTabs active={view} />

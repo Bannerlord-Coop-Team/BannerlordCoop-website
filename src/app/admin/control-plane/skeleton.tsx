@@ -16,27 +16,16 @@ export type ControlPlaneView =
 
 const TAB_WIDTHS = ["w-24", "w-15", "w-22", "w-18", "w-24", "w-19", "w-28", "w-24", "w-26", "w-24", "w-22"];
 
+/** Mirrors the control-plane page body while it loads; the admin layout keeps rendering the navigation above it. */
 export function ControlPlanePageSkeleton() {
     return (
         <main className="min-h-svh bg-background" aria-busy="true" aria-label="Loading control plane">
-            <header className="border-b border-white/10 bg-surface">
-                <div className="site-container flex min-h-18 items-center justify-between gap-4 py-3">
-                    <Skeleton className="h-4 w-26" />
-                    <div className="flex gap-2">
-                        <Skeleton className="h-9 w-22" />
-                        <Skeleton className="h-9 w-32" />
-                    </div>
-                </div>
-            </header>
             <div className="site-container py-10 sm:py-14">
-                <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
-                    <div className="w-full max-w-3xl">
-                        <Skeleton className="h-3 w-48" />
-                        <Skeleton className="mt-4 h-12 w-72 max-w-full" />
-                        <Skeleton className="mt-4 h-4 w-full" />
-                        <Skeleton className="mt-2 h-4 w-4/5" />
-                    </div>
-                    <Skeleton className="h-4 w-24" />
+                <div className="w-full max-w-3xl">
+                    <Skeleton className="h-3 w-48" />
+                    <Skeleton className="mt-4 h-12 w-72 max-w-full" />
+                    <Skeleton className="mt-4 h-4 w-full" />
+                    <Skeleton className="mt-2 h-4 w-4/5" />
                 </div>
                 <div className="mt-9 flex gap-2 overflow-hidden border-b border-white/10 pb-3" aria-hidden="true">
                     {TAB_WIDTHS.map((width, index) => <Skeleton key={index} className={`h-10 shrink-0 ${width}`} />)}
