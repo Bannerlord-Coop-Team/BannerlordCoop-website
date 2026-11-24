@@ -12,7 +12,7 @@ import { VpsSlotSummary } from "./VpsSlotSummary";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
-import { failedVpsProviderReadsMessage } from "@/app/lib/control-plane/vps-providers";
+import { billingReadState } from "@/app/lib/control-plane/vps-readings";
 import { manualEntryProviders } from "@/app/lib/control-plane/manual-vps";
 import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminRegionRequestNotification, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
@@ -36,7 +36,7 @@ export function VpsView({ inventory: initialInventory, hostingRegions, accounts 
     const controlPlaneHost = oracle.result ?? null;
     const ownerLabels = new Map(accounts.map(account => [account.accountId, account.label]));
     const availableHostCount = billing.result?.availableHosts?.length ?? 0;
-    const failedProviderReads = failedVpsProviderReadsMessage(billing.result?.providerReads);
+    const billingState = billingReadState(billing);
     const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
     const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
     return (
@@ -48,13 +48,13 @@ export function VpsView({ inventory: initialInventory, hostingRegions, accounts 
             </p>
             {pending && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading live resource readings…</p>}
             {readings.error && <p role="alert" className="mt-3 text-xs text-red-200">{readings.error} {readings.result ? "Showing the last resource readings; retrying automatically." : "Registered inventory remains visible; retrying automatically."} <button type="button" className="underline" onClick={readings.refreshReadings}>Retry live readings</button></p>}
-            {billing.pending && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading billing readings…</p>}
-            {!billing.error && failedProviderReads && <p role="status" className="mt-3 text-xs text-amber-200">{failedProviderReads}</p>}
-            {billing.error && <p role="alert" className="mt-3 text-xs text-red-200">Billing unavailable. {billing.error} {billing.result ? "Showing the last billing readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={billing.refreshReadings}>Retry billing</button></p>}
+            {billingState.kind === "loading" && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading billing readings…</p>}
+            {billingState.kind === "partial" && <p role="status" className="mt-3 text-xs text-amber-200">{billingState.failedProviderReads}</p>}
+            {(billingState.kind === "failed" || billingState.kind === "stale") && <p role="alert" className="mt-3 text-xs text-red-200">Billing unavailable. {billingState.error} {billingState.kind === "stale" ? "Showing the last billing readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={billing.refreshReadings}>Retry billing</button></p>}
             <OutOfAdmissionBanner hosts={hosts} />
             <VpsSlotSummary hosts={hosts} regionCatalog={hostingRegions.regions} />
             <AddCapacityPanel
-                provider={<ProviderVpsOnboardingCard inventory={providerAccountInventory(billing, failedProviderReads)} onRetry={billing.refreshReadings} />}
+                provider={<ProviderVpsOnboardingCard inventory={providerAccountInventory(billing)} onRetry={billing.refreshReadings} />}
                 manual={<ManualVpsOnboardingCard providers={manualEntryProviders(inventory)} hostingRegions={hostingRegions} />}
             />
             <div className="mt-6">

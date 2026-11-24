@@ -15,7 +15,7 @@ beforeEach(() => {
     opener.focus();
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); opener.remove(); });
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); opener.remove(); document.body.style.overflow = ""; });
 
 /** A bare dialog driven by the hook, focusing its input on open. */
 function Probe({ onFocusNotRestored }: { onFocusNotRestored: () => void }) {
@@ -32,11 +32,16 @@ async function open() {
     return fallback;
 }
 
-it("focuses the given element on open and refocuses the opener on close without the fallback", async () => {
+it("locks page scroll and focuses the given element on open, then restores both without the fallback on close", async () => {
+    document.body.style.overflow = "auto";
     const fallback = await open();
-    expect(container.querySelector("dialog")!.open).toBe(true);
+    const dialog = container.querySelector("dialog")!;
+    expect(dialog.open).toBe(true);
+    expect(document.body.style.overflow).toBe("hidden");
     expect(document.activeElement).toBe(container.querySelector("input"));
     await act(async () => root.render(null));
+    expect(dialog.open).toBe(false);
+    expect(document.body.style.overflow).toBe("auto");
     expect(document.activeElement).toBe(opener);
     expect(fallback).not.toHaveBeenCalled();
 });

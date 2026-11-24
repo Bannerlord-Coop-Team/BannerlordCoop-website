@@ -11,7 +11,7 @@ beforeEach(() => {
     Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value() { this.open = false; } });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
-afterEach(async () => { await act(async () => root.unmount()); container.remove(); document.body.style.overflow = ""; });
+afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 
 /** Renders the dialog with stand-in panels, so these tests cover only opening, closing and switching tabs. */
 async function render({ initialTab = "provider" as AddCapacityTab, onClose = vi.fn() } = {}) {
@@ -60,14 +60,9 @@ it("switches tabs by arrow key and click, keeping both panels mounted", async ()
     expect(panels()[1]!.querySelector('[aria-label="Manual form"]')).not.toBeNull();
 });
 
-it("closes on Escape and the close button, unlocking page scroll and refocusing the control that opened it", async () => {
-    const opener = document.createElement("button");
-    document.body.append(opener);
-    opener.focus();
-    document.body.style.overflow = "auto";
+it("asks to close on Escape and on the close button", async () => {
     const onClose = vi.fn();
     await render({ onClose });
-    expect(document.body.style.overflow).toBe("hidden");
     const dialog = container.querySelector("dialog")!;
     const cancel = new Event("cancel", { cancelable: true });
     await act(async () => dialog.dispatchEvent(cancel));
@@ -75,9 +70,4 @@ it("closes on Escape and the close button, unlocking page scroll and refocusing 
     expect(onClose).toHaveBeenCalledOnce();
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click());
     expect(onClose).toHaveBeenCalledTimes(2);
-    await act(async () => root.render(null));
-    expect(dialog.open).toBe(false);
-    expect(document.body.style.overflow).toBe("auto");
-    expect(document.activeElement).toBe(opener);
-    opener.remove();
 });

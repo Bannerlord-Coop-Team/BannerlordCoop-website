@@ -125,21 +125,6 @@ it("refreshes non-replayable stale actions without clearing the form or resubmit
     expect(container.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe("Keep settings intent");
     expect(container.querySelector<HTMLSelectElement>('select[name="serverId"]')!.selectedIndex).toBe(1);
 });
-it("onboards the selected VPS with the provider the inventory listed it under", async () => {
-    request.mockResolvedValueOnce({ outcome: "registered" });
-    const value = JSON.stringify({ provider: "contabo-vps", serviceName: "203779521" });
-    await act(async () => root.render(<ControlPlaneActionCard operation="onboard-vps-host" title="Onboard" description="Onboard"
-        fields={[{ name: "host", label: "Available VPS", kind: "select", required: true, defaultValue: value,
-            options: [{ label: "Contabo VPS · 203779521", value }] }]} />));
-    await act(async () => container.querySelector("form")!.requestSubmit());
-    expect(request).toHaveBeenCalledOnce();
-    expect(request.mock.calls[0]?.[0]).toMatchObject({
-        operation: "onboard-vps-host",
-        input: { provider: "contabo-vps", serviceName: "203779521", mode: "enroll" },
-    });
-    expect(request.mock.calls[0]?.[0].input).not.toHaveProperty("host");
-});
-
 it("keeps the chosen server when a refresh brings a new generation of the default server", async () => {
     const at = (updatedAt: string): AdminActionField => ({ ...servers, defaultValue: JSON.stringify({ id: "server-a", updatedAt }),
         options: servers.options!.map((option) => option.value === "server-a" ? { ...option, updatedAt } : option) });

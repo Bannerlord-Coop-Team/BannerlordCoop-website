@@ -515,7 +515,7 @@ it.each([
     ["Onboard VPS", "Provider account", BENELUX, "Add manual VPS"],
     ["Add manual VPS", "Manual entry", BENELUX, "Add manual VPS"],
     ["Add manual VPS", "Manual entry", UNREADABLE, "Unavailable"],
-] as const)("opens the Add capacity dialog from %s on its %s tab and refocuses the button on close", async (label, tabLabel, hostingRegions, manualSubmit) => {
+] as const)("opens the Add capacity dialog from %s on its %s tab and closes it", async (label, tabLabel, hostingRegions, manualSubmit) => {
     stubDialog();
     mocks.resources.mockReturnValue(new Promise(() => {}));
     mocks.billing.mockResolvedValue({ ...inventory(), availableHosts: [AVAILABLE] });
@@ -523,7 +523,7 @@ it.each([
     await act(async () => root.render(<VpsView hostingRegions={hostingRegions} inventory={listed} accounts={[]} />));
     expect([...container.querySelectorAll("button")].find(button => button.textContent === label)!.getAttribute("aria-haspopup")).toBe("dialog");
     expect(container.querySelector("dialog")).toBeNull();
-    const trigger = await openFrom(label);
+    await openFrom(label);
     const dialog = container.querySelector("dialog")!;
     expect(dialog.open).toBe(true);
     expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe(tabLabel);
@@ -534,7 +534,6 @@ it.each([
     expect(manual.querySelector<HTMLButtonElement>('button[type="submit"]')!.textContent).toBe(manualSubmit);
     await act(async () => dialog.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click());
     expect(container.querySelector("dialog")).toBeNull();
-    expect(document.activeElement).toBe(trigger);
 });
 
 it("retries the billing read from the Provider account tab", async () => {

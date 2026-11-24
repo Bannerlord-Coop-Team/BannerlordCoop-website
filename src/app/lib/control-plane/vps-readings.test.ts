@@ -4,6 +4,8 @@ import type { HostingAdminVpsInventory } from "./types";
 import {
     failedLiveInventoryReading,
     failedSupplementaryReading,
+    billingReadState,
+    liveDataMismatchError,
     liveInventoryView,
     readingErrorMessage,
     supplementaryView,
@@ -65,4 +67,25 @@ test("a failed read names its timeout, else its own error, else a generic cause"
         ["non-error rejection", "nope", false, timeout, "VPS readings could not be loaded."],
     ];
     for (const [name, error, timedOut, deadline, expected] of cases) assert.equal(readingErrorMessage(error, timedOut, deadline), expected, name);
+});
+
+test("a live-data mismatch names which way the response differs from the request", () => {
+    assert.equal(liveDataMismatchError({ liveDataIncluded: true }, true), null);
+    assert.equal(liveDataMismatchError({ liveDataIncluded: false }, false), null);
+    assert.equal(liveDataMismatchError({ liveDataIncluded: false }, true), "Live VPS data is unavailable.");
+    assert.equal(liveDataMismatchError({ liveDataIncluded: undefined }, true), "Live VPS data is unavailable.");
+    assert.equal(liveDataMismatchError({ liveDataIncluded: true }, false), "The provider inventory read returned an unexpected live-data response.");
+});
+
+test("the billing read state applies loading, failed, stale, partial, then ok precedence", () => {
+    const billing = inventory(false, "billing");
+    const partial = { ...billing, providerReads: [{ provider: "contabo-vps", status: "failed", code: null }] } as HostingAdminVpsInventory;
+    const cases: Array<[string, Parameters<typeof billingReadState>[0], ReturnType<typeof billingReadState>]> = [
+        ["first read loading", { pending: true }, { kind: "loading" }],
+        ["failed with nothing to show", { pending: false, error: "Down." }, { kind: "failed", error: "Down." }],
+        ["failed after an earlier result", { pending: false, result: partial, error: "Down." }, { kind: "stale", error: "Down." }],
+        ["some provider accounts failed", { pending: false, result: partial }, { kind: "partial", failedProviderReads: "The Contabo account read failed, so that provider's unregistered VPS products and billing are not shown." }],
+        ["complete", { pending: false, result: billing }, { kind: "ok" }],
+    ];
+    for (const [name, reading, expected] of cases) assert.deepEqual(billingReadState(reading), expected, name);
 });

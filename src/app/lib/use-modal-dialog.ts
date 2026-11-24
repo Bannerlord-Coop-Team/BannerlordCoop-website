@@ -8,15 +8,15 @@ export function useModalDialog(dialogRef: RefObject<HTMLDialogElement | null>, i
     const fallback = useRef(onFocusNotRestored);
     useEffect(() => {
         const dialog = dialogRef.current;
-        if (dialog === null) return;
+        if (dialog === null) throw new Error("useModalDialog: dialog ref is not attached");
         const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         const notRestored = fallback.current;
         const previousOverflow = document.body.style.overflow;
         document.body.style.overflow = "hidden";
-        if (!dialog.open) dialog.showModal();
+        dialog.showModal();
         initialFocus.current?.focus();
         return () => {
-            if (dialog.open) dialog.close();
+            dialog.close();
             document.body.style.overflow = previousOverflow;
             if (!restoreFocus(opener)) notRestored?.();
         };

@@ -1,4 +1,5 @@
 import type { HostingAdminVpsInventory } from "./types";
+import { failedVpsProviderReadsMessage } from "./vps-providers";
 
 /** A live-telemetry reading, tied to the registered inventory it was read for. */
 export type LiveInventoryReading = { initial: HostingAdminVpsInventory; result?: HostingAdminVpsInventory; error?: string };
@@ -52,4 +53,29 @@ export function readingErrorMessage(error: unknown, timedOut: boolean, timeout: 
     if (timedOut && timeout !== undefined) return timeout.message;
     if (error instanceof Error) return error.message;
     return "VPS readings could not be loaded.";
+}
+
+/** Why a `vps-hosts` response's live-data flag contradicts the request, naming which way; null when it matches. */
+export function liveDataMismatchError(result: Pick<HostingAdminVpsInventory, "liveDataIncluded">, includeLiveData: boolean): string | null {
+    if (result.liveDataIncluded === includeLiveData) return null;
+    if (includeLiveData) return "Live VPS data is unavailable.";
+    return "The provider inventory read returned an unexpected live-data response.";
+}
+
+/** The billing reading's condition, in precedence order: loading, failed with nothing to show, stale, some provider accounts failed, or ok. */
+export type BillingReadState =
+    | { kind: "loading" }
+    | { kind: "failed"; error: string }
+    | { kind: "stale"; error: string }
+    | { kind: "partial"; failedProviderReads: string }
+    | { kind: "ok" };
+
+/** Classifies the billing reading so the page banners and the provider form apply one precedence. */
+export function billingReadState(billing: ReadingView<HostingAdminVpsInventory>): BillingReadState {
+    if (billing.pending) return { kind: "loading" };
+    if (billing.error !== undefined && billing.result === undefined) return { kind: "failed", error: billing.error };
+    if (billing.error !== undefined) return { kind: "stale", error: billing.error };
+    const failedProviderReads = failedVpsProviderReadsMessage(billing.result?.providerReads);
+    if (failedProviderReads !== null) return { kind: "partial", failedProviderReads };
+    return { kind: "ok" };
 }
