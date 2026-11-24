@@ -16,17 +16,16 @@ const linkClassName = "inline-flex min-h-10 items-center gap-2 whitespace-nowrap
 const activeLinkClassName = "border-gold/30 bg-gold/8 text-gold";
 const inactiveLinkClassName = "border-white/15 text-foreground-muted hover:border-gold/40 hover:text-gold";
 
-/** Decides whether an admin section link represents the current path, ignoring any query or hash. */
-export function isAdminLinkActive(link: Pick<AdminLink, "href" | "exact">, pathname: string) {
-    const path = pathname.split(/[?#]/, 1)[0];
-    if (path === link.href) return true;
+/** Decides whether an admin section link represents the current pathname. */
+function isAdminLinkActive(link: AdminLink, pathname: string) {
+    if (pathname === link.href) return true;
     if (link.exact) return false;
-    return path.startsWith(`${link.href}/`);
+    return pathname.startsWith(`${link.href}/`);
 }
 
 /** Renders the admin section links under the site navbar, marking the current section. */
 export function AdminSubNav() {
-    const pathname = usePathname() ?? "";
+    const pathname = usePathname();
 
     return (
         <div className="border-b border-white/10 bg-surface">

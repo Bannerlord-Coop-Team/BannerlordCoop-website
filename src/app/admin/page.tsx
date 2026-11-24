@@ -5,7 +5,8 @@ import { DEFAULT_MEMBER_PAGE_SIZE, parseMemberListState, type MemberListState } 
 import { paginateItems } from "@/app/lib/pagination";
 import { getMemberRole, hasAdminAccess, isBootstrapAdmin } from "@/app/lib/auth/access";
 import { getLoginRedirect } from "@/app/lib/auth/redirect";
-import { createSupabaseServerClient, getSupabaseServerClient } from "@/app/lib/supabase/server";
+import { getAdminActor } from "@/app/lib/auth/admin-actor";
+import { createSupabaseServerClient } from "@/app/lib/supabase/server";
 import {
     AUTH_USERS_MAX_PAGES,
     AUTH_USERS_PAGE_SIZE,
@@ -69,9 +70,8 @@ function formatDate(value: string | undefined) {
 /** Lists members for the original administrator; the admin layout supplies site and admin navigation. */
 export default async function AdminPage({ searchParams }: AdminPageProps) {
     const impersonationEnabled = process.env.ADMIN_IMPERSONATION_ENABLED === "true";
-    const sessionClient = await getSupabaseServerClient({ impersonation: "actor" });
-    const { data: sessionData } = await sessionClient.auth.getUser();
-    const currentUser = sessionData.user;
+    // Shared with the admin layout's navigation, so the request looks the administrator up once.
+    const { actor: currentUser } = await getAdminActor();
     const params = await searchParams;
 
     if (!currentUser) redirect(getLoginRedirect("/admin", params));
