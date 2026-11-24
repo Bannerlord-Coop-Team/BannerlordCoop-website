@@ -1,0 +1,35 @@
+name: Verify VPS slot availability
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/app/components/admin/VpsHostInventory*'
+      - 'src/app/components/admin/RelocateView*'
+      - 'src/app/lib/control-plane/slot-availability*'
+      - 'src/app/lib/control-plane/relocation.ts'
+      - 'src/app/lib/control-plane/types.ts'
+      - 'test/fixtures/vps-slot-availability/**'
+      - '.github/workflows/verify-vps-slot-availability.yml'
+      - 'package*.json'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: VPS slot availability verification
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npx next typegen
+      - run: npx tsc --noEmit
+      - run: npx eslint src/app/components/admin/VpsHostInventory.tsx src/app/components/admin/VpsHostInventory.component.test.tsx src/app/lib/control-plane/slot-availability.ts src/app/lib/control-plane/relocation.ts src/app/lib/control-plane/types.ts
+      - run: npm run test:components -- src/app/components/admin/VpsHostInventory.component.test.tsx src/app/components/admin/RelocateView.component.test.tsx
