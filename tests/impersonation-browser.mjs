@@ -22,8 +22,7 @@ let server, browser, log = "";
 async function write(path, value) { await mkdir(dirname(join(fixture, path)), { recursive: true }); await writeFile(join(fixture, path), value); }
 /** Applies one targeted source patch, failing loudly when the real file no longer matches the pattern. */
 function patch(source, pattern, replacement) {
-    if (!pattern.test(source)) throw new Error(`Fixture patch no longer matches: ${pattern}`);
-    pattern.lastIndex = 0;
+    if (source.search(pattern) === -1) throw new Error(`Fixture patch no longer matches: ${pattern}`);
     return source.replace(pattern, replacement);
 }
 try {
@@ -42,7 +41,7 @@ try {
     // Keep the real root layout (localization the site navbar needs, banner); strip only the Google font downloads.
     let layout = await readFile("src/app/layout.tsx", "utf8");
     layout = patch(layout, /^import [^\r\n]* from "next\/font\/google";\r?\n/m, "");
-    layout = patch(layout, /^const \w+ = \w+\(\{[^}]*\}\);\r?\n/gm, "");
+    layout = patch(layout, /^const \w+ = (?:Inter|Cormorant_Garamond|Barlow_Condensed)\(\{[^}]*\}\);\r?\n/gm, "");
     layout = patch(layout, /\$\{inter\.variable\} \$\{cormorantGaramond\.variable\} \$\{barlowCondensed\.variable\} /, "");
     await write("src/app/layout.tsx", layout);
     execFileSync("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", join(fixture, "key.pem"), "-out", join(fixture, "cert.pem"), "-days", "1", "-subj", "/CN=localhost", "-addext", "subjectAltName=IP:127.0.0.1,DNS:localhost"], { stdio: "ignore" });

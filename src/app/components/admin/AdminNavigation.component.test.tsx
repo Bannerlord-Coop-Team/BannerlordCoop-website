@@ -7,17 +7,14 @@ const member = { id: "22222222-2222-4222-8222-222222222222", app_metadata: { rol
 
 beforeEach(() => { vi.stubEnv("SUPABASE_ADMIN_EMAILS", ""); });
 
-it("shows the sub-navigation to an administrator and reuses the actor as the navbar viewer", async () => {
-    const { navbarViewer, showSubNav } = resolveAdminNavigation({ actor: admin, impersonating: false });
-    expect(showSubNav).toBe(true);
-    expect(await navbarViewer).toEqual({ user: admin });
-});
-
-it.each([["member", member], ["signed-out", null]])("hides the sub-navigation from a %s viewer and passes it to the navbar", async (_label, actor) => {
-    const { navbarViewer, showSubNav } = resolveAdminNavigation({ actor, impersonating: false });
-    expect(showSubNav).toBe(false);
-    expect(await navbarViewer).toEqual({ user: actor });
-});
+it.each([["administrator", admin, true], ["member", member, false], ["signed-out", null, false]] as const)(
+    "reuses the %s viewer for the navbar and shows the sub-navigation only to administrators",
+    async (_label, actor, expectedSubNav) => {
+        const { navbarViewer, showSubNav } = resolveAdminNavigation({ actor, impersonating: false });
+        expect(showSubNav).toBe(expectedSubNav);
+        expect(await navbarViewer).toEqual({ user: actor });
+    },
+);
 
 it("keeps the administrator's sub-navigation while impersonating but lets the navbar resolve the impersonated user", () => {
     expect(resolveAdminNavigation({ actor: admin, impersonating: true })).toEqual({ navbarViewer: undefined, showSubNav: true });

@@ -2,7 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ADMIN_SESSION_COOKIE_OPTIONS, IMPERSONATION_COOKIE } from "../auth/impersonation-cookie-options";
+import { ADMIN_SESSION_COOKIE_OPTIONS } from "../auth/impersonation-cookie-options";
+import { getImpersonationSelection, hasImpersonationSelection } from "../auth/impersonation-selection";
 
 /** The backup client has a separate HttpOnly cookie namespace, never browser auth storage. */
 export async function createSupabaseServerClient(administratorBackup = false): Promise<SupabaseClient> {
@@ -23,15 +24,17 @@ export async function createSupabaseServerClient(administratorBackup = false): P
     });
 }
 
+/** Returns the effective (impersonated when selected) client, or the original administrator's with `impersonation: "actor"`. */
 export async function getSupabaseServerClient(options: { impersonation?: "actor" } = {}): Promise<SupabaseClient> {
     const primary = await createSupabaseServerClient();
-    const cookie = (await cookies()).get(IMPERSONATION_COOKIE);
+    const selection = await getImpersonationSelection();
+    const impersonating = selection !== null;
     const actor = options.impersonation === "actor";
-    const client = actor && cookie ? await createSupabaseServerClient(true) : primary;
+    const client = actor && impersonating ? await createSupabaseServerClient(true) : primary;
     try {
-        if (cookie && !actor) {
+        if (impersonating && !actor) {
             const { resolveImpersonation } = await import("../auth/impersonation");
-            await resolveImpersonation(await createSupabaseServerClient(true), client, cookie.value);
+            await resolveImpersonation(await createSupabaseServerClient(true), client, selection);
         } else {
             const { data: { session } } = await client.auth.getSession();
             if (session) {
@@ -40,7 +43,7 @@ export async function getSupabaseServerClient(options: { impersonation?: "actor"
             }
         }
     } catch (error) {
-        if (!cookie || actor) throw error;
+        if (!impersonating || actor) throw error;
         redirect("/admin?error=Impersonation+expired+or+is+unavailable.+Exit+or+select+a+user+again.");
     }
     return client;
@@ -48,7 +51,7 @@ export async function getSupabaseServerClient(options: { impersonation?: "actor"
 
 /** Refreshed token and cached identity only. Callers must independently verify authority before rendering. */
 export async function getSupabaseServerReadSession() {
-    const impersonating = Boolean((await cookies()).get(IMPERSONATION_COOKIE));
+    const impersonating = await hasImpersonationSelection();
     // Preserve the full actor/target validation and redirect path for impersonation.
     const client = impersonating ? await getSupabaseServerClient() : await createSupabaseServerClient();
     const { data: { session }, error: sessionError } = await client.auth.getSession();

@@ -1,4 +1,4 @@
-import { AuthSessionMissingError, type User } from "@supabase/supabase-js";
+import { AuthApiError, AuthRetryableFetchError, AuthSessionMissingError, type User } from "@supabase/supabase-js";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ client: vi.fn(), getUser: vi.fn(), cookies: new Map<string, string>() }));
@@ -34,9 +34,20 @@ it("resolves the original user through the actor client", async () => {
     expect(mocks.client).toHaveBeenCalledExactlyOnceWith({ impersonation: "actor" });
 });
 
-it("reads a missing Auth session as signed out so /admin can redirect to login", async () => {
-    mocks.getUser.mockResolvedValue({ data: { user: null }, error: new AuthSessionMissingError() });
+it.each([
+    ["a missing session", new AuthSessionMissingError()],
+    ["a rejected token", new AuthApiError("invalid JWT", 403, "bad_jwt")],
+])("reads %s as signed out so /admin can redirect to login", async (_label, error) => {
+    mocks.getUser.mockResolvedValue({ data: { user: null }, error });
     await expect(getAdminActor()).resolves.toBeNull();
+});
+
+it.each([
+    ["a retryable fetch failure", new AuthRetryableFetchError("fetch failed", 0)],
+    ["a 5xx Auth error", new AuthApiError("upstream unavailable", 500, "unexpected_failure")],
+])("rethrows %s instead of reading an Auth outage as signed out", async (_label, error) => {
+    mocks.getUser.mockResolvedValue({ data: { user: null }, error });
+    await expect(getAdminActor()).rejects.toBe(error);
 });
 
 it("rethrows client and session-context failures for the caller's policy", async () => {
