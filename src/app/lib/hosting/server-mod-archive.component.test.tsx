@@ -1,6 +1,8 @@
 import { unzipSync } from "fflate";
+import { Buffer } from "node:buffer";
 import { expect, it as test } from "vitest";
-import { buildModArchive, compress, ModArchiveError, zipEntrySizes, type ModArchiveProblem, type ModFolderFile } from "./server-mod-archive";
+import { buildModArchive, buildResumableModArchive, compress, ModArchiveError, zipEntrySizes, type ModArchiveProblem, type ModFolderFile } from "./server-mod-archive";
+import type { PreparedModArchiveWriter } from "./server-mod-upload-cache";
 
 // Runs under jsdom so SubModule.xml is parsed with the browser's DOMParser, as in production.
 const MIB = 1_048_576;
@@ -94,7 +96,57 @@ test("enforces path, count and size bounds before reading file contents", async 
     const many: Record<string, string> = { ...base };
     for (let index = 0; index < 5_000; index += 1) many[`ButterLib/f${index}.txt`] = "";
     await rejects(folder(many), "too-many-files");
-    await rejects(folder({ ...base, "ButterLib/huge.bin": "x" }, { "ButterLib/huge.bin": 512 * MIB }), "too-large-uncompressed");
+    await rejects(folder({ ...base, "ButterLib/huge.bin": "x" }, { "ButterLib/huge.bin": 3_000_000_000 }), "too-large-uncompressed");
+});
+
+test("streams files in at most 1 MiB reads, awaits the writer and produces a valid stored ZIP", async () => {
+    const payload = new Uint8Array(2 * MIB + 7).fill(53);
+    const files = folder({ "ButterLib/SubModule.xml": submodule(), "ButterLib/empty.txt": "" });
+    let reads = 0;
+    files.push({ webkitRelativePath: "ButterLib/payload.bin", size: payload.byteLength,
+        arrayBuffer: async () => { throw new Error("whole-file read"); },
+        slice: (start, end) => ({ arrayBuffer: async () => {
+            expect(end - start).toBeLessThanOrEqual(MIB); reads += 1;
+            return payload.slice(start, end).buffer;
+        } }),
+    });
+    const chunks: Uint8Array[] = [];
+    let inFlight = false;
+    const writer: PreparedModArchiveWriter = {
+        async append(bytes) {
+            expect(inFlight).toBe(false); inFlight = true;
+            await Promise.resolve(); chunks.push(bytes.slice()); inFlight = false;
+        },
+        async finish(details) {
+            expect(inFlight).toBe(false);
+            const bytes = new Uint8Array(chunks.reduce((size, chunk) => size + chunk.byteLength, 0));
+            let offset = 0;
+            for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+            return { ...details, bytes };
+        },
+        abort: async () => { throw new Error("unexpected abort"); },
+    };
+    const archive = await buildResumableModArchive(files, { writer });
+    expect(reads).toBe(3);
+    expect(archive.fileCount).toBe(3);
+    const entries = unzipSync(archive.bytes);
+    expect(Buffer.from(entries["Bannerlord.ButterLib/payload.bin"]).equals(Buffer.from(payload))).toBe(true);
+    expect(entries["Bannerlord.ButterLib/empty.txt"]).toEqual(new Uint8Array(0));
+    expect(zipEntrySizes(archive.bytes).every(entry => entry.compressed === entry.uncompressed)).toBe(true);
+});
+
+test("aborts prepared storage on a bounded writer failure and refuses a large in-memory fallback before reading", async () => {
+    let aborted = false;
+    const files = folder({ "ButterLib/SubModule.xml": submodule() });
+    await expect(buildResumableModArchive(files, { writer: {
+        append: async () => { throw new Error("storage full"); },
+        finish: async () => { throw new Error("unexpected finish"); },
+        abort: async () => { aborted = true; },
+    } })).rejects.toThrow("storage full");
+    expect(aborted).toBe(true);
+    const huge = [...files, { webkitRelativePath: "ButterLib/large.bin", size: 101 * MIB,
+        arrayBuffer: async (): Promise<ArrayBuffer> => { throw new Error("must not read"); } }];
+    await expect(buildModArchive(huge)).rejects.toMatchObject({ problem: "browser-storage" });
 });
 
 test("stores large entries that would exceed the compression ratio and refuses an aggregate bomb", () => {

@@ -172,7 +172,7 @@ export function UnavailableServerPanel({ title, actions }: { title: string; acti
 
 /** Organizes server identity, join actions and persistent task panels in one workspace. */
 export function ServerManagementWorkspace({ name, address, summary, status, visibility, notice, banner, initialSection = "Console", interactionLocked = false, children }: {
-    name: ReactNode; address?: string | null; summary: ReactNode; status?: ReactNode; visibility?: ReactNode; notice?: string;
+    name: ReactNode; address?: string | null; summary: ReactNode; status?: ReactNode; visibility?: ReactNode; notice?: ReactNode;
     /** Server notices shown above everything else on the page. */
     banner?: ReactNode;
     initialSection?: Section; interactionLocked?: boolean; children: ReactNode;

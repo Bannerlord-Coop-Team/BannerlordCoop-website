@@ -1,0 +1,21 @@
+import { NightlyCard } from "@/app/components/nightly/NightlyCard";
+import { NightlySuccess } from "@/app/components/nightly/NightlyStatus";
+import { isSponsoredApproval, type PageSearchParams } from "@/app/lib/nightly/query-flags";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { title: "Access approved", robots: { index: false, follow: false } };
+
+type ApprovedPageProps = { searchParams: Promise<PageSearchParams> };
+
+/** Confirms installer approval after the Discord callback or a sponsor claim. */
+export default async function ApprovedPage({ searchParams }: ApprovedPageProps) {
+    const sponsored = isSponsoredApproval(await searchParams);
+    return (
+        <NightlyCard eyebrow="Nightly access">
+            <NightlySuccess
+                title={sponsored ? "Sponsored access approved" : "Access approved"}
+                message="Return to the installer window. It will continue automatically."
+            />
+        </NightlyCard>
+    );
+}

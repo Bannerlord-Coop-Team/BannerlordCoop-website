@@ -1,4 +1,5 @@
 {
+  "support.discord": "공식 Discord",
   "metadata.title": "계정 | Bannerlord Co-op",
   "heading": "계정",
   "defaultName": "내 계정",
@@ -7,7 +8,7 @@
   "error.rateLimited": "계정 변경 요청이 너무 많거나 아직 동기화가 진행 중입니다. 상태가 갱신될 때까지 기다린 후 다시 시도하세요. 권한 승인은 10분 이내에 만료됩니다. 연결 해제와 기존 서버 관리는 계속 이용할 수 있습니다.",
   "error.retry": "계정에서 다른 요청을 처리 중입니다. 갱신된 연결 상태를 확인한 후 다시 시도하세요. 새로 권한을 승인하면 완료되지 않은 이전 시도를 대체합니다.",
   "error.lastIdentity": "Discord가 유일한 로그인 수단입니다. 연결을 해제하기 전에 다른 로그인 수단을 연결하세요.",
-  "error.discordDisconnect": "Discord 연결을 해제하지 못했습니다. 상태는 자동으로 갱신됩니다. 상태를 확인할 수 있게 되면 다시 시도하세요. 문제가 계속되면 지원팀에 문의하세요.",
+  "error.discordDisconnect": "Discord 연결을 해제하지 못했습니다. 상태는 자동으로 갱신됩니다. 상태를 확인할 수 있게 되면 다시 시도하세요. 문제가 계속되면 {supportLink}에서 ‘General Help’ 지원 티켓을 만들어 주세요.",
   "error.patreonDisconnect": "Patreon 연결을 해제하지 못했습니다. 상태는 자동으로 갱신됩니다. 현재 상태가 표시될 때까지 기다린 후 다시 시도하세요.",
   "error.discordRepair": "Discord 연결을 완료하지 못했습니다. 아래에서 현재 연결 상태를 확인한 후 다시 시도하세요. 세션이 변경되었거나 요청이 만료되었거나, 해당 Discord 계정이 다른 계정에 연결되어 있을 수 있습니다. 계정 연결 대신 로그인을 진행하지는 않습니다.",
   "error.patreonAuthorization": "Patreon 권한 승인이 취소되었거나 완료되지 않았습니다. 아래에서 현재 연결 상태를 확인하고, 필요하면 다시 연결하거나 인증하세요. Patreon 계정은 하나의 웹사이트 계정에만 연결할 수 있습니다.",
@@ -25,7 +26,7 @@
   "membership.verified": "멤버십이 인증되었습니다.",
   "membership.nonqualifying": "{installer} 그 밖의 혜택도 누릴 수 있습니다.",
   "membership.nightlyInstaller": "Patreon 후원자는 나이틀리 설치 프로그램을 이용할 수 있고(사용 방법 안내)",
-  "membership.reviewRequired": "멤버십 검토가 필요합니다. 다시 시도하기 전에 지원팀에 문의하세요.",
+  "membership.reviewRequired": "멤버십 검토가 필요합니다. 다시 시도하기 전에 {supportLink}에서 ‘General Help’ 지원 티켓을 만들어 주세요.",
   "membership.verifyRequired": "새 서버를 생성하기 전에 멤버십을 인증하세요.",
   "membership.syncPending": "서버 할당량을 업데이트하고 있습니다. 보통 몇 초 정도 걸리며 상태는 자동으로 새로고침됩니다.",
   "membership.syncUnavailable": "생성 가능한 서버 수를 확인하지 못했습니다.",
@@ -44,5 +45,9 @@
   "disconnect.confirm": "{provider} 연결 해제 확인",
   "disconnect.cancel": "취소",
   "loading.label": "계정 불러오는 중",
-  "loading.status": "계정 불러오는 중…"
+  "loading.status": "계정 불러오는 중…",
+  "boosty.linked": "Boosty 구독이 계정 이메일로 연결되었습니다.",
+  "boosty.notFound": "이 계정의 이메일을 사용하는 Boosty 구독이 없습니다. 연결하려면 같은 이메일로 Boosty에서 구독하세요.",
+  "boosty.nonqualifying": "Boosty 구독에 자격을 충족하는 등급이 포함되어 있지 않습니다.",
+  "boosty.checking": "Boosty 멤버십이 곧 확인됩니다."
 }

@@ -170,6 +170,7 @@ function CreateNotice({ initialServers, onCreated }: { initialServers: HostingPa
                             <button type="button" disabled={selected.size === 0} onClick={() => setSelected(new Map())} className={`${buttonClass} border-white/15 text-foreground-muted hover:text-foreground`}>Clear</button>
                         </span>
                     </div>
+                    {results.query === "" && results.page.partial && <p role="status" className="mt-2 text-xs text-amber-200">The initial server list reached the bounded read budget. Search to find older servers.</p>}
                     <ul className="mt-2 max-h-72 divide-y divide-white/10 overflow-y-auto border border-white/10" aria-label="Servers to target">
                         {results.page.items.map((server) => (
                             <li key={server.serverId}>

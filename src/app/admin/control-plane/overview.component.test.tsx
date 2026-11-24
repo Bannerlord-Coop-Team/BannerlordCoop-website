@@ -124,11 +124,29 @@ it("renders both complete release groups from one catalog request without accoun
     expect(mocks.accounts).not.toHaveBeenCalled();
 });
 
+it("follows both release channel cursors", async () => {
+    const build = { buildId: "stable-v0.1.10", channel: "stable", version: "v0.1.10", sourceRevision: "registry-observed",
+        supportedGameVersion: "v1.4.8", validationState: "validated", publishedAt: "2026-09-30T00:00:00.000Z", updatedAt: "2026-09-30T00:00:00.000Z",
+        registryMetadata: { versionTag: "v0.1.10", clientRevision: "a".repeat(40), serverRevision: "b".repeat(40) } };
+    mocks.request.mockImplementation(async request => request.input.stableCursor === null
+        ? { stable: { items: Array(100).fill(build), nextCursor: "stable-2" }, nightly: { items: Array(100).fill({ ...build, channel: "nightly" }), nextCursor: "nightly-2" } }
+        : { stable: { items: [build], nextCursor: null }, nightly: { items: [], nextCursor: null } });
+    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "releases" }) }));
+    await stream.allReady;
+    const html = await new Response(stream).text();
+    expect(mocks.request).toHaveBeenCalledTimes(2);
+    expect(mocks.request.mock.calls.map(([request]) => request.input)).toEqual([
+        { stableCursor: null, nightlyCursor: null, limit: 100 },
+        { stableCursor: "stable-2", nightlyCursor: "nightly-2", limit: 100 },
+    ]);
+    expect(html).not.toContain("reached the five-page read budget");
+});
+
 it("renders Operations with fresh VPS choices and capacity without requesting unused billing", async () => {
     mocks.accounts.mockResolvedValue({ users: [], truncated: false });
     mocks.request.mockImplementation(async request => {
         if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
-        if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
+        if (request.operation === "servers" || request.operation === "jobs") return { items: [], nextCursor: null };
         if (request.operation === "vps-hosts") return {
             availableHosts: [{ provider: "ovhcloud-vps", serviceName: "vps-available.vps.ovh.us", label: "OVHcloud VPS · vps-available.vps.ovh.us" }],
             hosts: [{ provider: "vpstc-vps", locationId: "nyc", countryCode: "US", region: null, availableServers: 1, totalSlots: 1 },
@@ -164,14 +182,15 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
         input: { includeLiveData: false, includeProviderInventory: "service-names" },
     }]]);
     expect(mocks.request.mock.calls.filter(([request]) => request.operation === "hosting-regions")).toEqual([[expect.objectContaining({ operation: "hosting-regions", input: {} })]]);
-    expect(mocks.request).toHaveBeenCalledTimes(4);
+    // Update server always follows the channel, so Operations reads no release catalog.
+    expect(mocks.request.mock.calls.map(([request]) => request.operation).sort()).toEqual(["hosting-regions", "jobs", "overview", "servers", "vps-hosts"]);
 });
 
 it("keeps Operations usable when the stored hosting-region catalog cannot be read", async () => {
     mocks.accounts.mockResolvedValue({ users: [], truncated: false });
     mocks.request.mockImplementation(async request => {
         if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
-        if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
+        if (request.operation === "servers" || request.operation === "jobs") return { items: [], nextCursor: null };
         if (request.operation === "vps-hosts") return { availableHosts: [], hosts: [] };
         throw new ControlPlaneAdminError("unsupported_operation", "The operation is not supported.");
     });
@@ -189,7 +208,7 @@ it("offers every stored region and the listed manual-entry providers on Add manu
     mocks.accounts.mockResolvedValue({ users: [], truncated: false });
     mocks.request.mockImplementation(async request => {
         if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
-        if (request.operation === "release-catalog") return { stable: { items: [] }, nightly: { items: [] } };
+        if (request.operation === "servers" || request.operation === "jobs") return { items: [], nextCursor: null };
         if (request.operation === "vps-hosts") return { availableHosts: [], hosts: [],
             manualEntryProviders: [{ provider: "hosthatch-vps", displayName: "HostHatch VPS" }] };
         if (request.operation === "hosting-regions") return { regions: hostingRegionCatalogPayload()
@@ -217,7 +236,12 @@ function cardHtml(html: string, operation: string) {
     return html.slice(start, html.indexOf("</article>", start));
 }
 
-it("registers Capacity after Placement and leaves the rate-limited capacity read to the browser", async () => {
+it("opens Capacity without querying region availability and leaves the fleet capacity read to the browser", async () => {
+    mocks.request.mockImplementation(async request => {
+        if (request.operation !== "overview") throw new Error("Unexpected Capacity page read");
+        request.onAuthenticated();
+        return {};
+    });
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "capacity" }) }));
     await stream.allReady;
     const html = await new Response(stream).text();
@@ -228,8 +252,9 @@ it("registers Capacity after Placement and leaves the rate-limited capacity read
     expect(html).toContain("Fleet capacity");
     expect(html).toContain("Loading fleet capacity…");
     expect(html).not.toContain("The control plane view could not be loaded");
-    // The control plane authorizes the page through a small read, as for every other view.
-    expect(mocks.request.mock.calls.map(([request]) => [request.operation, request.input])).toEqual([["hosting-regions", {}]]);
+    expect(mocks.request.mock.calls).toEqual([[expect.objectContaining({
+        operation: "overview", input: { compact: true }, requireOrdinarySession: true,
+    })]]);
     expect(mocks.auth).not.toHaveBeenCalled();
     expect(mocks.accounts).not.toHaveBeenCalled();
 });
@@ -317,7 +342,10 @@ it("projects only displayed job fields and preserves the fresh failed-attempt co
         failureAcknowledgedAt: null, failureAcknowledgedBy: "undisplayed-actor", authority: "undisplayed-authority",
         createdAt: "undisplayed-created", runAt: "undisplayed-run", unknownFutureField: "never-cross-the-boundary" };
     for (const acknowledged of [false, true]) {
-        mocks.request.mockResolvedValue({ items: [{ ...job, failureAcknowledgedAt: acknowledged ? updatedAt : null }], nextCursor: "next-page" });
+        mocks.request.mockImplementation(async request => ({
+            items: request.input?.cursor ? [] : [{ ...job, failureAcknowledgedAt: acknowledged ? updatedAt : null }],
+            nextCursor: `next-${request.input?.cursor ?? "first"}`,
+        }));
         const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "jobs", state: "failed" }) }));
         await stream.allReady;
         const html = await new Response(stream).text();
@@ -331,7 +359,7 @@ it("projects only displayed job fields and preserves the fresh failed-attempt co
         expect(JSON.stringify(props)).not.toContain("undisplayed");
         expect(JSON.stringify(props)).not.toContain("never-cross-the-boundary");
     }
-    expect(mocks.request).toHaveBeenCalledTimes(2); expect(mocks.accounts).not.toHaveBeenCalled();
+    expect(mocks.request).toHaveBeenCalledTimes(10); expect(mocks.accounts).not.toHaveBeenCalled();
 });
 
 it("projects only displayed audit fields while retaining reasons and shortened identifiers", async () => {

@@ -19,7 +19,6 @@ export type ManagedServer = {
     releaseChannel: "stable" | "nightly";
     installedBuildId: string | null;
     desiredBuildId: string | null;
-    pinnedBuildId: string | null;
     maintenanceSlot: string;
     activeSaveId: string | null;
     connectionHostname: string | null;
@@ -44,6 +43,8 @@ export type MyServerSummary = Pick<
 > & {
     subscriptionHold?: { state: "held" | "removal-pending"; reason: "subscription-funding-lapsed"; removalDueAt: string; canExportSave: boolean } | null;
     runtimeInsight?: import("../hosting/owner-runtime-insight").OwnerRuntimeInsight;
+    /** Present only when the optional insight was rejected, so the page can explain the degraded view. */
+    runtimeInsightWarning?: import("../hosting/owner-runtime-insight").OwnerRuntimeInsightValidationIssue;
     accessRole: "owner" | "manager" | "support" | "admin";
     // Client mod version of the installed build; null before the first install, missing from older control planes.
     installedVersion?: string | null;
@@ -210,7 +211,13 @@ export type AuditEvent = {
     occurredAt: string;
 };
 
-export type HostingPage<T> = { items: T[]; nextCursor: string | null };
+export type HostingPage<T> = {
+    items: T[];
+    nextCursor: string | null;
+    /** Set by bounded website reads when the server stopped at its page budget. */
+    partial?: boolean;
+    pagesRead?: number;
+};
 
 export type HostingAdminHostResources = {
     observedAt: string;
@@ -264,6 +271,8 @@ export type HostingAdminVpsHost = {
         ownerAccountId?: string | null;
         operationState: string;
         resources?: HostingServerResources | null;
+        /** Effective runner quota; absent on older control planes. */
+        storage?: { usedBytes: number; quotaBytes: number | null } | null;
     }>;
     cost: {
         priceInMicrocents: number;
@@ -390,7 +399,7 @@ export type HostingAdminRegionRequestNotification = {
 };
 
 export type OperationsData = {
-    overview: Pick<Overview, "controls" | "servers" | "jobs" | "stableBuilds" | "nightlyBuilds">;
+    overview: Pick<Overview, "controls" | "servers" | "jobs">;
     inventory: HostingAdminVpsInventory;
     vpsProviderError: string | null;
     selectedServer: ManagedServer | null;
@@ -1117,8 +1126,6 @@ export type Overview = {
     controls: GlobalControls;
     servers: HostingPage<ManagedServer>;
     jobs: HostingPage<HostingJob>;
-    stableBuilds: HostingPage<ReleaseBuild>;
-    nightlyBuilds: HostingPage<ReleaseBuild>;
 };
 
 /** Current data rendered by the Overview pane, without unused detail reads. */

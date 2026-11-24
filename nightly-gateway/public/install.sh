@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -eu
 
-INSTALLER_PRIMARY='https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/install-linux.sh'
+INSTALLER_PRIMARY='https://nightly.bannerlordcoop.com/install-linux.sh'
 INSTALLER_MIRROR='https://raw.githubusercontent.com/Bannerlord-Coop-Team/BannerlordCoop-website/main/installer/install-linux.sh'
 
 pause_on_failure() {

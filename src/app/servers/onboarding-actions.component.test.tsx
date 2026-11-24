@@ -37,10 +37,24 @@ describe("onboarding server action authentication and replay policy", () => {
         mocks.request.mockRejectedValue(new MyServersApiError(code, "Not confirmed", false));
         expect(await submitServerOnboarding(intent, "account-a")).toMatchObject({ ok: false, retrySameRequest: true });
     });
-    it.each(["capacity_unavailable", "capacity_available", "quota_exhausted", "provider_cannot_assign", "required_approval_missing", "pilot_only", "provisioning_paused", "validated_build_unavailable"])("only releases intent for documented post-receipt-lookup rejection %s", async (code) => {
+    it.each(["capacity_unavailable", "capacity_available", "quota_exhausted", "provider_cannot_assign", "required_approval_missing", "pilot_only", "provisioning_paused"])("preserves the capacity/eligibility message and terminal policy for %s", async (code) => {
         mocks.request.mockRejectedValue(new MyServersApiError(code, "Rejected", false));
-        expect(await submitServerOnboarding(intent, "account-a")).toMatchObject({ ok: false, retrySameRequest: false });
+        expect(await submitServerOnboarding(intent, "account-a")).toEqual({
+            ok: false, retrySameRequest: false,
+            message: "No change was made by this request. Capacity or eligibility changed; refresh before choosing again.",
+        });
         expect(mocks.revalidate).toHaveBeenCalledWith("/servers");
+    });
+    it.each([
+        { name: "Nightly", request: { ...intent, releaseChannel: "nightly" }, message: "Nightly Release is temporarily unavailable; choose Public Release or try again later." },
+        { name: "Public", request: { ...intent, releaseChannel: "stable" }, message: "Public Release is temporarily unavailable; try again later." },
+        { name: "default Public", request: intent, message: "Public Release is temporarily unavailable; try again later." },
+        { name: "region request", request: { action: "request-region", region: "france", requestId: ONBOARDING_TEST_ID }, message: "Server releases are temporarily unavailable; try again later." },
+    ])("maps validated_build_unavailable to truthful $name guidance without retaining a rejected intent", async ({ request, message }) => {
+        mocks.request.mockRejectedValue(new MyServersApiError("validated_build_unavailable", "Internal upstream detail", false));
+        expect(await submitServerOnboarding(request, "account-a")).toEqual({ ok: false, retrySameRequest: false, message });
+        expect(mocks.request).toHaveBeenCalledExactlyOnceWith("current-verified-token", request);
+        expect(mocks.revalidate).toHaveBeenCalledExactlyOnceWith("/servers");
     });
     it("releases intent with a region message when the control plane rejects a key outside its catalog", async () => {
         mocks.request.mockRejectedValue(new MyServersApiError("invalid_region", "Unknown region", false));
@@ -59,6 +73,8 @@ it("localizes action guidance without changing terminal rejection or exact-retry
     localeDefinitions.en.dictionaries.servers = async () => ({ default: {
         ...servers, "action.noChange": "Localized terminal outcome", "action.unconfirmed": "Localized uncertain outcome",
         "action.accountMismatch": "Localized account mismatch", "action.invalid": "Localized invalid request",
+        "action.nightlyUnavailable": "Localized Nightly unavailable", "action.publicReleaseUnavailable": "Localized Public unavailable",
+        "action.releaseUnavailable": "Localized releases unavailable",
     } });
     try {
         expect(await submitServerOnboarding({}, "account-a")).toEqual({ ok: false, retrySameRequest: true, message: "Localized invalid request" });
@@ -66,6 +82,14 @@ it("localizes action guidance without changing terminal rejection or exact-retry
         expect(mocks.request).not.toHaveBeenCalled();
         mocks.request.mockRejectedValueOnce(new MyServersApiError("quota_exhausted", "source transport error"));
         expect(await submitServerOnboarding(intent, "account-a")).toEqual({ ok: false, retrySameRequest: false, message: "Localized terminal outcome" });
+        for (const [request, message] of [
+            [{ ...intent, releaseChannel: "nightly" }, "Localized Nightly unavailable"],
+            [intent, "Localized Public unavailable"],
+            [{ action: "request-region", region: "france", requestId: ONBOARDING_TEST_ID }, "Localized releases unavailable"],
+        ] as const) {
+            mocks.request.mockRejectedValueOnce(new MyServersApiError("validated_build_unavailable", "Internal upstream detail", false));
+            expect(await submitServerOnboarding(request, "account-a")).toEqual({ ok: false, retrySameRequest: false, message });
+        }
         mocks.request.mockRejectedValueOnce(new Error("source transport error"));
         expect(await submitServerOnboarding(intent, "account-a")).toEqual({ ok: false, retrySameRequest: true, message: "Localized uncertain outcome" });
         expect(mocks.request).toHaveBeenLastCalledWith("current-verified-token", intent);

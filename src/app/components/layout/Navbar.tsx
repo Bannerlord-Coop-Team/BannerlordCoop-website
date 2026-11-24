@@ -54,6 +54,11 @@ export async function Navbar({ viewer }: { viewer?: Promise<{ user: User | null 
                                 </Link>
                             </li>
                             <li className="flex items-center">
+                                <Link href="/hosting" className={navigationLinkClassName}>
+                                    {t("nav.hosting")}
+                                </Link>
+                            </li>
+                            <li className="flex items-center">
                                 <Link href="/cheats" className={`${navigationLinkClassName} gap-2`}>
                                     <TerminalSquare aria-hidden="true" className="size-4 shrink-0" />
                                     {t("nav.cheats")}

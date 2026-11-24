@@ -156,13 +156,13 @@ $validManifest = [pscustomobject]@{
                 fileName = 'BannerlordCoop-DedicatedServer-Win64-Base.7z'
                 bytes = 4300000000
                 sha256 = 'e' * 64
-                publicUrl = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/v1/artifacts/windows/base/v1/' + ('d' * 64) + '/' + ('e' * 64) + '/server-base.7z'
+                publicUrl = 'https://nightly.bannerlordcoop.com/v1/artifacts/windows/base/v1/' + ('d' * 64) + '/' + ('e' * 64) + '/server-base.7z'
             }
             update = [pscustomobject]@{
                 fileName = 'BannerlordCoop-DedicatedServer-Win64-Update.7z'
                 bytes = 12000000
                 sha256 = 'f' * 64
-                publicUrl = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/v1/artifacts/nightly/windows/updates/' + ('a' * 40) + '/' + ('1' * 40) + '/' + ('f' * 64) + '/server-update.7z'
+                publicUrl = 'https://nightly.bannerlordcoop.com/v1/artifacts/nightly/windows/updates/' + ('a' * 40) + '/' + ('1' * 40) + '/' + ('f' * 64) + '/server-update.7z'
             }
         }
     }
@@ -422,9 +422,9 @@ try {
     $nextRelease.incremental.base = $validManifest.server.incremental.base.PSObject.Copy()
     $nextRelease.incremental.update = $validManifest.server.incremental.update.PSObject.Copy()
     $nextRelease.incremental.base.sha256 = '8' * 64
-    $nextRelease.incremental.base.publicUrl = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/v1/artifacts/windows/base/v1/' + ('d' * 64) + '/' + ('8' * 64) + '/server-base.7z'
+    $nextRelease.incremental.base.publicUrl = 'https://nightly.bannerlordcoop.com/v1/artifacts/windows/base/v1/' + ('d' * 64) + '/' + ('8' * 64) + '/server-base.7z'
     $nextRelease.incremental.update.sha256 = '9' * 64
-    $nextRelease.incremental.update.publicUrl = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/v1/artifacts/nightly/windows/updates/' + ('a' * 40) + '/' + ('1' * 40) + '/' + ('9' * 64) + '/server-update.7z'
+    $nextRelease.incremental.update.publicUrl = 'https://nightly.bannerlordcoop.com/v1/artifacts/nightly/windows/updates/' + ('a' * 40) + '/' + ('1' * 40) + '/' + ('9' * 64) + '/server-update.7z'
     $script:DownloadedLabels = @()
     Install-Server $nextRelease $server 'unused.exe'
     if ($script:DownloadedLabels.Count -ne 1 -or $script:DownloadedLabels[0] -ne 'dedicated server update') {
@@ -445,7 +445,7 @@ try {
     $migratedRelease.incremental.baseFingerprint = '7' * 64
     $migratedRelease.incremental.compatibleBaseFingerprints = @('d' * 64)
     $migratedRelease.incremental.update.sha256 = '6' * 64
-    $migratedRelease.incremental.update.publicUrl = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/v1/artifacts/nightly/windows/updates/' + ('a' * 40) + '/' + ('1' * 40) + '/' + ('6' * 64) + '/server-update.7z'
+    $migratedRelease.incremental.update.publicUrl = 'https://nightly.bannerlordcoop.com/v1/artifacts/nightly/windows/updates/' + ('a' * 40) + '/' + ('1' * 40) + '/' + ('6' * 64) + '/server-update.7z'
     $script:DownloadedLabels = @()
     Install-Server $migratedRelease $server 'unused.exe'
     if ($script:DownloadedLabels.Count -ne 1 -or $script:DownloadedLabels[0] -ne 'dedicated server update') {
@@ -522,6 +522,30 @@ $statusPending = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 
 if ($statusPending.Action -cne 'Continue') {
     throw 'An HTTP 428 token poll did not continue waiting for Discord.'
 }
+$outage = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 503 'internal_error')
+if ($outage.Action -cne 'Retry' -or $outage.Message -notmatch 'HTTP 503' -or $outage.Message -notmatch 'error=internal_error') {
+    throw 'A 503 token poll did not retry with its status and gateway error code.'
+}
+$discordUpstream = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 502 'discord_membership_required')
+if ($discordUpstream.Action -cne 'Fail' -or $discordUpstream.Message -notmatch 'HTTP 502; error=discord_membership_required') {
+    throw 'A named Discord upstream failure retried instead of failing fast with its details.'
+}
+foreach ($forwardingCode in 'function_unreachable', 'function_response_invalid') {
+    $forwarding = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 502 $forwardingCode)
+    if ($forwarding.Action -cne 'Retry' -or $forwarding.Message -notmatch "HTTP 502; error=$forwardingCode") {
+        throw "A Worker forwarding failure ($forwardingCode) did not retry with its details."
+    }
+}
+$networkRecord = $null
+try { throw [Net.WebException]::new('The underlying connection was closed: An unexpected error occurred on a send.') } catch { $networkRecord = $_ }
+$network = Get-NightlyTokenPollDecision -ErrorRecord $networkRecord
+if ($network.Action -cne 'Retry' -or $network.Message -notmatch 'WebException: The underlying connection was closed') {
+    throw 'A token poll with no HTTP response did not retry with the network error text.'
+}
+$notFound = Get-NightlyTokenPollDecision -ErrorRecord (New-GatewayWebError 404)
+if ($notFound.Action -cne 'Fail' -or $notFound.Message -notmatch '^The Discord verification check failed\. Details: HTTP 404') {
+    throw 'An unexpected 404 token poll did not fail with its details.'
+}
 $invalid = Get-NightlyTokenPollDecision -Response ([pscustomobject]@{ token_type = 'Basic'; access_token = 'nope' })
 if ($invalid.Action -cne 'Fail' -or $invalid.Message -cne 'The nightly authorization token is invalid. Details: response=invalid; bearer=false; token_length=4') {
     throw 'A malformed success body did not keep the invalid-token message.'
@@ -539,17 +563,17 @@ if ($invalidSupport.Count -ne 2 -or $invalidSupport[0] -notmatch 'open its verif
 $supportLines = @(Get-InstallationSupportLines)
 if ($supportLines.Count -ne 2 -or
     $supportLines[0] -cne 'If a DNS tool such as GoodbyeDPI is interfering, try Cloudflare WARP or turn that tool off, then run the installer again.' -or
-    $supportLines[1] -cne 'If you need help, copy this message and ask in the Bannerlord Co-op Discord.') {
+    $supportLines[1] -cne 'If you need help, create a General Help support ticket in our Discord (https://discord.gg/5vJzfz5Zzy) and include this message.') {
     throw 'Installer failure help omitted the GoodbyeDPI or Discord guidance.'
 }
 $diagnosedSupport = @(Get-InstallationSupportLines 'GoodbyeDPI is running and is blocking nightly authorization. Turn off GoodbyeDPI, or enable Cloudflare WARP, then run the installer again.')
 if ($diagnosedSupport.Count -ne 1 -or
-    $diagnosedSupport[0] -cne 'If you need help, copy this message and ask in the Bannerlord Co-op Discord.') {
+    $diagnosedSupport[0] -cne 'If you need help, create a General Help support ticket in our Discord (https://discord.gg/5vJzfz5Zzy) and include this message.') {
     throw 'A diagnosed authorization failure still repeated the generic DNS advice.'
 }
 $unpublishedSupport = @(Get-InstallationSupportLines (Get-UnpublishedNightlyMessage))
 if ($unpublishedSupport.Count -ne 1 -or
-    $unpublishedSupport[0] -cne 'If you need help, copy this message and ask in the Bannerlord Co-op Discord.') {
+    $unpublishedSupport[0] -cne 'If you need help, create a General Help support ticket in our Discord (https://discord.gg/5vJzfz5Zzy) and include this message.') {
     throw 'An unpublished nightly still repeated the generic DNS advice.'
 }
 
@@ -568,7 +592,7 @@ if (-not (Test-NightlyPhoneQrRecommended -ProcessNames @('goodbyedpi'))) {
 if (Test-NightlyPhoneQrRecommended -ProcessNames @('chrome')) {
     throw 'An ordinary process list requested a phone verification QR.'
 }
-$qrUrl = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=AB2D-EF3H'
+$qrUrl = 'https://nightly.bannerlordcoop.com/activate?code=AB2D-EF3H'
 $qrModules = Get-QrCodeModules $qrUrl
 if ($qrModules.Length -ne 37 -or $qrModules[0].Length -ne 37) {
     throw 'The verification QR was not a version-5 matrix.'
@@ -580,7 +604,8 @@ if (($qrModules[0][0..6] -join '') -cne $finder -or
     ($qrModules[30][0..6] -join '') -cne $finder) {
     throw 'The verification QR is missing finder patterns.'
 }
-if (($qrModules[0] -join '') -cne '1111111000100010000101110011001111111') {
+# Golden row cross-checked against the qrcode npm package (version 5, level L, mask 7, byte mode).
+if (($qrModules[0] -join '') -cne '1111111001001100110010100111001111111') {
     throw 'The verification QR is not the scannable mask-7 layout.'
 }
 $qrText = Get-QrCodeText $qrUrl
@@ -657,18 +682,40 @@ if ($serverError.Code -cne 'internal_error' -or $serverError.Message -notmatch '
     throw 'A gateway internal_error was still blamed on GoodbyeDPI.'
 }
 $serverSupport = @(Get-InstallationSupportLines $serverError.Message)
-if ($serverSupport.Count -ne 1 -or $serverSupport[0] -notmatch 'Bannerlord Co-op Discord') {
+if ($serverSupport.Count -ne 1 -or $serverSupport[0] -notmatch 'General Help support ticket in our Discord') {
     throw 'A gateway internal_error still repeated the generic DNS advice.'
 }
 
 $jsonSession = ConvertTo-NightlyJsonObject (@'
-{"device_code":"ddddddddddddddddddddddddddddddddddddddddddd","user_code":"AB2D-EF3H","verification_uri":"https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=AB2D-EF3H","expires_in":600,"interval":3}
+{"device_code":"ddddddddddddddddddddddddddddddddddddddddddd","user_code":"AB2D-EF3H","verification_uri":"https://nightly.bannerlordcoop.com/activate?code=AB2D-EF3H","expires_in":600,"interval":3}
 '@)
 if (-not (Test-NightlyDeviceSessionResponse $jsonSession)) {
     throw 'A JSON string device session was not parsed before validation.'
 }
 if ((Get-NightlyDeviceSessionShape $jsonSession) -notmatch 'type=PSCustomObject device_length=43 device_valid=true user_length=9 user_valid=true uri_length=') {
     throw 'A valid session did not report its safe validation shape.'
+}
+foreach ($foreignUri in @(
+    'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=AB2D-EF3H',
+    'https://nightly.bannerlordcoop.com.attacker.invalid/activate?code=AB2D-EF3H',
+    'https://nightlyXbannerlordcoop.com/activate?code=AB2D-EF3H',
+    'http://nightly.bannerlordcoop.com/activate?code=AB2D-EF3H'
+)) {
+    $foreignSession = [pscustomobject]@{
+        device_code = 'd' * 43
+        user_code = 'AB2D-EF3H'
+        verification_uri = $foreignUri
+        expires_in = 600
+        interval = 3
+    }
+    if ((Test-NightlyDeviceSessionResponse $foreignSession) -or
+        (Get-NightlyDeviceSessionShape $foreignSession) -notmatch 'uri_valid=false') {
+        throw "A verification URI outside the gateway host was accepted: $foreignUri"
+    }
+}
+if (-not (Test-PinClientArtifactUri 'https://nightly.bannerlordcoop.com/v1/artifacts/pins/1527333818711806084/Coop.7z') -or
+    (Test-PinClientArtifactUri 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/v1/artifacts/pins/1527333818711806084/Coop.7z')) {
+    throw 'Pin artifact host validation does not follow the canonical gateway host.'
 }
 if ((Get-NightlyDeviceSessionShape ([string][char]0xFEFF + '{"device_code":"secret"}')) -notmatch 'text length=.+ start=bom') {
     throw 'A leading BOM was not identified without exposing response text.'
@@ -688,7 +735,7 @@ $code = 'I' + ('d' * 41) + 'I'
 $session = [pscustomobject]@{
     device_code = $code
     user_code = 'AB2D-EF3H'
-    verification_uri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=AB2D-EF3H'
+    verification_uri = 'https://nightly.bannerlordcoop.com/activate?code=AB2D-EF3H'
     expires_in = 600
     interval = 3
 }
@@ -724,7 +771,7 @@ function Invoke-RestMethod {
     return [pscustomobject]@{
         device_code = 's' * 42
         user_code = 'KTL7-7FEH'
-        verification_uri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=KTL7-7FEH'
+        verification_uri = 'https://nightly.bannerlordcoop.com/activate?code=KTL7-7FEH'
         expires_in = 600
         interval = 3
     }
@@ -756,7 +803,7 @@ function Invoke-RestMethod {
         return [pscustomobject]@{
             device_code = 'd' * 43
             user_code = 'AB2D-EF3H'
-            verification_uri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=AB2D-EF3H'
+            verification_uri = 'https://nightly.bannerlordcoop.com/activate?code=AB2D-EF3H'
             expires_in = 600
             interval = 0
         }
@@ -784,7 +831,7 @@ if ($script:OpenedVerificationUri -notmatch '/activate\?code=AB2D-EF3H$') {
     throw 'A GoodbyeDPI machine did not still open the Discord verification URL.'
 }
 if ($dpiQrOutput -notmatch 'mobile data' -or
-    $dpiQrOutput -notmatch [regex]::Escape('https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=AB2D-EF3H') -or
+    $dpiQrOutput -notmatch [regex]::Escape('https://nightly.bannerlordcoop.com/activate?code=AB2D-EF3H') -or
     $dpiQrOutput -notmatch [char]0x2588) {
     throw 'GoodbyeDPI did not show a phone QR for the activate URL.'
 }
@@ -796,7 +843,7 @@ function Get-NightlyDeviceSessionFromCurl {
         Response = [pscustomobject]@{
             device_code = 'c' * 43
             user_code = 'AB2D-EF3H'
-            verification_uri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=AB2D-EF3H'
+            verification_uri = 'https://nightly.bannerlordcoop.com/activate?code=AB2D-EF3H'
             expires_in = 600
             interval = 0
         }
@@ -821,7 +868,7 @@ function Invoke-RestMethod {
         return [pscustomobject]@{
             device_code = 'e' * 43
             user_code = 'Z9K4-M7PX'
-            verification_uri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/activate?code=Z9K4-M7PX'
+            verification_uri = 'https://nightly.bannerlordcoop.com/activate?code=Z9K4-M7PX'
             expires_in = 600
             interval = 0
         }
@@ -832,6 +879,49 @@ $usedMessage = $null
 try { Get-NightlyAccessToken | Out-Null } catch { $usedMessage = $_.Exception.Message }
 if ($usedMessage -notmatch 'already used') {
     throw 'An already-used token poll still surfaced as an invalid token.'
+}
+
+$script:TokenPolls = 0
+function Invoke-RestMethod {
+    param($Method, $Uri, $ContentType, $Body)
+    if ([string]$Uri -match '/v1/device/sessions$') {
+        return [pscustomobject]@{
+            device_code = 'f' * 43
+            user_code = 'Q3W8-N5TR'
+            verification_uri = 'https://nightly.bannerlordcoop.com/activate?code=Q3W8-N5TR'
+            expires_in = 600
+            interval = 0
+        }
+    }
+    $script:TokenPolls += 1
+    if ($script:TokenPolls -eq 1) { throw (New-GatewayWebError 503 'internal_error').Exception }
+    return [pscustomobject]@{ token_type = 'Bearer'; access_token = 'r' * 43; expires_in = 3600 }
+}
+$retryOutput = (& { $script:RetriedToken = Get-NightlyAccessToken } 6>&1 | Out-String)
+if ($script:TokenPolls -ne 2 -or $script:RetriedToken -cne ('r' * 43)) {
+    throw 'A transient 503 token poll did not retry until Discord verification succeeded.'
+}
+if ($retryOutput -notmatch 'Verification check failed, retrying\. Details: HTTP 503') {
+    throw 'A retried token poll did not print its failure details.'
+}
+
+function Invoke-RestMethod {
+    param($Method, $Uri, $ContentType, $Body)
+    if ([string]$Uri -match '/v1/device/sessions$') {
+        return [pscustomobject]@{
+            device_code = 'g' * 43
+            user_code = 'H6J2-K9LM'
+            verification_uri = 'https://nightly.bannerlordcoop.com/activate?code=H6J2-K9LM'
+            expires_in = 600
+            interval = 0
+        }
+    }
+    throw (New-GatewayWebError 404).Exception
+}
+$unexpectedMessage = $null
+try { Get-NightlyAccessToken | Out-Null } catch { $unexpectedMessage = $_.Exception.Message }
+if ($unexpectedMessage -notmatch '^The Discord verification check failed\. Details: HTTP 404' -or $unexpectedMessage -match 'ScriptHalted') {
+    throw 'An unexpected token poll failure was not reported with its details.'
 }
 
 $script:NightlyObservedProcessNames = @('goodbyedpi')
@@ -872,7 +962,7 @@ try {
     }
     if ($script:SevenZipDownloads.Count -ne 3 -or
         $script:SevenZipDownloads[0] -notmatch '/7zr\.exe$' -or
-        $script:SevenZipDownloads[0] -notmatch 'bannerlordcoop-nightly-gateway' -or
+        $script:SevenZipDownloads[0] -cne 'https://nightly.bannerlordcoop.com/7zr.exe' -or
         $script:SevenZipDownloads[1] -cne $script:SevenZipDownloads[0] -or
         $script:SevenZipDownloads[2] -cne 'https://www.7-zip.org/a/7zr.exe') {
         throw 'A dropped 7-zip.org-style connection did not retry the gateway and then fall back to the official extractor.'
@@ -937,16 +1027,26 @@ $pinAccepted = Get-CreateBuildPinRedeemDecision -Response ([pscustomobject]@{
 if ($pinAccepted.Action -cne 'Accept' -or $pinAccepted.Token -cne ('p' * 43)) {
     throw 'A valid create-build pin session was not accepted.'
 }
+function Invoke-RestMethod {
+    param($Method, $Uri, $ContentType, $Body)
+    throw (New-GatewayWebError 503 'internal_error').Exception
+}
+$pinOutageMessage = $null
+try { Get-CreateBuildPinAccessToken -Pin ('P' * 43) | Out-Null } catch { $pinOutageMessage = $_.Exception.Message }
+if ($pinOutageMessage -notmatch '^The create-build installer link could not be redeemed\. Details: HTTP 503' -or
+    $pinOutageMessage -match 'ScriptHalted') {
+    throw 'An unexpected create-build pin failure was not reported with its details.'
+}
 $pinUsed = Get-CreateBuildPinRedeemDecision -Response ([pscustomobject]@{ error = 'already_used' })
-if ($pinUsed.Action -cne 'Fail' -or $pinUsed.Message -notmatch 'already used') {
-    throw 'An already-used create-build pin did not tell the user to ask staff for a new link.'
+if ($pinUsed.Action -cne 'Fail' -or $pinUsed.Message -notmatch 'already used' -or $pinUsed.Message -notmatch 'new /create-build link') {
+    throw 'An already-used create-build pin did not explain that the user needs a new link.'
 }
 $pinExpired = Get-CreateBuildPinRedeemDecision -ErrorRecord (New-GatewayWebError 400 'expired_token')
 if ($pinExpired.Action -cne 'Fail' -or $pinExpired.Message -notmatch 'has expired') {
     throw 'An expired create-build pin did not produce the expected guidance.'
 }
 
-$pinClientUri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/v1/artifacts/pins/1527333818711806084/Coop.7z'
+$pinClientUri = 'https://nightly.bannerlordcoop.com/v1/artifacts/pins/1527333818711806084/Coop.7z'
 $pinServerUri = 'https://pub-bf6bfe4b880e4d1b83f4b09b10419f78.r2.dev/manual/1527333818711806084/BannerlordCoop-DedicatedServer-Win64-client-1234567-server-abcdef1.7z'
 if (-not (Test-PinClientArtifactUri $pinClientUri)) {
     throw 'A valid pinned client URL was rejected.'

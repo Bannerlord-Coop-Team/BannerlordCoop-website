@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "contract": "managed-hosting.web-admin.slot-storage",
+  "requestId": "11111111-1111-4111-8111-111111111111",
+  "cases": [
+    {
+      "name": "normal",
+      "report": {
+        "usedBytes": 2254857830,
+        "freeBytes": 10630044058,
+        "quotaBytes": 12884901888
+      },
+      "storage": {
+        "usedBytes": 2254857830,
+        "quotaBytes": 12884901888
+      },
+      "text": "2.1 GiB / 12.0 GiB",
+      "tone": "text-foreground-muted"
+    },
+    {
+      "name": "warning",
+      "report": {
+        "usedBytes": 8589934592,
+        "freeBytes": 2147483648,
+        "quotaBytes": 10737418240
+      },
+      "storage": {
+        "usedBytes": 8589934592,
+        "quotaBytes": 10737418240
+      },
+      "text": "8.0 GiB / 10.0 GiB",
+      "tone": "text-amber-300"
+    },
+    {
+      "name": "over-quota",
+      "report": {
+        "usedBytes": 11811160064,
+        "freeBytes": 0,
+        "quotaBytes": 10737418240
+      },
+      "storage": {
+        "usedBytes": 11811160064,
+        "quotaBytes": 10737418240
+      },
+      "text": "11.0 GiB / 10.0 GiB",
+      "tone": "text-red-200"
+    },
+    {
+      "name": "zero",
+      "report": {
+        "usedBytes": 0,
+        "freeBytes": 0,
+        "quotaBytes": 0
+      },
+      "storage": {
+        "usedBytes": 0,
+        "quotaBytes": 0
+      },
+      "text": "0 KiB / 0 KiB",
+      "tone": "text-red-200"
+    },
+    {
+      "name": "unknown",
+      "report": null,
+      "storage": null,
+      "text": "Unknown",
+      "tone": "text-foreground-muted"
+    }
+  ],
+  "invalidStorage": [
+    {
+      "usedBytes": -1,
+      "quotaBytes": 12
+    },
+    {
+      "usedBytes": 1.5,
+      "quotaBytes": 12
+    },
+    {
+      "usedBytes": 1,
+      "quotaBytes": -1
+    },
+    {
+      "usedBytes": 1,
+      "quotaBytes": "12"
+    },
+    {
+      "usedBytes": 9007199254740992,
+      "quotaBytes": 12
+    },
+    {
+      "usedBytes": 1
+    },
+    {
+      "usedBytes": 1,
+      "quotaBytes": 12,
+      "extra": true
+    }
+  ],
+  "usedOnly": {
+    "usedBytes": 2254857830,
+    "quotaBytes": null
+  }
+}

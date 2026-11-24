@@ -21,7 +21,7 @@ function server(serverId: string, displayName: string, friendlyRegion: string): 
         serverId, displayName, friendlyRegion, ownerDiscordUserId: "123456789012345678", ownerAccountId: null,
         provider: "ovhcloud-vps", providerResourceId: null, providerLocationId: null, desiredState: "running",
         observedVmState: "running", observedGameState: "running", operationState: "running", releaseChannel: "stable",
-        installedBuildId: null, desiredBuildId: null, pinnedBuildId: null, maintenanceSlot: "sunday-0400", activeSaveId: null,
+        installedBuildId: null, desiredBuildId: null, maintenanceSlot: "sunday-0400", activeSaveId: null,
         connectionHostname: null, connectionIp: null, gamePorts: [], deletionDueAt: null, lastHealthCheckAt: null,
         lastErrorCode: null, createdAt: "2026-10-01T00:00:00.000Z", updatedAt: "2026-10-16T12:00:00.000Z",
     };

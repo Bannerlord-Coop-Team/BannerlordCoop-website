@@ -53,7 +53,8 @@ test("wrong campaign/tier, pending, declined, former, missing, future and incomp
         ["UUID campaign", b => { b.included[1].id = memberId; }, "unknown"],
         ["UUID tier", b => { b.included[2].id = memberId; }, "unknown"],
         ["wrong campaign", b => { b.included[0].relationships!.campaign!.data.id = "11"; }, "nonqualifying"],
-        ["wrong tier", b => { b.included[0].relationships!.currently_entitled_tiers!.data[0].id = "21"; b.included[2].id = "21"; }, "nonqualifying"],
+        ["unlisted $20 tier", b => { b.included[0].relationships!.currently_entitled_tiers!.data[0].id = "21"; b.included[2].id = "21"; }, "qualifying"],
+        ["cheap tier", b => { b.included[2].attributes.amount_cents = 1999; }, "nonqualifying"],
         ["declined", b => { b.included[0].attributes.last_charge_status = "Declined"; }, "nonqualifying"],
         ["pending", b => { b.included[0].attributes.last_charge_status = "Pending"; }, "review_required"],
         ["former without paid-through", b => { b.included[0].attributes.patron_status = "former_patron"; }, "review_required"],
@@ -250,20 +251,23 @@ test("$50 allocation policy checks provider amounts and versions for OAuth and w
     for (const bad of [{ ...fifty, minimumCents: 2000 }, { ...policy, minimumCents: 5000 }]) assert.throws(() => parsePolicy(JSON.stringify(bad)));
     const body = identity();
     body.included[2].attributes.amount_cents = 5000;
-    for (const [amount, expected] of [[4999, "nonqualifying"], [5000, "qualifying"], [10000, "qualifying"]] as const) {
-        body.included[0].attributes.currently_entitled_amount_cents = amount;
+    // The tier's list price decides; the entitled (possibly discounted) amount does not.
+    for (const [price, expected] of [[4999, "nonqualifying"], [5000, "qualifying"], [10000, "qualifying"]] as const) {
+        body.included[2].attributes.amount_cents = price;
+        body.included[0].attributes.currently_entitled_amount_cents = 1000;
         const result = await verifyPatreonMembership(body, fifty, now);
         assert.equal(result.evidence.verification, expected);
         assert.equal(result.evidence.policyVersion, fifty.policyVersion);
     }
-    body.included[2].attributes.amount_cents = 2000;
-    assert.equal((await verifyPatreonMembership(body, fifty, now)).evidence.verification, "review_required");
 });
 
 
-test("a former patron holding only a free tier has confirmed paid-access loss", async () => {
-    const freeTier = { type: "tier", id: "21", attributes: { amount_cents: 0 }, relationships: { campaign: { data: { type: "campaign", id: "10" } } } };
-    // Builds one creator-read member holding the given tiers, after their last paid charge.
+test("a complete creator read without an entitled tier listed at $20+ confirms paid-access loss", async () => {
+    const campaign = { data: { type: "campaign", id: "10" } };
+    const freeTier = { type: "tier", id: "21", attributes: { amount_cents: 0 }, relationships: { campaign } };
+    const lowTier = { type: "tier", id: "22", attributes: { amount_cents: 1000 }, relationships: { campaign } };
+    const unlistedTier = { type: "tier", id: "25", attributes: { amount_cents: 2500 }, relationships: { campaign } };
+    // Builds one creator-read member holding the given tiers with the given charge outcome.
     const member = (patronStatus: string, entitledCents: number, tierIds: string[], lastChargeStatus = "Paid") => {
         const body = identity();
         const attributes = body.included[0].attributes as Record<string, unknown>;
@@ -273,40 +277,42 @@ test("a former patron holding only a free tier has confirmed paid-access loss", 
         const tiers = body.included[0].relationships?.currently_entitled_tiers;
         assert.ok(tiers);
         tiers.data = tierIds.map((id) => ({ type: "tier", id }));
-        return { data: body.included[0], included: [...body.included.slice(1), freeTier] };
+        return { data: body.included[0], included: [...body.included.slice(1), freeTier, lowTier, unlistedTier] };
     };
     const read = (body: ReturnType<typeof member>) => verifyPatreonAllocation(body, policy, now);
 
-    const ended = await read(member("former_patron", 0, ["21"]));
-    assert.equal(ended.verification, "nonqualifying");
-    assert.equal(ended.paidAccessEndedAt, now);
-    assert.deepEqual(ended.tierIds, []); // The reader and SQL gate both require no remaining tiers.
-    assert.equal(ended.paidThroughAt, null);
+    // Declined, refunded or lapsed members, and a $10 paid tier, all start grace; $0 tiers are dropped.
+    for (const [status, charge, cents, tiers, kept] of [["declined_patron", "Declined", 0, [], []], ["former_patron", "Paid", 0, ["21"], []],
+        ["former_patron", "Refunded", 0, ["21"], []], ["former_patron", "Declined", 0, [], []], ["former_patron", "Paid", 500, ["21"], []],
+        ["active_patron", "Paid", 1000, ["21", "22"], ["22"]]] as const) {
+        const ended = await read(member(status, cents, [...tiers], charge));
+        assert.deepEqual([ended.verification, ended.paidAccessEndedAt, ended.tierIds, ended.paidThroughAt], ["nonqualifying", now, kept, null], `${status} ${charge}`);
+    }
+    // The campaign allows no custom pledges, so an active Paid patron with no tier at all is loss,
+    // even with an entitled amount; a mass glitch of empty tiers is caught by the mass-loss breaker.
+    const noTier = await read(member("active_patron", 2000, []));
+    assert.deepEqual([noTier.verification, noTier.paidAccessEndedAt, noTier.tierIds], ["nonqualifying", now, []]);
 
-    // A paid tier or amount still remaining is a cancellation that retains benefits, never loss.
-    const retained = await read(member("former_patron", 2000, ["20", "21"]));
-    assert.equal(retained.paidAccessEndedAt, undefined);
-    assert.equal(retained.verification, "review_required");
-    assert.deepEqual(retained.tierIds, ["20", "21"]);
-    const amountRemains = await read(member("former_patron", 500, ["21"]));
-    assert.equal(amountRemains.paidAccessEndedAt, undefined);
-    assert.deepEqual(amountRemains.tierIds, ["21"]);
-
-    // Only an explicit former patron with a paid charge history is confirmed.
-    for (const [status, charge] of [["active_patron", "Paid"], ["declined_patron", "Paid"], ["former_patron", "Refunded"], ["former_patron", "Declined"], ["former_patron", "Fraud"]] as const) {
-        const other = await read(member(status, 0, ["21"], charge));
-        assert.equal(other.paidAccessEndedAt, undefined);
-        assert.deepEqual(other.tierIds, ["21"]);
+    // Any tier listed at $20+ qualifies: the listed one, an unlisted $25 tier, and a discounted $20 pledge.
+    for (const [cents, tiers] of [[2000, ["20"]], [2500, ["25"]], [1500, ["20"]], [2000, ["20", "21"]]] as const) {
+        const qualifying = await read(member("active_patron", cents, [...tiers]));
+        assert.deepEqual([qualifying.verification, qualifying.paidAccessEndedAt], ["qualifying", undefined], `${tiers} at ${cents}`);
+    }
+    // A still-entitled $20+ tier or a charge in flight is never loss.
+    for (const [status, cents, tiers, charge] of [["former_patron", 2000, ["20", "21"], "Paid"], ["declined_patron", 2000, ["20"], "Declined"],
+        ["active_patron", 1000, ["22"], "Pending"], ["declined_patron", 0, [], "Pending"], ["former_patron", 0, [], "Pending"]] as const) {
+        assert.equal((await read(member(status, cents, [...tiers], charge))).paidAccessEndedAt, undefined, `${status} ${charge}`);
     }
 
     // OAuth identity reads never confirm loss, even for the same member.
-    const oauth = member("former_patron", 0, ["21"]);
-    const linked = identity();
-    linked.included[0] = oauth.data;
-    linked.included.push(freeTier as never);
-    const identityRead = await verifyPatreonMembership(linked, policy, now);
-    assert.equal(identityRead.evidence.paidAccessEndedAt, undefined);
-    assert.deepEqual(identityRead.evidence.tierIds, ["21"]);
+    for (const oauth of [member("former_patron", 0, ["21"]), member("declined_patron", 0, [], "Declined"), member("active_patron", 1000, ["22"])]) {
+        const linked = identity();
+        linked.included[0] = oauth.data;
+        linked.included.push(freeTier as never, lowTier as never, unlistedTier as never);
+        const identityRead = await verifyPatreonMembership(linked, policy, now);
+        assert.equal(identityRead.evidence.paidAccessEndedAt, undefined);
+        assert.notEqual(identityRead.evidence.verification, "qualifying");
+    }
 });
 
 test("confirmed former membership with no remaining benefits emits loss, never cancellation or ambiguity alone", async () => {
@@ -325,11 +331,66 @@ test("confirmed former membership with no remaining benefits emits loss, never c
     assert.equal((await verifyPatreonMembership(body, fifty, now)).evidence.paidAccessEndedAt, undefined);
     assert.deepEqual(parseSnapshot({ version: 1, accountId, discordUserId: "123456789012345678",
         patreonUserId: "1", linkGeneration: "1", revision: "1", linkState: "linked", ...ended }).paidAccessEndedAt, now);
-    for (const status of ["active_patron", "declined_patron", "unsupported"]) {
-        body.included[0].attributes.patron_status = status;
-        assert.equal((await read()).paidAccessEndedAt, undefined);
+    // A free member who never paid (null status), or an unknown status, is review, never loss.
+    for (const status of ["unsupported", null]) {
+        (body.included[0].attributes as Record<string, unknown>).patron_status = status;
+        assert.deepEqual([(await read()).verification, (await read()).paidAccessEndedAt], ["review_required", undefined], String(status));
     }
     body.included[0].attributes.patron_status = "former_patron";
     const incomplete = { data: body.included[0], included: body.included.slice(1), links: { next: "https://untrusted.invalid" } };
     assert.equal((await verifyPatreonAllocation(incomplete, fifty, now)).paidAccessEndedAt, undefined);
+    const partial = { ...body, links: { next: "https://untrusted.invalid" } };
+    const unknown = (await verifyPatreonMembership(partial, fifty, now, true)).evidence;
+    assert.deepEqual([unknown.verification, unknown.paidAccessEndedAt], ["unknown", undefined]);
+});
+
+test("CP version 2 snapshots and version 3 claims are strict per provider and fail closed on mismatched responses", async () => {
+    const claimId = "bbbbbbbb-1111-4111-8111-111111111111";
+    const eventId = "cccccccc-1111-4111-8111-111111111111";
+    const boosty = { version: 2, provider: "boosty", accountId, discordUserId: null, providerUserId: null, linkGeneration: "0", revision: "0", linkState: "unlinked",
+        verification: "unverified", programId: null, memberId: null, tierIds: [], verifiedAt: null, paidThroughAt: null, policyVersion: "boosty-paid-v1", evidenceSha256: null };
+    const patreon = { ...boosty, provider: "patreon", discordUserId: "123456789012345678", providerUserId: "1", linkGeneration: "3", revision: "9", linkState: "linked",
+        verification: "qualifying", programId: "10", memberId, tierIds: ["20"], verifiedAt: now, policyVersion: POLICY_VERSION, evidenceSha256: "e".repeat(64) };
+    let reply: unknown = boosty; const bodies: unknown[] = [];
+    const handler = createControlPlaneMembershipHandler({ supabaseUrl: "https://wfvqnijwuyqjibhlcrhz.supabase.co", serviceRoleKey: "synthetic-service-key", syncToken: "a".repeat(64),
+        fetch: async (url, init) => {
+            const path = new URL(String(url)).pathname;
+            if (path.startsWith("/auth/")) return Response.json({ id: accountId, identities: [] });
+            assert.ok(["/rest/v1/rpc/membership_funding_fence", "/rest/v1/rpc/membership_funding_claim"].includes(path), path);
+            bodies.push(JSON.parse(String(init?.body)));
+            return Response.json(reply);
+        } });
+    // Sends one authenticated CP request and returns its status and JSON body.
+    const request = async (body: unknown) => {
+        const response = await handler(new Request("https://edge-runtime.supabase.com/control-plane-membership-v1",
+            { method: "POST", headers: { Authorization: `Bearer ${"a".repeat(64)}`, "Content-Type": "application/json" }, body: JSON.stringify(body) }));
+        return { status: response.status, body: await response.json() };
+    };
+    // Requests one provider's version 2 snapshot for the fixture account.
+    const snapshot = (provider: string) => request({ version: 2, operation: "snapshot", accountId, provider });
+    assert.deepEqual(await snapshot("boosty"), { status: 200, body: boosty });
+    assert.deepEqual(bodies, [{ p_account_id: accountId, p_provider: "boosty", p_discord_user_id: null, p_deleted: false }]);
+    reply = patreon; assert.deepEqual(await snapshot("patreon"), { status: 200, body: patreon });
+    for (const paidAccessEndedAt of [null, now]) { reply = { ...patreon, paidAccessEndedAt }; assert.equal((await snapshot("patreon")).status, 200); }
+    // Each response must name the requested account and provider and satisfy that provider's grammar; per-field
+    // identifier grammar is pinned by the shared provider contract test.
+    for (const [provider, bad] of [
+        ["boosty", patreon], ["patreon", boosty], ["boosty", { ...boosty, accountId: "dddddddd-1111-4111-8111-111111111111" }], ["boosty", { ...boosty, version: 1 }],
+        ["boosty", { ...boosty, memberId }], ["boosty", { ...boosty, policyVersion: POLICY_VERSION }], ["patreon", { ...patreon, policyVersion: "boosty-paid-v1" }],
+        ["patreon", { ...patreon, memberId: null, tierIds: ["20", "20"] }], ["boosty", { ...boosty, extra: true }], ["patreon", { ...patreon, patreonUserId: "1" }],
+        ["boosty", { ...boosty, linkGeneration: 0 }], ["boosty", { ...boosty, paidAccessEndedAt: "yesterday" }], ["patreon", { ...patreon, campaignId: "10", programId: undefined }],
+    ] as const) { reply = bad; assert.equal((await snapshot(provider)).status, 503, JSON.stringify(bad)); }
+    reply = { ...boosty, programId: "coop-team_1", providerUserId: "12345678901234567890", tierIds: ["7"], linkState: "linked", verification: "qualifying" };
+    assert.equal((await snapshot("boosty")).status, 200);
+
+    const page = { version: 3, claimId, leaseExpiresAt: "2026-09-07T12:01:00.000Z", events: [{ eventId, accountId, provider: "boosty" }, { eventId: claimId, accountId, provider: "patreon" }] };
+    reply = page; bodies.length = 0;
+    assert.deepEqual(await request({ version: 3, operation: "claim", claimId, limit: 2 }), { status: 200, body: page });
+    assert.deepEqual(bodies, [{ p_claim_id: claimId, p_limit: 2 }]);
+    for (const bad of [{ ...page, version: 2 }, { ...page, claimId: eventId }, { ...page, events: [{ eventId, accountId }] }, { ...page, events: [{ eventId, accountId, provider: "kofi" }] },
+        { ...page, events: [...page.events, { eventId, accountId, provider: "patreon" }] }, { ...page, leaseExpiresAt: "2026-09-07T12:01:00Z" }]) {
+        reply = bad; assert.equal((await request({ version: 3, operation: "claim", claimId, limit: 2 })).status, 503, JSON.stringify(bad));
+    }
+    // Typed contention passes through so the store retries exactly as for version 2.
+    reply = { version: 2, retry: true }; assert.equal((await request({ version: 3, operation: "claim", claimId, limit: 2 })).status, 503);
 });

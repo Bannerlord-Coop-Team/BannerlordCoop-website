@@ -40,7 +40,7 @@ beforeEach(() => {
 it("revokes the listed manager at the freshly read server generation and refreshes the pages", async () => {
     const result = await removeServerManager(form({ serverId, managerAccountId: managerAccountId.toUpperCase(), expectedUpdatedAt: "2020-01-01T00:00:00.000Z" }));
     expect(result).toEqual({ ok: true, message: "Manager access removed. The account can no longer manage this server." });
-    expect(mocks.summary).toHaveBeenCalledExactlyOnceWith("verified-token", serverId);
+    expect(mocks.summary).toHaveBeenCalledExactlyOnceWith("verified-token", serverId, undefined, { includeRuntimeInsight: false });
     expect(mocks.set).toHaveBeenCalledExactlyOnceWith("verified-token",
         { serverId, managerAccountId, enabled: false, expectedUpdatedAt: current.updatedAt }, expect.any(String));
     expect(mocks.revalidate).toHaveBeenCalledWith(`/servers/${serverId}`);

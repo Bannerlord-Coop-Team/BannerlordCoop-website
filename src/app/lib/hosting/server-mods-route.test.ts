@@ -153,7 +153,7 @@ test("refuses cross-site, unknown-route and malformed requests without forwardin
         [json(...jsonRequest("list", { serverId: "44444444-4444-4444-8444-444444444444" })), 400],
         [json(...jsonRequest("list", { ...list, actor: "admin" })), 400],
         [json(...jsonRequest("list", list, { "content-type": "text/plain" })), 415],
-        [chunk(...chunkRequest(new Uint8Array([1]), `uploadId=${UPLOAD_ID}&index=13`)), 400],
+        [chunk(...chunkRequest(new Uint8Array([1]), `uploadId=${UPLOAD_ID}&index=358`)), 400],
         [chunk(...chunkRequest(new Uint8Array([1]), `uploadId=${UPLOAD_ID}&index=0&extra=1`)), 400],
         [chunk(...chunkRequest(new Uint8Array([1]), undefined, { "x-chunk-sha256": "short" })), 400],
         [chunk(...chunkRequest(new Uint8Array([1]), undefined, { "content-type": "application/json" })), 415],

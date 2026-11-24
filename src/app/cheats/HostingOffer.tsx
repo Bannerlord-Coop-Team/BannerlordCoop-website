@@ -1,16 +1,10 @@
 "use client";
 
 import { cheatsLabelClass } from "@/app/cheats/locale";
-import { PATREON_HOSTING_CHECKOUT_URL } from "@/app/lib/hosting/patreon-checkout";
+import { HOSTING_OFFER_PRICE_USD, HOSTING_OFFER_TIER, PATREON_HOSTING_CHECKOUT_URL } from "@/app/lib/hosting/patreon-checkout";
 import { useTranslations } from "@/app/lib/localization/client";
 import { ArrowRight, Check, X } from "lucide-react";
 import Image from "next/image";
-
-/** Patreon tier name, shown verbatim in every locale like other product names. */
-export const HOSTING_OFFER_TIER = "Veteran";
-
-/** Monthly tier price in whole US dollars; the campaign bills in USD. */
-export const HOSTING_OFFER_PRICE_USD = 20;
 
 const features = ["online", "backups", "updates", "support"] as const;
 

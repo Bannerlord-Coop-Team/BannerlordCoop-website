@@ -1,4 +1,5 @@
 {
+  "support.discord": "our Discord",
   "metadata.title": "Account | Bannerlord Co-op",
   "heading": "Account",
   "defaultName": "Your account",
@@ -7,7 +8,7 @@
   "error.rateLimited": "Too many account changes or synchronization is still catching up. Wait for updated status before trying again. Authorization expires within ten minutes. Unlink and existing server management remain available.",
   "error.retry": "The account is busy. Check the updated connection status before trying again. A new authorization replaces unfinished attempts.",
   "error.lastIdentity": "Discord is your only sign-in method. Connect another sign-in method before disconnecting it.",
-  "error.discordDisconnect": "Discord could not be disconnected. Status updates automatically; try again once it is available. If the problem continues, contact support.",
+  "error.discordDisconnect": "Discord could not be disconnected. Status updates automatically; try again once it is available. If the problem continues, create a General Help support ticket in {supportLink}.",
   "error.patreonDisconnect": "Patreon could not be disconnected. Status updates automatically; wait for the current status before trying again.",
   "error.discordRepair": "Discord linking could not be completed. Check your current connection below before trying again. Your session may have changed, the request expired, or Discord may belong to another account. We never substitute sign-in for linking.",
   "error.patreonAuthorization": "Patreon authorization was cancelled or could not be completed. Check your current connection below, then connect or verify again if needed. A Patreon account can belong to only one website account.",
@@ -25,7 +26,7 @@
   "membership.verified": "Membership verified.",
   "membership.nonqualifying": "{installer} and other benefits.",
   "membership.nightlyInstaller": "Patreon supporters have access to the nightly installer (here's how to use it)",
-  "membership.reviewRequired": "Your membership needs review. Contact support before trying again.",
+  "membership.reviewRequired": "Your membership needs review. Please create a General Help support ticket in {supportLink} before trying again.",
   "membership.verifyRequired": "Verify your membership before creating a new server.",
   "membership.syncPending": "Your server allowance is being updated. This usually takes a few seconds; refreshing automatically.",
   "membership.syncUnavailable": "Your server allowance could not be checked.",
@@ -44,5 +45,9 @@
   "disconnect.confirm": "Confirm disconnect {provider}",
   "disconnect.cancel": "Cancel",
   "loading.label": "Loading account",
-  "loading.status": "Loading account…"
+  "loading.status": "Loading account…",
+  "boosty.linked": "Your Boosty subscription is linked through your account email.",
+  "boosty.notFound": "No Boosty subscription uses this account's email. To link one, subscribe on Boosty with the same email.",
+  "boosty.nonqualifying": "Your Boosty subscription does not include a qualifying level.",
+  "boosty.checking": "Your Boosty membership will be checked shortly."
 }

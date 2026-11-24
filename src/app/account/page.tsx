@@ -1,3 +1,4 @@
+import { discordSupportSlots } from "@/app/components/ui/DiscordSupportLink";
 import { AccountStatusSync } from "@/app/account/AccountStatusSync";
 import { DisconnectAccount } from "@/app/account/DisconnectAccount";
 import { linkDiscordAccount, linkPatreonAccount, disconnectDiscordAccount, disconnectPatreonAccount } from "@/app/account/actions";
@@ -9,12 +10,16 @@ import { getSupabaseServerClient } from "@/app/lib/supabase/server";
 import { LoadingButton } from "@/app/components/ui/LoadingButton";
 import type { AccountStatus } from "@/app/lib/hosting/membership-onboarding";
 import { getWebsiteAccountStatus } from "@/app/lib/hosting/website-account-status";
+import { boostyStatusEnabled, readBoostyStatus } from "@/app/lib/hosting/boosty-status";
+import { BoostyConnection } from "@/app/account/BoostyConnection";
+import type { BoostyStatus } from "../../../supabase/functions/_shared/boosty-account";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { LocalizationProvider } from "@/app/lib/localization/client";
 import { getLocale, getMessages, getTranslations } from "@/app/lib/localization/server";
 import type { Translator } from "@/app/lib/localization/types";
+import { NIGHTLY_INSTALLER_GUIDE_URL } from "@/app/lib/nightly/links";
 
 /** Resolves the account title from the explicitly selected request locale. */
 export async function generateMetadata(): Promise<Metadata> {
@@ -32,10 +37,13 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
     const messages = await getMessages(["account"], locale);
     const params = await searchParams;
     let status: AccountStatus | null = null;
+    let boosty: BoostyStatus | null = null;
     try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session && session.user.id === user.id) {
-            status = await getWebsiteAccountStatus(user.id, session.access_token);
+            // An unread or unreadable Boosty status hides its section rather than guessing it.
+            [status, boosty] = await Promise.all([getWebsiteAccountStatus(user.id, session.access_token),
+                boostyStatusEnabled() ? readBoostyStatus(supabase, session.access_token).catch(() => null) : null]);
         }
     } catch { /* Query parameters never establish current link state. */ }
 
@@ -62,7 +70,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
         {(params.patreon === "rate_limited" || params.discord === "rate_limited") && <p role="alert" className="mt-4">{t("error.rateLimited")}</p>}
         {[params.patreon, params.discord].includes("retry") && <p role="alert" className="mt-4">{t("error.retry")}</p>}
         {params.discord === "last_identity" && <p role="alert" className="mt-4 text-sm">{t("error.lastIdentity")}</p>}
-        {params.discord === "disconnect_error" && <p role="alert" className="mt-4 text-sm">{t("error.discordDisconnect")}</p>}
+        {params.discord === "disconnect_error" && <p role="alert" className="mt-4 text-sm">{rich("error.discordDisconnect", discordSupportSlots(t))}</p>}
         {params.patreon === "disconnect_error" && <p role="alert" className="mt-4 text-sm">{t("error.patreonDisconnect")}</p>}
         {params.discord === "repair" && <p role="alert" className="mt-4">{t("error.discordRepair")}</p>}
         {["error", "confirm_error", "cancelled"].includes(params.patreon ?? "") && <p role="alert" className="mt-4">{t("error.patreonAuthorization")}</p>}
@@ -90,8 +98,8 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                     <p className="mt-3 text-sm leading-6 text-foreground-muted">{status?.membership.linked ? t("patreon.linked") : t("patreon.benefits")}</p>
                     {status?.membership.linked && <div className="mt-3 space-y-2 text-sm leading-6 text-foreground-muted">
                         <p role="status">{status.membership.verification === "qualifying" && status.membership.validUntil && Date.parse(status.membership.validUntil) > checkedAt ? t("membership.verified") : status.membership.verification === "nonqualifying" ? rich("membership.nonqualifying", {
-                            installer: <a href="https://discord.com/channels/709516043332354119/1058155634702434355/1539466223916421201" target="_blank" rel="noopener noreferrer" className="text-gold underline hover:text-gold/85">{t("membership.nightlyInstaller")}</a>,
-                        }) : status.membership.verification === "review_required" ? t("membership.reviewRequired") : t("membership.verifyRequired")}</p>
+                            installer: <a href={NIGHTLY_INSTALLER_GUIDE_URL} target="_blank" rel="noopener noreferrer" className="text-gold underline hover:text-gold/85">{t("membership.nightlyInstaller")}</a>,
+                        }) : status.membership.verification === "review_required" ? rich("membership.reviewRequired", discordSupportSlots(t)) : t("membership.verifyRequired")}</p>
                         {status.membership.sync === "pending" && <p role="status">{t("membership.syncPending")}</p>}
                         {status.membership.sync === "unavailable" && <p role="status">{t("membership.syncUnavailable")}</p>}
                         <p>{t("membership.expiry")}</p>
@@ -116,6 +124,7 @@ export default async function AccountPage({ searchParams }: { searchParams: Prom
                     )}
                     {status?.membership.linked && <DisconnectAccount provider="Patreon" action={disconnectPatreonAccount.bind(null, user.id)} />}
                 </section>
+                {boosty?.configured && <BoostyConnection status={boosty} t={t} />}
             </div>
         </section>
         <section className="mt-8 rounded-sm border border-white/10 bg-surface p-5 sm:p-6" aria-labelledby="servers-heading">

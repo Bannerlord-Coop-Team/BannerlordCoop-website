@@ -1,6 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { parseArgs } from "node:util";
-import { classifyLapseServers, lapseReportText } from "../supabase/functions/_shared/patreon-lapse-alert.ts";
+import { classifyLapseServers, lapseReportDiagnosticText } from "../supabase/functions/_shared/patreon-lapse-alert.ts";
 import { parseLapseInventory } from "../supabase/functions/_shared/patreon-lapse-inventory.ts";
 
 // Offline dry run only. The input is a captured/sanitized inventory plus the qualifying IDs from that same read.
@@ -15,6 +15,6 @@ async function main() {
         throw new Error("Invalid dry-run provenance envelope");
     }
     const report = classifyLapseServers(parseLapseInventory(value.inventory), new Set(value.qualifyingPatreonUserIds));
-    process.stdout.write(`DRY RUN — no network, mail or lifecycle writes\n${lapseReportText(report)}\n`);
+    process.stdout.write(`DRY RUN — no network, mail or lifecycle writes\n${lapseReportDiagnosticText(report)}\n`);
 }
 main().catch(() => { process.stderr.write("Lapse report dry run failed; check the input path and inventory shape\n"); process.exitCode = 1; });

@@ -20,8 +20,10 @@ left by a prior owner never follows a transfer. Named exceptions show their real
 existing grace until an administrator makes a separate, audited exception decision.
 
 Messages use server/account prefixes as labels and full UUIDs only in admin links.
-They omit owner emails, server names and Patreon IDs. Grant-note addresses, UUIDs, Discord IDs, control characters
-and URLs are redacted before formatting. Grant reasons remain operator notes;
+The private operator email includes the account's email beside its account link,
+or `(no email)` when it is unavailable. Both text and HTML include email addresses
+in grant reasons. Server names and Patreon IDs stay out; grant-note UUIDs, Discord
+IDs, control characters and URLs retain their sanitization. Grant reasons remain operator notes;
 never copy unsanitized notes into public evidence. Read/parse failures send no
 partial report and log no provider response or owner data.
 
@@ -54,12 +56,12 @@ validates it again as a same-origin relative destination. Account `q` and server
 `view`/`serverId` survive both a missing session and the CP page's expired-session
 fallback; query values cannot select a different origin.
 
-The new, additive `202611090002_patreon_lapse_report_links.sql` migration exposes
+The additive `202611090002_patreon_lapse_report_links.sql` migration exposes
 `patreon_lapse_report_inventory_v2()`, with validated UUID identities added to the
 same inventory facts. It preserves the existing v1 RPC, classifications, grant
 redaction, candidate bounds and service-role-only access. Invalid UUID data fails
-the report; it cannot choose a URL. The live loader requires v2; frozen v1 offline
-fixtures retain their original prefix-only rendering.
+the report; it cannot choose a URL. Frozen v1 offline fixtures retain prefix-only
+identities, and v2 fixtures keep their contact redaction. Both show `(no email)`.
 
 ControlPlane supplies the existing private tables, but builds no part of the
 email. Its repository mirrors historical `patreon_lapse_server_owners()` SQL and
@@ -67,6 +69,57 @@ the scheduler migration. That legacy RPC has contact/name columns and omits
 deleted rows, so the new links do not use it. The paired ControlPlane PR mirrors
 the new SQL and pins its digest in `ALREADY_APPLIED_EXTERNAL_MIGRATIONS` for the
 shared Supabase ledger; it adds no runtime schema marker or permission to apply it.
+
+## Operator-only account email
+
+`202611100001_patreon_lapse_report_emails.sql` adds the service-role-only
+`patreon_lapse_report_inventory_v3()` RPC. It materializes the unchanged v2
+inventory once, resolves its distinct account UUIDs against `auth.users` in one
+batch, and returns one `account_email` field per row. The Edge loader awaits one
+bounded RPC per report, with no per-line account requests. Existing 1000-row,
+overflow, 2 MiB response and timeout limits remain. Empty/blank or missing Auth
+emails become null. Display contacts accept Auth address characters such as
+apostrophe and exclamation mark, independently of the stricter SMTP recipient
+grammar. A malformed, oversized or control-character-bearing contact becomes
+`(no email)` for that row; it never suppresses the other rows or the report.
+HTML escaping still applies to every displayed contact.
+The lookup includes retained deleted Auth rows; a removed Auth row shows
+`(no email)` while preserving any existing account link and deleted-server rules.
+The older RPCs and all durable rows remain unchanged.
+
+Only the operator mail body receives the typed email fields. The sender still
+uses the explicitly configured private `PATREON_LAPSE_REPORT_RECIPIENTS`, never
+an account email, and scheduler authentication still precedes every read. Email
+addresses do not enter link URLs, subjects, scheduler responses, logs, audits or
+journals. The offline dry-run CLI uses `lapseReportDiagnosticText`: it removes
+account contacts and replaces every free-form grant note with the fixed marker
+`[grant note omitted in diagnostics; see operator email]`. No part of the note
+is copied into diagnostics, including quoted or Unicode contacts and fragments.
+Operator email note formatting and its display bounds remain unchanged.
+Failure logs remain generic,
+even if an underlying SMTP/DB error contains a private body. No shared/global
+redaction module changes.
+
+Current synthetic examples: [HTML](evidence/patreon-lapse-emails.html) and
+[text](evidence/patreon-lapse-emails.txt), from
+`tests/fixtures/patreon-lapse-emails-v3.json`. Every address uses `example.test`.
+
+### Email rollout (ORCH owns the slot)
+
+The paired ControlPlane PR mirrors the exact new SQL bytes (SHA-256
+`63f84a58c857053baa5c072bae47c733bbc699ce9af2cad7e84ac194142e7b08`)
+as required external history. Neither PR authorizes a live operation.
+Follow the existing protected-release order below for this new key: merge the
+CP catalog entry in ORCH's slot and retain ordinary Deploy's expected refusal;
+separately apply only `202611100001_patreon_lapse_report_emails.sql` and record
+its normal migration-history row atomically (version `202611100001`, name
+`patreon_lapse_report_emails`); verify checksum, v3 definition/ACL and unchanged
+v1/v2; commission the CP catalog through its protected release; then deploy only
+`patreon-lapse-alert` from the exact reviewed Website merge with pinned CLI
+2.120.0 and the existing private configuration. Read back source identity and
+ACTIVE/JWT policy. No broad `db push`, old migration replay, recipient change,
+manual scheduler invocation or test email is part of these PRs. The v2 Edge
+version remains the compatible fallback until v3 deployment is verified.
 
 ## Rollout
 
@@ -169,9 +222,9 @@ explicitly expected the mirrored migration to make ordinary Deploy refuse and
 required protected installation of the SQL tree. Those are the same ownership
 and deployment boundaries here; no old migration is reapplied.
 
-The RPC bounds the result to 1000 rows and marks overflow explicitly; the consumer
-refuses truncation and ambiguous prefixes. It does not read `auth.users`, account
-emails or credentials. Usage follows CP's live allocation plus active restoration
+The v1/v2 RPCs bound the result to 1000 rows and mark overflow explicitly; the consumer
+refuses truncation and ambiguous prefixes. Only v3 adds the bounded `auth.users`
+contact read described above; no credential columns are read. Usage follows CP's live allocation plus active restoration
 reservation calculation, pinned in the SQL tests to
 `33a693c01471b3ebd10b8e8afc945b0292f089e2`.
 
@@ -198,8 +251,8 @@ only, and asserts that no candidate disappears. CI retains that before/after
 transcript. The original classifier fragment is a historical test fixture, not a
 runtime fallback.
 
-The dry run reads only the explicitly supplied bounded local JSON and prints the
-same classifier/formatter used by the handler. It does not load live credentials,
+The dry run reads only the explicitly supplied bounded local JSON and uses the
+same classifier with the redacted diagnostic formatter. It does not load live credentials,
 contact Patreon/Supabase or send mail. PostgreSQL tests execute the real new RPC
 in PGlite, including a read-only transaction, service-role permissions, migration
 replay, empty/overflow results, ownership changes and reservation counting, and
@@ -208,11 +261,11 @@ JSON through the real inventory loader for nonempty and empty responses.
 These are offline checks, not deployed RPC,
 live-provider or SMTP evidence.
 
-The IDs-only [HTML sample](evidence/patreon-lapse-links.html) and
+The legacy v2 [HTML sample](evidence/patreon-lapse-links.html) and
 [plain-text sample](evidence/patreon-lapse-links.txt) are rendered from
 `tests/fixtures/patreon-lapse-links-v2.json`: five realistic funding states with
 synthetic full UUIDs, two review rows and three context rows. Regenerate them
-with the command above. The sample uses the production link targets but none of
+with the render command above, alongside the current v3 email samples. The sample uses the production link targets but none of
 its UUIDs identify real accounts or servers. Rendering makes no network calls.
 
 Acceptance: an administrator opens the daily funding email and clicks a live
@@ -220,3 +273,5 @@ server prefix or account prefix. The browser opens that exact server detail or
 the member list filtered by the exact account UUID, after normal admin sign-in.
 Text-only readers receive the same complete URLs. Deleted server rows retain
 their account link without advertising an unavailable server detail page.
+Both alternatives show the account's resolved email or `(no email)` beside that
+link, and grant reasons retain their email addresses only in this operator mail.

@@ -1,10 +1,11 @@
 import "server-only"
+import { GITHUB_OWNER, GITHUB_RELEASES_URL, GITHUB_REPO } from "@/app/lib/releases/repository";
 
-const GITHUB_OWNER = "Bannerlord-Coop-Team";
-const GITHUB_REPO = "BannerlordCoop";
-const RELEASE_LIMIT = 20;
+const RELEASE_PAGE_SIZE = 100;
+const MAXIMUM_RELEASE_PAGES = 5;
+const RELEASE_CACHE_VERSION = "2";
 
-export const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`;
+export { GITHUB_RELEASES_URL };
 
 const GITHUB_RELEASES_API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases`;
 
@@ -35,10 +36,10 @@ export type GitHubRelease = {
 export type GitHubReleaseResult = {
     releases: GitHubRelease[];
     isAvailable: boolean;
+    hasMore: boolean;
 }
 
 export async function getGitHubReleases(): Promise<GitHubReleaseResult> {
-    const parameters = new URLSearchParams({per_page: String(RELEASE_LIMIT), page: "1",});
     const githubToken = process.env.GITHUB_TOKEN?.trim();
 
     const headers: Record<string, string> = {
@@ -50,27 +51,28 @@ export async function getGitHubReleases(): Promise<GitHubReleaseResult> {
     if (githubToken) headers.Authorization = `Bearer ${githubToken}`;
 
     try {
-        const response = await fetch(
-            `${GITHUB_RELEASES_API_URL}?${parameters}`,
-            {
-                headers,
-                next: {
-                    revalidate: 3600,
+        const releases: GitHubRelease[] = [];
+        let hasMore = false;
+        for (let page = 1; page <= MAXIMUM_RELEASE_PAGES; page += 1) {
+            const parameters = new URLSearchParams({ per_page: String(RELEASE_PAGE_SIZE), page: String(page), cache_key: RELEASE_CACHE_VERSION });
+            const response = await fetch(
+                `${GITHUB_RELEASES_API_URL}?${parameters}`,
+                {
+                    headers,
+                    next: {
+                        revalidate: 3600,
+                    },
                 },
-            },
-        );
+            );
 
-        if (!response.ok) {console.error(`GitHub releases request failed with status ${response.status}.`,);return {releases: [], isAvailable: false,};
-        }
+            if (!response.ok) { console.error(`GitHub releases request failed with status ${response.status}.`); return { releases: [], isAvailable: false, hasMore: false }; }
 
-        const data = (await response.json()) as unknown;
-
-        if (!Array.isArray(data)) {
-            console.error("GitHub releases request returned an unexpected response.");
-            return {releases: [], isAvailable: false,};
-        }
-
-        const releases = data.flatMap((value): GitHubRelease[] => {
+            const data = (await response.json()) as unknown;
+            if (!Array.isArray(data)) {
+                console.error("GitHub releases request returned an unexpected response.");
+                return { releases: [], isAvailable: false, hasMore: false };
+            }
+            releases.push(...data.flatMap((value): GitHubRelease[] => {
             const release = value as GitHubReleaseResponse;
 
             if (release.draft || typeof release.id !== "number" || typeof release.tag_name !== "string" || typeof release.html_url !== "string")
@@ -94,11 +96,14 @@ export async function getGitHubReleases(): Promise<GitHubReleaseResult> {
                     prerelease: release.prerelease === true,
                 },
             ];
-        });
+            }));
+            if (data.length < RELEASE_PAGE_SIZE) break;
+            hasMore = page === MAXIMUM_RELEASE_PAGES;
+        }
 
-        return {releases, isAvailable: true,};
+        return { releases, isAvailable: true, hasMore };
     } catch (error) {
         console.error("Unable to retrieve GitHub releases.", error);
-        return {releases: [], isAvailable: false,};
+        return { releases: [], isAvailable: false, hasMore: false };
     }
 }

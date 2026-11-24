@@ -10,6 +10,7 @@
   "history.eyebrow": "Historial de versiones",
   "history.title": "¿Qué ha cambiado?",
   "history.description": "La información de las versiones se carga directamente desde el repositorio público del proyecto en GitHub y se actualiza cada hora.",
+  "history.olderOnGitHub": "Hay versiones anteriores disponibles en GitHub.",
   "history.count": {
     "one": "Se muestra {formattedCount} versión",
     "other": "Se muestran {formattedCount} versiones"

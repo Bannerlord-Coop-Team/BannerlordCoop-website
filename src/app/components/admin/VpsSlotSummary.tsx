@@ -3,7 +3,7 @@ import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
 import type { HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
 export function VpsSlotSummary({ hosts, regionCatalog = null }: {
-    hosts: readonly Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region" | "totalSlots" | "occupiedSlots">[];
+    hosts: readonly Pick<HostingAdminVpsHost, "countryCode" | "locationId" | "region" | "totalSlots" | "occupiedSlots" | "availableServers">[];
     regionCatalog?: readonly HostingRegionPayload[] | null;
 }) {
     const summary = summarizeVpsSlots(hosts, regionCatalog);
@@ -12,19 +12,22 @@ export function VpsSlotSummary({ hosts, regionCatalog = null }: {
             <div className="grid grid-cols-2 bg-surface">
                 <SlotTotal label="Total slots" value={summary.totalSlots} help="Prepared slots on registered VPS hosts." />
                 <SlotTotal label="Taken slots" value={summary.takenSlots} help="Slots assigned to a server." />
+                <SlotTotal label="Free now" value={summary.allocatableSlots} help="Slots the control plane currently admits for a new server." />
             </div>
             <div className="bg-surface p-5">
                 <p className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-gold">By region</p>
                 {summary.regions.length === 0 ? <p className="mt-3 text-xs text-foreground-muted">No registered VPS hosts.</p> : (
                     <ul className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                         {summary.regions.map((region) => (
-                            <li key={region.region} className={`border px-3 py-2 ${regionOutlineClass(regionSlotOutline(region.takenSlots, region.totalSlots))}`}>
+                            <li key={region.region} className={`border px-3 py-2 ${regionOutlineClass(regionSlotOutline(region.totalSlots - region.allocatableSlots, region.totalSlots))}`}>
                                 <p className="text-xs text-foreground-muted">{region.label}</p>
                                 <p className="mt-1 text-sm text-foreground">
                                     <span className="font-semibold">{region.takenSlots}</span>
                                     <span className="text-foreground-dim"> taken / </span>
                                     <span className="font-semibold">{region.totalSlots}</span>
-                                    <span className="text-foreground-dim"> total</span>
+                                    <span className="text-foreground-dim"> total · </span>
+                                    <span className="font-semibold">{region.allocatableSlots}</span>
+                                    <span className="text-foreground-dim"> free now</span>
                                 </p>
                             </li>
                         ))}

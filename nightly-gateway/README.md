@@ -1,9 +1,28 @@
 # Staff, Supporter, and Tester nightly access gateway
 
+This Worker is the R2 half of nightly access (see
+`docs/nightly-backend-contract.md`). It serves manifests, artifacts, create-build
+pins, the installer scripts and `7zr.exe`, and it forwards the installer device
+API (`POST /v1/device/sessions`, `POST /v1/device/token`) to the Supabase Edge
+Function at `NIGHTLY_FUNCTION_URL`. The Worker never calls Discord: device
+sessions, OAuth, the member check, and sponsor seats live in the Edge Function,
+and the browser pages live at `https://bannerlordcoop.com/nightly/*`. The
+Worker's old `/`, `/activate`, `/sponsor*`, `/oauth/callback`, and
+`/v1/sponsor*` paths redirect there.
+
+The Worker answers on `https://nightly.bannerlordcoop.com` (canonical) and
+`https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev` (legacy).
+Every URL it hands back (manifest artifact URLs, pin install links, the pin
+launcher, and the `verification_uri` it adds to a created device session) uses
+the host the request arrived on. Any other host is treated as the canonical one.
+How forwarding failures are answered and logged is specified in
+[§1](../docs/nightly-backend-contract.md#1-installer-facing-api-worker-host) of
+the nightly backend contract.
+
 The installer script is intentionally public. It carries no Discord, R2, or
 shared download secret. Every install or update starts a new device session,
 opens Discord OAuth in the user's browser, and receives a short-lived bearer
-token only after the gateway verifies one of these conditions:
+token only after the Edge Function verifies one of these conditions:
 
 - the signed-in Discord member currently has one of the fixed Staff, Tester,
   Competition Winner, Patreon, Boosty, or Afdian roles in the Bannerlord Co-op guild; or
@@ -11,12 +30,12 @@ token only after the gateway verifies one of these conditions:
   sponsored-account seats.
 
 Sponsored access is attached to the friend's Discord account, not to a machine
-or a download count. Before each installer session is approved, the gateway
-asks Discord whether that sponsor still has a qualifying Staff, Tester, Competition Winner, or
-supporter role. If they left the guild or lost the role, their grant, seats,
-and active download sessions are removed. Sponsored friends do not need the
-sponsor to sign in again. Removing a sponsored account also revokes its active
-gateway sessions. Every eligible member has one shared ten-seat pool
+or a download count. Before each installer session is approved, the Edge
+Function asks Discord whether that sponsor still has a qualifying Staff, Tester,
+Competition Winner, or supporter role. If they left the guild or lost the role,
+the Edge Function removes their grant, seats, and active download sessions.
+Sponsored friends do not need the sponsor to sign in again. Removing a sponsored
+account (also an Edge Function action) revokes its active download sessions. Every eligible member has one shared ten-seat pool
 regardless of how many qualifying roles they hold.
 
 Competition Winner is an installer eligibility role only, not a website membership
@@ -36,8 +55,8 @@ server; Linux testers run those files through Wine or Proton. Run
 `installer/`; `gateway:dry-run` performs the sync automatically before
 packaging.
 
-`installer/install.ps1` is the authority for nightly release metadata, Discord
-authorization decisions, and incremental server update behavior. Both installers
+`installer/install.ps1` is the client-side authority for nightly release
+metadata, the device-authorization flow, and incremental server update behavior. Both installers
 read `/v1/manifests/release`. The gateway first reads the public
 `bannerlordcoop-nightly-releases/nightly/release.json` pointer, which contains only
 the GHCR digest and the hash-bound key of the private
@@ -84,15 +103,19 @@ permits caller-chosen object keys.
 
 ### Manifest-version compatibility during rollout
 
-`/v1/manifests/client` and `/v1/manifests/release` return the validated legacy
-v1 object by default, preserving compatibility with the 14b9e61c gateway and
-older installers. A request that sends
-`X-Bannerlord-Coop-Nightly-Version: 2` opts into the complete v2 publication;
-the header is the only representation switch and does not select an object key.
+`/v1/manifests/release` returns the validated legacy v1 object by default,
+preserving compatibility with the 14b9e61c gateway and older installers. A
+headerless client request returns a v1 projection of the complete paired
+publication: the legacy client object is used only when its identity agrees
+with that publication; a newer or mismatched legacy object is ignored. A
+request that sends `X-Bannerlord-Coop-Nightly-Version: 2` opts into the complete
+v2 publication; the header is the only representation switch and does not
+select an object key.
 The current Windows and Linux installers send that header and accept either v2
 or the validated v1 response, so a session can cross a gradual Worker rollout
-without a manifest-version failure. Client-only `/client` requests without the
-header remain v1.
+without a manifest-version failure. Client-only requests return the previous
+complete pair while a newer client waits for its server; they return 503 only
+when no complete pair exists.
 
 ### Publication read failures and compatibility fallback
 
@@ -101,11 +124,9 @@ back only when both legacy `nightly/release.json` and `nightly/client.json`
 objects validate and agree on release date, client commit, client key, and
 client checksum. This keeps Server and Both on one validated legacy pair during
 a transient publication read failure; missing, malformed, or mismatched legacy
-objects remain a 503. `GET /v1/manifests/client` falls back to the bounded,
-validated `nightly/client.json` compatibility object in the same `RELEASES`
-bucket. A Client installer can continue with that validated legacy client. The
-fallback accepts only fixed artifact origins and content-addressed client keys,
-then rewrites responses through the normal artifact route.
+objects remain a 503. Headerless client delivery uses the same bounded,
+validated legacy v1 projection and fixed artifact-origin checks, so a client
+cannot move ahead of the complete server publication.
 
 The failure event records the route, exact stage (`pointer`, `private_read`,
 `checksum`, `manifest`, or `container`), the pointer HTTP/R2 status when one
@@ -135,48 +156,41 @@ Linux and checks that the packaged Linux scripts match their canonical sources.
    login named `nightly_gateway_worker`, grant it that runtime role, and use it
    only for this gateway.
 2. Create a cache-disabled Cloudflare Hyperdrive configuration using that
-   login and the Supabase PostgreSQL connection. Replace the all-zero
-   Hyperdrive ID in `wrangler.jsonc` before a real deployment. The Worker never
-   receives a Supabase service-role key or a general database owner credential.
-3. Keep the existing D1 binding during the migration window only. With no
-   `DATABASE_BACKEND` secret, the post-cutover release uses PostgreSQL. Select
-   `legacy-d1` explicitly before deploying a bridge release to an unmigrated
-   environment. Follow
-   `SUPABASE_CUTOVER.md` to lock writes, import one consistent snapshot, switch
-   to PostgreSQL, verify, and unlock. Remove the D1 binding after the rollback
-   window closes.
-4. Register exactly
-   `https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/oauth/callback`
-   as a Discord OAuth2
-   redirect and enable the `identify guilds.members.read` scopes.
-5. Set `DISCORD_CLIENT_SECRET` with `wrangler secret put`.
-6. Set `DISCORD_BOT_TOKEN` to Bot_UP's existing Discord bot token with
-   `wrangler secret put`. That bot is already in the Bannerlord Co-op guild and
-   can look up one member's current roles without Server Members Intent. Do not
-   create or invite a second bot for this. The installer OAuth app stays
-   separate; only the role check uses Bot_UP.
-7. Generate 32 random bytes, encode them as unpadded base64url, and set them as
-   `TOKEN_ENCRYPTION_KEY` with `wrangler secret put`.
-8. Optionally set `PIN_MINT_SECRET` with `wrangler secret put` to the same
+   login and the Supabase PostgreSQL connection, and bind it as `HYPERDRIVE` in
+   `wrangler.jsonc`. The Worker never receives a Supabase service-role key or a
+   general database owner credential.
+3. For the PostgreSQL-only rollback rule and the retired Worker secrets to
+   delete, see [§5](../docs/nightly-backend-contract.md#5-worker) and
+   [§7](../docs/nightly-backend-contract.md#7-rollout-each-step-after-explicit-approval)
+   of the nightly backend contract. For maintenance, see
+   [SUPABASE_CUTOVER.md](SUPABASE_CUTOVER.md#maintenance).
+4. Keep the `NIGHTLY_FUNCTION_URL` var in `wrangler.jsonc` pointed at the
+   deployed `nightly-gateway` Edge Function. Discord OAuth, the Discord bot
+   token, and the website key are Edge Function secrets; the Worker holds no
+   Discord secret.
+5. `nightly.bannerlordcoop.com` is attached to this Worker as a custom domain
+   (declared in `wrangler.jsonc` `routes`; the `bannerlordcoop.com` zone is on
+   Cloudflare). The `workers.dev` host keeps serving identically until it is
+   retired.
+6. Optionally set `PIN_MINT_SECRET` with `wrangler secret put` to the same
    value as Bot_UP's `NIGHTLY_GATEWAY_PIN_SECRET` (at least 32 characters).
-   Nightly Discord OAuth and `/v1/manifests/client` keep working when this
-    secret is absent. When it is set, `/create-build` can mint a one-time
-   installer pin. Apply D1 migration `0002_installer_pins.sql`, and add a
-   one-day `pins/` lifecycle rule on `bannerlordcoop-patron-nightlies`. Do not
-   require this secret at Worker start.
-9. Create and bind a private R2 bucket named
+   `/v1/manifests/client` keeps working when this secret is absent. When it is
+   set, `/create-build` can mint a one-time installer pin; its tables come from
+   the step 1 schema migration. Add a one-day `pins/` lifecycle rule on
+   `bannerlordcoop-patron-nightlies`. Do not require this secret at Worker
+   start.
+7. Create and bind a private R2 bucket named
    `bannerlordcoop-patron-nightlies` as `RELEASES`. Do not enable its `r2.dev`
-   URL or attach a public custom domain. The Worker is exposed through the
-   existing `garrett-luskey.workers.dev` account subdomain, so Squarespace DNS
-   is not involved.
-10. Keep `/create-build` output and the public publication pointer in the
+   URL or attach a public custom domain. Artifacts reach installers only
+   through the Worker's own hosts.
+8. Keep `/create-build` output and the public publication pointer in the
    separate `bannerlordcoop-nightly-releases` bucket, bound as `PUBLIC_RELEASES`.
    Its copyable links remain valid until Bot_UP's existing 24-hour expiry
    cleanup; never disable public access on that bucket as part of the
    Patron-nightly rollout.
-11. Migrate Bot_UP/Managed Hosting to scoped R2 S3 reads from the private Patron
+9. Migrate Bot_UP/Managed Hosting to scoped R2 S3 reads from the private Patron
    bucket. Machine-to-machine hosting downloads do not use Discord OAuth.
-12. Deploy the updated client, dedicated-server, and website publishers and
+10. Deploy the updated client, dedicated-server, and website publishers and
    verify a live direct eligible-member install plus a sponsored install.
 
 ## Verification
@@ -191,7 +205,7 @@ npm test
 `wrangler.jsonc` before typechecking. Run `gateway:types` directly only when
 you want to refresh the generated types for editor use.
 
-The dry run is intentionally non-deploying. Deployment also requires the real
-Hyperdrive ID, Discord application ID, secrets, private Patron bucket, and the
-Garrett Cloudflare account configured in `wrangler.jsonc`. D1 remains bound
-only for the controlled cutover and short rollback window.
+The dry run is intentionally non-deploying. Deployment also requires the
+Hyperdrive configuration, the deployed Edge Function, private Patron bucket, and
+the Garrett Cloudflare account configured in `wrangler.jsonc`. The Worker binds
+no D1 database.

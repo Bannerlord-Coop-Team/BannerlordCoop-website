@@ -1,12 +1,15 @@
+import { discordSupportSlots } from "@/app/components/ui/DiscordSupportLink";
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { isColdSleeping } from "@/app/lib/hosting/cold-sleep";
 import type { Translator } from "@/app/lib/localization/types";
 import { LocalizationProvider } from "@/app/lib/localization/client";
 import { localizedRegionLabel } from "@/app/lib/hosting/region-labels";
 import { getLocale, getMessages, getTranslations } from "@/app/lib/localization/server";
+import { getMemberRole, hasHostedServerAccess } from "@/app/lib/auth/access";
+import { hasServerFleetAccess } from "@/app/lib/auth/roles";
 import { ManagedServerCommands } from "@/app/components/servers/ManagedServerCommands";
 import { publicVersionLabel, releaseChannelLabel } from "@/app/lib/control-plane/presentation";
 import { ServerSettingsPanel } from "@/app/components/servers/ServerSettingsPanel";
-import { ManagedServerVersion } from "@/app/components/servers/ManagedServerVersion";
 import { ServerSaveConfigPanels } from "@/app/components/servers/ServerSaveConfigPanels";
 import { ServerManagementWorkspace, ServerWorkspacePanel, ServerConsoleWorkspace, UnavailableServerConsole, UnavailableServerPanel } from "@/app/components/servers/ServerManagementWorkspace";
 import { ServerVisibilitySetting } from "@/app/components/servers/ServerVisibilitySetting";
@@ -21,8 +24,6 @@ import { ManagedServerMaintenanceProvider } from "@/app/components/servers/Manag
 import { ManagedServerDelete } from "@/app/components/servers/ManagedServerDelete";
 import { ManagedServerMods } from "@/app/components/servers/ServerModsPanel";
 import { readManagedServerStatusFingerprint } from "@/app/servers/managed-server-actions";
-import { getMemberRole, hasHostedServerAccess } from "@/app/lib/auth/access";
-import { hasServerFleetAccess } from "@/app/lib/auth/roles";
 import type { MyServerMove, MyServerNotice, MyServerSavePage, MyServerSummary } from "@/app/lib/control-plane/types";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
 import { campaignUsesWarSails } from "@/app/lib/hosting/war-sails";
@@ -38,6 +39,7 @@ import { isMoveInProgress } from "@/app/lib/hosting/server-move";
 import { SubscriptionHoldNotice } from "@/app/components/servers/SubscriptionHoldNotice";
 import { ManagedServerNoticeBanner } from "@/app/components/servers/ManagedServerNoticeBanner";
 import { ManagedServerUnavailable } from "@/app/components/servers/ManagedServerUnavailable";
+import { ManagedServerLoadError } from "@/app/components/servers/ManagedServerLoadError";
 import { ManagedServerMoveProvider, ManagedServerMoveStatus } from "@/app/components/servers/ManagedServerMoveStatus";
 import { getServerForRole } from "@/app/lib/hosting/servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -87,18 +89,30 @@ async function AuthorizedServerPage({ params, searchParams }: ServerPageProps) {
 
     let managedServer: MyServerSummary | null = null;
     try {
-        managedServer = await getMyServerSummary(accessToken, serverId);
+        managedServer = await getMyServerSummary(accessToken, serverId, undefined, { includeRuntimeInsight: true });
     } catch (error) {
-        const unknownServer = error instanceof MyServersApiError && ["invalid_request", "server_not_found", "forbidden"].includes(error.code);
-        if (!unknownServer) {
+        const accessRemoved = error instanceof MyServersApiError && ["invalid_request", "server_not_found", "forbidden"].includes(error.code);
+        if (!accessRemoved) {
             console.error("Managed server detail failed to load", error);
+            if (error instanceof MyServersApiError && error.code === "invalid_response") {
+                return <ServerManagementWorkspace
+                    name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{t("page.serverCouldNotLoadRetry")}</h1>}
+                    summary={t("page.serverCouldNotLoadRetry")}
+                    banner={<ManagedServerLoadError />}
+                    initialSection={rememberedSection}
+                >
+                    <ServerWorkspacePanel section="Console"><ServerConsoleWorkspace><UnavailableServerConsole /></ServerConsoleWorkspace></ServerWorkspacePanel>
+                    <UnavailableFileWorkspaces />
+                </ServerManagementWorkspace>;
+            }
             const retryable = error instanceof MyServersApiError
                 && (error.retryable || ["server_api_unavailable", "control_plane_unavailable"].includes(error.code));
             if (retryable) {
+                const maintenance = await ownerMaintenanceMessage(error);
                 return <ServerManagementWorkspace
-                    name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{t("action.actions.thisServerIsUnavailableOrYourAccessWasRemoved")}</h1>}
-                    summary={t("action.config.theHostingServiceCouldNotBeReachedTryAgain")}
-                    banner={<ManagedServerUnavailable />}
+                    name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{t("page.serverTemporarilyUnavailableRetry")}</h1>}
+                    summary={maintenance ?? t("action.config.theHostingServiceCouldNotBeReachedTryAgain")}
+                    banner={<ManagedServerUnavailable message={maintenance} />}
                     initialSection={rememberedSection}
                 >
                     <ServerWorkspacePanel section="Console"><ServerConsoleWorkspace><UnavailableServerConsole /></ServerConsoleWorkspace></ServerWorkspacePanel>
@@ -107,6 +121,15 @@ async function AuthorizedServerPage({ params, searchParams }: ServerPageProps) {
             }
             throw error;
         }
+        return <ServerManagementWorkspace
+            name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{t("action.console.thisServerIsUnavailableOrYourAccessChanged")}</h1>}
+            summary={t("action.console.thisServerIsUnavailableOrYourAccessChanged")}
+            banner={<p role="status" className="rounded-lg border border-white/10 bg-surface p-4 text-sm leading-6 text-foreground-muted">{t("action.console.thisServerIsUnavailableOrYourAccessChanged")}</p>}
+            initialSection={rememberedSection}
+        >
+            <ServerWorkspacePanel section="Console"><ServerConsoleWorkspace><UnavailableServerConsole /></ServerConsoleWorkspace></ServerWorkspacePanel>
+            <UnavailableFileWorkspaces />
+        </ServerManagementWorkspace>;
     }
 
     if (managedServer !== null) {
@@ -114,11 +137,9 @@ async function AuthorizedServerPage({ params, searchParams }: ServerPageProps) {
     }
 
     if (!hasHostedServerAccess(user)) redirect("/servers");
-
     const role = getMemberRole(user);
     const server = getServerForRole(serverId, role);
     if (!server) redirect("/servers");
-
     return <ServerManagementWorkspace
         name={<h1 id="server-heading" className="font-display text-2xl font-semibold sm:text-4xl">{server.name}</h1>}
         summary={t("page.previewSummary", { plan: server.plan, location: server.location })}
@@ -160,7 +181,7 @@ async function UnavailableFileWorkspaces() {
 async function ManagedServerManagementPage({ userId, accessToken, server, initialSection }: {
     userId: string; accessToken: string; server: MyServerSummary; initialSection?: ServerWorkspaceSection;
 }) {
-    const { t } = await getTranslations("managed-server");
+    const { rich, t } = await getTranslations("managed-server");
     // Region names live with onboarding in the servers namespace, so both pages share one translation.
     const { t: tServers } = await getTranslations("servers");
     const [deletionStatus, notices, move, managers] = await Promise.all([
@@ -189,6 +210,7 @@ async function ManagedServerManagementPage({ userId, accessToken, server, initia
         interactionLocked={initializing}
         address={address}
         visibility={<ServerVisibilitySetting serverId={server.serverId} visibility={server.visibility} accessRole={server.accessRole} expectedUpdatedAt={server.updatedAt} disabled={initializing} />}
+        notice={server.runtimeInsightWarning ? rich("page.liveStatusDetailsUnavailable", discordSupportSlots(t)) : undefined}
         summary={t("page.managedSummary", { region: localizedRegionLabel(tServers, server.friendlyRegion), access: managedAccessLabels[server.accessRole] })}
         status={<Suspense fallback={<ManagedServerStatus accessToken={accessToken} server={server} move={move} checkBackup={false} />}>
             <ManagedServerStatus accessToken={accessToken} server={server} move={move} checkBackup={server.accessRole === "owner" || server.accessRole === "manager"} />
@@ -227,7 +249,6 @@ function ManagedServerSections({
                 </ServerWorkspacePanel>
                 <ServerWorkspacePanel section="Settings">
                     <ServerSettingsPanel settingsAccess={{ serverId: server.serverId, maintenanceSlot: server.maintenanceSlot, timezone: server.timezone, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} releaseAccess={{ serverId: server.serverId, channel: server.releaseChannel, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} managerAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner", managers }} name={server.displayName} visibility={server.visibility ?? "private"} visibilityAccess={{ serverId: server.serverId, expectedUpdatedAt: server.updatedAt, canEdit: server.accessRole === "owner" }} />
-                    <ManagedServerVersion serverId={server.serverId} expectedUpdatedAt={server.updatedAt} canEdit={server.accessRole === "owner"} />
                     <ManagedServerPassword serverId={server.serverId} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} />
                     <ManagedServerDelete key={`${userId}:${server.serverId}`} serverId={server.serverId} displayName={server.displayName} accessRole={server.accessRole} operationState={server.operationState} expectedUpdatedAt={server.updatedAt} deletionStatus={deletionStatus} />
                 </ServerWorkspacePanel>
@@ -253,6 +274,7 @@ async function ManagedServerLifecycleSection({ server }: { server: MyServerSumma
                     observedGameState={server.observedGameState}
                     expectedUpdatedAt={server.updatedAt}
                     runtimeInsight={server.runtimeInsight}
+                    runtimeInsightUnavailable={server.runtimeInsightWarning !== undefined}
                     subscriptionHold={server.subscriptionHold}
                     releaseChannel={server.releaseChannel}
                 />
@@ -304,7 +326,9 @@ async function ManagedServerBackupsSection({
     const backups = backupsResult.status === "fulfilled" ? backupsResult.value : [];
     const status = statusResult.status === "fulfilled" ? statusResult.value : null;
     const loadError = backupsResult.status === "rejected" || statusResult.status === "rejected"
-        ? t("page.backupHistoryCouldnTBeLoadedJustNowBackupActionsArePaused")
+        ? await ownerMaintenanceMessage(backupsResult.status === "rejected" ? backupsResult.reason : undefined)
+            ?? await ownerMaintenanceMessage(statusResult.status === "rejected" ? statusResult.reason : undefined)
+            ?? t("page.backupHistoryCouldnTBeLoadedJustNowBackupActionsArePaused")
         : undefined;
     if (backupsResult.status === "rejected") {
         console.error("Managed server backups failed to load");
@@ -322,7 +346,8 @@ async function ManagedServerBackupsSection({
         saves={savesResult.status === "fulfilled" ? savesResult.value : null}
         backups={backups} status={status} loadError={loadError}
         autosaves={autosavesResult.status === "fulfilled" ? autosavesResult.value : null}
-        autosaveLoadError={autosavesResult.status === "rejected" ? t("page.recentAutosavesCouldNotBeLoaded") : undefined} />;
+        autosaveLoadError={autosavesResult.status === "rejected"
+            ? await ownerMaintenanceMessage(autosavesResult.reason) ?? t("page.recentAutosavesCouldNotBeLoaded") : undefined} />;
 }
 
 // Renders the accessible loading state for streamed backup and file data.

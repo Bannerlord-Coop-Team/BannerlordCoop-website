@@ -23,6 +23,8 @@ failed summary reads remain unavailable.
 
 ## Authority and public contract
 
+Region capacity and release availability are separate checks. The release selector explains that Nightly may be paused even when a region has capacity; the summary does not expose channel-specific readiness. A `validated_build_unavailable` refusal names the selected release (omitted selection means Public Release), offers Public Release as an alternative to Nightly, and suggests trying later. Region requests, which carry no release selection, receive generic release-unavailable guidance. These terminal refusals still release the rejected intent and refresh the summary; other refusals retain their existing messages and retry policy.
+
 The backend requires active, unused allocation under `max(administrativeBase, qualifyingPatreonOne) + administrativeBonus`. Membership is disabled until the reviewed configuration/rollout gates in the membership document pass. Roles (including Admin, Standard and Server Owner) and historical role grants do not authorize this feature. The authenticated backend derives the guild and verified linked Discord identity; website-supplied page identity only prevents dispatch after an account switch.
 
 | Website request | Fixed backend operation | Exact backend input |

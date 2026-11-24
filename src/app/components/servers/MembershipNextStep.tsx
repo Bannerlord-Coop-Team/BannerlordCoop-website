@@ -1,5 +1,6 @@
 "use client";
 
+import { discordSupportSlots } from "@/app/components/ui/DiscordSupportLink";
 import { useTranslations } from "@/app/lib/localization/client";
 import Link from "next/link";
 import { linkPatreonAccount } from "@/app/account/actions";
@@ -8,10 +9,10 @@ import type { WebsiteOnboardingSummary } from "@/app/lib/hosting/membership-onbo
 
 /** Presents the next membership step without changing eligibility or authorization actions. */
 export function MembershipNextStep({ summary }: { summary: WebsiteOnboardingSummary }) {
-    const { t } = useTranslations("servers");
+    const { t, rich } = useTranslations("servers");
     return <section className="mt-7 border border-gold/30 bg-surface p-5" aria-label={t("membership.label")}>
         {summary.status === "sync_pending" && <AccountStatusSync pending />}
-        <p role="status">{t(`membership.status.${summary.status}`)}</p>
+        <p role="status">{rich(`membership.status.${summary.status}`, discordSupportSlots(t))}</p>
         {summary.nextAction === "confirm_account" && <Link className="mt-3 block underline" href="/account">{t("membership.confirm")}</Link>}
         {summary.nextAction === "sign_in" && <Link href="/login?next=/servers">{t("membership.signIn")}</Link>}
         {["connect_patreon", "check_again", "subscribe_or_upgrade"].includes(summary.nextAction) && <form action={linkPatreonAccount}><input type="hidden" name="returnPath" value="/servers" /><button className="mt-3 underline" type="submit">{summary.nextAction === "connect_patreon" ? t("membership.connect") : t("membership.checkAgain")}</button></form>}

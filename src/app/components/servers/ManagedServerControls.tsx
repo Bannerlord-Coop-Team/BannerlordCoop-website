@@ -1,5 +1,6 @@
 "use client";
 
+import { DiscordSupportText } from "@/app/components/ui/DiscordSupportLink";
 import { isColdSleeping } from "@/app/lib/hosting/cold-sleep";
 
 import { useTranslations } from "@/app/lib/localization/client";
@@ -12,9 +13,9 @@ import {
     type ManagedConsoleSignal,
 } from "@/app/components/servers/ManagedServerPollingProvider";
 import { cancelManagedServerStart, operateManagedServer, readManagedServerStartStatus, setManagedServerPassword } from "@/app/servers/managed-server-actions";
+import { hasUpdateStatus, ServerUpdateProgressStatus } from "./ServerUpdateProgress";
+import { useServerUpdateProgress } from "./use-server-update-progress";
 import { readServerBuildStatus } from "@/app/servers/server-build-actions";
-import { VersionProgress } from "./ManagedServerVersion";
-import type { BuildChangeJob } from "../../../../supabase/functions/_shared/server-build-contract";
 import { useRouter } from "next/navigation";
 import type { ManagedStartStatus } from "@/app/lib/hosting/my-servers-server";
 import type { OwnerRuntimeInsight } from "@/app/lib/hosting/owner-runtime-insight";
@@ -63,6 +64,7 @@ type ManagedServerControlsProps = {
     observedGameState: string;
     expectedUpdatedAt: string;
     runtimeInsight?: OwnerRuntimeInsight;
+    runtimeInsightUnavailable?: boolean;
     subscriptionHold?: { reason: "subscription-funding-lapsed" } | null;
     releaseChannel?: "stable" | "nightly";
 };
@@ -136,6 +138,7 @@ export function ManagedServerControls({
     observedGameState,
     expectedUpdatedAt,
     runtimeInsight,
+    runtimeInsightUnavailable = false,
     subscriptionHold,
     releaseChannel,
 }: ManagedServerControlsProps) {
@@ -144,16 +147,14 @@ export function ManagedServerControls({
     const [isPending, startTransition] = useTransition();
     const [pendingOperation, setPendingOperation] = useState<Operation | null>(null);
     const [message, setMessage] = useState("");
-    const [updateJob, setUpdateJob] = useState<BuildChangeJob | null>(null);
-    const [updateProgressError, setUpdateProgressError] = useState("");
-    const updateFollowed = useRef(false);
-    const [updatePollRun, setUpdatePollRun] = useState(0);
     const [lastOperation, setLastOperation] = useState<Operation | null>(null);
     const [startRevision, setStartRevision] = useState(expectedUpdatedAt);
     const [startJobId, setStartJobId] = useState<string | null>(() => ["owner", "manager"].includes(accessRole) && runtimeInsight?.start && ["queued", "running", "retry-wait"].includes(runtimeInsight.start.state) ? runtimeInsight.start.jobId : null);
     const [startStatus, setStartStatus] = useState<StartProgressStatus | null>(null);
     const cancelledStart = useRef<string | null>(null);
     const startPollVersion = useRef(0);
+    // The Start job whose finish already refreshed the page.
+    const refreshedStartJob = useRef<string | null>(null);
     const [cancellingStart, setCancellingStart] = useState(false);
     const [locallyRequested, setLocallyRequested] = useState(false);
     const receiptId = runtimeInsight?.start?.jobId ?? null;
@@ -179,11 +180,12 @@ export function ManagedServerControls({
     // A move to another machine owns the server until it finishes; an announced one leaves the controls usable.
     const moving = isMoveInProgress(useManagedServerMove());
     const canOperate = accessRole === "owner" || accessRole === "manager";
+    const { job: updateJob, error: updateError, busy: updateBusy, followJob } = useServerUpdateProgress(
+        serverId, canOperate, expectedUpdatedAt, readServerBuildStatus, () => router.refresh());
     const displayedState = startStatus?.state === "succeeded" && expectedUpdatedAt === startRevision ? "running" : operationState;
     const stateIsTransitional = TRANSITIONAL_STATES.has(displayedState);
     const trackingStop = stopRevision !== null;
     const trackingRestart = restart !== null && !restartSettled(restart);
-    const updateBusy = updateJob !== null && ["queued", "running", "retry-wait"].includes(updateJob.state);
     const stopCheckPaused = trackingStop && timedOutSession?.serverId === serverId
         && timedOutSession.statusSource === "server" && timedOutSession.initialUpdatedAt === stopRevision;
     const verifyTimedOut = verifyRevision !== null && timedOutSession?.serverId === serverId
@@ -274,8 +276,14 @@ export function ManagedServerControls({
         return () => clearTimeout(timeout);
     }, [serverId, verifyRevision, verifyWindowOpen, verifyTimedOut, operationState, expectedUpdatedAt, isPending, endPolling, t, runtimeInsight?.desiredState, subscriptionHold]);
 
+    // Reads the current translator inside polls, so a refreshed dictionary never restarts them.
+    const translateInPoll = useEffectEvent((...args: Parameters<typeof t>) => t(...args));
+
     useEffect(() => {
         if (!canOperate || startJobId === null) return;
+        // This finished job already refreshed the page; a re-run must not read or refresh it again.
+        if (refreshedStartJob.current === startJobId) return;
+        const jobId = startJobId;
         let cancelled = false;
         const version = ++startPollVersion.current;
         let timeout: ReturnType<typeof setTimeout>;
@@ -283,19 +291,23 @@ export function ManagedServerControls({
         // Refreshes existing operation progress and reports localized connection feedback.
         async function poll() {
             try {
-                const result = await readManagedServerStartStatus(serverId, startJobId!);
+                const result = await readManagedServerStartStatus(serverId, jobId);
                 if (cancelled || version !== startPollVersion.current) return;
                 if (result.ok) {
                     setStartStatus(result.status);
                     setMessage("");
-                    if (["succeeded", "failed", "cancelled"].includes(result.status.state)) { router.refresh(); return; }
+                    if (["succeeded", "failed", "cancelled"].includes(result.status.state)) {
+                        refreshedStartJob.current = jobId;
+                        router.refresh();
+                        return;
+                    }
                 } else {
                     setMessage(result.message);
                     if (!result.retryable) { setProgressPaused(true); return; }
                 }
             } catch {
                 if (cancelled || version !== startPollVersion.current) return;
-                setMessage(t("controls.reconnectingToServerProgressYourStartRequestIsStillBeing"));
+                setMessage(translateInPoll("controls.reconnectingToServerProgressYourStartRequestIsStillBeing"));
             }
             if (Date.now() >= deadline) {
                 setProgressPaused(true);
@@ -305,37 +317,7 @@ export function ManagedServerControls({
         }
         void poll();
         return () => { cancelled = true; clearTimeout(timeout); };
-    }, [serverId, startJobId, pollRun, router, canOperate, t]);
-
-    useEffect(() => {
-        if (!canOperate) return;
-        let cancelled = false;
-        let timeout: ReturnType<typeof setTimeout>;
-        const deadline = Date.now() + 15 * 60_000;
-        // Reattaches to an in-flight update after a reload; terminal history is shown only after this page followed it.
-        async function pollUpdate() {
-            const status = await Promise.resolve(readServerBuildStatus(serverId)).catch(() => null);
-            if (cancelled) return;
-            const job = status?.job ?? null;
-            if (job !== null && (["queued", "running", "retry-wait"].includes(job.state) || updateFollowed.current)) {
-                updateFollowed.current = true;
-                setUpdateJob(job);
-                setUpdateProgressError("");
-            } else if (updateFollowed.current && status === null) {
-                setUpdateProgressError(t("serverVersion.progressIsUnavailableTheChangeMayStillBeRunning"));
-            } else if (job === null && !updateFollowed.current) {
-                return;
-            }
-            if (job !== null && ["succeeded", "failed", "cancelled"].includes(job.state)) return;
-            if (Date.now() >= deadline) {
-                setUpdateProgressError(t("serverVersion.progressChecksPausedRefreshToCheckAgain"));
-                return;
-            }
-            timeout = setTimeout(pollUpdate, 3_000);
-        }
-        void pollUpdate();
-        return () => { cancelled = true; clearTimeout(timeout); };
-    }, [serverId, canOperate, updatePollRun, t]);
+    }, [serverId, startJobId, pollRun, router, canOperate]);
 
     /** Keeps the restart ref and rendered progress in step. */
     function updateRestart(next: RestartProgress | null) {
@@ -382,10 +364,10 @@ export function ManagedServerControls({
         || (showInsightDetails && (modLoadFailed || !!runtimeInsight.failureMessage || !!runtimeInsight.recommendation)));
     const insightPanel = runtimeInsight && hasInsight && <div className="max-w-xl space-y-2 text-sm leading-6 text-foreground-muted">
         {showInsightDetails && (runtimeInsight.modLoadFailure && ["stopped", "failed"].includes(observedGameState)
-            ? <p className="text-red-200">{modLoadFailureMessage(runtimeInsight.modLoadFailure, t)}</p>
+            ? <p className="text-red-200"><DiscordSupportText message={modLoadFailureMessage(runtimeInsight.modLoadFailure, t)} label={t("support.discord")} /></p>
             : isWarSailsFailureCode(runtimeInsight.failureCode) ? <p className="text-red-200">{warSailsFailureMessage(runtimeInsight.failureCode, t)}</p>
-            : <>{runtimeInsight.failureMessage && <p className="text-red-200">{runtimeInsight.failureMessage}</p>}
-                {runtimeInsight.recommendation && <p>{runtimeInsight.recommendation}</p>}</>)}
+            : <>{runtimeInsight.failureMessage && <p className="text-red-200"><DiscordSupportText message={runtimeInsight.failureMessage} /></p>}
+                {runtimeInsight.recommendation && <p><DiscordSupportText message={runtimeInsight.recommendation} /></p>}</>)}
         {runtimeInsight.failureCode && <button type="button" className="min-h-10 rounded-md border border-gold/40 px-3 text-gold focus-visible:outline-2 focus-visible:outline-gold" onClick={() => startTransition(() => router.refresh())} disabled={isPending}>{t("controls.checkNow")}</button>}
     </div>;
 
@@ -406,7 +388,7 @@ export function ManagedServerControls({
     const confirmedLocalStart = startStatus?.state === "succeeded" && expectedUpdatedAt === startRevision;
     // The cancelled receipt may remain in this render until the refreshed server summary arrives.
     const cancelledReceipt = cancelledStart.current !== null && cancelledStart.current === receiptId && runtimeInsight?.start?.state === "queued";
-    const allowed = confirmedLocalStart ? ["stop", "restart-game"] : cancelledReceipt ? undefined : runtimeInsight?.allowedActions;
+    const allowed = runtimeInsightUnavailable ? [] : confirmedLocalStart ? ["stop", "restart-game"] : cancelledReceipt ? undefined : runtimeInsight?.allowedActions;
     const canStart = allowed ? allowed.includes("start") : ["stopped", "failed", "degraded"].includes(operationState) && ["stopped", "failed", "awaiting-save"].includes(observedGameState);
     const canStop = allowed ? allowed.includes("stop") : ["running", "starting", "failed", "degraded"].includes(operationState) && ["running", "starting", "stopping"].includes(observedGameState);
     const canRestart = allowed ? allowed.includes("restart-game") : ["running", "degraded"].includes(operationState) && observedGameState === "running";
@@ -538,9 +520,7 @@ export function ManagedServerControls({
                 }
                 if (operation === "update-now" && result.ok && result.updateJobId) {
                     setMessage("");
-                    updateFollowed.current = true;
-                    setUpdateProgressError("");
-                    setUpdatePollRun(value => value + 1);
+                    followJob(result.updateJobId);
                 }
             } catch {
                 if (operation === "restart-game") updateRestart(null);
@@ -564,8 +544,7 @@ export function ManagedServerControls({
     const showStart = pendingOperation === "start" || startJobId !== null || displayedStartStatus !== null;
     // With a Maintenance card, Update now reports beside its own button instead of in the console.
     const updateMessageInSlot = updateSlot !== undefined && lastOperation === "update-now" && updateJob === null;
-    const updateProgressCard = updateJob !== null ? <VersionProgress job={updateJob} /> : null;
-    const statusArea = showStart || updateJob !== null || restart !== null || progressPaused || stopCheckPaused || (message && !updateMessageInSlot && updateJob === null) ? (
+    const statusArea = showStart || hasUpdateStatus(updateJob, updateError) || restart !== null || progressPaused || stopCheckPaused || (message && !updateMessageInSlot && updateJob === null) ? (
         <div className="flex w-full flex-col items-start gap-2">
             {showStart && <StartProgress key={`${serverId}:${startProgressIdentity}`} status={displayedStartStatus} paused={progressPaused} />}
             {startJobId !== null && startStatus?.queue?.canCancel && <button type="button"
@@ -573,8 +552,7 @@ export function ManagedServerControls({
                 disabled={isPending || moving} onClick={cancelQueuedStart}>
                 {t(cancellingStart ? "controls.cancellingStart" : "controls.cancelStart")}
             </button>}
-            {updateProgressCard}
-            {updateProgressError && <p role="status" className="max-w-xl text-sm leading-6 text-foreground-muted">{updateProgressError}</p>}
+            <ServerUpdateProgressStatus job={updateJob} error={updateError} />
             {restart !== null && <RestartProgressCard progress={restart} />}
             {progressPaused && <div className="max-w-xl text-sm leading-6 text-foreground-muted">
                 <p>{t("controls.automaticProgressUpdatesArePausedReadinessHasNotBeenConfirmed")}</p>
@@ -594,7 +572,7 @@ export function ManagedServerControls({
                     aria-live="polite"
                     className="max-w-xl text-left text-xs leading-5 text-foreground-muted"
                 >
-                    {message}
+                    <DiscordSupportText message={message} />
                 </p>
             )}
         </div>
@@ -611,7 +589,7 @@ export function ManagedServerControls({
     />;
     const updateInSlot = <>
         <DisabledControlHint disabled={moving} message={t("move.controlsUnavailable")}>{updateAction}</DisabledControlHint>
-        {updateMessageInSlot && message && <p aria-live="polite" className="text-xs leading-5 text-foreground-muted sm:text-right">{message}</p>}
+        {updateMessageInSlot && message && <p aria-live="polite" className="text-xs leading-5 text-foreground-muted sm:text-right"><DiscordSupportText message={message} /></p>}
     </>;
     const alreadyStopped = !busy && canStart && operationState === "stopped" && observedGameState === "stopped"
         && <p className="max-w-sm text-xs text-foreground-muted">{t("controls.alreadyStopped")}</p>;
@@ -713,9 +691,9 @@ function StartProgress({ status, paused }: { status: StartProgressStatus | null;
         current={status?.state === "retry-wait" || (failed && ["game_crashed_during_load", "mod_load_failed", "war_sails_save_mismatch", "war_sails_unsupported"].includes(status.failureCode ?? "")) ? 2
             : Math.max(0, phases.findIndex(phase => phase === status?.phase))}
         outcome={outcome}
-        footer={failed && status.modLoadFailure ? modLoadFailureMessage(status.modLoadFailure, t)
+        footer={failed && status.modLoadFailure ? <DiscordSupportText message={modLoadFailureMessage(status.modLoadFailure, t)} label={t("support.discord")} />
             : failed && isWarSailsFailureCode(status.failureCode) ? warSailsFailureMessage(status.failureCode, t)
-            : failed ? status.progress
+            : failed ? <DiscordSupportText message={status.progress} />
             : status?.state === "retry-wait" ? t("controls.waitingToRetrySafelyProgress", { progress: status.progress })
                 : status?.state === "succeeded" ? <>{status.progress ?? t("controls.yourServerIsReadyToJoin")} <span className="mt-1 block">{t("controls.connectWithIpAddress")}</span></>
                     : status?.queue?.waitingReason ? <>{status.progress}<span className="mt-1 block">{t(`controls.startWaiting.${status.queue.waitingReason}`)}</span></>

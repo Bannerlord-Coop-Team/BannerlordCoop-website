@@ -5,7 +5,7 @@ export function serverProgressView(result: ServerDashboardResult) {
     const { dashboard } = result;
     const { serverId, ownerDiscordUserId, ownerAccountId, displayName, provider, providerResourceId, friendlyRegion,
         desiredState, observedVmState, observedGameState, operationState, releaseChannel, installedBuildId,
-        desiredBuildId, pinnedBuildId, updatedAt } = dashboard.server;
+        desiredBuildId, updatedAt } = dashboard.server;
     const job = dashboard.activeJob;
     const activeJob: HostingJobProgress | null = job === null ? null : {
         jobId: job.jobId, serverId: job.serverId, action: job.action, state: job.state,
@@ -16,7 +16,7 @@ export function serverProgressView(result: ServerDashboardResult) {
         dashboard: {
             server: { serverId, ownerDiscordUserId, ownerAccountId, displayName, provider, providerResourceId, friendlyRegion,
                 desiredState, observedVmState, observedGameState, operationState, releaseChannel, installedBuildId,
-                desiredBuildId, pinnedBuildId, updatedAt },
+                desiredBuildId, updatedAt },
             activeJob,
             runtime: dashboard.runtime === null ? null : { agentHealthy: dashboard.runtime.agentHealthy },
             installedBuild: displayBuild(dashboard.installedBuild), desiredBuild: displayBuild(dashboard.desiredBuild),

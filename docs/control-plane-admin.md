@@ -49,12 +49,13 @@ identifiers remain shortened in the props; failure acknowledgement keeps the exa
 job ID and current `updatedAt`. Reads, pagination, viewer validation and mutation
 requests retain the same paths and freshness requirements.
 
-Releases and release choices in Operations request one `release-catalog` result
-with separate Stable/Nightly pages, rather than authenticate two `builds` reads.
-Both pages use one freshly verified and mapped registry observation, retaining
-independent null cursors, current-first ordering and limit100 per channel. GHCR
-discovery has a global100-version bound; aliases mark matching versions without
-adding rows, so these pages cover the full current catalog. Errors remain visible.
+The Releases view requests the `release-catalog` result with separate
+Stable/Nightly pages, rather than authenticate two `builds` reads. It follows
+both channel cursors for at most five requests, retaining current-first ordering
+and limit100 per channel. If either cursor remains, the page shows that the
+bounded catalog is partial and retains the continuation for another request.
+Each verified channel/image digest receives one freshly mapped observation.
+Errors remain visible.
 The Releases view records each verified channel/image digest's first observation in
 `public.release_observations` after its authorized catalog read. The Releases page
 shows **First observed** from that immutable display timestamp, rather than the
@@ -72,10 +73,11 @@ older backends reject it without a fallback. Browser `builds` reads and all
 mutations retain their existing Edge contract.
 
 Operations requests Overview with `input: { operations: true }` for its current
-global controls, 100 server choices and 100 job choices, retaining cursors and
-the `updatedAt` values used by mutations. It omits the unused health snapshot and
-fleet summary, while full release choices, fresh provider service names and an
-optional selected-server dashboard keep their existing reads. The page still
+global controls, then follows the independent server and job cursors for at most
+five 100-item pages. A bounded result is marked partial and the page links to the
+full Servers or Jobs view for the continuation. It omits the unused health
+snapshot and fleet summary, while fresh provider service names and an optional
+selected-server dashboard keep their existing reads. The page still
 requires fresh protected administrator/session authority before rendering data.
 Deploy [ControlPlane #280](https://github.com/Bannerlord-Coop-Team/BannerlordCoop.ControlPlane/pull/280) before the website change; an
 older backend rejects the request without a fallback. Earlier website versions
@@ -234,16 +236,24 @@ The website itself needs only the existing public Supabase URL and publishable k
 
 ## Simplified server operations
 
-Update server includes build selection: keep the current selection, install the
-latest release and remove a pin, or install and pin a specific release. Only
-installable builds in the selected server's channel are offered. Selection and
-pinning are a single control-plane transaction. Deploy the control-plane version
-supporting optional `update-server.input.buildId` before publishing this website.
+GHCR is the only source of truth for which build a server runs: every server
+follows its release channel's current build, and no administrator control pins
+one. Update server has no version picker and always sends `buildId: null`
+("Follow channel"), so the control plane installs the channel's current build.
+No card calls `set-build-pin`, and the server detail's update policy reads
+"Follow Public channel" or "Follow Nightly channel". The control plane refuses `set-build-pin` and an
+Update server carrying a specific `buildId` with HTTP 409
+`admin_build_pin_retired`; the card shows the control plane's message. To fix a
+bad release, publish a new build to the channel.
 
-Reinstall previous build installs and pins the preceding channel release while
-keeping the current campaign. Restore backup instead replaces the campaign with
-an older snapshot. Selecting a server loads a bounded backup page; the list shows
-creation time, type, size, and build, with expiry in the selected backup details.
+Reinstall previous build temporarily reinstalls the preceding channel release
+while keeping the current campaign. It pins nothing: the server returns to the
+channel's current build at its next update (maintenance window, Batch
+maintenance or Update server).
+
+Restore backup instead replaces the campaign with an older snapshot. Selecting
+a server loads a bounded backup page; the list shows creation time, type, size,
+and build, with expiry in the selected backup details.
 Older pages, empty lists, request failures, and retries are supported. Changing
 servers clears the selected backup and ignores late responses from the previous
 server. In-game date is not yet recorded in the backup catalog.
@@ -266,6 +276,16 @@ administrator operations to `supabase:<user UUID>`, derived from the independent
 verified session. Customer ownership and owner/manager Discord identities are
 unchanged. Deploy the control-plane principal migration and adapter before the
 Edge Function change; the old adapter will reject accounts without Discord.
+
+### Rollout
+
+Update server and Reinstall previous build pair with
+[ControlPlane #1125](https://github.com/Bannerlord-Coop-Team/BannerlordCoop.ControlPlane/pull/1125),
+and either may deploy first. Update server sends `buildId: null` rather than
+omitting it because a control plane before #1125 keeps an existing pin when the
+field is omitted but clears it on null, so Update follows the channel in either
+order. Until #1125 deploys, the older control plane still pins a Reinstall
+previous build, and Update server clears that pin.
 
 ## Latest game log download
 
@@ -1526,9 +1546,10 @@ administrator withdraws it. It is not email or a Discord message; the retired
 owner announcements have no website form. See the control-plane repository's
 `docs/managed-hosting/server-notices.md`.
 
-The **Notices** tab renders the first 100 servers from the existing `servers`
-read on the server, so the page keeps its fresh administrator authority. The
-search box re-reads `servers` with its query filter from the browser, and
+The **Notices** tab follows the server cursor for at most five 100-item pages on
+the server, so the page keeps its fresh administrator authority while exposing a
+bounded partial state. The search box re-reads `servers` with its query filter
+from the browser, and
 **Load more servers** follows its cursor, so selections survive searches. An
 administrator can tick servers one by one or **Select all shown**, sees the
 selected count and can remove each one; a notice targets at most 500 servers.

@@ -153,14 +153,15 @@ test("uploads chunks in order with their digests, completes, polls gently and re
     const progress: ServerModUploadProgress[] = [];
     assert.deepEqual(await catalog.uploadServerMod(SERVER_ID, REVISION, upload, (event) => progress.push(event)), installed);
     assert.deepEqual(sent[0].body, { requestId: "00000000-0000-4000-8000-000000000001", serverId: SERVER_ID, expectedRevision: REVISION,
-        manifest: upload.manifest, totalBytes: MOD_UPLOAD_CHUNK_BYTES + 5, sha256 });
+        manifest: upload.manifest, totalBytes: MOD_UPLOAD_CHUNK_BYTES + 5, uncompressedBytes: upload.uncompressedBytes, sha256 });
     assert.deepEqual(sentChunks.map(({ index, length }) => [index, length]), [[0, MOD_UPLOAD_CHUNK_BYTES], [1, 5]]);
     assert.equal(sentChunks[1].sha256, await webSha256(upload.bytes.slice(MOD_UPLOAD_CHUNK_BYTES)));
     assert.deepEqual(sent[1].body, { requestId: "00000000-0000-4000-8000-000000000002", uploadId: UPLOAD_ID, expectedRevision: REVISION });
     assert.deepEqual(sent.slice(2).map(call => call.route), ["status", "status", "status"]);
     assert.ok(sleeps.every(delay => delay >= 2_000), "status is never polled faster than every two seconds");
-    assert.deepEqual(progress.map(event => event.phase), ["creating", "uploading", "uploading", "installing", "verifying"]);
-    assert.deepEqual(progress[1], { phase: "uploading", sentBytes: MOD_UPLOAD_CHUNK_BYTES, totalBytes: MOD_UPLOAD_CHUNK_BYTES + 5 });
+    assert.deepEqual(progress.map(event => event.phase), ["creating", "uploading", "uploading", "uploading", "installing", "verifying"]);
+    assert.deepEqual(progress[1], { phase: "uploading", sentBytes: 0, totalBytes: MOD_UPLOAD_CHUNK_BYTES + 5 });
+    assert.deepEqual(progress[2], { phase: "uploading", sentBytes: MOD_UPLOAD_CHUNK_BYTES, totalBytes: MOD_UPLOAD_CHUNK_BYTES + 5 });
 });
 
 test("resends the same chunk index and digest after a retryable failure", async () => {

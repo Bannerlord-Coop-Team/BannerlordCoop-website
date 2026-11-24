@@ -1,4 +1,5 @@
 {
+  "error.maintenance": "Сервис временно недоступен из-за технических работ. Повторите попытку через несколько минут.",
   "managementWorkspace.information": "Информация",
   "managementWorkspace.listAvailableConsoleCommands": "Показать доступные команды консоли",
   "managementWorkspace.showCampaignTimePartiesAndPlayers": "Показать время кампании, отряды и игроков",

@@ -41,10 +41,13 @@ test("create-server regions are the stored-catalog entries reported available, i
     assert.deepEqual(createServerRegionOptions([]), []);
 });
 
-test("administrator create sends only the region key; other operations get no defaults", () => {
+test("operation defaults: create gets the stable channel, Update an explicit null buildId, and others nothing", () => {
     const input: Record<string, unknown> = { friendlyRegion: "us-east" };
     applyControlPlaneOperationDefaults("create-server", input);
     assert.deepEqual(input, { friendlyRegion: "us-east", releaseChannel: "stable" });
+    const update: Record<string, unknown> = { serverId: "22222222-2222-4222-8222-222222222222", reason: "Roll forward" };
+    applyControlPlaneOperationDefaults("update-server", update);
+    assert.deepEqual(update, { serverId: "22222222-2222-4222-8222-222222222222", reason: "Roll forward", buildId: null });
     const maintenance: Record<string, unknown> = { reason: "Roll the fleet" };
     applyControlPlaneOperationDefaults("batch-maintenance", maintenance);
     assert.deepEqual(maintenance, { reason: "Roll the fleet" });
@@ -403,17 +406,7 @@ test("Builds refreshes GHCR discovery and displays exact release labels", async 
     assert.ok(details.includes('build.sourceRevision === "registry-observed"'));
     assert.match(source, /build.currentChannel/u);
     assert.ok(source.includes('build.registryMetadata ? "First observed" : "Published"'));
-    assert.match(source, /Follow channel \(remove version pin\)/u);
     assert.match(server, /RecordedRelease build=\{result.dashboard.installedBuild\}/u);
-});
-
-// Operations must offer the full discovery bound, not the overview's truncated 20-version lists.
-test("release selectors load the same full catalog as the Releases view", async () => {
-    const source = await readFile(new URL("../../admin/control-plane/page.tsx", import.meta.url), "utf8");
-    const operations = source.slice(source.indexOf('case "operations":'), source.indexOf('case "vps":'));
-    assert.match(operations, /operation: "overview", input: \{ operations: true \}/u);
-    assert.match(operations, /loadReleaseCatalog\(token, signal, identity\)/u);
-    assert.match(operations, /stableBuilds: releases.stable, nightlyBuilds: releases.nightly/u);
 });
 
 test("shows a public version without the registry's leading v", () => {

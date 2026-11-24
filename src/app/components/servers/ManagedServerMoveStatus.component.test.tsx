@@ -42,6 +42,10 @@ let visibility: DocumentVisibilityState = "visible";
 beforeEach(() => {
     vi.resetAllMocks();
     vi.useFakeTimers();
+    if (!globalThis.localStorage) {
+        const values = new Map<string, string>();
+        vi.stubGlobal("localStorage", { clear: () => values.clear(), getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => values.set(key, value), removeItem: (key: string) => values.delete(key) });
+    }
     vi.setSystemTime(NOW);
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
     visibility = "visible";
@@ -55,10 +59,13 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-    await act(async () => root.unmount());
-    container.remove();
+    if (root) await act(async () => root.unmount());
+    container?.remove();
     Reflect.deleteProperty(document, "visibilityState");
     vi.useRealTimers();
+    vi.clearAllTimers();
+    vi.restoreAllMocks();
+   
 });
 
 async function render(initialMove: MyServerMove | null, notices: MyServerNotice[] = [], headerAddress: string | null = null) {
@@ -201,11 +208,12 @@ it.each([
 ] as const)("reports a failed move where the server stayed on its original machine: %s", async (stayedOnOriginal, title, body, tone) => {
     await render(move("failed", { startedAt: at(-900_000), completedAt: at(-60_000), stayedOnOriginal }), [completedNotice]);
     expect(card()!.querySelector("h2")!.textContent).toBe(messages[title]);
-    expect(card()!.textContent).toContain(messages[body]);
+    expect(card()!.textContent).toContain(messages[body].replace("{supportLink}", messages["support.discord"]));
     expect(card()!.className).toContain(tone);
-    // Nobody is told about a failed move, so the owner is asked to contact support rather than to wait.
+    // A failed move requiring intervention gives the owner a route to General Help.
     if (stayedOnOriginal !== true) {
-        expect(card()!.textContent).toContain("Please contact support so we can sort it out.");
+        expect(card()!.textContent).toContain("Please create a General Help support ticket in our Discord so we can sort it out.");
+        expect(card()!.querySelector("a")?.getAttribute("href")).toBe("https://discord.gg/5vJzfz5Zzy");
         expect(card()!.textContent).not.toContain("notified");
     }
 
@@ -634,3 +642,4 @@ it("stops reading once the page closes", async () => {
     await advance(10 * 60_000);
     expect(mocks.read).not.toHaveBeenCalled();
 });
+

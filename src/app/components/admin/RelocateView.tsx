@@ -2,6 +2,7 @@
 
 import { ArrowLeftRight, LoaderCircle, X } from "lucide-react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Empty, State } from "@/app/components/admin/ControlPlanePresentation";
 import { formatAccountOwner } from "@/app/lib/control-plane/presentation";
@@ -70,6 +71,7 @@ export function RelocateView({ data, query, accounts }: { data: RelocateViewData
                 </table>
                 {rows.length === 0 && <Empty>No managed servers match this filter.</Empty>}
             </div>
+            {servers.partial && <p role="status" className="mt-4 border-l-2 border-amber-400 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">This relocation list reached the bounded read budget. <Link href={`/admin/control-plane?view=relocate${query ? `&q=${encodeURIComponent(query)}` : ""}&cursor=${encodeURIComponent(servers.nextCursor ?? "")}`} className="font-semibold underline underline-offset-2">Load the next bounded window</Link> or narrow the search.</p>}
             {selected !== null && (
                 <RelocateDialog
                     key={selected.server.serverId}

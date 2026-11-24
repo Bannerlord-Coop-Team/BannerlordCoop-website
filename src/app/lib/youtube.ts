@@ -294,7 +294,8 @@ function createYouTubeVideoFallback(id: string, labels: YouTubeLabels): YouTubeV
     };
 }
 
-function getYouTubeVideoId(videoUrl: string): string | null {
+// Extracts the video ID from a youtube.com, m.youtube.com or youtu.be watch, shorts, embed or live URL.
+export function getYouTubeVideoId(videoUrl: string): string | null {
     try {
         const url = new URL(videoUrl);
         const hostname = url.hostname.replace(/^www\./, "");

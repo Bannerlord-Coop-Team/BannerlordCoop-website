@@ -1,0 +1,37 @@
+name: Verify server onboarding
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/app/servers/onboarding-*'
+      - 'src/app/components/servers/ServerOnboarding*'
+      - 'src/app/lib/localization/**'
+      - 'docs/server-onboarding.md'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vitest.config.ts'
+      - 'tsconfig.json'
+      - '.github/workflows/verify-onboarding.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Linux onboarding verification
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: npx next typegen
+      - run: npx tsc --noEmit
+      - run: npx eslint src/app/servers/onboarding-actions.ts src/app/servers/onboarding-actions.component.test.tsx src/app/components/servers/ServerOnboarding.tsx src/app/components/servers/ServerOnboarding.component.test.tsx
+      - run: npm run test:components -- src/app/servers/onboarding-actions.component.test.tsx src/app/components/servers/ServerOnboarding.component.test.tsx src/app/lib/localization/runtime.component.test.tsx

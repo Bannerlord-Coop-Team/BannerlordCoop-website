@@ -1,4 +1,5 @@
 {
+  "support.discord": "unserem Discord",
   "metadata.title": "Konto | Bannerlord Co-op",
   "heading": "Konto",
   "defaultName": "Dein Konto",
@@ -7,7 +8,7 @@
   "error.rateLimited": "Zu viele Kontoänderungen oder die Synchronisierung läuft noch. Warte auf den aktualisierten Status, bevor du es erneut versuchst. Die Autorisierung läuft innerhalb von zehn Minuten ab. Das Trennen der Verknüpfung und die Verwaltung bestehender Server bleiben verfügbar.",
   "error.retry": "Das Konto ist gerade beschäftigt. Prüfe den aktualisierten Verbindungsstatus, bevor du es erneut versuchst. Eine neue Autorisierung ersetzt unvollständige Versuche.",
   "error.lastIdentity": "Discord ist deine einzige Anmeldemethode. Verbinde eine weitere Anmeldemethode, bevor du Discord trennst.",
-  "error.discordDisconnect": "Discord konnte nicht getrennt werden. Der Status wird automatisch aktualisiert; versuche es erneut, sobald er verfügbar ist. Wenn das Problem weiterhin besteht, wende dich an den Support.",
+  "error.discordDisconnect": "Discord konnte nicht getrennt werden. Der Status wird automatisch aktualisiert; versuche es erneut, sobald er verfügbar ist. Wenn das Problem weiterhin besteht, erstelle ein Support-Ticket unter „General Help“ auf {supportLink}.",
   "error.patreonDisconnect": "Patreon konnte nicht getrennt werden. Der Status wird automatisch aktualisiert; warte auf den aktuellen Status, bevor du es erneut versuchst.",
   "error.discordRepair": "Die Verknüpfung mit Discord konnte nicht abgeschlossen werden. Prüfe unten deine aktuelle Verbindung, bevor du es erneut versuchst. Möglicherweise hat sich deine Sitzung geändert, die Anfrage ist abgelaufen oder Discord gehört zu einem anderen Konto. Wir ersetzen das Verknüpfen niemals durch eine Anmeldung.",
   "error.patreonAuthorization": "Die Patreon-Autorisierung wurde abgebrochen oder konnte nicht abgeschlossen werden. Prüfe unten deine aktuelle Verbindung und verbinde dich bei Bedarf erneut oder verifiziere sie noch einmal. Ein Patreon-Konto kann nur zu einem Website-Konto gehören.",
@@ -25,7 +26,7 @@
   "membership.verified": "Mitgliedschaft verifiziert.",
   "membership.nonqualifying": "{installer} und weitere Vorteile.",
   "membership.nightlyInstaller": "Patreon-Unterstützer haben Zugriff auf den Nightly-Installer (so verwendest du ihn)",
-  "membership.reviewRequired": "Deine Mitgliedschaft muss überprüft werden. Wende dich an den Support, bevor du es erneut versuchst.",
+  "membership.reviewRequired": "Deine Mitgliedschaft muss überprüft werden. Erstelle ein Support-Ticket unter „General Help“ auf {supportLink}, bevor du es erneut versuchst.",
   "membership.verifyRequired": "Verifiziere deine Mitgliedschaft, bevor du einen neuen Server erstellst.",
   "membership.syncPending": "Dein Serverkontingent wird aktualisiert. Das dauert normalerweise nur wenige Sekunden; der Status wird automatisch aktualisiert.",
   "membership.syncUnavailable": "Dein Server-Kontingent konnte nicht geprüft werden.",
@@ -44,5 +45,9 @@
   "disconnect.confirm": "Trennen von {provider} bestätigen",
   "disconnect.cancel": "Abbrechen",
   "loading.label": "Konto wird geladen",
-  "loading.status": "Konto wird geladen…"
+  "loading.status": "Konto wird geladen…",
+  "boosty.linked": "Dein Boosty-Abonnement ist über die E-Mail-Adresse deines Kontos verknüpft.",
+  "boosty.notFound": "Kein Boosty-Abonnement nutzt die E-Mail-Adresse dieses Kontos. Abonniere auf Boosty mit derselben E-Mail-Adresse, um es zu verknüpfen.",
+  "boosty.nonqualifying": "Dein Boosty-Abonnement enthält keine qualifizierende Stufe.",
+  "boosty.checking": "Deine Boosty-Mitgliedschaft wird in Kürze geprüft."
 }

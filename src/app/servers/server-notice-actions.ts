@@ -1,5 +1,6 @@
 "use server";
 
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 
@@ -43,6 +44,6 @@ export async function dismissManagedServerNotice(value: unknown): Promise<Dismis
         const refusal = ownerRefusalMessage(error, t);
         if (refusal !== null) return { ok: false, message: refusal };
         console.error("Server notice dismissal failed", { code });
-        return { ok: false, message: t("notices.dismissFailed") };
+        return { ok: false, message: await ownerMaintenanceMessage(error) ?? t("notices.dismissFailed") };
     }
 }

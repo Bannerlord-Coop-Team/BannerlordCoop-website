@@ -22,8 +22,8 @@ The cheats page advertises managed hosting beside the command directory.
   - The page was already rendered dynamically.
 - **Art.** `public/images/hosting/riders-band.webp` (600 × 320, about 30 KB) is served through `next/image` with `alt=""` and lazy loading.
 - **Changing the offer.**
-  - The checkout link is `PATREON_HOSTING_CHECKOUT_URL` in `src/app/lib/hosting/patreon-checkout.ts`. The home page's "Rent a Server" button uses it too, also in a new tab with a localized `hero.rentServerNewTab` note.
-  - Update it together with `HOSTING_OFFER_TIER` and `HOSTING_OFFER_PRICE_USD` in `src/app/cheats/HostingOffer.tsx`, and the `hostingOffer.finePrint` messages.
+  - The checkout link, `HOSTING_OFFER_TIER` and `HOSTING_OFFER_PRICE_USD` live together in `src/app/lib/hosting/patreon-checkout.ts`. The `/hosting` landing page uses all three: its checkout buttons, its price, and the `Offer` in its structured data. The home page's "Rent a Server" button links to `/hosting`.
+  - When the offer changes, also update the `hostingOffer.finePrint` messages and the `hosting` namespace (tier, price wording, FAQ).
 
 Production build (`next start`), signed out:
 

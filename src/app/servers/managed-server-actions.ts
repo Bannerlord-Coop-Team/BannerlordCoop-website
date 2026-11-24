@@ -1,5 +1,6 @@
 "use server";
 
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { ownerRefusalMessage } from "@/app/lib/hosting/owner-refusal";
 import type { Translator } from "@/app/lib/localization/types";
@@ -56,9 +57,9 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
             let expectedUpdatedAt = parsed.expectedUpdatedAt;
             if (parsed.expectedReleaseChannel !== undefined) {
                 let current;
-                try { current = await getMyServerSummary(accessToken, parsed.serverId); }
-                catch {
-                    return { ok: false, refresh: true, message: t("action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent") };
+                try { current = await getMyServerSummary(accessToken, parsed.serverId, undefined, { includeRuntimeInsight: false }); }
+                catch (error) {
+                    return { ok: false, refresh: true, message: await ownerMaintenanceMessage(error) ?? t("action.actions.serverStatusCouldNotBeConfirmedUpdateNotSent") };
                 }
                 if (current.releaseChannel !== parsed.expectedReleaseChannel) {
                     return { ok: false, refresh: true, message: t("action.actions.yourServerSStatusChangedSoWeRefreshedItPress", { action: t("controls.updateNow") }) };
@@ -94,7 +95,7 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         if (parsed.action === "start" && code === "mod_load_failed" && error instanceof MyServersApiError) {
             return { ok: false, message: await startModLoadFailureMessage(accessToken, parsed.serverId, error, t) };
         }
-        // The campaign's War Sails mode cannot run as launched; the owner must pick another campaign or channel, not retry.
+        // The campaign's War Sails mode cannot run as launched; the owner must pick another campaign or update to a build that ships War Sails, not retry.
         if ((parsed.action === "start" || parsed.action === "restart-game") && isWarSailsFailureCode(code)) {
             return { ok: false, refresh: true, message: warSailsFailureMessage(code, t) };
         }
@@ -130,6 +131,8 @@ export async function operateManagedServer(input: unknown): Promise<ManagedServe
         }
         const refusal = ownerRefusalMessage(error, t);
         if (refusal !== null) return { ok: false, message: refusal };
+        const maintenance = await ownerMaintenanceMessage(error);
+        if (maintenance !== undefined) return { ok: false, checkStatus: true, message: maintenance };
         if (parsed.action === "stop") return { ok: false, checkStatus: true, message: t("controls.checkingWhetherYourServerHasStopped") };
         return { ok: false, checkStatus: true, message: t("controls.weCouldnTConfirmThatYourOperationRequestWentThrough", { operation: operationLabel(parsed.action, t) }) };
     }
@@ -208,7 +211,7 @@ export async function setManagedServerPassword(input: { serverId: string; expect
     } catch (error) {
         const refusal = ownerRefusalMessage(error, t);
         if (refusal !== null) return { ok: false, message: refusal };
-        return { ok: false, checkStatus: true, message: t("controls.weCouldnTConfirmThePasswordChangeSoWeRefreshed") };
+        return { ok: false, checkStatus: true, message: await ownerMaintenanceMessage(error) ?? t("controls.weCouldnTConfirmThePasswordChangeSoWeRefreshed") };
     }
 }
 
@@ -226,8 +229,8 @@ export async function cancelManagedServerStart(input: StartCancellationInput): P
         revalidatePath(`/servers/${parsed.serverId}`);
         revalidatePath("/servers");
         return { ok: true, message: t("controls.startCancelled") };
-    } catch {
-        return { ok: false, refresh: true, message: t("controls.startCancellationUnconfirmed") };
+    } catch (error) {
+        return { ok: false, refresh: true, message: await ownerMaintenanceMessage(error) ?? t("controls.startCancellationUnconfirmed") };
     }
 }
 
@@ -246,7 +249,7 @@ export async function readManagedServerStartStatus(serverId: string, jobId: stri
         if (error instanceof MyServersApiError && ["forbidden", "server_not_found", "unauthenticated"].includes(error.code)) {
             return { ok: false as const, retryable: false, message: t("action.actions.yourServerAccessCouldNotBeConfirmedSignInAgain") };
         }
-        return { ok: false as const, retryable: true, message: t("action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing") };
+        return { ok: false as const, retryable: true, message: await ownerMaintenanceMessage(error) ?? t("action.actions.reconnectingToServerProgressYourStartRequestIsStillBeing") };
     }
 }
 
@@ -271,7 +274,7 @@ export async function readManagedServerResources(serverId: string): Promise<{ ok
  * Reads only the compact status that lifecycle, backup, and deletion polling watch. Polling re-renders the
  * page only when this fingerprint changes, keeping repeated checks far cheaper than full renders.
  */
-export async function readManagedServerStatusFingerprint(serverId: string): Promise<{ ok: true; fingerprint: string } | { ok: false }> {
+export async function readManagedServerStatusFingerprint(serverId: string): Promise<{ ok: true; fingerprint: string } | { ok: false; retryable?: boolean }> {
     if (typeof serverId !== "string" || !SERVER_ID.test(serverId)) return { ok: false };
     try {
         const supabase = await getSupabaseServerClient();
@@ -280,7 +283,7 @@ export async function readManagedServerStatusFingerprint(serverId: string): Prom
         const [status, deletion, summary] = await Promise.all([
             getMyServerBackupStatus(session.access_token, serverId),
             getMyServerDeletionStatus(session.access_token, serverId).catch(() => null),
-            getMyServerSummary(session.access_token, serverId),
+            getMyServerSummary(session.access_token, serverId, undefined, { includeRuntimeInsight: true }),
         ]);
         const job = status.job;
         const deletionJob = deletion?.job;
@@ -289,9 +292,10 @@ export async function readManagedServerStatusFingerprint(serverId: string): Prom
             job?.jobId ?? null, job?.state ?? null, job?.progress ?? null,
             deletion?.updatedAt ?? null, deletion?.operationState ?? null,
             deletionJob?.jobId ?? null, deletionJob?.state ?? null, deletionJob?.progress ?? null,
+            summary.runtimeInsightWarning ? "runtime-insight-unavailable" : null,
             summary.runtimeInsight?.desiredState ?? null, summary.runtimeInsight?.allowedActions ?? null,
         ]) };
     } catch {
-        return { ok: false };
+        return { ok: false, retryable: true };
     }
 }

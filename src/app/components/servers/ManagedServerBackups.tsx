@@ -1,5 +1,7 @@
 "use client";
 
+import { DiscordSupportText } from "@/app/components/ui/DiscordSupportLink";
+import { DISCORD_SUPPORT_URL } from "../../../../supabase/functions/_shared/discord-support";
 import { useTranslations } from "@/app/lib/localization/client";
 import type { Translator } from "@/app/lib/localization/types";
 
@@ -40,6 +42,7 @@ import { useEffect, useId, useRef, useState, useSyncExternalStore, useTransition
 /** Backup history that failed to load is re-read this many times, this far apart, before the notice stays. */
 const MAXIMUM_LOAD_RETRIES = 5;
 const LOAD_RETRY_MILLISECONDS = 10_000;
+const GAME_OBSERVATION_MAX_AGE_MILLISECONDS = 6 * 60_000;
 
 const TERMINAL_JOB_STATES = new Set(["succeeded", "failed", "cancelled"]);
 const TRANSITIONAL_SERVER_STATES = new Set([
@@ -138,7 +141,7 @@ function ManagedServerBackupsSession({
     const expiredListId = useId();
     const autosaveHeadingId = useId();
     const backupListHeadingId = useId();
-    const restoreMessages = { expired: t("backupReason.expired"), inProgress: t("backupReason.inProgress"), installedBuildUnknown: t("backupReason.installedBuildUnknown"), backupBuildUnknown: t("backupReason.backupBuildUnknown"), buildMismatch: t("backupReason.buildMismatch"), unknown: t("backupReason.unknown") };
+    const restoreMessages = { expired: t("backupReason.expired"), inProgress: t("backupReason.inProgress"), installedBuildUnknown: t("backupReason.installedBuildUnknown"), backupBuildUnknown: t("backupReason.backupBuildUnknown"), buildMismatch: t("backupReason.buildMismatch"), unknown: t("backupReason.unknown", { supportLink: DISCORD_SUPPORT_URL }) };
     const [intentReady, setIntentReady] = useState(false);
     const [storageError, setStorageError] = useState(false);
     const [isPending, startTransition] = useTransition();
@@ -146,7 +149,6 @@ function ManagedServerBackupsSession({
     const [retainedIntent, setRetainedIntent] = useState<ManagedServerBackupInput | null>(null);
     const [feedback, setFeedback] = useState<{ target: string; text: string; jobId?: string } | null>(null);
     const [watchedJobIds, setWatchedJobIds] = useState<ReadonlySet<string>>(() => new Set());
-    const [interruptingJobIds, setInterruptingJobIds] = useState<ReadonlySet<string>>(() => new Set());
     const [showExpired, setShowExpired] = useState(false);
     const retainedIntentRef = useRef<ManagedServerBackupInput | null>(null);
     const polledJobIds = useRef(new Set<string>());
@@ -198,6 +200,18 @@ function ManagedServerBackupsSession({
         && !(status?.job != null
             && status.job.jobId === timedOutSession.jobId
             && TERMINAL_JOB_STATES.has(status.job.state));
+    const observedAt = Date.parse(server.runtimeInsight?.observedAt ?? "");
+    // The observation timestamp belongs to the server summary, so require both reads to agree.
+    const gameObservedRunning = !statusIsStale
+        && pollingSession?.serverId === server.serverId
+        && pollingSession.statusSource === "backup"
+        && pollingSession.jobId === activeJob?.jobId
+        && server.observedGameState === "running"
+        && status?.observedGameState === "running"
+        && status.updatedAt === server.updatedAt
+        && now !== null
+        && observedAt >= now - GAME_OBSERVATION_MAX_AGE_MILLISECONDS
+        && observedAt < now + 60_000;
 
     useEffect(() => {
         const timeout = window.setTimeout(() => {
@@ -317,7 +331,7 @@ function ManagedServerBackupsSession({
     function submitIntent(
         intent: ManagedServerBackupInput,
         pendingId: string,
-        { retry = false, interruptsPlayers = false }: { retry?: boolean; interruptsPlayers?: boolean } = {},
+        { retry = false }: { retry?: boolean } = {},
     ) {
         if (!canManage || loadError || !intentReady || storageError || isPending) return;
         // Persist before dispatch: the response or polling refresh can remove this component.
@@ -336,7 +350,6 @@ function ManagedServerBackupsSession({
                     rememberIntent(null, intent);
                     watchJob(result.jobId);
                     if (intent.action === "restore-save-generation") autosaveJobs.current.set(result.jobId, intent.generation);
-                    if (interruptsPlayers) setInterruptingJobIds((current) => new Set(current).add(result.jobId));
                     polledJobIds.current.add(result.jobId);
                     beginPolling(server.serverId, intent.expectedUpdatedAt, result.jobId, "backup");
                 } else if (result.retrySameRequest) {
@@ -356,8 +369,7 @@ function ManagedServerBackupsSession({
     // Confirms the brief interruption of a running server before creating a backup intent.
     function submitCreateBackup() {
         if (retainedIntentRef.current !== null) return;
-        const interruptsPlayers = serverIsRunning;
-        if (interruptsPlayers && !window.confirm([
+        if (serverIsRunning && !window.confirm([
             t("backups.createABackupNow"),
             t("backups.theServerIsRunningItWillSaveStopBrieflyAndStartAgain"),
         ].join("\n\n"))) return;
@@ -370,7 +382,6 @@ function ManagedServerBackupsSession({
         submitIntent(
             retainManagedServerBackupIntent(retainedIntentRef.current, candidate),
             "create",
-            { interruptsPlayers },
         );
     }
 
@@ -528,7 +539,7 @@ function ManagedServerBackupsSession({
                     )}
                     {reason && (
                         <p className="mt-1 text-xs text-foreground-dim">
-                            {reason}
+                            <DiscordSupportText message={reason} label={t("support.discord")} />
                         </p>
                     )}
                     {rowFeedback?.target === backup.backupId && (
@@ -591,7 +602,7 @@ function ManagedServerBackupsSession({
                     </p>
                 )}
 
-                {shownJob !== null && <BackupJobStatus job={shownJob} interruptsPlayers={interruptingJobIds.has(shownJob.jobId) || serverIsRunning} />}
+                {shownJob !== null && <BackupJobStatus job={shownJob} gameObservedRunning={gameObservedRunning} />}
 
                 {statusIsStale && (
                     <div className={`flex flex-wrap items-center justify-between gap-3 ${workspaceNoticeClass}`}>
@@ -727,27 +738,28 @@ function formatRelativeTime(value: string, now: number, locale: string) {
 }
 
 // Presents durable backup progress without translating external job output.
-function BackupJobStatus({ job, interruptsPlayers }: { job: MyServerBackupJob; interruptsPlayers: boolean }) {
+function BackupJobStatus({ job, gameObservedRunning }: { job: MyServerBackupJob; gameObservedRunning: boolean }) {
     const { t } = useTranslations("managed-server");
     const active = ACTIVE_BACKUP_JOB_STATES.has(job.state);
     const failed = job.state === "failed" || job.state === "cancelled";
-    const message = active
-        ? formatProgress(job, t)
-        : job.state === "succeeded"
-            ? job.action === "backup" ? t("backups.backupCompleted") : t("backups.saveRestoreCompleted")
-            : job.action === "backup" ? t("backups.theBackupDidNotComplete") : t("backups.theSaveRestoreDidNotComplete");
+    // Backup status has no start timestamp. The progress alone avoids attributing a stop to the job.
+    let message: string;
+    if (job.action === "backup" && job.state === "queued") {
+        message = gameObservedRunning ? t("backups.queuedWhileRunning") : t("backups.queued");
+    } else if (active) {
+        message = formatProgress(job, t);
+    } else if (job.state === "succeeded") {
+        message = job.action === "backup" ? t("backups.backupCompleted") : t("backups.saveRestoreCompleted");
+    } else {
+        message = job.action === "backup" ? t("backups.theBackupDidNotComplete") : t("backups.theSaveRestoreDidNotComplete");
+    }
     return (
         <div
             role={failed ? "alert" : "status"}
             className={`flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${failed ? "border-crimson/50 bg-crimson/10 text-red-200" : "border-gold/30 bg-gold/[0.06] text-foreground"}`}
         >
             {active && <LoaderCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 animate-spin text-gold" />}
-            <span>
-                {message}
-                {active && job.action === "backup" && interruptsPlayers && (
-                    <span className="mt-1 block text-xs">{t("backups.theServerIsTemporarilyStoppedForThisBackup")}</span>
-                )}
-            </span>
+            <span>{message}</span>
         </div>
     );
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { getTranslations } from "@/app/lib/localization/server";
 import { MyServersApiError, requestServerOnboarding } from "@/app/lib/hosting/my-servers";
 import { getSupabaseServerClient } from "@/app/lib/supabase/server";
@@ -41,8 +42,14 @@ export async function submitServerOnboarding(input: unknown, expectedPageUserId:
         const code = error instanceof MyServersApiError ? error.code : "operation_failed";
         // These workflow errors occur only AFTER exact receipt lookup. Auth failures,
         // request_conflict and rate_limited do not establish a previous attempt's outcome.
+        if (code === "validated_build_unavailable") {
+            revalidatePath("/servers");
+            const message = intent.action !== "create-server" ? "action.releaseUnavailable"
+                : intent.releaseChannel === "nightly" ? "action.nightlyUnavailable" : "action.publicReleaseUnavailable";
+            return { ok: false, retrySameRequest: false, message: t(message) };
+        }
         if (["capacity_unavailable", "capacity_available", "quota_exhausted", "provider_cannot_assign",
-            "required_approval_missing", "pilot_only", "provisioning_paused", "validated_build_unavailable"].includes(code)) {
+            "required_approval_missing", "pilot_only", "provisioning_paused"].includes(code)) {
             revalidatePath("/servers");
             return { ok: false, retrySameRequest: false, message: t("action.noChange") };
         }
@@ -51,7 +58,7 @@ export async function submitServerOnboarding(input: unknown, expectedPageUserId:
             revalidatePath("/servers");
             return { ok: false, retrySameRequest: false, message: t("action.regionNotOffered") };
         }
-        return uncertain(t("action.unconfirmed"));
+        return uncertain(await ownerMaintenanceMessage(error) ?? t("action.unconfirmed"));
     }
 }
 /** Retains ambiguous requests for safe exact replay. */

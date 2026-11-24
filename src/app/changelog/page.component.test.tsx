@@ -40,6 +40,7 @@ const spanish: Dictionary = {
     "history.eyebrow": "Historial",
     "history.title": "¿Qué cambió?",
     "history.description": "Información de GitHub actualizada cada hora.",
+    "history.olderOnGitHub": "Hay versiones anteriores disponibles en GitHub.",
     "history.count": { one: "{formattedCount} versión disponible", other: "{formattedCount} versiones disponibles" },
     "release.latest": "Última versión",
     "release.label": "Versión",
@@ -85,7 +86,7 @@ it.each([undefined, "invalid-locale", "es"])("keeps metadata and page English fo
     expect(page.props.locale).toBe("en");
     expect(Object.keys(page.props.messages)).toEqual(["changelog"]);
     expect(page.props.messages.changelog).toEqual(english);
-    expect(await generateMetadata()).toEqual({ title: "Changelog", description: english["metadata.description"] });
+    expect(await generateMetadata()).toEqual({ title: "Changelog", description: english["metadata.description"], alternates: { canonical: "/changelog" } });
     expect(container.querySelector("h1")?.textContent).toBe("Bannerlord Co-op Changelog");
     expect(container.textContent).toContain("Showing 1 release");
     expect(container.querySelector("time")?.textContent).toBe("Published September 30, 2026");
@@ -99,7 +100,7 @@ it("preserves external release names, markdown, author, tags, and links while tr
     const { page, container } = await renderPage();
     expect(page.props.locale).toBe("es");
     expect(page.props.messages).toEqual({ changelog: spanish });
-    expect(await generateMetadata()).toEqual({ title: spanish["metadata.title"], description: spanish["metadata.description"] });
+    expect(await generateMetadata()).toEqual({ title: spanish["metadata.title"], description: spanish["metadata.description"], alternates: { canonical: "/changelog" } });
     for (const key of ["hero.eyebrow", "hero.title", "hero.description", "links.githubReleases", "links.fullRelease", "history.eyebrow", "history.title", "history.description", "release.latest", "release.label", "release.prerelease"]) {
         expect(container.textContent).toContain(spanish[key]);
     }
@@ -126,6 +127,16 @@ it("localizes missing release notes and invalid dates as whole messages", async 
     expect(container.textContent).toContain(spanish["release.emptyNotes"]);
     expect(container.querySelector("time")?.textContent).toBe(spanish["release.publishedUnknown"]);
     expect(container.textContent).not.toContain("Published");
+});
+
+it("shows the translated GitHub archive notice when the bounded release history has more pages", async () => {
+    selectSpanish();
+    request.releases.mockResolvedValue({ releases: [release], isAvailable: true, hasMore: true });
+    const { container } = await renderPage();
+    const notice = container.querySelector('[role="status"]');
+    expect(notice?.textContent).toContain(spanish["history.olderOnGitHub"]);
+    expect(notice?.textContent).not.toContain("Older releases are available on GitHub.");
+    expect(notice?.querySelector('a[href="https://github.com/Bannerlord-Coop-Team/BannerlordCoop/releases"]')).not.toBeNull();
 });
 
 it.each([true, false])("localizes empty/unavailable status presentation (available=%s)", async (isAvailable) => {

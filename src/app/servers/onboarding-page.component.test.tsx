@@ -21,6 +21,9 @@ import ServersLoading from "./loading";
 import { localeDefinitions } from "@/app/lib/localization/registry";
 import servers from "@/app/lib/localization/dictionaries/en/servers.json";
 import type { Dictionary } from "@/app/lib/localization/types";
+
+const pageToken = "test-page-owner-access-token";
+
 /** Collects the completed streamed page for existing content regressions. */
 async function renderPage() {
     const stream = await renderToReadableStream(await ServersPage());
@@ -31,12 +34,45 @@ beforeEach(() => {
     vi.resetAllMocks();
     mocks.account.mockResolvedValue(null);
     mocks.prepareAccount.mockImplementation(async (token: string) => (viewer: { id: string }) => mocks.account(viewer.id, token));
-    mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "44444444-4444-4444-8444-444444444444", identities: [{ provider: "discord", identity_data: { sub: "123456789012345678" } }] } } }), getSession: async () => ({ data: { session: { access_token: "test-page-jwt", user: { id: "44444444-4444-4444-8444-444444444444" } } } }) } });
+    mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "44444444-4444-4444-8444-444444444444", identities: [{ provider: "discord", identity_data: { sub: "123456789012345678" } }] } } }), getSession: async () => ({ data: { session: { access_token: pageToken, user: { id: "44444444-4444-4444-8444-444444444444" } } } }) } });
     mocks.list.mockResolvedValue([{ serverId: ONBOARDING_TEST_ID, displayName: "Assigned campaign", operationState: "stopped", observedGameState: "stopped", accessRole: "owner" }]);
     mocks.onboarding.mockResolvedValue(onboardingSummary());
     mocks.publicList.mockResolvedValue([]);
 });
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
+});
+
+it.each([
+    ["control_plane_unavailable", "Temporarily down for maintenance. Please check back in a few minutes.", "Managed servers could not be loaded right now."],
+    ["control_plane_failure", "Managed servers could not be loaded right now.", "Temporarily down for maintenance. Please check back in a few minutes."],
+])("renders the signed-in directory copy for %s from the owner adapter", async (code, expected, other) => {
+    vi.stubEnv("CONTROL_PLANE_ORIGIN", "https://control-plane.example.test");
+    const { listAllMyServers } = await vi.importActual<typeof import("@/app/lib/hosting/my-servers-server")>("@/app/lib/hosting/my-servers-server");
+    mocks.list.mockImplementationOnce(listAllMyServers);
+    const fetchOwner = vi.fn<typeof fetch>(async (url, init) => {
+        expect(url).toBe("https://control-plane.example.test/v1/user/control-plane");
+        const { requestId } = JSON.parse(String(init?.body));
+        expect(init).toMatchObject({
+            method: "POST", credentials: "omit", cache: "no-store", redirect: "manual",
+            headers: { authorization: `Bearer ${pageToken}`, "content-type": "application/json",
+                accept: "application/json", "x-request-id": requestId },
+        });
+        expect(JSON.parse(String(init?.body))).toEqual({ version: 1, requestId, operation: "my-servers", input: { cursor: null, limit: 100 } });
+        return Response.json({ version: 1, requestId, ok: false, error: { code, message: "Internal adapter message", retryable: false } }, { status: 409 });
+    });
+    vi.stubGlobal("fetch", fetchOwner);
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+        const html = await renderPage();
+        expect(fetchOwner).toHaveBeenCalledOnce();
+        expect(html).toContain(expected);
+        expect(html).not.toContain(other);
+        expect(html).not.toContain("Internal adapter message");
+        expect(html).not.toContain(code);
+    } finally { log.mockRestore(); }
+});
 
 // Removed catalog settings must not resurrect an external server alongside authenticated inventory.
 it("real servers page uses only managed inventory and ignores retired external configuration", async () => {
@@ -48,13 +84,13 @@ it("real servers page uses only managed inventory and ignores retired external c
     expect(html).toContain("Trusted onboarding snapshot"); expect(html).toContain('data-user="44444444-4444-4444-8444-444444444444"');
     expect(html).toContain("Assigned campaign"); expect(html).toContain("Public directory");
     expect(html).toContain(`/servers/${ONBOARDING_TEST_ID}`); expect(html).toContain("Offline");
-    expect(mocks.onboarding).toHaveBeenCalledWith("test-page-jwt"); expect(mocks.list).toHaveBeenCalledWith("test-page-jwt", expect.any(AbortSignal));
+    expect(mocks.onboarding).toHaveBeenCalledWith(pageToken); expect(mocks.list).toHaveBeenCalledWith(pageToken, expect.any(AbortSignal));
 });
 it("shares the verified viewer and client within one render, then reads the next session afresh", async () => {
     await renderPage();
     const first = await mocks.navbar.mock.calls[0][0].viewer;
     expect(mocks.auth).toHaveBeenCalledTimes(1);
-    expect(mocks.account).toHaveBeenCalledWith(first.user.id, "test-page-jwt");
+    expect(mocks.account).toHaveBeenCalledWith(first.user.id, pageToken);
     expect(Object.keys(first)).toEqual(["user"]);
 
     mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: null } }), getSession: async () => ({ data: { session: null } }) } });
@@ -98,7 +134,7 @@ it("signed-out page never requests private onboarding or inventory", async () =>
 });
 
 it("website-only accounts fetch allocations and keep existing inventory accessible", async () => {
-    mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "44444444-4444-4444-8444-444444444444", identities: [] } } }), getSession: async () => ({ data: { session: { access_token: "test-page-jwt", user: { id: "44444444-4444-4444-8444-444444444444" } } } }) } });
+    mocks.auth.mockResolvedValue({ auth: { getUser: async () => ({ data: { user: { id: "44444444-4444-4444-8444-444444444444", identities: [] } } }), getSession: async () => ({ data: { session: { access_token: pageToken, user: { id: "44444444-4444-4444-8444-444444444444" } } } }) } });
     const html = await renderPage();
     expect(mocks.onboarding).toHaveBeenCalled(); expect(mocks.list).toHaveBeenCalled(); expect(html).toContain("Assigned campaign");
     expect(html).toContain("Owned servers"); expect(html).toContain("Associated servers");
@@ -172,7 +208,7 @@ it.each(["auth", "account", "onboarding"] as const)("streams the public director
             expect(mocks.account).not.toHaveBeenCalled();
             expect(mocks.onboarding).not.toHaveBeenCalled();
         } else {
-            await vi.waitFor(() => expect(mocks.list).toHaveBeenCalledExactlyOnceWith("test-page-jwt", expect.any(AbortSignal)));
+            await vi.waitFor(() => expect(mocks.list).toHaveBeenCalledExactlyOnceWith(pageToken, expect.any(AbortSignal)));
             await readUntil("Assigned campaign");
             expect(html).not.toContain("Trusted onboarding snapshot");
             if (dependency === "account") expect(mocks.onboarding).not.toHaveBeenCalled();
@@ -217,8 +253,8 @@ it("starts owner inventory during viewer verification but streams it only after 
             html += decoder.decode(chunk.value, { stream: true });
         }
         expect(html).toContain("Public directory</div>");
-        expect(mocks.list).toHaveBeenCalledExactlyOnceWith("test-page-jwt", expect.any(AbortSignal));
-        expect(mocks.prepareAccount).toHaveBeenCalledExactlyOnceWith("test-page-jwt");
+        expect(mocks.list).toHaveBeenCalledExactlyOnceWith(pageToken, expect.any(AbortSignal));
+        expect(mocks.prepareAccount).toHaveBeenCalledExactlyOnceWith(pageToken);
         expect(html).not.toContain("Assigned campaign");
         expect(mocks.account).not.toHaveBeenCalled();
         expect(mocks.onboarding).not.toHaveBeenCalled();
@@ -263,7 +299,7 @@ it("delivers only directory and shared server namespaces and resolves metadata/l
         const page = await ServersPage();
         expect(Object.keys(page.props.messages)).toEqual(["servers", "server-common"]);
         expect(page.props.locale).toBe("en");
-        expect(await generateMetadata()).toEqual({ title: "Directory metadata", description: "Directory description" });
+        expect(await generateMetadata()).toEqual({ title: "Directory metadata", description: "Directory description", alternates: { canonical: "/servers" } });
         const stream = await renderToReadableStream(page);
         await stream.allReady;
         expect(await new Response(stream).text()).toContain("Localized directory");
@@ -293,7 +329,7 @@ it("localizes whole inventory totals and isolated errors without translating ser
         expect(html).toContain("Localized public failure");
         expect(html).toContain("Assigned campaign");
         expect(html).toContain("Second campaign");
-        expect(mocks.list).toHaveBeenCalledWith("test-page-jwt", expect.any(AbortSignal));
+        expect(mocks.list).toHaveBeenCalledWith(pageToken, expect.any(AbortSignal));
     } finally { localeDefinitions.en.dictionaries.servers = original; }
 });
 

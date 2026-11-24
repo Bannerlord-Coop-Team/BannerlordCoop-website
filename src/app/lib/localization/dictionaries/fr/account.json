@@ -1,4 +1,5 @@
 {
+  "support.discord": "notre Discord",
   "metadata.title": "Compte | Bannerlord Co-op",
   "heading": "Compte",
   "defaultName": "Votre compte",
@@ -7,7 +8,7 @@
   "error.rateLimited": "Trop de modifications du compte ont été effectuées, ou la synchronisation n’est pas encore à jour. Attendez la mise à jour de l’état avant de réessayer. L’autorisation expire dans un délai de dix minutes. La dissociation et la gestion de vos serveurs existants restent disponibles.",
   "error.retry": "Le compte est occupé. Vérifiez l’état à jour de la connexion avant de réessayer. Une nouvelle autorisation remplace les tentatives inachevées.",
   "error.lastIdentity": "Discord est votre seule méthode de connexion. Associez une autre méthode de connexion avant de le déconnecter.",
-  "error.discordDisconnect": "Discord n’a pas pu être déconnecté. L’état se met à jour automatiquement ; réessayez dès qu’il est disponible. Si le problème persiste, contactez l’assistance.",
+  "error.discordDisconnect": "Discord n’a pas pu être déconnecté. L’état se met à jour automatiquement ; réessayez dès qu’il est disponible. Si le problème persiste, ouvrez un ticket d’assistance « General Help » sur {supportLink}.",
   "error.patreonDisconnect": "Patreon n’a pas pu être déconnecté. L’état se met à jour automatiquement ; attendez l’état actuel avant de réessayer.",
   "error.discordRepair": "L’association de Discord n’a pas pu être finalisée. Vérifiez votre connexion actuelle ci-dessous avant de réessayer. Votre session a peut-être changé, la demande a peut-être expiré, ou Discord appartient peut-être à un autre compte. Nous ne remplaçons jamais l’association par une connexion.",
   "error.patreonAuthorization": "L’autorisation Patreon a été annulée ou n’a pas pu être finalisée. Vérifiez votre connexion actuelle ci-dessous, puis connectez-vous ou vérifiez de nouveau si nécessaire. Un compte Patreon ne peut appartenir qu’à un seul compte du site.",
@@ -25,7 +26,7 @@
   "membership.verified": "Abonnement vérifié.",
   "membership.nonqualifying": "{installer} ainsi qu’à d’autres avantages.",
   "membership.nightlyInstaller": "Les soutiens sur Patreon ont accès à l’installateur des versions nocturnes (voici comment l’utiliser)",
-  "membership.reviewRequired": "Votre abonnement doit être examiné. Contactez l’assistance avant de réessayer.",
+  "membership.reviewRequired": "Votre abonnement doit être examiné. Ouvrez un ticket d’assistance « General Help » sur {supportLink} avant de réessayer.",
   "membership.verifyRequired": "Vérifiez votre abonnement avant de créer un nouveau serveur.",
   "membership.syncPending": "Votre allocation de serveurs est en cours de mise à jour. Cela prend généralement quelques secondes ; le statut s’actualise automatiquement.",
   "membership.syncUnavailable": "Votre allocation de serveurs n’a pas pu être vérifiée.",
@@ -44,5 +45,9 @@
   "disconnect.confirm": "Confirmer la déconnexion de {provider}",
   "disconnect.cancel": "Annuler",
   "loading.label": "Chargement du compte",
-  "loading.status": "Chargement du compte…"
+  "loading.status": "Chargement du compte…",
+  "boosty.linked": "Votre abonnement Boosty est associé via l’adresse e-mail de votre compte.",
+  "boosty.notFound": "Aucun abonnement Boosty n’utilise l’adresse e-mail de ce compte. Pour en associer un, abonnez-vous sur Boosty avec la même adresse e-mail.",
+  "boosty.nonqualifying": "Votre abonnement Boosty n’inclut pas de niveau éligible.",
+  "boosty.checking": "Votre adhésion Boosty sera vérifiée sous peu."
 }

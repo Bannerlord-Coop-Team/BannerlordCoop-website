@@ -41,16 +41,18 @@ jobs:
         run: npm run test:components -- src/app/admin/login-return.component.test.tsx src/app/auth/callback/route.component.test.tsx
       - name: Replay the sanitized subscription funding report
         run: npm run replay:patreon-lapse
-      - name: Render the IDs-only subscription email sample
+      - name: Render the synthetic subscription email samples
         run: npm run render:patreon-lapse
       - name: Check the committed email sample
-        run: git diff --exit-code -- docs/evidence/patreon-lapse-links.html docs/evidence/patreon-lapse-links.txt
+        run: git diff --exit-code -- docs/evidence/patreon-lapse-links.html docs/evidence/patreon-lapse-links.txt docs/evidence/patreon-lapse-emails.html docs/evidence/patreon-lapse-emails.txt
       - uses: actions/upload-artifact@v4
         with:
           name: subscription-funding-email-sample
           path: |
             docs/evidence/patreon-lapse-links.html
             docs/evidence/patreon-lapse-links.txt
+            docs/evidence/patreon-lapse-emails.html
+            docs/evidence/patreon-lapse-emails.txt
           if-no-files-found: error
       - run: node scripts/deploy-hosting-functions.mjs plan
 

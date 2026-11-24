@@ -75,11 +75,21 @@ test("the owner email names the server, the UTC deadline and how to keep it", ()
     assert.deepEqual(message.to, ["owner@example.com"]);
     assert.equal(message.from, "admin@bannerlordcoop.com");
     assert.equal(message.fromName, "Bannerlord Co-op");
+    assert.match(message.text, /General Help support ticket in our Discord \(https:\/\/discord\.gg\/5vJzfz5Zzy\)/);
+    assert.match(message.html ?? "", /<a href="https:\/\/discord\.gg\/5vJzfz5Zzy" target="_blank" rel="noopener noreferrer">our Discord<\/a>/);
     assert.equal(message.subject, "[BannerlordCoop] Your server \"GSR\" has been stopped and will be removed after 2026-10-15 15:00 UTC");
-    assert.match(message.text, /has been stopped because the Patreon membership/u);
+    assert.match(message.text, /has been stopped because the supporter membership/u);
+    // Grace covers every funding provider (a released Patreon or Boosty binding), so the copy names none exclusively.
+    assert.doesNotMatch(message.text, /the Patreon membership|qualifying Patreon account/u);
     assert.match(message.text, /locked and scheduled for removal after 2026-10-15 15:00 UTC\./u);
     assert.match(message.text, /stays stopped; press Start to run it again\./u);
     assert.match(message.text, /https:\/\/bannerlordcoop\.com\/account/u);
+});
+
+test("escapes the server name in the HTML email", () => {
+    const message = subscriptionGraceMessage({ ...alert({ serverName: "<game> & players" }), email: "owner@example.com" }, siteUrl, sender);
+    assert.match(message.html ?? "", /&lt;game&gt; &amp; players/);
+    assert.doesNotMatch(message.html ?? "", /<game>/);
 });
 
 test("emails each claimed grace once and skips accounts without an email", async () => {

@@ -4,8 +4,10 @@ $ProgressPreference = 'SilentlyContinue'
 # Windows adds Expect: 100-continue on POST; some DPI and proxies then return an empty body.
 try { [Net.ServicePointManager]::Expect100Continue = $false } catch { }
 
-$script:InstallerUri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev/install.ps1'
-$script:NightlyGatewayUri = 'https://bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev'
+$script:NightlyGatewayHost = 'nightly.bannerlordcoop.com'
+$script:NightlyGatewayUri = "https://$($script:NightlyGatewayHost)"
+$script:InstallerUri = "$($script:NightlyGatewayUri)/install.ps1"
+$script:NightlyActivationPattern = "^$([regex]::Escape($script:NightlyGatewayUri))/activate\?"
 $script:ClientManifestUri = "$($script:NightlyGatewayUri)/v1/manifests/client"
 $script:ReleaseManifestUri = "$($script:NightlyGatewayUri)/v1/manifests/release"
 $script:NightlyManifestVersionHeader = 'X-Bannerlord-Coop-Nightly-Version'
@@ -193,7 +195,7 @@ function Test-NightlyDeviceSessionResponse {
     if ($null -eq $Response -or $Response -is [string] -or $Response -is [xml]) { return $false }
     return [string]$Response.device_code -cmatch '^[A-Za-z0-9_-]{43}$' -and
         [string]$Response.user_code -cmatch '^[A-Z2-9]{4}-[A-Z2-9]{4}$' -and
-        [string]$Response.verification_uri -cmatch '^https://bannerlordcoop-nightly-gateway\.garrett-luskey\.workers\.dev/activate\?'
+        [string]$Response.verification_uri -cmatch $script:NightlyActivationPattern
 }
 
 function Get-NightlyDeviceSessionShape {
@@ -217,7 +219,7 @@ function Get-NightlyDeviceSessionShape {
     $uri = [string]$Response.verification_uri
     $deviceValid = ($deviceCode -cmatch '^[A-Za-z0-9_-]{43}$').ToString().ToLowerInvariant()
     $userValid = ($userCode -cmatch '^[A-Z2-9]{4}-[A-Z2-9]{4}$').ToString().ToLowerInvariant()
-    $uriValid = ($uri -cmatch '^https://bannerlordcoop-nightly-gateway\.garrett-luskey\.workers\.dev/activate\?').ToString().ToLowerInvariant()
+    $uriValid = ($uri -cmatch $script:NightlyActivationPattern).ToString().ToLowerInvariant()
     $expires = [string]$Response.expires_in
     $interval = [string]$Response.interval
     if ($expires -notmatch '^\d{1,5}$') { $expires = 'invalid' }
@@ -866,6 +868,50 @@ function Get-NightlyDeviceSessionFailureMessage {
     return "$message`nSession diagnostics v2 (safe to share):`n  $($Attempts -join "`n  ")"
 }
 
+# Describes a failed verification check as safe-to-share text: HTTP status, gateway error code,
+# response kind and exception chain. Never includes device codes or raw response bodies.
+function Get-NightlyPollFailureDetail {
+    param(
+        [Parameter(Mandatory = $true)]$ErrorRecord,
+        [int]$StatusCode,
+        [string]$ErrorCode
+    )
+
+    $parts = @()
+    if ($StatusCode -gt 0) { $parts += "HTTP $StatusCode" }
+    $body = $null
+    try { $body = ConvertTo-NightlyJsonObject ([string]$ErrorRecord.ErrorDetails.Message) } catch { }
+    if (-not $ErrorCode) { $ErrorCode = Get-NightlyGatewayErrorCode $body }
+    if ($ErrorCode) { $parts += "error=$ErrorCode" }
+    if (-not [string]::IsNullOrWhiteSpace([string]$body) -and -not $ErrorCode) {
+        $parts += "response=$(Get-NightlyResponseInterceptKind $body)"
+        if (([string]$body).Trim() -match '^error code: \d{3,4}$') { $parts += ([string]$body).Trim() }
+    }
+    $exception = $null
+    try { $exception = $ErrorRecord.Exception } catch { }
+    while ($null -ne $exception) {
+        $text = ([string]$exception.Message).Trim()
+        if ($text) { $parts += "$($exception.GetType().Name): $text" }
+        $exception = $exception.InnerException
+    }
+    if ($parts.Count -eq 0) { return 'no error details were returned' }
+    return $parts -join '; '
+}
+
+# Reports whether a failed verification check is temporary and worth retrying: no HTTP response,
+# timeout, rate limit, or an unnamed/internal gateway outage. Named upstream failures fail fast.
+function Test-NightlyTransientPollFailure {
+    param([int]$StatusCode, [string]$ErrorCode)
+
+    if ($StatusCode -eq 0) { return $true }
+    if ($StatusCode -eq 408 -or $StatusCode -eq 429) { return $true }
+    if ($StatusCode -lt 500) { return $false }
+    if (-not $ErrorCode) { return $true }
+    return $ErrorCode -cin @('internal_error', 'function_unreachable', 'function_response_invalid')
+}
+
+# Classifies one Discord verification check into Continue, Accept, Retry or Fail.
+# Every non-Accept outcome carries a message, so callers never need to rethrow.
 function Get-NightlyTokenPollDecision {
     param(
         $Response,
@@ -928,7 +974,18 @@ function Get-NightlyTokenPollDecision {
             Message = "The nightly authorization token is invalid. Details: $shape"
         }
     }
-    return [pscustomobject]@{ Action = 'Rethrow'; Token = ''; Message = '' }
+    if (-not $errorCode) {
+        try { $errorCode = Get-NightlyGatewayErrorCode (ConvertTo-NightlyJsonObject ([string]$ErrorRecord.ErrorDetails.Message)) } catch { }
+    }
+    $detail = Get-NightlyPollFailureDetail -ErrorRecord $ErrorRecord -StatusCode $statusCode -ErrorCode $errorCode
+    if (Test-NightlyTransientPollFailure -StatusCode $statusCode -ErrorCode $errorCode) {
+        return [pscustomobject]@{ Action = 'Retry'; Token = ''; Message = $detail }
+    }
+    return [pscustomobject]@{
+        Action = 'Fail'
+        Token = ''
+        Message = "The Discord verification check failed. Details: $detail"
+    }
 }
 
 function Get-NightlyAccessToken {
@@ -978,6 +1035,7 @@ function Get-NightlyAccessToken {
     Start-Process $verificationUri
 
     $deadline = [datetimeoffset]::UtcNow.AddSeconds([Math]::Min(600, [int]$session.expires_in))
+    $lastRetryDetail = ''
     while ([datetimeoffset]::UtcNow -lt $deadline) {
         Start-Sleep -Seconds ([Math]::Max($script:NightlyTokenPollMinimumSeconds, [int]$session.interval))
         $decision = $null
@@ -994,8 +1052,15 @@ function Get-NightlyAccessToken {
             Write-Host 'Nightly access verified.' -ForegroundColor Green
             return [string]$decision.Token
         }
-        if ($decision.Action -eq 'Fail') { throw $decision.Message }
-        throw
+        if ($decision.Action -eq 'Retry') {
+            $lastRetryDetail = [string]$decision.Message
+            Write-Host "Verification check failed, retrying. Details: $lastRetryDetail" -ForegroundColor Yellow
+            continue
+        }
+        throw $decision.Message
+    }
+    if ($lastRetryDetail) {
+        throw "Discord verification timed out after repeated check failures. Last error: $lastRetryDetail"
     }
     throw 'Discord verification timed out. Run the installer again when you are ready to authorize it.'
 }
@@ -1017,7 +1082,7 @@ function Get-InstallerPin {
     if ([string]::IsNullOrWhiteSpace($value)) { return '' }
     $pin = $value.Trim()
     if ($pin -cnotmatch '^[A-Za-z0-9_-]{43}$') {
-        throw 'The create-build installer pin is invalid. Ask staff for a new /create-build link.'
+        throw 'The create-build installer pin is invalid. You need a new /create-build link. Include that in your support ticket.'
     }
     return $pin
 }
@@ -1044,28 +1109,28 @@ function Get-CreateBuildPinRedeemDecision {
         return [pscustomobject]@{
             Action = 'Fail'
             Token = ''
-            Message = 'That create-build installer link was already used. Ask staff for a new /create-build link.'
+            Message = 'That create-build installer link was already used. You need a new /create-build link. Include that in your support ticket.'
         }
     }
     if ($errorCode -ceq 'expired_token') {
         return [pscustomobject]@{
             Action = 'Fail'
             Token = ''
-            Message = 'That create-build installer link has expired. Ask staff for a new /create-build link.'
+            Message = 'That create-build installer link has expired. You need a new /create-build link. Include that in your support ticket.'
         }
     }
     if ($errorCode -ceq 'pin_incomplete') {
         return [pscustomobject]@{
             Action = 'Fail'
             Token = ''
-            Message = 'That create-build installer is not ready yet. Ask staff to run /create-build again.'
+            Message = 'That create-build installer is not ready yet. It needs to be regenerated with /create-build. Include that in your support ticket.'
         }
     }
     if ($statusCode -eq 400 -or $statusCode -eq 401 -or $errorCode -ceq 'invalid_request') {
         return [pscustomobject]@{
             Action = 'Fail'
             Token = ''
-            Message = 'That create-build installer link is invalid. Ask staff for a new /create-build link.'
+            Message = 'That create-build installer link is invalid. You need a new /create-build link. Include that in your support ticket.'
         }
     }
     if ($null -eq $ErrorRecord) {
@@ -1085,17 +1150,20 @@ function Get-CreateBuildPinAccessToken {
     Write-Host 'Create-build installer' -ForegroundColor Cyan
     Write-Host 'Redeeming the one-time installer link for this exact client and dedicated-server pair.'
     $decision = $null
+    $redeemError = $null
     try {
         $response = Invoke-RestMethod -Method Post -Uri "$($script:NightlyGatewayUri)/v1/pins/token" `
             -ContentType 'application/x-www-form-urlencoded' `
             -Body @{ pin = $Pin }
         $decision = Get-CreateBuildPinRedeemDecision -Response $response
     } catch {
+        $redeemError = $_
         $decision = Get-CreateBuildPinRedeemDecision -ErrorRecord $_
     }
     if ($decision.Action -eq 'Accept') { return [string]$decision.Token }
     if ($decision.Action -eq 'Fail') { throw $decision.Message }
-    throw
+    $detail = Get-NightlyPollFailureDetail -ErrorRecord $redeemError -StatusCode (Get-HttpStatusCode $redeemError)
+    throw "The create-build installer link could not be redeemed. Details: $detail"
 }
 
 function Get-NormalizedPath {
@@ -1312,7 +1380,7 @@ function Test-NightlyClientArtifactUri {
     }
     try { $parsed = [Uri]$Uri } catch { return $false }
     if ($parsed.Scheme -cne 'https' -or
-        $parsed.Authority -cne 'bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev' -or
+        $parsed.Authority -cne $script:NightlyGatewayHost -or
         -not [string]::IsNullOrEmpty($parsed.Query) -or
         -not [string]::IsNullOrEmpty($parsed.Fragment)) { return $false }
     return $parsed.AbsolutePath -ceq "/v1/artifacts/nightly/clients/$HeadSha/$Sha256/Coop.7z"
@@ -1331,7 +1399,7 @@ function Test-NightlyServerArtifactUri {
     }
     try { $parsed = [Uri]$Uri } catch { return $false }
     if ($parsed.Scheme -cne 'https' -or
-        $parsed.Authority -cne 'bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev' -or
+        $parsed.Authority -cne $script:NightlyGatewayHost -or
         -not [string]::IsNullOrEmpty($parsed.Query) -or
         -not [string]::IsNullOrEmpty($parsed.Fragment)) { return $false }
     return $parsed.AbsolutePath -ceq "/v1/artifacts/nightly/windows/full/$HeadSha/$ServerSha/$Sha256/BannerlordCoop-DedicatedServer-Win64.7z"
@@ -1515,7 +1583,7 @@ function Test-PinClientArtifactUri {
 
     try { $parsed = [Uri]$Uri } catch { return $false }
     if ($parsed.Scheme -cne 'https' -or
-        $parsed.Host -cne 'bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev' -or
+        $parsed.Host -cne $script:NightlyGatewayHost -or
         -not [string]::IsNullOrEmpty($parsed.Query) -or
         -not [string]::IsNullOrEmpty($parsed.Fragment)) { return $false }
     return $parsed.AbsolutePath -cmatch '^/v1/artifacts/pins/\d{17,20}/Coop\.7z$'
@@ -1540,7 +1608,7 @@ function Get-PinManifest {
     } catch {
         $statusCode = Get-HttpStatusCode $_
         if ($statusCode -eq 401 -or $statusCode -eq 403) {
-            throw 'The create-build installer session expired. Ask staff for a new /create-build link.'
+            throw 'The create-build installer session expired. You need a new /create-build link. Include that in your support ticket.'
         }
         throw
     }
@@ -1576,7 +1644,7 @@ function Test-PublicArtifactUri {
 
     try { $parsed = [Uri]$Uri } catch { return $false }
     if ($parsed.Scheme -cne 'https' -or
-        $parsed.Host -cne 'bannerlordcoop-nightly-gateway.garrett-luskey.workers.dev' -or
+        $parsed.Host -cne $script:NightlyGatewayHost -or
         -not [string]::IsNullOrEmpty($parsed.Query) -or
         -not [string]::IsNullOrEmpty($parsed.Fragment)) { return $false }
     $pattern = if ($Kind -eq 'base') {
@@ -2289,13 +2357,13 @@ function Get-InstallationSupportLines {
     if ($FailureMessage -match 'The nightly authorization token is invalid') {
         $lines += 'If Discord desktop did not complete verification, run the installer again and open its verification link in a web browser.'
     } elseif ($FailureMessage -match '(?i)7-Zip failed to extract|CRC Failed') {
-        $lines += 'The downloaded archive failed 7-Zip integrity checks. Run the installer again; if it repeats, copy this exact message when asking for help.'
+        $lines += 'The downloaded archive failed 7-Zip integrity checks. Run the installer again. If it repeats, include this exact message in your support ticket.'
     } elseif ([string]::IsNullOrWhiteSpace($FailureMessage) -or
         (($FailureMessage -match '(?i)download|HTTP|gateway|DNS|network|proxy|hash|incomplete|authorization') -and
             $FailureMessage -notmatch 'GoodbyeDPI|zapret|ByeDPI|SpoofDPI|PowerTunnel|GreenTunnel|youtubeUnblock|Cloudflare WARP|HTTPS scanning|DNS for the nightly|hostname could not be resolved|network filter replaced|Cloudflare challenged|internal_error|HTTP 50|not available yet|#nightly-releases|could not validate')) {
         $lines += 'If a DNS tool such as GoodbyeDPI is interfering, try Cloudflare WARP or turn that tool off, then run the installer again.'
     }
-    $lines += 'If you need help, copy this message and ask in the Bannerlord Co-op Discord.'
+    $lines += 'If you need help, create a General Help support ticket in our Discord (https://discord.gg/5vJzfz5Zzy) and include this message.'
     return $lines
 }
 

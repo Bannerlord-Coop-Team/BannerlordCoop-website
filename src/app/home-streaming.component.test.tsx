@@ -13,7 +13,7 @@ vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerClient: async () 
 vi.mock("@/app/lib/network-stats", () => ({ getNetworkStats: vi.fn() }));
 vi.mock("@/app/lib/roadmap", () => ({ getRoadmap: async () => [] }));
 vi.mock("@/app/lib/homepage-videos", () => ({ getHomepageVideos: async () => [] }));
-vi.mock("@/app/lib/youtube", () => ({ getYouTubeCreators: async () => [] }));
+vi.mock("@/app/lib/homepage-creators", () => ({ getHomepageCreators: async () => [] }));
 
 afterEach(() => vi.resetAllMocks());
 

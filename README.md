@@ -171,6 +171,14 @@ Server-only Supabase secret key used by protected member-role administration to 
 
 Comma-separated bootstrap administrator emails. These users always have admin access and cannot be demoted through the member administration page.
 
+### `NIGHTLY_FUNCTION_URL`
+
+Server-only base URL of the `nightly-gateway` Supabase Edge Function that backs the `/nightly/*` pages (installer activation, the Discord callback, sponsor claims and the sponsor portal); see `docs/nightly-backend-contract.md`. Production sets it in `wrangler.jsonc` `vars`. It must be `https://` (loopback `http://` is accepted only under `next dev`), without credentials, query or fragment; otherwise every nightly page fails closed with the generic access error.
+
+### `NIGHTLY_WEBSITE_KEY`
+
+Server-only shared secret sent as `x-nightly-website-key` on every Edge Function call. It must match the Edge Function's `NIGHTLY_WEBSITE_KEY` secret. Set it with `npx wrangler secret put NIGHTLY_WEBSITE_KEY`; never commit it or use a `NEXT_PUBLIC_` variable.
+
 ### `CONTROL_PLANE_ORIGIN`
 
 Optional server-only origin for the website's direct control-plane reads: the administrator pane reads (`/v1/admin/control-plane`), owner inventory reads (`/v1/user/control-plane`) and the public directory (`/v1/public/control-plane`). Unset or empty uses the reviewed production origin `https://control-plane.bannerlordcoop.com`. An override must be a bare absolute `https://` origin with no credentials, path, query or fragment, for example `https://localhost:9443` for a local stack behind a trusted TLS proxy. Any other value fails closed: the read throws before a request is sent. The routes stay fixed in code; this value only selects the origin. It does not affect `CONTROL_PLANE_CONSOLE_ORIGIN` or the Edge Functions' `CONTROL_PLANE_WEB_ORIGINS`. Never use a `NEXT_PUBLIC_` variable for it.
@@ -211,33 +219,12 @@ Do not replace the unavailable state with mock production values. Live values sh
 
 ## Media Configuration
 
-Official YouTube links and approved creator channel IDs are configured in:
+Homepage videos and featured creators are rows in Supabase, so adding or reordering them needs no deployment:
 
-```text
-src/app/components/home/media/CommunityMedia.tsx
-```
+- Videos: `public.homepage_videos`, documented in [docs/homepage-videos.md](docs/homepage-videos.md).
+- Creators: `public.homepage_creators`, documented in [docs/homepage-creators.md](docs/homepage-creators.md).
 
-Videos require only a YouTube URL:
-
-```ts
-{ href: "https://www.youtube.com/watch?v=VIDEO_ID" }
-```
-
-YouTube creators require only a channel ID:
-
-```ts
-{ channelId: "UC_CHANNEL_ID" }
-```
-
-The server-side YouTube utility retrieves the remaining metadata.
-
-Creators on other platforms, such as Twitch, carry their full profile instead, because the site has no API integration for those platforms. Their avatar host must be allowed in `next.config.ts`:
-
-```ts
-{ profile: { id: "twitch:name", name: "Name", description: "", avatar: "https://...", href: "https://www.twitch.tv/name" } }
-```
-
-Creators appear in the order they are listed.
+YouTube rows need only a video URL or channel ID; the server-side YouTube utility retrieves the remaining metadata. Remote image hosts are listed in `src/app/lib/remote-image-hosts.ts`.
 
 ## Project Structure
 

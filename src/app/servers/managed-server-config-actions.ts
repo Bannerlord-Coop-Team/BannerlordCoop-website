@@ -1,5 +1,6 @@
 "use server";
 
+import { ownerMaintenanceMessage } from "@/app/lib/hosting/owner-maintenance";
 import { requestServerMods } from "@/app/lib/hosting/server-mods-api";
 import { parseModsState } from "../../../supabase/functions/_shared/server-mods-contract";
 import { maximumBattleSize } from "../../../supabase/functions/_shared/battle-size-policy";
@@ -64,15 +65,14 @@ async function failure(error: unknown, notSubmitted = false): Promise<ManagedSer
         control_plane_failure: t("action.config.controlPlaneFailure"),
         runtime_unavailable: t("action.config.runtimeUnavailable"),
         rate_limited: t("action.config.tooManyRequestsWereSentWaitAMomentAndTry"),
-        control_plane_unavailable: t("action.config.theHostingServiceCouldNotBeReachedTryAgain"),
         server_api_unavailable: t("action.config.theHostingServiceCouldNotBeReachedTryAgain"),
         invalid_request: t("action.config.theSettingsWereRejectedCheckTheValuesAndTryAgain"),
     };
     const refusal = !notSubmitted && !Object.hasOwn(messages, code) ? ownerRefusalMessage(error, t) : null;
     if (refusal !== null) return { ok: false, message: refusal, reload: false, notSubmitted: true };
     return { ok: false, notSubmitted, reload: !notSubmitted && RELOAD_CODES.has(code),
-        message: notSubmitted ? t("action.config.theSettingsWereNotSentCheckTheValuesAndTry")
-            : messages[code] ?? t("action.config.theChangeCouldNotBeConfirmedReloadTheSettingsTo") };
+        message: await ownerMaintenanceMessage(error) ?? (notSubmitted ? t("action.config.theSettingsWereNotSentCheckTheValuesAndTry")
+            : messages[code] ?? t("action.config.theChangeCouldNotBeConfirmedReloadTheSettingsTo")) };
 }
 
 // Authenticates a configuration read and presents existing failure outcomes.

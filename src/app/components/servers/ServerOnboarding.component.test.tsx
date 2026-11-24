@@ -66,6 +66,14 @@ function deferred() {
 }
 // Text includes the literal space before the decorative arrow in JSX.
 describe("ServerOnboarding real component and server-action recovery", () => {
+    it("explains that region capacity does not guarantee release availability", async () => {
+        await setup();
+        const dialog = container.querySelector("dialog")!;
+        expect(dialog.textContent).toContain("Release availability is checked when you create a server. Nightly Release may be temporarily paused even when a region has capacity.");
+        expect(dialog.querySelector('input[name="release-channel"][value="stable"]')).not.toBeNull();
+        expect(dialog.querySelector('input[name="release-channel"][value="nightly"]')).not.toBeNull();
+        expect(mocks.request).not.toHaveBeenCalled();
+    });
     it("offers only backend-authorized unused allocation and fails safely for unknown or unavailable summary", async () => {
         await render(); expect(container.textContent).toContain("You have a server available"); expect(container.textContent).not.toContain("Patreon");
         for (const summary of [null, { ...onboardingSummary(), unavailableReason: "provisioning_paused" as const }, { ...onboardingSummary(), eligibility: { eligible: false, reason: "no_grant" as const, granted: 0, used: 0, remaining: 0 } }, { ...onboardingSummary(), eligibility: { eligible: false, reason: "quota_exhausted" as const, granted: 1, used: 1, remaining: 0 } }]) {

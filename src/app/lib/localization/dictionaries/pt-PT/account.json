@@ -1,4 +1,5 @@
 {
+  "support.discord": "nosso Discord",
   "metadata.title": "Conta | Bannerlord Co-op",
   "heading": "Conta",
   "defaultName": "A sua conta",
@@ -7,7 +8,7 @@
   "error.rateLimited": "Foram efetuadas demasiadas alterações à conta ou a sincronização ainda está em curso. Aguarde a atualização do estado antes de tentar novamente. A autorização expira no prazo de dez minutos. A desassociação de contas e a gestão dos servidores existentes continuam disponíveis.",
   "error.retry": "A conta está ocupada. Consulte o estado atualizado da associação antes de tentar novamente. Uma nova autorização substitui as tentativas por concluir.",
   "error.lastIdentity": "O Discord é o seu único método de início de sessão. Associe outro método de início de sessão antes de o desassociar.",
-  "error.discordDisconnect": "Não foi possível desassociar o Discord. O estado é atualizado automaticamente; tente novamente quando estiver disponível. Se o problema persistir, contacte o apoio.",
+  "error.discordDisconnect": "Não foi possível desassociar o Discord. O estado é atualizado automaticamente; tente novamente quando estiver disponível. Se o problema persistir, abra um pedido de apoio em «General Help» no {supportLink}.",
   "error.patreonDisconnect": "Não foi possível desassociar o Patreon. O estado é atualizado automaticamente; aguarde a atualização do estado antes de tentar novamente.",
   "error.discordRepair": "Não foi possível concluir a associação ao Discord. Verifique a associação atual abaixo antes de tentar novamente. A sua sessão pode ter mudado, o pedido pode ter expirado ou a conta do Discord pode pertencer a outra conta. Nunca substituímos a associação pelo início de sessão.",
   "error.patreonAuthorization": "A autorização do Patreon foi cancelada ou não foi possível concluí-la. Verifique a associação atual abaixo e, se necessário, volte a associar ou verificar a conta. Uma conta do Patreon só pode pertencer a uma conta do site.",
@@ -25,7 +26,7 @@
   "membership.verified": "Subscrição verificada.",
   "membership.nonqualifying": "{installer} e outras vantagens.",
   "membership.nightlyInstaller": "Os apoiantes no Patreon têm acesso ao instalador da versão noturna (saiba como utilizá-lo)",
-  "membership.reviewRequired": "A sua subscrição precisa de ser revista. Contacte o apoio antes de tentar novamente.",
+  "membership.reviewRequired": "A sua subscrição precisa de ser revista. Abra um pedido de apoio em «General Help» no {supportLink} antes de tentar novamente.",
   "membership.verifyRequired": "Verifique a sua subscrição antes de criar um novo servidor.",
   "membership.syncPending": "O teu limite de servidores está a ser atualizado. Normalmente demora alguns segundos; o estado é atualizado automaticamente.",
   "membership.syncUnavailable": "Não foi possível verificar a sua quota de servidores.",
@@ -44,5 +45,9 @@
   "disconnect.confirm": "Confirmar a desassociação de {provider}",
   "disconnect.cancel": "Cancelar",
   "loading.label": "Carregamento da conta",
-  "loading.status": "A carregar a conta…"
+  "loading.status": "A carregar a conta…",
+  "boosty.linked": "A sua subscrição do Boosty está associada através do e-mail da sua conta.",
+  "boosty.notFound": "Nenhuma subscrição do Boosty utiliza o e-mail desta conta. Para associar uma, subscreva no Boosty com o mesmo e-mail.",
+  "boosty.nonqualifying": "A sua subscrição do Boosty não inclui um nível elegível.",
+  "boosty.checking": "A sua subscrição do Boosty será verificada em breve."
 }

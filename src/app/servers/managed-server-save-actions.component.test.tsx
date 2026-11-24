@@ -1,3 +1,5 @@
+import { createTranslator } from "@/app/lib/localization/translator";
+import type { Locale } from "@/app/lib/localization/types";
 import { readdirSync, readFileSync } from "node:fs";
 import { beforeEach, expect, it, vi } from "vitest";
 import { deleteManagedServerSave, readManagedServerSaveDeletion } from "./managed-server-save-actions";
@@ -14,7 +16,7 @@ vi.mock("@/app/lib/hosting/my-servers", async (original) => ({
 }));
 vi.mock("@/app/lib/localization/server", () => ({ getTranslations: async () => {
     const dictionary = JSON.parse(readFileSync(`src/app/lib/localization/dictionaries/${mocks.locale}/managed-server.json`, "utf8"));
-    return { t: (key: string) => dictionary[key] };
+    return createTranslator(mocks.locale as Locale, dictionary);
 } }));
 const id = "11111111-1111-4111-8111-111111111111";
 const input = { serverId: id, saveId: id, requestId: id, expectedUpdatedAt: "2026-10-02T12:00:00.000Z", confirmationText: "Campaign" };
@@ -55,7 +57,7 @@ it.each(locales)("translates durable outcomes and uses generic copy for unknown 
         const status = { serverId: id, jobId: id, saveId: id, state, errorCode };
         mocks.status.mockResolvedValueOnce(status);
         expect(dictionary[`campaigns.${key}`]).toBeTypeOf("string");
-        expect(await readManagedServerSaveDeletion(id, id, "owner")).toEqual({ ok: true, status, message: dictionary[`campaigns.${key}`] });
+        expect(await readManagedServerSaveDeletion(id, id, "owner")).toEqual({ ok: true, status, message: dictionary[`campaigns.${key}`].replace("{supportLink}", "https://discord.gg/5vJzfz5Zzy") });
     }
     mocks.status.mockRejectedValueOnce(new MyServersApiError("invalid_request", "Old CP"));
     expect(await readManagedServerSaveDeletion(id, id, "owner")).toEqual({ ok: false, message: dictionary["campaigns.deleteStatusUnavailable"] });

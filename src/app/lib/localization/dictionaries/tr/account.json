@@ -1,4 +1,5 @@
 {
+  "support.discord": "Discord sunucumuzda",
   "metadata.title": "Hesap | Bannerlord Co-op",
   "heading": "Hesap",
   "defaultName": "Hesabınız",
@@ -7,7 +8,7 @@
   "error.rateLimited": "Çok fazla hesap değişikliği yapıldı ya da eşitleme hâlâ tamamlanmadı. Yeniden denemeden önce güncel durumun görünmesini bekleyin. Yetkilendirme on dakika içinde sona erer. Bağlantıyı kaldırma ve mevcut sunucu yönetimi kullanılabilir durumda kalır.",
   "error.retry": "Hesap şu anda meşgul. Yeniden denemeden önce güncel bağlantı durumunu kontrol edin. Yeni bir yetkilendirme, tamamlanmamış denemelerin yerini alır.",
   "error.lastIdentity": "Discord tek oturum açma yönteminizdir. Bağlantısını kesmeden önce başka bir oturum açma yöntemi bağlayın.",
-  "error.discordDisconnect": "Discord bağlantısı kesilemedi. Durum otomatik olarak güncellenir; kullanılabilir olduğunda yeniden deneyin. Sorun devam ederse destekle iletişime geçin.",
+  "error.discordDisconnect": "Discord bağlantısı kesilemedi. Durum otomatik olarak güncellenir; kullanılabilir olduğunda yeniden deneyin. Sorun devam ederse {supportLink} “General Help” kategorisinde bir destek talebi açın.",
   "error.patreonDisconnect": "Patreon bağlantısı kesilemedi. Durum otomatik olarak güncellenir; yeniden denemeden önce güncel durumu bekleyin.",
   "error.discordRepair": "Discord bağlantısı tamamlanamadı. Yeniden denemeden önce aşağıdaki mevcut bağlantınızı kontrol edin. Oturumunuz değişmiş, isteğin süresi dolmuş veya Discord başka bir hesaba ait olabilir. Oturum açmayı hiçbir zaman hesap bağlama yerine kullanmayız.",
   "error.patreonAuthorization": "Patreon yetkilendirmesi iptal edildi veya tamamlanamadı. Aşağıdaki mevcut bağlantınızı kontrol edin, ardından gerekirse yeniden bağlayın veya doğrulayın. Bir Patreon hesabı yalnızca tek bir web sitesi hesabına ait olabilir.",
@@ -25,7 +26,7 @@
   "membership.verified": "Üyelik doğrulandı.",
   "membership.nonqualifying": "{installer} ve diğer avantajlardan yararlanabilir.",
   "membership.nightlyInstaller": "Patreon destekçileri nightly yükleyiciye erişebilir (nasıl kullanılacağını buradan öğrenebilirsiniz)",
-  "membership.reviewRequired": "Üyeliğinizin incelenmesi gerekiyor. Yeniden denemeden önce destekle iletişime geçin.",
+  "membership.reviewRequired": "Üyeliğinizin incelenmesi gerekiyor. Yeniden denemeden önce {supportLink} “General Help” kategorisinde bir destek talebi açın.",
   "membership.verifyRequired": "Yeni bir sunucu oluşturmadan önce üyeliğinizi doğrulayın.",
   "membership.syncPending": "Sunucu hakkınız güncelleniyor. Bu işlem genellikle birkaç saniye sürer; durum otomatik olarak yenilenir.",
   "membership.syncUnavailable": "Sunucu hakkınız kontrol edilemedi.",
@@ -44,5 +45,9 @@
   "disconnect.confirm": "{provider} bağlantısını kesmeyi onayla",
   "disconnect.cancel": "İptal",
   "loading.label": "Hesap yükleniyor",
-  "loading.status": "Hesap yükleniyor…"
+  "loading.status": "Hesap yükleniyor…",
+  "boosty.linked": "Boosty aboneliğin hesabının e-posta adresiyle bağlandı.",
+  "boosty.notFound": "Bu hesabın e-posta adresini kullanan bir Boosty aboneliği yok. Bağlamak için Boosty'de aynı e-posta adresiyle abone ol.",
+  "boosty.nonqualifying": "Boosty aboneliğin uygun bir seviye içermiyor.",
+  "boosty.checking": "Boosty üyeliğin kısa süre içinde kontrol edilecek."
 }
