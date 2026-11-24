@@ -16,6 +16,10 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/app/components/layout/Navbar", () => ({
     Navbar: () => <header>Site navigation</header>,
 }));
+// The real fallback loads its label asynchronously (covered in NavbarFallback.component.test.tsx); the synchronous renderer needs a stand-in.
+vi.mock("@/app/components/layout/NavbarFallback", () => ({
+    NavbarFallback: () => <div role="status">Navigation placeholder</div>,
+}));
 import AdminLayout from "./layout";
 
 const admin = { id: "11111111-1111-4111-8111-111111111111", app_metadata: { role: "Admin" }, user_metadata: {} } as unknown as User;
@@ -23,7 +27,7 @@ const member = { id: "22222222-2222-4222-8222-222222222222", app_metadata: { rol
 
 /** Streams the layout to completion around a stand-in page body. */
 async function renderLayout() {
-    const stream = await renderToReadableStream(await AdminLayout({ children: <main>Admin page body</main> }));
+    const stream = await renderToReadableStream(AdminLayout({ children: <main>Admin page body</main> }));
     await stream.allReady;
     return new Response(stream).text();
 }
@@ -48,12 +52,12 @@ it("renders the site navbar, the admin sub-navigation and the page in order for 
     expect(html.match(/<main/g)).toHaveLength(1);
 });
 
-it("renders the page behind a localized navbar placeholder while the identity is still loading", async () => {
+it("renders the page behind the navbar placeholder while the identity is still loading", async () => {
     mocks.getUser.mockReturnValue(new Promise(() => {}));
     // The synchronous renderer emits Suspense fallbacks for content that has not resolved yet.
-    const shell = renderToStaticMarkup(await AdminLayout({ children: <main>Admin page body</main> }));
+    const shell = renderToStaticMarkup(AdminLayout({ children: <main>Admin page body</main> }));
 
-    expect(shell).toContain('role="status" aria-label="Loading navigation"');
+    expect(shell).toContain("Navigation placeholder");
     expect(shell).toContain("Admin page body");
     expect(shell).not.toContain("Site navigation");
 });

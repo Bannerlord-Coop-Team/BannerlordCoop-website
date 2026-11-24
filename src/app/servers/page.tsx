@@ -45,14 +45,14 @@ export default async function ServersPage() {
     const hostingStatus = viewer.then(({ user, accessToken, accountRead }) => loadHostingStatus(user, accessToken, accountRead));
 
     const locale = await getLocale();
-    const [{ t, number }, { t: common }, messages] = await Promise.all([
-        getTranslations("servers", locale), getTranslations("common", locale), getMessages(["servers", "server-common"], locale),
+    const [{ t, number }, messages] = await Promise.all([
+        getTranslations("servers", locale), getMessages(["servers", "server-common"], locale),
     ]);
 
     const managedInventory = viewer.then(({ user, accessToken, inventory }) => loadManagedInventory(user, accessToken, inventory, t));
     return (
         <LocalizationProvider locale={locale} messages={messages}>
-            <Suspense fallback={<NavbarFallback label={common("nav.loading")} />}>
+            <Suspense fallback={<NavbarFallback />}>
                 <Navbar viewer={viewer.then(({ user }) => ({ user }))} />
             </Suspense>
             <main className="min-h-svh bg-background">
