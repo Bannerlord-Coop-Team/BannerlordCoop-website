@@ -1,7 +1,9 @@
 import { act } from "react";
+import { readFileSync } from "node:fs";
+import { decodeControlPlaneAdminResponse } from "@/app/lib/control-plane/client";
+import { parseSlotAvailability } from "@/app/lib/control-plane/slot-availability";
 import shared from "../../../../test/fixtures/slot-storage/v1.json";
 import capture from "../../../../test/fixtures/slot-storage/capture-v1.json";
-import { decodeControlPlaneAdminResponse } from "@/app/lib/control-plane/client";
 import { readSlotStorage } from "@/app/lib/control-plane/slot-storage";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,6 +42,60 @@ afterEach(async () => {
 });
 
 describe("compact VPS host inventory", () => {
+    it("decodes the shared incident fixture and explains five ready but zero admissible slots", async () => {
+        const fixture = JSON.parse(readFileSync("test/fixtures/vps-slot-availability/v1.json", "utf8"));
+        const requestId = "11111111-1111-4111-8111-111111111111";
+        const result = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify({
+            version: 1, requestId, ok: true, result: { hosts: [{ ...host("fixture-host", resources(60, 40), 0), ...fixture.expectedHost }] },
+        }), requestId, true);
+        const details = result.hosts[0].slotAvailability!;
+        expect(parseSlotAvailability(details)).toEqual(details);
+        await act(async () => root.render(<VpsHostInventory hosts={result.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 admissible"]')?.textContent)
+            .toBe("Slots8Running0Ready5Admissible0");
+        expect(container.textContent).toContain("Storage evidence is stale");
+        expect(container.textContent).toContain("2 launch-proven; 0 relocation candidates");
+        for (const invalid of [{ reasons: ["unknown"] }, { ready: 33 }, { launchProven: 6 }, { extra: true }]) {
+            expect(parseSlotAvailability({ ...details, ...invalid })).toBeUndefined();
+        }
+    });
+    it.each([
+        ["host_memory", "Host memory evidence is missing, stale, or below the admission minimum."],
+        ["shared_image_commission", "Shared game image commissioning holds admission."],
+        ["slot_health", "Slot health checks hold admission."],
+    ])("decodes and explains %s without hiding ready capacity", async (reason, label) => {
+        const requestId = "11111111-1111-4111-8111-111111111111";
+        const result = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify({
+            version: 1, requestId, ok: true, result: { hosts: [{ ...host("blocked-host", resources(60, 40), 0),
+                totalSlots: 8, runningServers: 0, availableServers: 0, provenServers: 0,
+                slotAvailability: { ready: 5, launchProven: 2, storageObservedAt: "2026-11-11T03:32:28.000Z", reasons: [reason] },
+            }] },
+        }), requestId, true);
+        expect(parseSlotAvailability(result.hosts[0].slotAvailability)).toEqual(result.hosts[0].slotAvailability);
+        await act(async () => root.render(<VpsHostInventory hosts={result.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 admissible"]')?.textContent)
+            .toBe("Slots8Running0Ready5Admissible0");
+        expect(container.textContent).toContain(label);
+    });
+
+    it("keeps legacy admission visible when a future reason makes optional details unreadable", async () => {
+        const details = { ready: 5, launchProven: 2, storageObservedAt: null, reasons: ["host_memory", "future_gate"] };
+        for (const reason of ["future_gate", "host-memory", "SLOT_HEALTH", "shared_image_commission_extra"]) {
+            expect(parseSlotAvailability({ ...details, reasons: [reason] })).toBeUndefined();
+        }
+        expect(parseSlotAvailability(details)).toBeUndefined();
+        const requestId = "11111111-1111-4111-8111-111111111111";
+        const result = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify({
+            version: 1, requestId, ok: true, result: { hosts: [{ ...host("future-host", resources(60, 40), 0),
+                totalSlots: 8, runningServers: 0, availableServers: 0, slotAvailability: details,
+            }] },
+        }), requestId, true);
+        await act(async () => root.render(<VpsHostInventory hosts={result.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 admissible"]')?.textContent)
+            .toBe("Slots8Running0Admissible0");
+        expect(container.textContent).toContain("future-host");
+        expect(container.textContent).not.toContain("future_gate");
+    });
     it("decodes and renders the captured CP HTTP/IPC response and rejects an incompatible envelope", async () => {
         const decoded = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify(capture), capture.requestId, true);
         await act(async () => root.render(<VpsHostInventory hosts={decoded.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
@@ -119,9 +175,9 @@ describe("compact VPS host inventory", () => {
 
         expect(container.textContent).toContain("host-a");
         expect(container.textContent).toContain("owner@example.com (testserver)");
-        const capacity = container.querySelector('dl[aria-label="3 total slots, 1 running, 2 free"]');
+        const capacity = container.querySelector('dl[aria-label="3 total slots, 1 running, 2 admissible"]');
         expect(capacity?.querySelectorAll("dt")).toHaveLength(3);
-        expect(capacity?.textContent).toBe("Slots3Running1Free2");
+        expect(capacity?.textContent).toBe("Slots3Running1Admissible2");
         expect(container.textContent).not.toContain("UDP 4200");
         expect([...container.querySelectorAll("button")].filter((button) => button.textContent === "Runner current")).toHaveLength(2);
 

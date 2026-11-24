@@ -100,12 +100,18 @@ it("places each server on its VPS slot and keeps relocations ahead of other acti
     ]);
 });
 
-it("offers other hosts by catalog region, with full regions and hosts marked", () => {
+it("offers other hosts by catalog region, with unavailable regions and hosts marked", () => {
     expect(relocationTargets(hosts, catalog, "vps-uk-a")).toEqual([
         { region: "france", label: "France", freeSlots: 1, hosts: [{ name: "vps-fr-a", freeSlots: 1 }, { name: "vps-fr-b", freeSlots: 0 }] },
         { region: "germany", label: "Germany", freeSlots: 0, hosts: [{ name: "vps-de-a", freeSlots: 0 }] },
     ]);
     expect(relocationTargets(hosts, catalog, "vps-fr-a").map((target) => target.region)).toEqual(["france", "united-kingdom", "germany"]);
+});
+
+it("uses launch-proven admissible relocation candidates instead of the larger create count", () => {
+    const target = host("vps-proof", "FR", 5, []);
+    expect(relocationTargets([{ ...target, provenServers: 2 }], catalog, null)[0]?.freeSlots).toBe(2);
+    expect(relocationTargets([{ ...target, provenServers: 0 }], catalog, null)[0]?.freeSlots).toBe(0);
 });
 
 it("disables Relocate while a server is already relocating or another job is running", async () => {
