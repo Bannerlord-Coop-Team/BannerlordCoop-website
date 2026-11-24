@@ -1,4 +1,4 @@
-import { renderToReadableStream } from "react-dom/server";
+import { renderToReadableStream, renderToStaticMarkup } from "react-dom/server";
 import type { User } from "@supabase/supabase-js";
 import { beforeEach, expect, it, vi } from "vitest";
 
@@ -23,7 +23,7 @@ const member = { id: "22222222-2222-4222-8222-222222222222", app_metadata: { rol
 
 /** Streams the layout to completion around a stand-in page body. */
 async function renderLayout() {
-    const stream = await renderToReadableStream(AdminLayout({ children: <main>Admin page body</main> }));
+    const stream = await renderToReadableStream(await AdminLayout({ children: <main>Admin page body</main> }));
     await stream.allReady;
     return new Response(stream).text();
 }
@@ -46,6 +46,16 @@ it("renders the site navbar, the admin sub-navigation and the page in order for 
     expect(body).toBeGreaterThan(subNav);
     expect(html).toContain("Admin access");
     expect(html.match(/<main/g)).toHaveLength(1);
+});
+
+it("renders the page behind a localized navbar placeholder while the identity is still loading", async () => {
+    mocks.getUser.mockReturnValue(new Promise(() => {}));
+    // The synchronous renderer emits Suspense fallbacks for content that has not resolved yet.
+    const shell = renderToStaticMarkup(await AdminLayout({ children: <main>Admin page body</main> }));
+
+    expect(shell).toContain('role="status" aria-label="Loading navigation"');
+    expect(shell).toContain("Admin page body");
+    expect(shell).not.toContain("Site navigation");
 });
 
 it.each([["member", member], ["signed-out", null]])("keeps the admin sub-navigation away from a %s viewer", async (_label, user) => {

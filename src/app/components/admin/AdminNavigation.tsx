@@ -5,6 +5,7 @@ import { hasAdminAccess } from "@/app/lib/auth/access";
 import type { User } from "@supabase/supabase-js";
 
 export type AdminNavigationState = {
+    // undefined hands the lookup to Navbar so it resolves the impersonated viewer itself; it never means signed out.
     navbarViewer: Promise<{ user: User | null }> | undefined;
     showSubNav: boolean;
 };

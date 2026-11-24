@@ -6,6 +6,7 @@
   "metadata.description": "与好友在共享的多人世界中，一同畅玩 Mount & Blade II: Bannerlord 战役。",
   "nav.homeLabel": "Bannerlord Co-op 首页",
   "nav.primary": "主导航",
+  "nav.loading": "正在加载导航",
   "nav.mobile": "移动端导航",
   "nav.home": "首页",
   "nav.servers": "服务器",
