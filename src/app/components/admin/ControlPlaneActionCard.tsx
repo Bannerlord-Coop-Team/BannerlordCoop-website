@@ -103,8 +103,8 @@ export function ControlPlaneActionCard({
                 ...(fields.length === 0 ? {} : { input }),
             }, () => router.refresh());
             setResult({ ok: true, ...presentControlPlaneOperationResult(operation, response) });
-            if (operation === "onboard-vps-host") router.push("/admin/control-plane?view=vps");
-            else router.refresh();
+            // Every card refreshes the current view in place, so the result stays visible beside the updated state.
+            router.refresh();
         } catch (error) {
             setResult({
                 ok: false,

@@ -4,7 +4,7 @@ import { LoaderCircle, Play, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState, type ReactNode } from "react";
-import { FieldRequirement, HelpIcon, useOperationTarget } from "./ControlPlaneActionCard";
+import { FieldRequirement, HelpIcon } from "./ControlPlaneActionCard";
 import {
     emptyManualVpsForm,
     MANUAL_VPS_MAXIMUM_VCPU,
@@ -32,7 +32,7 @@ type Result = { ok: boolean; message: string; links: ControlPlaneOperationResult
 
 const INPUT_CLASS = "mt-1.5 min-h-10 w-full border border-white/15 bg-background px-3 text-xs text-foreground outline-none placeholder:text-foreground-dim focus:border-gold disabled:opacity-60 aria-invalid:border-crimson";
 
-/** The "Add manual VPS" operation card: collects a hand-typed host's facts, validates them and submits `onboard-manual-vps-host`. */
+/** The Add capacity dialog's "Add manual VPS" form: collects a hand-typed host's facts, validates them and submits `onboard-manual-vps-host`. */
 export function ManualVpsOnboardingCard({ providers, regions, regionsError, help }: {
     providers: ManualEntryProvider[];
     regions: HostingRegionPayload[] | null;
@@ -41,7 +41,6 @@ export function ManualVpsOnboardingCard({ providers, regions, regionsError, help
     help?: string;
 }) {
     const router = useRouter();
-    const { cardRef, isTargeted } = useOperationTarget(MANUAL_VPS_OPERATION);
     const [values, setValues] = useState<ManualVpsFormValues>(() => emptyManualVpsForm(providers));
     const [errors, setErrors] = useState<FieldErrors>({});
     const [pending, setPending] = useState(false);
@@ -54,7 +53,7 @@ export function ManualVpsOnboardingCard({ providers, regions, regionsError, help
         setErrors((current) => ({ ...current, [field]: undefined, ...(field === "region" ? { countryCode: undefined, locationId: undefined } : {}) }));
     }
 
-    /** Validates locally, asks the administrator to recheck the IPv4, then sends the request and opens the VPS view. */
+    /** Validates locally, asks the administrator to recheck the IPv4, then sends the request and refreshes the VPS view behind the result. */
     async function submit() {
         if (pending || blockedReason !== null) return;
         const validation = validateManualVpsForm(values, { providers, regions: regions ?? [] });
@@ -74,7 +73,7 @@ export function ManualVpsOnboardingCard({ providers, regions, regionsError, help
                 accessToken: session.access_token, requestId: crypto.randomUUID(), operation: MANUAL_VPS_OPERATION, input: validation.input,
             }, () => router.refresh());
             setResult({ ok: true, ...presentControlPlaneOperationResult(MANUAL_VPS_OPERATION, response) });
-            router.push("/admin/control-plane?view=vps");
+            router.refresh();
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : "The operation failed.", links: [] });
         } finally {
@@ -83,8 +82,7 @@ export function ManualVpsOnboardingCard({ providers, regions, regionsError, help
     }
 
     return (
-        <article ref={cardRef} id={MANUAL_VPS_OPERATION} tabIndex={-1}
-            className={`flex h-full scroll-mt-6 flex-col border border-white/10 bg-surface p-5 outline-none ${isTargeted ? "control-plane-card-targeted" : ""}`}>
+        <article className="flex h-full flex-col border border-white/10 bg-surface p-5">
             <div className="flex items-center gap-2">
                 <h3 className="font-display text-xl font-semibold text-foreground">Add manual VPS</h3>
                 {help && <HelpIcon label={`Add manual VPS: ${help}`} help={help} />}

@@ -138,7 +138,10 @@ it("onboards the selected VPS with the provider the inventory listed it under", 
         input: { provider: "contabo-vps", serviceName: "203779521", mode: "enroll" },
     });
     expect(request.mock.calls[0]?.[0].input).not.toHaveProperty("host");
-    expect(push).toHaveBeenCalledWith("/admin/control-plane?view=vps");
+    // The card lives in the VPS view's Add capacity dialog, so it refreshes in place and keeps the result visible.
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(push).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="status"]')).not.toBeNull();
 });
 
 it("names an optional select's empty choice and sends a provider pin only when one is chosen", async () => {

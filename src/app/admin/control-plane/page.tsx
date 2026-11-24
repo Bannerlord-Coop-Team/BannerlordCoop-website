@@ -14,7 +14,6 @@ import { RelocateView } from "@/app/components/admin/RelocateView";
 import { PlacementView } from "@/app/components/admin/PlacementView";
 import { FleetCapacityView } from "@/app/components/admin/FleetCapacityView";
 import { NoticesView } from "@/app/components/admin/NoticesView";
-import { ManualVpsOnboardingCard } from "@/app/components/admin/ManualVpsOnboardingCard";
 import { AuditTable, Panel, Definition, SectionHeading, State, Empty, ReleaseMetadata, shortId } from "@/app/components/admin/ControlPlanePresentation";
 import { ClickableTableRow } from "@/app/components/admin/ClickableTableRow";
 import { hasAdminAccess } from "@/app/lib/auth/access";
@@ -22,12 +21,10 @@ import { getLoginRedirect } from "@/app/lib/auth/redirect";
 import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
 import { serverProgressView } from "@/app/lib/control-plane/server-progress";
 import { readControlPlaneAdmin } from "@/app/lib/control-plane/server-read";
-import { readOperationsVpsInventory } from "@/app/lib/control-plane/operations-inventory";
 import { readHostingRegionCatalog } from "@/app/lib/control-plane/hosting-region-catalog";
 import { recordReleaseFirstObservations } from "@/app/lib/control-plane/release-observations";
 import { ADMIN_READ_PAGE_LIMIT, readBoundedHostingPage, type BoundedHostingPage } from "@/app/lib/control-plane/pagination";
-import { vpsHostSelectionValue, vpsProviderLabel } from "@/app/lib/control-plane/vps-providers";
-import { MANUAL_VPS_OPERATION, manualEntryProviders } from "@/app/lib/control-plane/manual-vps";
+import { vpsProviderLabel } from "@/app/lib/control-plane/vps-providers";
 import {
     destructiveExplanation,
     operationExplanation,
@@ -86,7 +83,7 @@ import {
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Suspense, type ReactNode } from "react";
+import { Suspense } from "react";
 import {
     ControlPlaneViewSkeleton,
     type ControlPlaneView,
@@ -310,7 +307,8 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                 readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<HostingJob>>({
                     accessToken: token, signal, ...identity, operation: "jobs", input: { filter: {}, cursor, limit: ADMIN_READ_PAGE_LIMIT },
                 })),
-                readOperationsVpsInventory((input) => readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input })),
+                // Create server needs only the registered hosts' providers; provider-account onboarding lives in the VPS view.
+                readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false } }),
                 serverId
                     ? readControlPlaneAdmin<ServerDashboardResult>({
                         accessToken: token, signal, ...identity,
@@ -322,8 +320,7 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             ]);
             return {
                 overview: { ...overview, servers, jobs },
-                inventory: inventory.inventory,
-                vpsProviderError: inventory.providerError,
+                inventory,
                 selectedServer: selectedDashboard?.dashboard.server ?? null,
                 hostingRegions,
             } satisfies OperationsData;
@@ -333,8 +330,9 @@ async function loadView(token: string, view: View, query: string, serverId: stri
                 readControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: token, signal, ...identity, operation: "vps-hosts", input: { includeLiveData: false } }),
                 loadHostingRegionCatalog(token, signal, identity),
             ]);
-            // Host labels match the stored placements; an unreadable catalog leaves the hosts listed without regions.
-            return { inventory, regionCatalog: hostingRegions.regions } satisfies VpsViewData;
+            // Host labels match the stored placements; an unreadable catalog leaves the hosts listed without regions
+            // and the Add capacity dialog's manual entry explains why it is unavailable.
+            return { inventory, regionCatalog: hostingRegions.regions, regionCatalogError: hostingRegions.error } satisfies VpsViewData;
         }
         case "servers":
             return readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<ManagedServer>>({
@@ -660,7 +658,7 @@ function BoundedPageNotice({ page, href, label }: { page: HostingPage<unknown>; 
 
 /** Lays out every administrator operation card, grouped, with choices built from the loaded fleet, server and catalog state. */
 function OperationsView({ data, accounts }: { data: OperationsData; accounts: WebsiteAccountSummary[] }) {
-    const { overview, inventory, selectedServer, vpsProviderError, hostingRegions } = data;
+    const { overview, inventory, selectedServer, hostingRegions } = data;
     const listedServers = selectedServer !== null
         && !overview.servers.items.some((server) => server.serverId === selectedServer.serverId)
         ? [selectedServer, ...overview.servers.items]
@@ -672,8 +670,6 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
         : serverOptions.find((option) => option.value === selectedServer.serverId);
     const jobOptions: AdminActionOption[] = overview.jobs.items.map((job) => ({ label: `${job.action} · ${job.state} · ${shortId(job.jobId)}`, value: job.jobId, updatedAt: job.updatedAt }));
     const accountOptions: AdminActionOption[] = accounts.map(user => ({ label: user.label, value: user.accountId }));
-    // Each option carries the provider the control plane listed with the host, so onboarding never guesses it.
-    const availableVpsOptions: AdminActionOption[] = (Array.isArray(inventory.availableHosts) ? inventory.availableHosts : []).map((host) => ({ label: host.label, value: vpsHostSelectionValue(host) }));
     // Region choices come from the stored catalog, so without it Create server is offered as unavailable with the read error.
     const createRegionOptions: AdminActionOption[] = hostingRegions.regions === null ? [] : createServerRegionOptions(hostingRegions.regions);
     const createProviderOptions: AdminActionOption[] = createServerProviderOptions(inventory.hosts);
@@ -683,15 +679,8 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
     const reasonField: AdminActionField = { name: "reason", label: "Reason", kind: "textarea", placeholder: "Optional context for this action", help: "Optional context stored in the immutable administrative audit event. When blank, the control plane records a fixed portal-action reason." };
     const serverField: AdminActionField = { name: "serverId", label: "Server", kind: "server", required: true, options: serverOptions, defaultValue: selectedServerOption === undefined ? "" : adminActionOptionValue("server", selectedServerOption), help: "The selected row carries its current update generation so a stale action fails safely." };
     const plainServerField: AdminActionField = { name: "serverId", label: "Server", kind: "select", required: true, options: serverPlainOptions, defaultValue: selectedServerOption?.value ?? "" };
-    // Providers without an account API whose hosts are typed in by hand; an older backend omits the list.
-    const manualProviders = manualEntryProviders(inventory);
-    // `custom` replaces the generic card for forms whose fields depend on each other; its `fields` only size the layout.
-    const cards: Array<{ group: string; operation: string; title: string; description: string; fields: AdminActionField[]; destructive?: boolean; layoutPriority?: number; unavailableReason?: string; custom?: ReactNode }> = [
-        { group: "Fleet", operation: "onboard-vps-host", title: "Onboard provider-account VPS", description: "For OVHcloud and Contabo, whose account APIs list purchased VPSes. Choose one already-purchased VPS, then click Onboard VPS. The control plane revalidates it against its provider account (identity, location, vCPU capacity, and primary IPv4); acquires and pins its Ed25519 host identity; uses the preinstalled fleet-operator key; installs and hardens every managed runner slot; establishes private mTLS routes; and publishes capacity only after health checks. It never buys, renews, or cancels a VPS.", fields: [
-            { name: "host", label: "Available VPS", kind: "select", required: true, options: availableVpsOptions, defaultValue: availableVpsOptions.length === 1 ? availableVpsOptions[0]!.value : "", help: "Only unregistered VPS products discovered in the authenticated provider accounts are shown, each with its provider. Select the saved bannerlord-fleet-operator key when installing the VPS; no SSH key, IP address, vCPU count, region, or audit reason is entered here. For a provider without an account API, use Add manual VPS." },
-        ] },
-        { group: "Fleet", operation: MANUAL_VPS_OPERATION, title: "Add manual VPS", description: "", fields: [],
-            custom: <ManualVpsOnboardingCard key={MANUAL_VPS_OPERATION} providers={manualProviders} regions={hostingRegions.regions} regionsError={hostingRegions.error} help={operationExplanation(MANUAL_VPS_OPERATION)} /> },
+    // VPS onboarding (provider account and manual entry) is the VPS view's Add capacity dialog, not a card here.
+    const cards: Array<{ group: string; operation: string; title: string; description: string; fields: AdminActionField[]; destructive?: boolean; layoutPriority?: number; unavailableReason?: string }> = [
         { group: "Fleet", operation: "create-server", title: "Create server", description: "Assign one prepared slot from existing registered VPS capacity in stopped state. New servers use Public by default; choose Nightly later with Change release settings if needed. Copy the generated password, then use Lifecycle operation → Start; that durable job reports live progress. The owner's current entitlement comes from an explicit administrator grant. This never orders or bills a new VPS; unavailable regional capacity makes the request fail without creating anything.",
             ...createUnavailable,
             fields: [
@@ -728,13 +717,10 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
     const groups = [...new Set(cards.map((card) => card.group))];
     const serverOlder = overview.servers.nextCursor ? `/admin/control-plane?view=servers&cursor=${encodeURIComponent(overview.servers.nextCursor)}` : null;
     const jobOlder = overview.jobs.nextCursor ? `/admin/control-plane?view=jobs&cursor=${encodeURIComponent(overview.jobs.nextCursor)}` : null;
-    return <div className="mt-8 space-y-12">{(overview.servers.partial || overview.jobs.partial) && <div role="status" className="border-l-2 border-amber-400 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">Server and job choices reached the bounded read budget. Open the full Servers or Jobs view to continue through older rows. <span className="ml-2 inline-flex gap-3 font-semibold underline underline-offset-2">{serverOlder && <Link href={serverOlder}>Older servers</Link>}{jobOlder && <Link href={jobOlder}>Older jobs</Link>}</span></div>}{vpsProviderError && <div role="status" className="border-l-2 border-gold bg-gold/10 px-4 py-3 text-sm text-foreground">
-        <p>Provider account inventory is unavailable, so unregistered VPS products cannot be listed for onboarding. Other operations, including Add manual VPS, still work.</p>
-        <p className="mt-1 text-xs text-foreground-muted">{vpsProviderError}</p>
-    </div>}{groups.map((group) => {
+    return <div className="mt-8 space-y-12">{(overview.servers.partial || overview.jobs.partial) && <div role="status" className="border-l-2 border-amber-400 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">Server and job choices reached the bounded read budget. Open the full Servers or Jobs view to continue through older rows. <span className="ml-2 inline-flex gap-3 font-semibold underline underline-offset-2">{serverOlder && <Link href={serverOlder}>Older servers</Link>}{jobOlder && <Link href={jobOlder}>Older jobs</Link>}</span></div>}{groups.map((group) => {
         const groupCards = cards.filter((card) => card.group === group);
-        const rows = operationCardRows(groupCards, group === "Fleet" ? 2 : 0);
-        return <section key={group}><SectionHeading eyebrow="Administrative actions" title={group} count={groupCards.length} /><div className="mt-5 space-y-5">{rows.map((row) => <div key={row.map((card) => card.operation).join(":")} className={`grid gap-5 ${operationCardRowClass(row.length)}`}>{row.map((card) => card.custom ?? <ControlPlaneActionCard key={card.operation} {...card} help={operationExplanation(card.operation)} destructiveReason={card.destructive ? destructiveExplanation(card.operation) : undefined} />)}</div>)}</div></section>;
+        const rows = operationCardRows(groupCards);
+        return <section key={group}><SectionHeading eyebrow="Administrative actions" title={group} count={groupCards.length} /><div className="mt-5 space-y-5">{rows.map((row) => <div key={row.map((card) => card.operation).join(":")} className={`grid gap-5 ${operationCardRowClass(row.length)}`}>{row.map((card) => <ControlPlaneActionCard key={card.operation} {...card} help={operationExplanation(card.operation)} destructiveReason={card.destructive ? destructiveExplanation(card.operation) : undefined} />)}</div>)}</div></section>;
     })}</div>;
 }
 

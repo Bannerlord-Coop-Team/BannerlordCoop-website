@@ -177,10 +177,10 @@ test("administrator reason fields are optional and explain the audit fallback", 
 });
 
 test("operation deep links match their rendered card after hydration", () => {
-    assert.equal(operationTargetMatchesHash("#onboard-vps-host", "onboard-vps-host"), true);
-    assert.equal(operationTargetMatchesHash("#onboard%2Dvps%2Dhost", "onboard-vps-host"), true);
-    assert.equal(operationTargetMatchesHash("#create-server", "onboard-vps-host"), false);
-    assert.equal(operationTargetMatchesHash("#%E0%A4%A", "onboard-vps-host"), false);
+    assert.equal(operationTargetMatchesHash("#server-operation", "server-operation"), true);
+    assert.equal(operationTargetMatchesHash("#server%2Doperation", "server-operation"), true);
+    assert.equal(operationTargetMatchesHash("#create-server", "server-operation"), false);
+    assert.equal(operationTargetMatchesHash("#%E0%A4%A", "server-operation"), false);
 });
 
 test("server rows deep-link to a highlighted lifecycle operation", () => {
@@ -356,17 +356,15 @@ test("a prioritized lifecycle card remains first without occupying its own row",
     );
 });
 
-test("fleet onboarding and server creation remain paired after onboarding becomes one-click", () => {
+test("the fleet's server creation and global controls share one row", () => {
     const cards = [
-        { operation: "onboard", fields: [true] },
-        { operation: "create", fields: Array.from({ length: 5 }) },
-        { operation: "controls", fields: Array.from({ length: 6 }) },
-        { operation: "force", fields: [] },
+        { operation: "create-server", fields: Array.from({ length: 5 }) },
+        { operation: "set-global-controls", fields: Array.from({ length: 5 }) },
     ];
 
     assert.deepEqual(
-        operationCardRows(cards, 2).map((row) => row.map((card) => card.operation)),
-        [["onboard", "create"], ["controls"], ["force"]],
+        operationCardRows(cards).map((row) => row.map((card) => card.operation)),
+        [["create-server", "set-global-controls"]],
     );
 });
 

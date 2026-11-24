@@ -1,7 +1,7 @@
 /**
  * Exactly the control plane's closed `VPS_PROVIDER_IDS` (`src/hosting/providers/vps-provider-ids.ts`), in its order.
- * Until a provider it adds is listed here, the fleet capacity read rejects it, the Onboard provider-account VPS card
- * refuses its hosts and other views show its raw id, so the website updates first.
+ * Until a provider it adds is listed here, the fleet capacity read rejects it, the VPS view's Add capacity dialog
+ * (Provider account tab) refuses its hosts and other views show its raw id, so the website updates first.
  */
 export const VPS_PROVIDERS = ["ovhcloud-vps", "contabo-vps", "hosthatch-vps", "vpstc-vps"] as const;
 export type VpsProviderId = (typeof VPS_PROVIDERS)[number];

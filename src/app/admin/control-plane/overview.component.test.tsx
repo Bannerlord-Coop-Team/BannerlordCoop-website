@@ -142,15 +142,16 @@ it("follows both release channel cursors", async () => {
     expect(html).not.toContain("reached the five-page read budget");
 });
 
-it("renders Operations with fresh VPS choices and capacity without requesting unused billing", async () => {
+it("renders Operations with create-server capacity choices and no VPS onboarding or provider-account read", async () => {
     mocks.accounts.mockResolvedValue({ users: [], truncated: false });
     mocks.request.mockImplementation(async request => {
         if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
         if (request.operation === "servers" || request.operation === "jobs") return { items: [], nextCursor: null };
         if (request.operation === "vps-hosts") return {
-            availableHosts: [{ provider: "ovhcloud-vps", serviceName: "vps-available.vps.ovh.us", label: "OVHcloud VPS · vps-available.vps.ovh.us" }],
+            availableHosts: [],
             hosts: [{ provider: "vpstc-vps", locationId: "nyc", countryCode: "US", region: null, availableServers: 1, totalSlots: 1 },
-                { provider: "ovhcloud-vps", locationId: "os-us-east-va-2", countryCode: "US", region: null, availableServers: 1, totalSlots: 2 }] };
+                { provider: "ovhcloud-vps", locationId: "os-us-east-va-2", countryCode: "US", region: null, availableServers: 1, totalSlots: 2 }],
+            manualEntryProviders: [{ provider: "hosthatch-vps", displayName: "HostHatch VPS" }] };
         // Only US-East has a free slot in the stored catalog, so it is the only Create region offered.
         if (request.operation === "hosting-regions") return { revision: 4, updatedAt: "2026-10-09T12:00:00.000Z", updatedBy: "supabase:admin",
             regions: hostingRegionCatalogPayload()
@@ -163,23 +164,22 @@ it("renders Operations with fresh VPS choices and capacity without requesting un
     const html = await new Response(stream).text();
     expect(html).not.toContain("Hosting regions");
     expect(html).not.toContain("Publish website regions");
-    expect(html).toContain("Onboard provider-account VPS");
-    expect(html).toContain("OVHcloud VPS · vps-available.vps.ovh.us");
-    // The option value carries the listed provider so onboarding never guesses it.
-    expect(html).toContain("{&quot;provider&quot;:&quot;ovhcloud-vps&quot;,&quot;serviceName&quot;:&quot;vps-available.vps.ovh.us&quot;}");
+    // VPS onboarding moved to the VPS view's Add capacity dialog.
+    expect(html).not.toContain("Onboard provider-account VPS");
+    expect(html).not.toContain("Add manual VPS");
+    expect(html).not.toContain('id="onboard-vps-host"');
+    expect(html).not.toContain("Provider account inventory is unavailable");
     const createCard = cardHtml(html, "create-server");
     expect(createCard.match(/<option value="us-east">US-East<\/option>/gu) ?? []).toHaveLength(1);
     expect(createCard).not.toContain('value="us-west"');
     // Only providers holding a registered VPS can be pinned, named, in catalog order, after the empty "any" choice.
     expect(createCard).toContain('<option value="" selected="">Any provider</option><option value="ovhcloud-vps">OVHcloud</option><option value="vpstc-vps">VPS.TC</option></select>');
-    // This older inventory has no manualEntryProviders, so the manual card explains why it is unavailable.
-    const manualCard = cardHtml(html, "onboard-manual-vps-host");
-    expect(manualCard).toContain("Add manual VPS");
-    expect(manualCard).toContain("No provider currently accepts manual entry.");
+    expect(cardHtml(html, "set-global-controls")).toContain("Global controls");
     expect(html).not.toContain("The control plane view could not be loaded");
+    // Create server needs only registered hosts, so Operations no longer reads provider account inventory.
     expect(mocks.request.mock.calls.filter(([request]) => request.operation === "vps-hosts")).toEqual([[{
         accessToken: "test-admin-token", operation: "vps-hosts", signal: expect.any(AbortSignal), expectedUserId: "admin", requireOrdinarySession: true, onAuthenticated: expect.any(Function),
-        input: { includeLiveData: false, includeProviderInventory: "service-names" },
+        input: { includeLiveData: false },
     }]]);
     expect(mocks.request.mock.calls.filter(([request]) => request.operation === "hosting-regions")).toEqual([[expect.objectContaining({ operation: "hosting-regions", input: {} })]]);
     // Update server always follows the channel, so Operations reads no release catalog.
@@ -199,34 +199,29 @@ it("keeps Operations usable when the stored hosting-region catalog cannot be rea
     const html = await new Response(stream).text();
     expect(html).toContain("The operation is not supported.");
     expect(html).not.toContain("Publish website regions");
-    expect(html).toContain("Onboard provider-account VPS");
-    expect(html).toContain("Regions are unavailable: The operation is not supported.");
+    expect(cardHtml(html, "create-server")).toContain("Regions are unavailable: The operation is not supported.");
 });
 
-
-it("offers every stored region and the listed manual-entry providers on Add manual VPS", async () => {
+it.each([true, false])("offers VPS onboarding from the VPS view as Add capacity dialog buttons: catalog readable=%s", async readable => {
     mocks.accounts.mockResolvedValue({ users: [], truncated: false });
     mocks.request.mockImplementation(async request => {
-        if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
-        if (request.operation === "servers" || request.operation === "jobs") return { items: [], nextCursor: null };
-        if (request.operation === "vps-hosts") return { availableHosts: [], hosts: [],
+        if (request.operation === "vps-hosts") return { liveDataIncluded: false, controlPlaneHost: null, hosts: [], availableHosts: [],
             manualEntryProviders: [{ provider: "hosthatch-vps", displayName: "HostHatch VPS" }] };
-        if (request.operation === "hosting-regions") return { regions: hostingRegionCatalogPayload()
-            .filter((entry) => entry.region === "us-west" || entry.region === "us-east")
-            .map((entry) => ({ ...entry, available: false })) };
-        throw new Error("Unexpected read");
+        if (request.operation === "hosting-regions" && readable) return { regions: hostingRegionCatalogPayload().map((entry) => ({ ...entry, available: false })) };
+        throw new ControlPlaneAdminError("unsupported_operation", "The operation is not supported.");
     });
-    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "operations" }) }));
+    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "vps" }) }));
     await stream.allReady;
-    const manualCard = cardHtml(await new Response(stream).text(), "onboard-manual-vps-host");
-    expect(manualCard).toContain('<option value="hosthatch-vps" selected="">HostHatch VPS</option>');
-    // Onboarding adds capacity, so regions without a free slot are offered too.
-    expect(manualCard).toContain('value="us-east"');
-    expect(manualCard).toContain('value="us-west"');
-    expect(manualCard).not.toContain("No provider currently accepts manual entry.");
-    expect(manualCard).toContain('name="sshLogin"');
-    // The control plane scans and pins the host key on first contact, so the form never asks for one.
-    expect(manualCard).not.toContain("hostPublicKey");
+    const html = await new Response(stream).text();
+    expect(html).not.toContain("The control plane view could not be loaded");
+    expect(html).toMatch(/<button type="button" aria-haspopup="dialog"[^>]*>Onboard VPS<\/button>/u);
+    expect(html).toMatch(/<button type="button" aria-haspopup="dialog"[^>]*>Add manual VPS<\/button>/u);
+    expect(html).not.toContain("view=operations#onboard");
+    // The dialog opens in the browser on demand; the page reads only the base inventory and the catalog it labels hosts with.
+    expect(html).not.toContain('role="dialog"');
+    expect(mocks.request.mock.calls.map(([request]) => [request.operation, request.input])).toEqual([
+        ["vps-hosts", { includeLiveData: false }], ["hosting-regions", {}],
+    ]);
 });
 
 /** The server-rendered markup of one operation card, located by its anchor id. */

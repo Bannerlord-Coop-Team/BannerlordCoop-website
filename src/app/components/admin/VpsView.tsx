@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AddCapacityDialog, type AddCapacityTab } from "./AddCapacityDialog";
 import { LocalDateTime } from "./LocalDateTime";
 import { OutOfAdmissionBanner } from "./OutOfAdmissionBanner";
 import { VpsInventoryBrowser } from "./VpsInventoryBrowser";
@@ -10,14 +10,16 @@ import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
 import { failedVpsProviderReadsMessage } from "@/app/lib/control-plane/vps-providers";
+import { manualEntryProviders } from "@/app/lib/control-plane/manual-vps";
 import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminRegionRequestNotification, HostingAdminVpsInventory, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 
 const FLEET_RESOURCE_REFRESH_INTERVAL_MILLISECONDS = 15_000;
+const ADD_CAPACITY_BUTTON_CLASS = "cursor-pointer border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10 focus-visible:outline-2 focus-visible:outline-gold";
 
 /** Shows registered VPS capacity, labelled by the stored region catalog, with live readings and region requests. */
-export function VpsView({ inventory: initialInventory, regionCatalog, accounts }: VpsViewData & { accounts: WebsiteAccountSummary[] }) {
+export function VpsView({ inventory: initialInventory, regionCatalog, regionCatalogError, accounts }: VpsViewData & { accounts: WebsiteAccountSummary[] }) {
     const readings = useVpsReadings(initialInventory, "resources");
     const billing = useVpsReadings(initialInventory, "billing");
     const oracle = useVpsReadings(initialInventory, "oracle");
@@ -36,6 +38,13 @@ export function VpsView({ inventory: initialInventory, regionCatalog, accounts }
     const failedProviderReads = failedVpsProviderReadsMessage(billing.result?.providerReads);
     const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
     const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
+    const [capacityTab, setCapacityTab] = useState<AddCapacityTab | null>(null);
+    const capacityTrigger = useRef<HTMLButtonElement | null>(null);
+    /** Opens the Add capacity dialog on one tab, remembering the button to refocus when it closes. */
+    function openAddCapacity(tab: AddCapacityTab, trigger: HTMLButtonElement) {
+        capacityTrigger.current = trigger;
+        setCapacityTab(tab);
+    }
     return (
         <section className="mt-8">
             <SectionHeading eyebrow="VPS inventory" title="VPS hosts" count={hosts.length} />
@@ -53,10 +62,24 @@ export function VpsView({ inventory: initialInventory, regionCatalog, accounts }
             <div className="mt-5 flex flex-col justify-between gap-3 border border-gold/25 bg-gold/8 p-4 sm:flex-row sm:items-center">
                 <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> onboard an already-purchased VPS, from a provider account (OVHcloud, Contabo) or by manual entry for a provider without an account API. The durable workflow verifies the host, installs the reviewed runner, prepares every isolated slot, establishes private mTLS routes, and exposes capacity only after health proof.</p>
                 <div className="flex shrink-0 flex-wrap gap-2">
-                    <Link href="/admin/control-plane?view=operations#onboard-vps-host" className="border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Onboard VPS</Link>
-                    <Link href="/admin/control-plane?view=operations#onboard-manual-vps-host" className="border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Add manual VPS</Link>
+                    <button type="button" aria-haspopup="dialog" onClick={(event) => openAddCapacity("provider", event.currentTarget)} className={ADD_CAPACITY_BUTTON_CLASS}>Onboard VPS</button>
+                    <button type="button" aria-haspopup="dialog" onClick={(event) => openAddCapacity("manual", event.currentTarget)} className={ADD_CAPACITY_BUTTON_CLASS}>Add manual VPS</button>
                 </div>
             </div>
+            {capacityTab !== null && <AddCapacityDialog
+                initialTab={capacityTab}
+                providerAccount={{
+                    availableHosts: billing.result?.availableHosts ?? null,
+                    pending: billing.pending,
+                    error: billing.error ?? null,
+                    failedProviderReads: billing.error ? null : failedProviderReads,
+                }}
+                manualProviders={manualEntryProviders(inventory)}
+                regions={regionCatalog}
+                regionsError={regionCatalogError}
+                onClose={() => setCapacityTab(null)}
+                returnFocusTo={capacityTrigger}
+            />}
             <div className="mt-6">
                 {oracle.error && <p role="alert" className="mb-3 text-xs text-red-200">Oracle readings unavailable. {oracle.error} {oracle.result?.controlPlaneHost ? "Showing the last Oracle readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={oracle.refreshReadings}>Retry Oracle readings</button></p>}
                 <HostResourcesCard name="Oracle control plane" resources={controlPlaneHost} pending={oracle.pending} />
