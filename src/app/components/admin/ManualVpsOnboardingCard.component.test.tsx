@@ -29,7 +29,8 @@ afterEach(async () => { await act(async () => root.unmount()); container.remove(
 
 /** Renders the card with the given providers and catalog. */
 async function render(providers = PROVIDERS, regions: HostingRegionPayload[] | null = REGIONS) {
-    await act(async () => root.render(<ManualVpsOnboardingCard providers={providers} regions={regions} regionsError={regions === null ? "Catalog down." : null} />));
+    const hostingRegions = regions === null ? { regions: null, error: "Catalog down." } : { regions: regions.map((entry) => ({ ...entry, available: false })), error: null };
+    await act(async () => root.render(<ManualVpsOnboardingCard providers={providers} hostingRegions={hostingRegions} />));
 }
 
 /** The form control with the given name. */

@@ -362,7 +362,7 @@ test("failed and legacy runner rows expose the typed service-only onboarding act
         "utf8",
     );
 
-    assert.match(source, /operation: "onboard-vps-host"/u);
+    assert.match(source, /operation: PROVIDER_VPS_OPERATION,/u);
     assert.match(source, /input: \{ provider, serviceName, mode: onboarding === null \? "enroll" : "retry" \}/u);
     assert.match(source, /operation: "update-vps-runner",\s+input: \{\s+provider,\s+serviceName,/u);
     assert.match(source, /Retry onboarding/u);

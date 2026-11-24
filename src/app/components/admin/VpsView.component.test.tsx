@@ -508,36 +508,56 @@ async function openFrom(label: string) {
 
 const AVAILABLE = { provider: "contabo-vps" as const, serviceName: "203779521", label: "Contabo VPS · 203779521" };
 
-it.each([["Onboard VPS", "Provider account"], ["Add manual VPS", "Manual entry"]])("opens the Add capacity dialog from %s on its %s tab and refocuses the button on close", async (label, tabLabel) => {
+const BENELUX: HostingRegionCatalogRead = { regions: [{ region: "benelux", placement: { countryCodes: ["NL"] }, available: false }], error: null };
+const UNREADABLE: HostingRegionCatalogRead = { regions: null, error: "The operation is not supported." };
+
+it.each([
+    ["Onboard VPS", "Provider account", BENELUX, "Add manual VPS"],
+    ["Add manual VPS", "Manual entry", BENELUX, "Add manual VPS"],
+    ["Add manual VPS", "Manual entry", UNREADABLE, "Unavailable"],
+] as const)("opens the Add capacity dialog from %s on its %s tab and refocuses the button on close", async (label, tabLabel, hostingRegions, manualSubmit) => {
     stubDialog();
     mocks.resources.mockReturnValue(new Promise(() => {}));
     mocks.billing.mockResolvedValue({ ...inventory(), availableHosts: [AVAILABLE] });
     const listed = { ...inventory(), manualEntryProviders: [{ provider: "hosthatch-vps", displayName: "HostHatch VPS" }] };
-    await act(async () => root.render(<VpsView hostingRegions={{ regions: [{ region: "benelux", placement: { countryCodes: ["NL"] }, available: false }], error: null }} inventory={listed} accounts={[]} />));
+    await act(async () => root.render(<VpsView hostingRegions={hostingRegions} inventory={listed} accounts={[]} />));
     expect([...container.querySelectorAll("button")].find(button => button.textContent === label)!.getAttribute("aria-haspopup")).toBe("dialog");
     expect(container.querySelector("dialog")).toBeNull();
     const trigger = await openFrom(label);
     const dialog = container.querySelector("dialog")!;
     expect(dialog.open).toBe(true);
     expect(dialog.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe(tabLabel);
-    // The provider tab lists the billing read's unregistered hosts; the manual tab, the inventory's manual-entry providers and the catalog.
+    // The provider tab lists the billing read's unregistered hosts; the manual tab, the inventory's manual-entry providers and the catalog read.
     expect(dialog.querySelector('select[name="host"] option[value*="203779521"]')).not.toBeNull();
     expect(dialog.querySelector<HTMLSelectElement>('select[name="provider"]')!.value).toBe("hosthatch-vps");
-    expect(dialog.querySelector('select[name="region"] option[value="benelux"]')).not.toBeNull();
+    const manual = dialog.querySelectorAll<HTMLElement>('[role="tabpanel"]')[1]!;
+    expect(manual.querySelector<HTMLButtonElement>('button[type="submit"]')!.textContent).toBe(manualSubmit);
     await act(async () => dialog.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!.click());
     expect(container.querySelector("dialog")).toBeNull();
     expect(document.activeElement).toBe(trigger);
 });
 
-it("explains an unreadable region catalog on the Add capacity dialog's Manual entry tab", async () => {
+it("treats a malformed host list as not yet listed", async () => {
     stubDialog();
     mocks.resources.mockReturnValue(new Promise(() => {}));
-    const listed = { ...inventory(), manualEntryProviders: [{ provider: "hosthatch-vps", displayName: "HostHatch VPS" }] };
-    await act(async () => root.render(<VpsView hostingRegions={{ regions: null, error: "The operation is not supported." }} inventory={listed} accounts={[]} />));
-    await openFrom("Add manual VPS");
-    const manual = container.querySelector<HTMLElement>('dialog [role="tabpanel"]:not([hidden])')!;
-    expect(manual.textContent).toContain("Regions are unavailable: The operation is not supported.");
-    expect(manual.querySelector<HTMLButtonElement>('button[type="submit"]')!.textContent).toBe("Unavailable");
+    mocks.billing.mockResolvedValue({ ...inventory(), availableHosts: "not-a-list" });
+    await act(async () => root.render(<VpsView hostingRegions={NO_REGIONS} inventory={inventory()} accounts={[]} />));
+    await openFrom("Onboard VPS");
+    const provider = container.querySelector<HTMLElement>('dialog [role="tabpanel"]:not([hidden])')!;
+    expect(provider.textContent).toContain("Provider account inventory is unavailable, so unregistered VPS products cannot be listed");
+    expect(provider.querySelector<HTMLButtonElement>('button[type="submit"]')!.textContent).toBe("Unavailable");
+});
+
+it("retries the billing read from the Provider account tab", async () => {
+    stubDialog();
+    mocks.resources.mockReturnValue(new Promise(() => {}));
+    mocks.billing.mockRejectedValueOnce(new Error("Billing provider timed out.")).mockResolvedValueOnce({ ...inventory(), availableHosts: [AVAILABLE] });
+    await act(async () => root.render(<VpsView hostingRegions={NO_REGIONS} inventory={inventory()} accounts={[]} />));
+    await openFrom("Onboard VPS");
+    const retry = [...container.querySelectorAll<HTMLButtonElement>("dialog button")].find(button => button.textContent === "Retry provider inventory")!;
+    await act(async () => retry.click());
+    expect(mocks.billing).toHaveBeenCalledTimes(2);
+    expect(container.querySelector<HTMLSelectElement>('dialog select[name="host"]')!.value).toContain("203779521");
 });
 
 it("keeps the listed provider host beside a retained-inventory notice when a later billing read fails", async () => {
@@ -549,7 +569,7 @@ it("keeps the listed provider host beside a retained-inventory notice when a lat
     expect(container.textContent).toContain("Showing the last billing readings");
     await openFrom("Onboard VPS");
     const provider = container.querySelector<HTMLElement>('dialog [role="tabpanel"]:not([hidden])')!;
-    expect(provider.querySelector('[role="status"]')!.textContent).toBe("Showing the last provider account inventory; retrying automatically.Billing provider timed out.");
+    expect(provider.querySelector('[role="status"]')!.textContent).toBe("Showing the last provider account inventory; retrying automatically.Billing provider timed out.Retry provider inventory");
     expect(provider.querySelector<HTMLSelectElement>('select[name="host"]')!.value).toContain("203779521");
 });
 
@@ -565,4 +585,16 @@ it("keeps billing across a server refresh while the refreshed registered invento
     expect(container.textContent).toContain("Loading live resource readings");
     expect(container.textContent).not.toContain("Loading billing readings");
     expect(container.textContent).toContain("1 authenticated provider VPS is available to onboard.");
+});
+
+it("keeps the last billing host list and its error when the read after a server refresh fails", async () => {
+    mocks.resources.mockReturnValue(new Promise(() => {}));
+    mocks.billing.mockResolvedValueOnce({ ...inventory(), availableHosts: [AVAILABLE] }).mockRejectedValueOnce(new Error("Billing provider timed out."));
+    await act(async () => root.render(<VpsView hostingRegions={NO_REGIONS} inventory={inventory()} accounts={[]} />));
+    expect(container.textContent).toContain("1 authenticated provider VPS is available to onboard.");
+    // The refreshed inventory reads billing again at once; that read fails.
+    await act(async () => root.render(<VpsView hostingRegions={NO_REGIONS} inventory={inventory()} accounts={[]} />));
+    expect(mocks.billing).toHaveBeenCalledTimes(2);
+    expect(container.textContent).toContain("1 authenticated provider VPS is available to onboard.");
+    expect(container.textContent).toContain("Showing the last billing readings");
 });

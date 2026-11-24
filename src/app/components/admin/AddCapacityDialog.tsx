@@ -1,8 +1,9 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { tabKeyStep } from "@/app/lib/tab-navigation";
+import { useModalDialog } from "@/app/lib/use-modal-dialog";
 
 /** The dialog's two onboarding sources: a provider account's inventory, or facts typed in by hand. */
 export type AddCapacityTab = "provider" | "manual";
@@ -24,10 +25,12 @@ export function AddCapacityDialog({ initialTab, provider, manual, onClose }: {
 }) {
     const id = useId();
     const dialogRef = useRef<HTMLDialogElement>(null);
+    // Points at the tab selected when the dialog opens, which receives focus then.
+    const openingTabRef = useRef<HTMLButtonElement>(null);
     const [tab, setTab] = useState<AddCapacityTab>(initialTab);
     const tabId = (value: AddCapacityTab) => `${id}-tab-${value}`;
     const panelId = (value: AddCapacityTab) => `${id}-panel-${value}`;
-    useModalDialog(dialogRef);
+    useModalDialog(dialogRef, openingTabRef);
 
     /** Moves the selection and focus between tabs with the arrow, Home and End keys. */
     function moveTab(event: KeyboardEvent<HTMLButtonElement>) {
@@ -61,7 +64,7 @@ export function AddCapacityDialog({ initialTab, provider, manual, onClose }: {
                 <p id={`${id}-description`} className="mt-3 text-xs leading-5 text-foreground-muted">{ADD_CAPACITY_SUMMARY}</p>
                 <div role="tablist" aria-label="Onboarding source" className="mt-5 flex gap-2 overflow-x-auto border-b border-white/10 pb-3">
                     {TABS.map(({ tab: value, label }) => (
-                        <button key={value} type="button" role="tab" id={tabId(value)} aria-selected={tab === value} aria-controls={panelId(value)}
+                        <button key={value} ref={value === initialTab ? openingTabRef : undefined} type="button" role="tab" id={tabId(value)} aria-selected={tab === value} aria-controls={panelId(value)}
                             tabIndex={tab === value ? 0 : -1} onClick={() => setTab(value)} onKeyDown={moveTab}
                             className={`inline-flex min-h-10 shrink-0 items-center border px-4 font-label text-[0.68rem] font-semibold uppercase tracking-[0.12em] focus-visible:outline-2 focus-visible:outline-gold ${tab === value ? "border-gold/40 bg-gold/10 text-gold" : "border-white/10 text-foreground-muted hover:border-white/25 hover:text-foreground"}`}>
                             {label}
@@ -74,22 +77,4 @@ export function AddCapacityDialog({ initialTab, provider, manual, onClose }: {
             </div>
         </dialog>
     );
-}
-
-/** Opens the dialog modally with the page scroll locked and focus on the selected tab, restoring both and the opener's focus on close. */
-function useModalDialog(dialogRef: React.RefObject<HTMLDialogElement | null>) {
-    useEffect(() => {
-        const dialog = dialogRef.current;
-        if (dialog === null) return;
-        const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = "hidden";
-        if (!dialog.open) dialog.showModal();
-        dialog.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')?.focus();
-        return () => {
-            if (dialog.open) dialog.close();
-            document.body.style.overflow = previousOverflow;
-            opener?.focus();
-        };
-    }, [dialogRef]);
 }

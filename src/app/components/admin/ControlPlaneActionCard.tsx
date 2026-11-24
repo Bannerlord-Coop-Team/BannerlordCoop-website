@@ -49,6 +49,7 @@ export function ControlPlaneActionCard({
     help,
     destructiveReason,
     unavailableReason,
+    submitLabel = "Run",
 }: {
     operation: string;
     title: string;
@@ -59,6 +60,8 @@ export function ControlPlaneActionCard({
     destructiveReason?: string;
     // Page-supplied reason the action cannot run now; the card stays mounted but its submit is disabled.
     unavailableReason?: string;
+    // The submit button's label while the action can run.
+    submitLabel?: string;
 }) {
     const router = useRouter();
     const { cardRef, isTargeted } = useOperationTarget(operation);
@@ -174,9 +177,7 @@ export function ControlPlaneActionCard({
                             ? "Working"
                             : blockedReason !== null
                                 ? "Unavailable"
-                                : operation === PROVIDER_VPS_OPERATION
-                                    ? "Onboard VPS"
-                                    : "Run"}
+                                : submitLabel}
                     </button>
                 </div>
             </form>

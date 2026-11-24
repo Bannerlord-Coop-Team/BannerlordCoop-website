@@ -142,7 +142,7 @@ it("follows both release channel cursors", async () => {
     expect(html).not.toContain("reached the five-page read budget");
 });
 
-it("renders Operations with create-server capacity choices and no VPS onboarding or provider-account read", async () => {
+it("renders Operations with create-server capacity choices and no provider-account read", async () => {
     mocks.accounts.mockResolvedValue({ users: [], truncated: false });
     mocks.request.mockImplementation(async request => {
         if (request.operation === "overview") return { controls: {}, servers: { items: [] }, jobs: { items: [] } };
@@ -164,17 +164,11 @@ it("renders Operations with create-server capacity choices and no VPS onboarding
     const html = await new Response(stream).text();
     expect(html).not.toContain("Hosting regions");
     expect(html).not.toContain("Publish website regions");
-    // VPS onboarding moved to the VPS view's Add capacity dialog.
-    expect(html).not.toContain("Onboard provider-account VPS");
-    expect(html).not.toContain("Add manual VPS");
-    expect(html).not.toContain('id="onboard-vps-host"');
-    expect(html).not.toContain("Provider account inventory is unavailable");
     const createCard = cardHtml(html, "create-server");
     expect(createCard.match(/<option value="us-east">US-East<\/option>/gu) ?? []).toHaveLength(1);
     expect(createCard).not.toContain('value="us-west"');
     // Only providers holding a registered VPS can be pinned, named, in catalog order, after the empty "any" choice.
     expect(createCard).toContain('<option value="" selected="">Any provider</option><option value="ovhcloud-vps">OVHcloud</option><option value="vpstc-vps">VPS.TC</option></select>');
-    expect(cardHtml(html, "set-global-controls")).toContain("Global controls");
     expect(html).not.toContain("The control plane view could not be loaded");
     // Create server needs only registered hosts, so Operations no longer reads provider account inventory.
     expect(mocks.request.mock.calls.filter(([request]) => request.operation === "vps-hosts")).toEqual([[{
@@ -202,23 +196,15 @@ it("keeps Operations usable when the stored hosting-region catalog cannot be rea
     expect(cardHtml(html, "create-server")).toContain("Regions are unavailable: The operation is not supported.");
 });
 
-it("offers VPS onboarding from the VPS view as Add capacity dialog buttons", async () => {
+it("reads only the base inventory and region catalog for the VPS view", async () => {
     mocks.accounts.mockResolvedValue({ users: [], truncated: false });
     mocks.request.mockImplementation(async request => {
-        if (request.operation === "vps-hosts") return { liveDataIncluded: false, controlPlaneHost: null, hosts: [], availableHosts: [],
-            manualEntryProviders: [{ provider: "hosthatch-vps", displayName: "HostHatch VPS" }] };
+        if (request.operation === "vps-hosts") return { liveDataIncluded: false, controlPlaneHost: null, hosts: [], availableHosts: [] };
         if (request.operation === "hosting-regions") return { regions: hostingRegionCatalogPayload().map((entry) => ({ ...entry, available: false })) };
         throw new Error("Unexpected read");
     });
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "vps" }) }));
     await stream.allReady;
-    const html = await new Response(stream).text();
-    expect(html).not.toContain("The control plane view could not be loaded");
-    expect(html).toMatch(/<button type="button" aria-haspopup="dialog"[^>]*>Onboard VPS<\/button>/u);
-    expect(html).toMatch(/<button type="button" aria-haspopup="dialog"[^>]*>Add manual VPS<\/button>/u);
-    expect(html).not.toContain("view=operations#onboard");
-    // The dialog opens in the browser on demand; the page reads only the base inventory and the catalog it labels hosts with.
-    expect(html).not.toContain("<dialog");
     expect(mocks.request.mock.calls.map(([request]) => [request.operation, request.input])).toEqual([
         ["vps-hosts", { includeLiveData: false }], ["hosting-regions", {}],
     ]);

@@ -3,12 +3,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
     ProviderVpsOnboardingCard,
-    providerAccountInventory,
     providerAccountNotice,
     providerAccountUnavailableReason,
     type ProviderAccountInventory,
 } from "./ProviderVpsOnboardingCard";
-import type { HostingAdminVpsAvailableHost, HostingAdminVpsInventory } from "@/app/lib/control-plane/types";
+import type { HostingAdminVpsAvailableHost } from "@/app/lib/control-plane/types";
 
 const { request, session, refresh, push } = vi.hoisted(() => ({ request: vi.fn(), session: vi.fn(), refresh: vi.fn(), push: vi.fn() }));
 vi.mock("@/app/lib/control-plane/client", async (importOriginal) => ({
@@ -32,9 +31,14 @@ beforeEach(() => {
 });
 afterEach(async () => { await act(async () => root.unmount()); container.remove(); });
 
-/** Renders the card over the given inventory. */
-async function render(inventory: ProviderAccountInventory) {
-    await act(async () => root.render(<ProviderVpsOnboardingCard inventory={inventory} />));
+/** Renders the card over the given inventory, with an optional retry handler. */
+async function render(inventory: ProviderAccountInventory, onRetry = vi.fn()) {
+    await act(async () => root.render(<ProviderVpsOnboardingCard inventory={inventory} onRetry={onRetry} />));
+}
+
+/** The notice's retry button, if shown. */
+function retryButton() {
+    return [...container.querySelectorAll("button")].find((button) => button.textContent === "Retry provider inventory");
 }
 
 /** The host select and the submit button. */
@@ -74,10 +78,21 @@ it("lists several VPSes without preselecting one", async () => {
     expect(hostSelect().value).toBe("");
 });
 
-it("explains an inventory that could not be read and points to manual entry", async () => {
-    await render({ availableHosts: null, pending: false, error: "Billing readings timed out.", failedProviderReads: null });
-    expect(container.querySelector('[role="status"]')!.textContent).toBe("Provider account inventory is unavailable, so unregistered VPS products cannot be listed for onboarding. Manual entry still works.Billing readings timed out.");
-    expect(submitButton().textContent).toBe("Unavailable");
+it.each([
+    ["an unlisted inventory", { availableHosts: null, pending: false, error: "Billing readings timed out.", failedProviderReads: null }],
+    ["a failed later read", { ...LOADED, error: "Billing readings timed out." }],
+] as Array<[string, ProviderAccountInventory]>)("offers a retry from the notice for %s", async (_name, inventory) => {
+    const onRetry = vi.fn();
+    await render(inventory, onRetry);
+    await act(async () => retryButton()!.click());
+    expect(onRetry).toHaveBeenCalledOnce();
+});
+
+it("offers no retry while loading, when complete, or for failed provider accounts alone", async () => {
+    for (const inventory of [PENDING, LOADED, { ...LOADED, failedProviderReads: "The Contabo account read failed." }]) {
+        await render(inventory);
+        expect(retryButton()).toBeUndefined();
+    }
 });
 
 it("blocks submission only while no hosts are listed, naming whether the read is loading or failed", () => {
@@ -92,17 +107,7 @@ it("notices a failed read before a retained listing before failed provider accou
     expect(providerAccountNotice(PENDING)).toBeNull();
     expect(providerAccountNotice({ ...PENDING, pending: false, error: null })?.detail).toBe("The provider account inventory could not be read.");
     expect(providerAccountNotice({ ...LOADED, error: "Billing readings timed out.", failedProviderReads: "The Contabo account read failed." }))
-        .toEqual({ summary: "Showing the last provider account inventory; retrying automatically.", detail: "Billing readings timed out." });
+        .toEqual({ summary: "Showing the last provider account inventory; retrying automatically.", detail: "Billing readings timed out.", retryable: true });
     expect(providerAccountNotice({ ...LOADED, failedProviderReads: "The Contabo account read failed." }))
-        .toEqual({ summary: "The Contabo account read failed.", detail: "Manual entry still works." });
-});
-
-it("maps the billing reading onto the form's inventory, passing failed provider reads through", () => {
-    const result = { availableHosts: [CONTABO] } as HostingAdminVpsInventory;
-    expect(providerAccountInventory({ result, pending: false, error: "Timed out." }, "The Contabo account read failed.")).toEqual({
-        availableHosts: [CONTABO], pending: false, error: "Timed out.", failedProviderReads: "The Contabo account read failed.",
-    });
-    expect(providerAccountInventory({ pending: true }, null)).toEqual(PENDING);
-    // A malformed host list counts as not yet listed rather than as an empty one.
-    expect(providerAccountInventory({ result: { availableHosts: "bad" } as unknown as HostingAdminVpsInventory, pending: false }, null).availableHosts).toBeNull();
+        .toEqual({ summary: "The Contabo account read failed.", detail: "Manual entry still works.", retryable: false });
 });
