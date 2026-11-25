@@ -4,6 +4,7 @@ import { LoaderCircle, RefreshCw } from "lucide-react";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { SLOT_DECOMMISSION_PAUSED, slotDecommissionPaused } from "@/app/lib/control-plane/slot-decommission";
 import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
+import { PROVIDER_VPS_OPERATION } from "@/app/lib/control-plane/vps-providers";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -90,7 +91,7 @@ export function RunnerOnboardingStatus({
             await requestControlPlaneAdmin({
                 accessToken: session.access_token,
                 requestId: crypto.randomUUID(),
-                operation: "onboard-vps-host",
+                operation: PROVIDER_VPS_OPERATION,
                 input: { provider, serviceName, mode: onboarding === null ? "enroll" : "retry" },
             });
             refresh();

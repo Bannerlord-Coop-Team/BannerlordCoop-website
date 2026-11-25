@@ -4,7 +4,7 @@ import { LoaderCircle, Play, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState, type ReactNode } from "react";
-import { FieldRequirement, HelpIcon, useOperationTarget } from "./ControlPlaneActionCard";
+import { FieldRequirement, HelpIcon } from "./ControlPlaneActionCard";
 import {
     emptyManualVpsForm,
     MANUAL_VPS_MAXIMUM_VCPU,
@@ -25,6 +25,8 @@ import {
 import { presentControlPlaneOperationResult, type ControlPlaneOperationResultLink } from "@/app/lib/control-plane/presentation";
 import { requestControlPlaneAdminWithRefresh } from "@/app/lib/control-plane/stale-request";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
+import { operationExplanation } from "@/app/lib/control-plane/explanations";
+import type { HostingRegionCatalogRead } from "@/app/lib/control-plane/types";
 import { hostingRegionLabel, type HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
 type FieldErrors = Partial<Record<ManualVpsField, string>>;
@@ -32,21 +34,20 @@ type Result = { ok: boolean; message: string; links: ControlPlaneOperationResult
 
 const INPUT_CLASS = "mt-1.5 min-h-10 w-full border border-white/15 bg-background px-3 text-xs text-foreground outline-none placeholder:text-foreground-dim focus:border-gold disabled:opacity-60 aria-invalid:border-crimson";
 
-/** The "Add manual VPS" operation card: collects a hand-typed host's facts, validates them and submits `onboard-manual-vps-host`. */
-export function ManualVpsOnboardingCard({ providers, regions, regionsError, help }: {
+/** The Add capacity dialog's "Add manual VPS" form: collects a hand-typed host's facts, validates them and submits `onboard-manual-vps-host`. */
+export function ManualVpsOnboardingCard({ providers, hostingRegions }: {
     providers: ManualEntryProvider[];
-    regions: HostingRegionPayload[] | null;
-    // Why the catalog could not be read; shown when `regions` is null.
-    regionsError: string | null;
-    help?: string;
+    // The stored catalog read; its error explains an unavailable form.
+    hostingRegions: HostingRegionCatalogRead;
 }) {
+    const regions = hostingRegions.regions;
+    const help = operationExplanation(MANUAL_VPS_OPERATION);
     const router = useRouter();
-    const { cardRef, isTargeted } = useOperationTarget(MANUAL_VPS_OPERATION);
     const [values, setValues] = useState<ManualVpsFormValues>(() => emptyManualVpsForm(providers));
     const [errors, setErrors] = useState<FieldErrors>({});
     const [pending, setPending] = useState(false);
     const [result, setResult] = useState<Result | null>(null);
-    const blockedReason = manualVpsBlockedReason(providers, regions, regionsError);
+    const blockedReason = manualVpsBlockedReason(providers, hostingRegions);
 
     /** Replaces one field (a region also resets its dependent country and location) and clears its errors. */
     function update(field: ManualVpsField, value: string) {
@@ -54,7 +55,7 @@ export function ManualVpsOnboardingCard({ providers, regions, regionsError, help
         setErrors((current) => ({ ...current, [field]: undefined, ...(field === "region" ? { countryCode: undefined, locationId: undefined } : {}) }));
     }
 
-    /** Validates locally, asks the administrator to recheck the IPv4, then sends the request and opens the VPS view. */
+    /** Validates locally, asks the administrator to recheck the IPv4, then sends the request and refreshes the VPS view behind the result. */
     async function submit() {
         if (pending || blockedReason !== null) return;
         const validation = validateManualVpsForm(values, { providers, regions: regions ?? [] });
@@ -74,7 +75,7 @@ export function ManualVpsOnboardingCard({ providers, regions, regionsError, help
                 accessToken: session.access_token, requestId: crypto.randomUUID(), operation: MANUAL_VPS_OPERATION, input: validation.input,
             }, () => router.refresh());
             setResult({ ok: true, ...presentControlPlaneOperationResult(MANUAL_VPS_OPERATION, response) });
-            router.push("/admin/control-plane?view=vps");
+            router.refresh();
         } catch (error) {
             setResult({ ok: false, message: error instanceof Error ? error.message : "The operation failed.", links: [] });
         } finally {
@@ -83,11 +84,10 @@ export function ManualVpsOnboardingCard({ providers, regions, regionsError, help
     }
 
     return (
-        <article ref={cardRef} id={MANUAL_VPS_OPERATION} tabIndex={-1}
-            className={`flex h-full scroll-mt-6 flex-col border border-white/10 bg-surface p-5 outline-none ${isTargeted ? "control-plane-card-targeted" : ""}`}>
+        <article className="flex h-full flex-col border border-white/10 bg-surface p-5">
             <div className="flex items-center gap-2">
                 <h3 className="font-display text-xl font-semibold text-foreground">Add manual VPS</h3>
-                {help && <HelpIcon label={`Add manual VPS: ${help}`} help={help} />}
+                <HelpIcon label={`Add manual VPS: ${help}`} help={help} />
             </div>
             <p className="mt-1 text-xs leading-5 text-foreground-muted">For an already-purchased VPS from a provider without an account API. Type the facts from the provider panel; the control plane revalidates them, scans and pins the host key on first contact, installs every managed runner slot, and publishes capacity only after health checks. It never buys, renews, or cancels a VPS.</p>
             <form noValidate onSubmit={(event) => { event.preventDefault(); void submit(); }} className="mt-4 flex flex-1 flex-col">
@@ -113,9 +113,9 @@ export function ManualVpsOnboardingCard({ providers, regions, regionsError, help
 }
 
 /** Explains why the form cannot be used now (no manual-entry provider or no catalog), or null when it can. */
-export function manualVpsBlockedReason(providers: readonly ManualEntryProvider[], regions: readonly HostingRegionPayload[] | null, regionsError: string | null): string | null {
+export function manualVpsBlockedReason(providers: readonly ManualEntryProvider[], hostingRegions: HostingRegionCatalogRead): string | null {
     if (providers.length === 0) return "No provider currently accepts manual entry. API providers (OVHcloud, Contabo) are onboarded from their account inventory instead.";
-    if (regions === null) return `Regions are unavailable: ${regionsError ?? "the catalog could not be read."}`;
+    if (hostingRegions.regions === null) return `Regions are unavailable: ${hostingRegions.error}`;
     return null;
 }
 

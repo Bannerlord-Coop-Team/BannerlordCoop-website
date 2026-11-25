@@ -1,7 +1,7 @@
 /**
  * Exactly the control plane's closed `VPS_PROVIDER_IDS` (`src/hosting/providers/vps-provider-ids.ts`), in its order.
- * Until a provider it adds is listed here, the fleet capacity read rejects it, the Onboard provider-account VPS card
- * refuses its hosts and other views show its raw id, so the website updates first.
+ * Until a provider it adds is listed here, the fleet capacity read rejects it, the VPS view's Add capacity dialog
+ * (Provider account tab) refuses its hosts and other views show its raw id, so the website updates first.
  */
 export const VPS_PROVIDERS = ["ovhcloud-vps", "contabo-vps", "hosthatch-vps", "vpstc-vps"] as const;
 export type VpsProviderId = (typeof VPS_PROVIDERS)[number];
@@ -13,6 +13,9 @@ export type VpsHostTarget = { provider: VpsProviderId; serviceName: string };
 export function isVpsProviderId(value: unknown): value is VpsProviderId {
     return typeof value === "string" && (VPS_PROVIDERS as readonly string[]).includes(value);
 }
+
+/** The administrator operation that verifies and onboards a host listed by its provider's account API. */
+export const PROVIDER_VPS_OPERATION = "onboard-vps-host";
 
 /** Encodes one listed host as a single form value so its provider travels with its service name. */
 export function vpsHostSelectionValue(host: VpsHostTarget): string {

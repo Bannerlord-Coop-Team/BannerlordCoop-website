@@ -1,7 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
+import { AddCapacityPanel } from "./AddCapacityPanel";
+import { ManualVpsOnboardingCard } from "./ManualVpsOnboardingCard";
+import { ProviderVpsOnboardingCard } from "./ProviderVpsOnboardingCard";
+import { useLiveInventoryReading, useSupplementaryReading } from "./use-vps-readings";
+import { BILLING_READING, ORACLE_READING, RESOURCES_READING } from "./vps-reading-specs";
 import { LocalDateTime } from "./LocalDateTime";
 import { OutOfAdmissionBanner } from "./OutOfAdmissionBanner";
 import { VpsInventoryBrowser } from "./VpsInventoryBrowser";
@@ -9,18 +13,17 @@ import { VpsSlotSummary } from "./VpsSlotSummary";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
-import { failedVpsProviderReadsMessage } from "@/app/lib/control-plane/vps-providers";
+import { billingListedHosts, billingReadState, type BillingReadState } from "@/app/lib/control-plane/vps-billing-state";
+import { manualEntryProviders } from "@/app/lib/control-plane/manual-vps";
 import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
-import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminRegionRequestNotification, HostingAdminVpsInventory, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
+import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminRegionRequestNotification, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 
-const FLEET_RESOURCE_REFRESH_INTERVAL_MILLISECONDS = 15_000;
-
 /** Shows registered VPS capacity, labelled by the stored region catalog, with live readings and region requests. */
-export function VpsView({ inventory: initialInventory, regionCatalog, accounts }: VpsViewData & { accounts: WebsiteAccountSummary[] }) {
-    const readings = useVpsReadings(initialInventory, "resources");
-    const billing = useVpsReadings(initialInventory, "billing");
-    const oracle = useVpsReadings(initialInventory, "oracle");
+export function VpsView({ inventory: initialInventory, hostingRegions, accounts }: VpsViewData & { accounts: WebsiteAccountSummary[] }) {
+    const readings = useLiveInventoryReading(initialInventory, RESOURCES_READING);
+    const billing = useSupplementaryReading(initialInventory, BILLING_READING);
+    const oracle = useSupplementaryReading(initialInventory, ORACLE_READING);
     const inventory = readings.result ?? initialInventory;
     const pending = readings.pending;
     // A service name is unique only within its provider, so billing rows are matched by both.
@@ -30,47 +33,42 @@ export function VpsView({ inventory: initialInventory, regionCatalog, accounts }
         return { ...host, cost: provider?.cost ?? null, expirationDate: provider?.expirationDate ?? null,
             autoRenew: provider?.autoRenew ?? null, providerCheckedAt: provider?.providerCheckedAt ?? null };
     });
-    const controlPlaneHost = oracle.result?.controlPlaneHost ?? null;
+    const controlPlaneHost = oracle.result ?? null;
     const ownerLabels = new Map(accounts.map(account => [account.accountId, account.label]));
-    const availableHostCount = billing.result?.availableHosts?.length ?? 0;
-    const failedProviderReads = failedVpsProviderReadsMessage(billing.result?.providerReads);
+    const billingState = billingReadState(billing);
+    const listedHosts = billingListedHosts(billingState);
     const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
     const checkedAt = hosts.find((host) => host.providerCheckedAt)?.providerCheckedAt ?? null;
     return (
         <section className="mt-8">
             <SectionHeading eyebrow="VPS inventory" title="VPS hosts" count={hosts.length} />
             <p className="mt-3 text-xs text-foreground-muted">
-                Registered VPS capacity and server assignments. {billing.result && <>{availableHostCount} authenticated provider {availableHostCount === 1 ? "VPS is" : "VPS products are"} available to onboard.</>}
+                Registered VPS capacity and server assignments. {listedHosts !== null && <>{listedHosts.length} authenticated provider {listedHosts.length === 1 ? "VPS is" : "VPS products are"} available to onboard.</>}
                 {checkedAt && <> Provider data checked <LocalDateTime value={checkedAt} />.</>}
             </p>
             {pending && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading live resource readings…</p>}
             {readings.error && <p role="alert" className="mt-3 text-xs text-red-200">{readings.error} {readings.result ? "Showing the last resource readings; retrying automatically." : "Registered inventory remains visible; retrying automatically."} <button type="button" className="underline" onClick={readings.refreshReadings}>Retry live readings</button></p>}
-            {billing.pending && <p role="status" className="mt-3 text-xs text-foreground-muted">Loading billing readings…</p>}
-            {!billing.error && failedProviderReads && <p role="status" className="mt-3 text-xs text-amber-200">{failedProviderReads}</p>}
-            {billing.error && <p role="alert" className="mt-3 text-xs text-red-200">Billing unavailable. {billing.error} {billing.result ? "Showing the last billing readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={billing.refreshReadings}>Retry billing</button></p>}
+            <BillingBanner state={billingState} onRetry={billing.refreshReadings} />
             <OutOfAdmissionBanner hosts={hosts} />
-            <VpsSlotSummary hosts={hosts} regionCatalog={regionCatalog} />
-            <div className="mt-5 flex flex-col justify-between gap-3 border border-gold/25 bg-gold/8 p-4 sm:flex-row sm:items-center">
-                <p className="text-xs leading-5 text-foreground-muted"><span className="font-semibold text-foreground">Adding capacity:</span> onboard an already-purchased VPS, from a provider account (OVHcloud, Contabo) or by manual entry for a provider without an account API. The durable workflow verifies the host, installs the reviewed runner, prepares every isolated slot, establishes private mTLS routes, and exposes capacity only after health proof.</p>
-                <div className="flex shrink-0 flex-wrap gap-2">
-                    <Link href="/admin/control-plane?view=operations#onboard-vps-host" className="border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Onboard VPS</Link>
-                    <Link href="/admin/control-plane?view=operations#onboard-manual-vps-host" className="border border-gold/40 px-4 py-2 font-label text-[0.65rem] font-semibold uppercase tracking-[0.12em] text-gold hover:bg-gold/10">Add manual VPS</Link>
-                </div>
-            </div>
+            <VpsSlotSummary hosts={hosts} regionCatalog={hostingRegions.regions} />
+            <AddCapacityPanel
+                provider={<ProviderVpsOnboardingCard state={billingState} onRetry={billing.refreshReadings} />}
+                manual={<ManualVpsOnboardingCard providers={manualEntryProviders(inventory)} hostingRegions={hostingRegions} />}
+            />
             <div className="mt-6">
-                {oracle.error && <p role="alert" className="mb-3 text-xs text-red-200">Oracle readings unavailable. {oracle.error} {oracle.result?.controlPlaneHost ? "Showing the last Oracle readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={oracle.refreshReadings}>Retry Oracle readings</button></p>}
+                {oracle.error && <p role="alert" className="mb-3 text-xs text-red-200">Oracle readings unavailable. {oracle.error} {oracle.result ? "Showing the last Oracle readings; retrying automatically." : "Retrying automatically."} <button type="button" className="underline" onClick={oracle.refreshReadings}>Retry Oracle readings</button></p>}
                 <HostResourcesCard name="Oracle control plane" resources={controlPlaneHost} pending={oracle.pending} />
             </div>
             <VpsInventoryBrowser
                 hosts={hosts}
                 accounts={accounts}
                 liveDataPending={pending}
-                billingPending={billing.pending}
-                billingUnavailable={!!billing.error && !billing.result}
+                billingPending={billingState.kind === "loading"}
+                billingUnavailable={billingState.kind === "failed"}
                 onRefresh={readings.refreshReadings}
                 ownerLabels={Object.fromEntries(ownerLabels)}
                 runnerTargetSourceCommit={runnerTargetSourceCommit}
-                regionCatalog={regionCatalog}
+                regionCatalog={hostingRegions.regions}
             />
             <RegionRequestsPane accounts={accounts} />
         </section>
@@ -207,69 +205,16 @@ function formatAllocatedRegions(regions: readonly string[]) {
     return regions.map(hostingRegionLabel).join(", ");
 }
 
-function useVpsReadings(initialInventory: HostingAdminVpsInventory, kind: "resources" | "billing" | "oracle") {
-    const [refresh, setRefresh] = useState<{ initial: HostingAdminVpsInventory; result?: HostingAdminVpsInventory; error?: string }>();
-    const [attempt, setAttempt] = useState(0);
-    const current = refresh?.initial === initialInventory ? refresh : undefined;
-    const pending = initialInventory.liveDataIncluded === false && current === undefined;
-    const refreshReadings = useCallback(() => setAttempt(value => value + 1), []);
-    useEffect(() => {
-        let cancelled = false;
-        let inFlight = false;
-        let timer: ReturnType<typeof setTimeout>;
-        const interval = kind === "billing" ? 60_000 : kind === "oracle" ? 5_000 : FLEET_RESOURCE_REFRESH_INTERVAL_MILLISECONDS;
-        const controller = new AbortController();
-        async function load() {
-            if (cancelled || inFlight || document.visibilityState === "hidden") return;
-            clearTimeout(timer);
-            inFlight = true;
-            const requestController = new AbortController();
-            const deadline = kind !== "resources"
-                ? setTimeout(() => requestController.abort(), kind === "oracle" ? 10_000 : 15_000) : undefined;
-            try {
-                const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
-                if (cancelled) return;
-                if (!session?.access_token) throw new Error("Authentication is required.");
-                const signal = AbortSignal.any([controller.signal, requestController.signal]);
-                const result = kind === "oracle"
-                    ? { ...initialInventory, liveDataIncluded: true, controlPlaneHost:
-                        await requestControlPlaneAdmin<HostingAdminHostResources | null>({ accessToken: session.access_token,
-                            operation: "control-plane-host-resources", signal }) }
-                    : await requestControlPlaneAdmin<HostingAdminVpsInventory>({ accessToken: session.access_token, operation: "vps-hosts",
-                        input: { includeLiveData: kind === "resources", includeProviderInventory: kind === "billing" }, signal });
-                if (result.liveDataIncluded !== (kind !== "billing")) throw new Error("Live VPS data is unavailable.");
-                if (!cancelled) setRefresh({ initial: initialInventory, result });
-            } catch (error) {
-                if (!cancelled) setRefresh(previous => ({
-                    initial: initialInventory,
-                    result: previous?.initial === initialInventory ? previous.result
-                        : initialInventory.liveDataIncluded !== false ? initialInventory : undefined,
-                    error: requestController.signal.aborted ? `${kind === "oracle" ? "Oracle" : "Billing"} readings timed out.`
-                        : error instanceof Error ? error.message : "VPS readings could not be loaded.",
-                }));
-            } finally {
-                clearTimeout(deadline);
-                inFlight = false;
-                if (!cancelled) timer = setTimeout(() => void load(), interval);
-            }
-        }
-        function visibilityChanged() {
-            clearTimeout(timer);
-            if (document.visibilityState !== "hidden") void load();
-        }
-        if (initialInventory.liveDataIncluded === false || attempt > 0) void load();
-        else timer = setTimeout(() => void load(), interval);
-        document.addEventListener("visibilitychange", visibilityChanged);
-        return () => {
-            cancelled = true;
-            clearTimeout(timer);
-            controller.abort();
-            document.removeEventListener("visibilitychange", visibilityChanged);
-        };
-    }, [initialInventory, attempt, kind]);
-    return { result: current?.result ?? (initialInventory.liveDataIncluded !== false ? initialInventory : undefined),
-        error: current?.error, pending, refreshReadings };
-
+/** The page's billing status line for one read state: loading, failed provider accounts, or a failed read with a retry. */
+function BillingBanner({ state, onRetry }: { state: BillingReadState; onRetry: () => void }) {
+    const retry = <button type="button" className="underline" onClick={onRetry}>Retry billing</button>;
+    switch (state.kind) {
+        case "loading": return <p role="status" className="mt-3 text-xs text-foreground-muted">Loading billing readings…</p>;
+        case "partial": return <p role="status" className="mt-3 text-xs text-amber-200">{state.failedProviderReads}</p>;
+        case "failed": return <p role="alert" className="mt-3 text-xs text-red-200">Billing unavailable. {state.error} Retrying automatically. {retry}</p>;
+        case "stale": return <p role="alert" className="mt-3 text-xs text-red-200">Billing unavailable. {state.error} Showing the last billing readings; retrying automatically. {retry}</p>;
+        case "ok": return null;
+    }
 }
 
 function HostResourcesCard({ name, resources, pending }: { name: string; resources: HostingAdminHostResources | null; pending: boolean }) {
