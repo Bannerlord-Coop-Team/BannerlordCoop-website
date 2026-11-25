@@ -42,7 +42,7 @@ afterEach(async () => {
 });
 
 describe("compact VPS host inventory", () => {
-    it("decodes the shared incident fixture and explains five ready but zero admissible slots", async () => {
+    it("renders Slots, Running and Free for the shared incident fixture", async () => {
         const fixture = JSON.parse(readFileSync("test/fixtures/vps-slot-availability/v1.json", "utf8"));
         const requestId = "11111111-1111-4111-8111-111111111111";
         const result = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify({
@@ -51,10 +51,12 @@ describe("compact VPS host inventory", () => {
         const details = result.hosts[0].slotAvailability!;
         expect(parseSlotAvailability(details)).toEqual(details);
         await act(async () => root.render(<VpsHostInventory hosts={result.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
-        expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 admissible"]')?.textContent)
-            .toBe("Slots8Running0Ready5Admissible0");
-        expect(container.textContent).toContain("Storage evidence is stale");
-        expect(container.textContent).toContain("2 launch-proven; 0 relocation candidates");
+        expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 free"]')?.textContent)
+            .toBe("Slots8Running0Free0");
+        expect(container.textContent).not.toContain("Storage evidence is stale");
+        const capacity = container.querySelector('[data-label="Capacity"]')!;
+        expect(capacity.textContent).not.toMatch(/Admissible|Ready|launch-proven|relocation candidates/);
+        expect(capacity.querySelector('dl')?.classList.contains('max-w-28')).toBe(true);
         for (const invalid of [{ reasons: ["unknown"] }, { ready: 33 }, { launchProven: 6 }, { extra: true }]) {
             expect(parseSlotAvailability({ ...details, ...invalid })).toBeUndefined();
         }
@@ -63,7 +65,7 @@ describe("compact VPS host inventory", () => {
         ["host_memory", "Host memory evidence is missing, stale, or below the admission minimum."],
         ["shared_image_commission", "Shared game image commissioning holds admission."],
         ["slot_health", "Slot health checks hold admission."],
-    ])("decodes and explains %s without hiding ready capacity", async (reason, label) => {
+    ])("keeps the capacity view compact for %s", async (reason, label) => {
         const requestId = "11111111-1111-4111-8111-111111111111";
         const result = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify({
             version: 1, requestId, ok: true, result: { hosts: [{ ...host("blocked-host", resources(60, 40), 0),
@@ -73,12 +75,12 @@ describe("compact VPS host inventory", () => {
         }), requestId, true);
         expect(parseSlotAvailability(result.hosts[0].slotAvailability)).toEqual(result.hosts[0].slotAvailability);
         await act(async () => root.render(<VpsHostInventory hosts={result.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
-        expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 admissible"]')?.textContent)
-            .toBe("Slots8Running0Ready5Admissible0");
-        expect(container.textContent).toContain(label);
+        expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 free"]')?.textContent)
+            .toBe("Slots8Running0Free0");
+        expect(container.textContent).not.toContain(label);
     });
 
-    it("keeps legacy admission visible when a future reason makes optional details unreadable", async () => {
+    it("keeps free capacity visible when a future reason makes optional details unreadable", async () => {
         const details = { ready: 5, launchProven: 2, storageObservedAt: null, reasons: ["host_memory", "future_gate"] };
         for (const reason of ["future_gate", "host-memory", "SLOT_HEALTH", "shared_image_commission_extra"]) {
             expect(parseSlotAvailability({ ...details, reasons: [reason] })).toBeUndefined();
@@ -91,8 +93,8 @@ describe("compact VPS host inventory", () => {
             }] },
         }), requestId, true);
         await act(async () => root.render(<VpsHostInventory hosts={result.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
-        expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 admissible"]')?.textContent)
-            .toBe("Slots8Running0Admissible0");
+        expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 free"]')?.textContent)
+            .toBe("Slots8Running0Free0");
         expect(container.textContent).toContain("future-host");
         expect(container.textContent).not.toContain("future_gate");
     });
@@ -175,9 +177,11 @@ describe("compact VPS host inventory", () => {
 
         expect(container.textContent).toContain("host-a");
         expect(container.textContent).toContain("owner@example.com (testserver)");
-        const capacity = container.querySelector('dl[aria-label="3 total slots, 1 running, 2 admissible"]');
+        const capacity = container.querySelector('dl[aria-label="3 total slots, 1 running, 2 free"]');
         expect(capacity?.querySelectorAll("dt")).toHaveLength(3);
-        expect(capacity?.textContent).toBe("Slots3Running1Admissible2");
+        expect(capacity?.textContent).toBe("Slots3Running1Free2");
+        expect(container.querySelector('[data-label="Capacity"]')?.textContent).not.toMatch(/Admissible|Ready|launch-proven/);
+        expect(container.textContent).toContain("2 available");
         expect(container.textContent).not.toContain("UDP 4200");
         expect([...container.querySelectorAll("button")].filter((button) => button.textContent === "Runner current")).toHaveLength(2);
 
