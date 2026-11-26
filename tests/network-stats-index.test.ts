@@ -60,9 +60,23 @@ test("network statistics replaces the BRIN only after validating the smaller ran
         assert.deepEqual((await db.query(`select to_regclass('public.server_statistics_updated_at_brin_idx')
             is not null as old_index`)).rows, [{old_index:true}]);
 
-        await db.exec("drop index public.server_statistics_updated_at_brin8_idx");
+        await db.exec(`drop index public.server_statistics_updated_at_brin8_idx;
+            create index server_statistics_updated_at_brin8_idx on public.server_statistics using brin(updated_at)
+              with (pages_per_range = 8);
+            update pg_catalog.pg_index set indisvalid=false, indisready=false
+              where indexrelid = 'public.server_statistics_updated_at_brin8_idx'::regclass;`);
+        const originalOid = (await db.query(`select 'public.server_statistics_updated_at_brin8_idx'::regclass::oid as oid`)).rows;
+        for (const statement of statements.slice(0, 3)) await db.exec(statement);
+        assert.deepEqual((await db.query(`select
+            to_regclass('public.server_statistics_updated_at_brin_idx') is not null as old_index,
+            to_regclass('public.server_statistics_updated_at_brin8_idx') is null as target_vacant,
+            'public.server_statistics_updated_at_brin8_retry_idx'::regclass::oid as oid`)).rows,
+            [{old_index:true,target_vacant:true,oid:originalOid[0]?.oid}]);
         await apply();
+        const rebuiltOid = (await db.query(`select 'public.server_statistics_updated_at_brin8_idx'::regclass::oid as oid`)).rows;
+        assert.notDeepEqual(rebuiltOid, originalOid);
         await apply();
+        assert.deepEqual((await db.query(`select 'public.server_statistics_updated_at_brin8_idx'::regclass::oid as oid`)).rows, rebuiltOid);
         assert.deepEqual((await db.query(`select c.reloptions, i.indisvalid,
             to_regclass('public.server_statistics_updated_at_brin_idx') is null as old_index_removed
             from pg_class c join pg_index i on i.indexrelid=c.oid

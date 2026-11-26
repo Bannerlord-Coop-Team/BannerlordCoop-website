@@ -1,6 +1,42 @@
 set lock_timeout = '5s';
 set statement_timeout = '60s';
 
+-- Move an interrupted build aside so its drop can run outside this transaction.
+do $guard$
+declare
+  target_index oid := to_regclass('public.server_statistics_updated_at_brin8_idx');
+  retry_index oid := to_regclass('public.server_statistics_updated_at_brin8_retry_idx');
+  existing record;
+begin
+  for existing in
+    select idx.oid, i.indisvalid,
+      i.indrelid = 'public.server_statistics'::regclass
+        and am.amname = 'brin' and op.opcdefault
+        and i.indnatts = 1 and i.indpred is null and i.indexprs is null
+        and pg_get_indexdef(i.indexrelid, 1, true) = 'updated_at'
+        and idx.reloptions @> array['pages_per_range=8'] as expected
+    from pg_catalog.pg_class idx
+    left join pg_catalog.pg_index i on i.indexrelid = idx.oid
+    left join pg_catalog.pg_am am on am.oid = idx.relam
+    left join pg_catalog.pg_opclass op on op.oid = i.indclass[0]
+    where idx.oid in (target_index, retry_index)
+  loop
+    if existing.expected is not true or (existing.oid = retry_index and existing.indisvalid) then
+      raise exception using errcode = '55000',
+        message = 'network statistics BRIN replacement or retry name has a conflicting index';
+    end if;
+    if existing.oid = target_index and not existing.indisvalid then
+      if retry_index is not null then
+        raise exception using errcode = '55000', message = 'both network statistics BRIN retry names are occupied';
+      end if;
+      alter index public.server_statistics_updated_at_brin8_idx rename to server_statistics_updated_at_brin8_retry_idx;
+    end if;
+  end loop;
+end
+$guard$;
+
+drop index concurrently if exists public.server_statistics_updated_at_brin8_retry_idx;
+
 -- Smaller ranges reduce lossy heap reads for the RPC's two-minute window.
 create index concurrently if not exists server_statistics_updated_at_brin8_idx
   on public.server_statistics using brin (updated_at) with (pages_per_range = 8);
