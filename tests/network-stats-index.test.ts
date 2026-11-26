@@ -38,3 +38,38 @@ test("network statistics index preserves updated_at freshness and uses an indexe
         assert.deepEqual((await db.query('select count(*)::integer as total from public.server_statistics')).rows,[{total:20002}]);
     } finally { await db.close(); }
 });
+
+test("network statistics replaces the BRIN only after validating the smaller range", async () => {
+    const db = new PGlite();
+    try {
+        await db.exec(`create table public.server_statistics (
+            session_id text primary key, updated_at timestamptz, last_seen_at timestamptz, player_count integer
+        );
+        insert into public.server_statistics values
+            ('active', now(), now()-interval '1 day', 3),
+            ('old', now()-interval '1 day', now(), 100);
+        create index server_statistics_updated_at_brin_idx on public.server_statistics using brin (updated_at);
+        create index server_statistics_updated_at_brin8_idx on public.server_statistics using brin (updated_at)
+          with (pages_per_range = 16);`);
+        const migration = await readFile("supabase/migrations/20261126014500_network_stats_brin_range.sql", "utf8");
+        const statements = migration.split(/\n(?=set |create index |do \$guard\$|drop index )/);
+        const apply = async () => {
+            for (const statement of statements) await db.exec(statement);
+        };
+        await assert.rejects(apply, (error: { code?: string }) => error.code === "55000");
+        assert.deepEqual((await db.query(`select to_regclass('public.server_statistics_updated_at_brin_idx')
+            is not null as old_index`)).rows, [{old_index:true}]);
+
+        await db.exec("drop index public.server_statistics_updated_at_brin8_idx");
+        await apply();
+        await apply();
+        assert.deepEqual((await db.query(`select c.reloptions, i.indisvalid,
+            to_regclass('public.server_statistics_updated_at_brin_idx') is null as old_index_removed
+            from pg_class c join pg_index i on i.indexrelid=c.oid
+            where c.oid='public.server_statistics_updated_at_brin8_idx'::regclass`)).rows,
+            [{reloptions:["pages_per_range=8"],indisvalid:true,old_index_removed:true}]);
+        assert.deepEqual((await db.query(`select count(*)::integer as server_count, sum(player_count)::integer as player_count
+            from public.server_statistics where updated_at >= now()-interval '2 minutes'`)).rows,
+            [{server_count:1,player_count:3}]);
+    } finally { await db.close(); }
+});
