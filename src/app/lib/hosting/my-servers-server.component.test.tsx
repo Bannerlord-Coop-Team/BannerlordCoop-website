@@ -794,6 +794,10 @@ it.each([{ actions: ["stop"] }, { actions: ["start"] }, { actions: ["start", "st
 
 it.each([
     { name: "unknown operation state", server: { operationState: "waiting-for-owner" }, insight: {} },
+    ...["start", "stop", "restart-game"].map(action => ({
+        name: `unknown operation state with only ${action}`, server: { operationState: "waiting-for-owner" },
+        insight: { allowedActions: [action] },
+    })),
     { name: "unknown action", server: {}, insight: { allowedActions: ["start", "acknowledge"] } },
     { name: "open crash breaker", server: {}, insight: { crashLoopDetected: true } },
 ])("preserves the mod diagnosis with actions disabled for $name", async ({ server: posture, insight }) => {
@@ -802,5 +806,26 @@ it.each([
     expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual({
         ...value, runtimeInsight: { ...value.runtimeInsight, allowedActions: [] },
         runtimeInsightWarning: { fieldPath: "runtimeInsight.allowedActions", reason: "unsupported action posture" },
+    });
+});
+
+const longestModId = "M".repeat(64);
+const longestAssembly = "A".repeat(128);
+const missingAssemblyCopy = `Mod ${longestModId} needs ${longestAssembly}. Upload the dependency or disable this mod. Then start again.`;
+const missingHarmonyCopy = `Mod ${longestModId}: Harmony (0Harmony.dll) failed. Don't re-upload Bannerlord.Harmony. Create a General Help support ticket in our Discord (https://discord.gg/5vJzfz5Zzy), or disable it and its dependants. Then start again.`;
+
+it.each([
+    { assembly: longestAssembly, copy: missingAssemblyCopy, length: 265 },
+    { assembly: "0Harmony", copy: missingHarmonyCopy, length: 273 },
+    { assembly: "0Harmony", copy: missingHarmonyCopy + " More guidance.", length: 288 },
+])("keeps the mod diagnosis when owner copy has $length characters", async ({ assembly, copy, length }) => {
+    expect(copy).toHaveLength(length);
+    const value = { ...failedModSummary, runtimeInsight: {
+        ...failedModSummary.runtimeInsight, failureMessage: copy,
+        modLoadFailure: { modId: longestModId, reason: "missing-assembly", assembly },
+    } };
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), value));
+    expectSummary(await getMyServerSummary(TOKEN, server.serverId), {
+        ...value, runtimeInsight: { ...value.runtimeInsight, failureMessage: length <= 273 ? copy : copy.slice(0, 272) + "…" },
     });
 });

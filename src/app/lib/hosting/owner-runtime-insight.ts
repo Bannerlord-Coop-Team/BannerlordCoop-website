@@ -37,9 +37,30 @@ const RUNTIME_KEYS = ["desiredState", "observedAt", "allowedActions", "crashLoop
 const FAILURE_CODES: readonly string[] = ["game_crashed_during_load", "game_unavailable", "crash_loop_cooldown", "mod_load_failed", "operation_failed", ...WAR_SAILS_FAILURE_CODES];
 const RECOMMENDATIONS = ["review-backups", "check-console", "wait", "contact-support"];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-const text = (value: unknown): value is string => typeof value === "string" && value.length > 0 && value.length <= 256 && !/[\p{Cc}\p{Cf}]/u.test(value);
+const KNOWN_ACTION_OPERATION_STATES = new Set([
+    "provisioning", "configuring", "awaiting-save", "stopped", "starting", "running", "stopping", "maintenance",
+    "failed", "degraded", "suspended", "deletion-pending", "deleting", "deleted", "drifted",
+]);
+const RUNTIME_COPY_FIELDS = ["failureMessage", "recommendation"] as const;
+// ControlPlane's Harmony guidance with a maximum-length mod ID is 273 characters.
+const MAX_RUNTIME_COPY_LENGTH = 273;
+const CONTROL_CHARACTERS = /[\p{Cc}\p{Cf}]/u;
+const text = (value: unknown, maximum = 256): value is string => typeof value === "string" && value.length > 0 && value.length <= maximum && !CONTROL_CHARACTERS.test(value);
 const failure = (value: unknown) => value === null || FAILURE_CODES.includes(value as string);
 const recommendation = (value: unknown) => value === null || RECOMMENDATIONS.includes(value as string);
+
+/** Bounds readable owner copy before validating the response, keeping the full structured diagnosis. */
+export function truncateOwnerRuntimeCopy(value: unknown): unknown {
+    if (!isRecord(value)) return value;
+    const bounded = { ...value };
+    for (const field of RUNTIME_COPY_FIELDS) {
+        const copy = value[field];
+        if (typeof copy === "string" && copy.length > MAX_RUNTIME_COPY_LENGTH && !CONTROL_CHARACTERS.test(copy)) {
+            bounded[field] = copy.slice(0, MAX_RUNTIME_COPY_LENGTH - 1).replace(/\p{Cs}$/u, "") + "…";
+        }
+    }
+    return bounded;
+}
 
 /** Validates the additive, closed Start projection before any component renders it. */
 export function isOwnerStartInsight(value: unknown): value is OwnerStartInsight {
@@ -77,14 +98,15 @@ export function isOwnerRuntimeInsight(value: unknown, context?: { operationState
         && Array.isArray(value.allowedActions) && value.allowedActions.length <= 3
         && new Set(value.allowedActions).size === value.allowedActions.length
         && value.allowedActions.every(action => ["start", "stop", "restart-game"].includes(action))
+        && (value.allowedActions.length === 0 || context === undefined
+            || (typeof context.operationState === "string" && KNOWN_ACTION_OPERATION_STATES.has(context.operationState)))
         && !(value.allowedActions.includes("start") && value.allowedActions.includes("restart-game"))
         && (!(value.allowedActions.includes("start") && value.allowedActions.includes("stop")) || canOfferStartAndStop)
         && !(value.crashLoopDetected === true && value.allowedActions.includes("start"))
         && !(value.desiredState === "deleted" && value.allowedActions.length > 0)
         && (value.crashLoopDetected === null || typeof value.crashLoopDetected === "boolean")
         && failure(value.failureCode) && recommendation(value.recommendedAction)
-        && (value.failureMessage === null || text(value.failureMessage))
-        && (value.recommendation === null || text(value.recommendation))
+        && RUNTIME_COPY_FIELDS.every(field => value[field] === null || text(value[field], MAX_RUNTIME_COPY_LENGTH))
         && (value.start === null || isOwnerStartInsight(value.start));
 }
 
@@ -106,8 +128,8 @@ export function ownerRuntimeInsightValidationIssue(value: unknown, context?: { o
     if (value.crashLoopDetected !== null && typeof value.crashLoopDetected !== "boolean") return { fieldPath: "runtimeInsight.crashLoopDetected", reason: "must be boolean or null" };
     if (!failure(value.failureCode)) return { fieldPath: "runtimeInsight.failureCode", reason: "unknown enum value" };
     if (!recommendation(value.recommendedAction)) return { fieldPath: "runtimeInsight.recommendedAction", reason: "unknown enum value" };
-    for (const field of ["failureMessage", "recommendation"] as const) {
-        if (value[field] !== null && !text(value[field])) return { fieldPath: "runtimeInsight." + field, reason: "must be a bounded string or null" };
+    for (const field of RUNTIME_COPY_FIELDS) {
+        if (value[field] !== null && !text(value[field], MAX_RUNTIME_COPY_LENGTH)) return { fieldPath: "runtimeInsight." + field, reason: "must be a bounded string or null" };
     }
     if (Object.hasOwn(value, "modLoadFailure") && !isModLoadFailure(value.modLoadFailure)) return { fieldPath: "runtimeInsight.modLoadFailure", reason: "invalid value" };
     if (value.start !== null) {

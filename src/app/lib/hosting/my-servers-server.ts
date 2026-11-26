@@ -1,6 +1,6 @@
 import "server-only";
 import { isStartQueueDetails, type StartQueueDetails } from "../../../../supabase/functions/_shared/server-start-queue-contract";
-import { isOwnerRuntimeInsight, isOwnerStartInsight, ownerRuntimeInsightValidationIssue, START_INSIGHT_KEYS, type OwnerStartInsight } from "./owner-runtime-insight";
+import { isOwnerRuntimeInsight, isOwnerStartInsight, ownerRuntimeInsightValidationIssue, START_INSIGHT_KEYS, truncateOwnerRuntimeCopy, type OwnerStartInsight } from "./owner-runtime-insight";
 import { isIP } from "node:net";
 import type { MyServerMove, MyServerNotice, MyServerSummary } from "@/app/lib/control-plane/types";
 import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
@@ -60,8 +60,10 @@ export async function getMyServerSummary(accessToken: string, serverId: string, 
         throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid summary.", true);
     }
     const runtimeContext = { operationState: value.operationState, observedGameState: value.observedGameState, subscriptionHold: value.subscriptionHold };
-    if (hasRuntimeInsight && !isOwnerRuntimeInsight(value.runtimeInsight, runtimeContext)) {
-        const { runtimeInsight, ...core } = value;
+    if (hasRuntimeInsight) {
+        const { runtimeInsight: rawInsight, ...core } = value;
+        const runtimeInsight = truncateOwnerRuntimeCopy(rawInsight);
+        if (isOwnerRuntimeInsight(runtimeInsight, runtimeContext)) return { ...(core as MyServerSummary), runtimeInsight };
         // Validate the same diagnosis with actions disabled before deciding whether to omit it.
         if (isRecord(runtimeInsight) && Object.hasOwn(runtimeInsight, "allowedActions")) {
             const withoutActions = { ...runtimeInsight, allowedActions: [] };
