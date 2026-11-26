@@ -65,15 +65,20 @@ export function isOwnerRuntimeInsight(value: unknown, context?: { operationState
     if (!isRecord(value) || !hasExactKeys(value, [...RUNTIME_KEYS, ...(Object.hasOwn(value, "modLoadFailure") ? ["modLoadFailure"] : [])])) return false;
     if (Object.hasOwn(value, "modLoadFailure") && (!isModLoadFailure(value.modLoadFailure)
         || value.desiredState === "deleted" || (isRecord(value.start) && ["queued", "running", "retry-wait", "succeeded"].includes(value.start.state as string)))) return false;
+    const canOfferStartAndStop = !context?.subscriptionHold && (
+        (typeof context?.operationState === "string" && context.observedGameState === "stopped"
+            && isColdSleeping(context.operationState, typeof value.desiredState === "string" ? value.desiredState : undefined))
+        || (value.desiredState === "running" && value.failureCode === "mod_load_failed" && Object.hasOwn(value, "modLoadFailure")
+            && (context?.operationState === "failed" || context?.operationState === "degraded")
+            && (context.observedGameState === "failed" || context.observedGameState === "stopped"))
+    );
     return ["running", "stopped", "deleted"].includes(value.desiredState as string)
         && (value.observedAt === null || timestamp(value.observedAt))
         && Array.isArray(value.allowedActions) && value.allowedActions.length <= 3
         && new Set(value.allowedActions).size === value.allowedActions.length
         && value.allowedActions.every(action => ["start", "stop", "restart-game"].includes(action))
         && !(value.allowedActions.includes("start") && value.allowedActions.includes("restart-game"))
-        && (!(value.allowedActions.includes("start") && value.allowedActions.includes("stop"))
-            || (typeof context?.operationState === "string" && isColdSleeping(context.operationState, typeof value.desiredState === "string" ? value.desiredState : undefined)
-                && context.observedGameState === "stopped" && !context.subscriptionHold))
+        && (!(value.allowedActions.includes("start") && value.allowedActions.includes("stop")) || canOfferStartAndStop)
         && !(value.crashLoopDetected === true && value.allowedActions.includes("start"))
         && !(value.desiredState === "deleted" && value.allowedActions.length > 0)
         && (value.crashLoopDetected === null || typeof value.crashLoopDetected === "boolean")

@@ -374,10 +374,10 @@ it("accepts only closed queue details and never falls back on malformed admissio
     await expect(getMyServerStartStatus(TOKEN, server.serverId, startJobId)).rejects.toMatchObject({ code: "invalid_response" });
 });
 
-it.each([{ ...runtimeInsight, allowedActions: ["start", "stop"] }, { ...runtimeInsight, privatePath: "extra" },
+it.each([{ ...runtimeInsight, privatePath: "extra" },
     { ...runtimeInsight, desiredState: "suspended" }, { ...runtimeInsight, start: { ...failedStartInsight, nextRetryAt: server.updatedAt } },
     { ...runtimeInsight, start: { ...failedStartInsight, attemptCount: 6 } }, { ...runtimeInsight, start: { ...failedStartInsight, phase: "preparing" } },
-    { ...runtimeInsight, crashLoopDetected: true }, { ...runtimeInsight, desiredState: "deleted" }])("omits malformed runtime insight without legacy fallback: %j", async runtimeInsight => {
+    { ...runtimeInsight, failureMessage: "invalid\ncopy", allowedActions: ["start", "stop"] }])("omits malformed runtime insight without legacy fallback: %j", async runtimeInsight => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
         const fetch = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), { ...summary, runtimeInsight }));
@@ -741,13 +741,13 @@ it.each([
     { desiredState: "running", allowedActions: ["start", "stop", "restart-game"] },
     { desiredState: "running", allowedActions: ["start", "start"] },
     { desiredState: "running", allowedActions: ["shell"] },
-])("rejects invalid sleeper actions %j", async insight => {
+])("disables invalid sleeper actions %j", async insight => {
     vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), {
         ...summary, operationState: "suspended", observedGameState: "stopped", runtimeInsight: { ...runtimeInsight, ...insight },
     }));
     const parsed = await getMyServerSummary(TOKEN, server.serverId);
-    expect(parsed.runtimeInsight).toBeUndefined();
-    expect(parsed.runtimeInsightWarning).toBeDefined();
+    expect(parsed.runtimeInsight).toEqual({ ...runtimeInsight, ...insight, allowedActions: [] });
+    expect(parsed.runtimeInsightWarning?.fieldPath).toBe("runtimeInsight.allowedActions");
 });
 
 it.each([
@@ -767,12 +767,40 @@ it.each([
 it.each([
     { observedGameState: "running", subscriptionHold: null },
     { observedGameState: "stopped", subscriptionHold: { state: "held", reason: "subscription-funding-lapsed", removalDueAt: "2026-11-01T00:00:00.000Z", canExportSave: true } },
-])("rejects combined sleeper actions outside the cold-sleep context %j", async context => {
+])("disables combined sleeper actions outside the cold-sleep context %j", async context => {
     vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), {
         ...summary, operationState: "suspended", ...context,
         runtimeInsight: { ...runtimeInsight, allowedActions: ["start", "stop"] },
     }));
     const parsed = await getMyServerSummary(TOKEN, server.serverId);
-    expect(parsed.runtimeInsight).toBeUndefined();
-    expect(parsed.runtimeInsightWarning).toBeDefined();
+    expect(parsed.runtimeInsight).toEqual({ ...runtimeInsight, allowedActions: [] });
+    expect(parsed.runtimeInsightWarning?.fieldPath).toBe("runtimeInsight.allowedActions");
+});
+
+const failedModSummary = {
+    ...summary, operationState: "failed", observedGameState: "failed",
+    runtimeInsight: {
+        ...runtimeInsight, allowedActions: ["start", "stop"], failureCode: "mod_load_failed", recommendedAction: "check-console",
+        failureMessage: "Mod WPS_BannerColors could not load. Disable it in Mods, then start again.",
+        recommendation: null, start: null, modLoadFailure: { modId: "WPS_BannerColors", reason: "load-error" },
+    },
+};
+
+it.each([{ actions: ["stop"] }, { actions: ["start"] }, { actions: ["start", "stop"] }])("accepts failed-mod actions %j through the owner summary parser", async ({ actions }) => {
+    const value = { ...failedModSummary, runtimeInsight: { ...failedModSummary.runtimeInsight, allowedActions: actions } };
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), value));
+    expectSummary(await getMyServerSummary(TOKEN, server.serverId), value);
+});
+
+it.each([
+    { name: "unknown operation state", server: { operationState: "waiting-for-owner" }, insight: {} },
+    { name: "unknown action", server: {}, insight: { allowedActions: ["start", "acknowledge"] } },
+    { name: "open crash breaker", server: {}, insight: { crashLoopDetected: true } },
+])("preserves the mod diagnosis with actions disabled for $name", async ({ server: posture, insight }) => {
+    const value = { ...failedModSummary, ...posture, runtimeInsight: { ...failedModSummary.runtimeInsight, ...insight } };
+    vi.stubGlobal("fetch", async (_url: RequestInfo | URL, init?: RequestInit) => accepted(input(init), value));
+    expect(await getMyServerSummary(TOKEN, server.serverId)).toEqual({
+        ...value, runtimeInsight: { ...value.runtimeInsight, allowedActions: [] },
+        runtimeInsightWarning: { fieldPath: "runtimeInsight.allowedActions", reason: "unsupported action posture" },
+    });
 });
