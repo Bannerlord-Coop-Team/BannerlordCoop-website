@@ -362,7 +362,7 @@ export function ManagedServerControls({
     // Rendered only when it has something to say, so it never leaves an empty block in the status row.
     const hasInsight = !!runtimeInsight && (!!runtimeInsight.failureCode
         || (showInsightDetails && (modLoadFailed || !!runtimeInsight.failureMessage || !!runtimeInsight.recommendation)));
-    const insightPanel = runtimeInsight && hasInsight && <div className="max-w-xl space-y-2 text-sm leading-6 text-foreground-muted">
+    const insightPanel = runtimeInsight && hasInsight && <div className="min-w-0 max-w-xl space-y-2 text-sm leading-6 text-foreground-muted [overflow-wrap:anywhere]">
         {showInsightDetails && (runtimeInsight.modLoadFailure && ["stopped", "failed"].includes(observedGameState)
             ? <p className="text-red-200"><DiscordSupportText message={modLoadFailureMessage(runtimeInsight.modLoadFailure, t)} label={t("support.discord")} /></p>
             : isWarSailsFailureCode(runtimeInsight.failureCode) ? <p className="text-red-200">{warSailsFailureMessage(runtimeInsight.failureCode, t)}</p>

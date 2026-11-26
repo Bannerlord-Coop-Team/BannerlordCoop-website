@@ -849,6 +849,24 @@ it("shows a stopped server's retained mod diagnosis on reload without sending St
     } finally { await act(async () => root.unmount()); }
 });
 
+it.each([false, true])("shows a failed mod diagnosis when actions are unavailable: %s", async runtimeInsightUnavailable => {
+    const insight: OwnerRuntimeInsight = {
+        desiredState: "running", observedAt: null, allowedActions: runtimeInsightUnavailable ? [] : ["start", "stop"],
+        crashLoopDetected: false, failureCode: "mod_load_failed", recommendedAction: "check-console",
+        failureMessage: null, recommendation: null, start: null, modLoadFailure: { modId: "WPS_BannerColors", reason: "load-error" },
+    };
+    const container = document.createElement("div"); const root = createRoot(container);
+    try {
+        await act(async () => root.render(<TestLocalization><ManagedServerControls {...progressProps}
+            operationState="failed" observedGameState="failed" runtimeInsight={insight}
+            runtimeInsightUnavailable={runtimeInsightUnavailable} /></TestLocalization>));
+        expect(container.textContent).toContain("Mod WPS_BannerColors could not load.");
+        const buttons = [...container.querySelectorAll("button")];
+        expect(buttons.find(button => button.textContent?.trim() === "Start")?.disabled).toBe(runtimeInsightUnavailable);
+        expect(buttons.find(button => button.textContent?.trim() === "Stop")?.disabled).toBe(runtimeInsightUnavailable);
+    } finally { await act(async () => root.unmount()); }
+});
+
 it("names the mod a failed Start could not load, from its recorded diagnosis", async () => {
     vi.useFakeTimers();
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
