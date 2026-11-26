@@ -65,7 +65,8 @@ test("network statistics replaces the BRIN only after validating the smaller ran
               with (pages_per_range = 8);
             update pg_catalog.pg_index set indisvalid=false, indisready=false
               where indexrelid = 'public.server_statistics_updated_at_brin8_idx'::regclass;`);
-        const originalOid = (await db.query(`select 'public.server_statistics_updated_at_brin8_idx'::regclass::oid as oid`)).rows;
+        const originalOid = (await db.query<{ oid: number }>(
+            `select 'public.server_statistics_updated_at_brin8_idx'::regclass::oid as oid`)).rows;
         for (const statement of statements.slice(0, 3)) await db.exec(statement);
         assert.deepEqual((await db.query(`select
             to_regclass('public.server_statistics_updated_at_brin_idx') is not null as old_index,
