@@ -49,6 +49,24 @@ test("calls the Supabase Edge Function with the current access token", async () 
     }
 });
 
+test("carries a Retry-After delay from the Edge response to the inventory reader", async () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://project.supabase.co";
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = "publishable-key-with-enough-characters";
+    globalThis.fetch = async () => Response.json({
+        version: 1, requestId: REQUEST_ID, ok: false,
+        error: { code: "rate_limited", message: "Try again shortly.", retryable: true },
+    }, { status: 429, headers: { "Retry-After": "30" } });
+    try {
+        await assert.rejects(requestControlPlaneAdmin({
+            accessToken: "access-token-with-enough-characters", operation: "vps-hosts", requestId: REQUEST_ID,
+        }), { code: "rate_limited", retryable: true, retryAfterMilliseconds: 30_000 });
+    } finally {
+        globalThis.fetch = ORIGINAL_FETCH;
+        restoreEnvironment("NEXT_PUBLIC_SUPABASE_URL", ORIGINAL_URL);
+        restoreEnvironment("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", ORIGINAL_KEY);
+    }
+});
+
 function restoreEnvironment(name: string, value: string | undefined) {
     if (value === undefined) delete process.env[name];
     else process.env[name] = value;

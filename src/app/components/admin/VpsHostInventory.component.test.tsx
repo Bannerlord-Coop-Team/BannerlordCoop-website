@@ -50,7 +50,7 @@ describe("compact VPS host inventory", () => {
         }), requestId, true);
         const details = result.hosts[0].slotAvailability!;
         expect(parseSlotAvailability(details)).toEqual(details);
-        await act(async () => root.render(<VpsHostInventory hosts={result.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        await act(async () => root.render(<VpsHostInventory hosts={result.hosts} runnerTargetSourceCommit={null} />));
         expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 free"]')?.textContent)
             .toBe("Slots8Running0Free0");
         expect(container.textContent).not.toContain("Storage evidence is stale");
@@ -74,7 +74,7 @@ describe("compact VPS host inventory", () => {
             }] },
         }), requestId, true);
         expect(parseSlotAvailability(result.hosts[0].slotAvailability)).toEqual(result.hosts[0].slotAvailability);
-        await act(async () => root.render(<VpsHostInventory hosts={result.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        await act(async () => root.render(<VpsHostInventory hosts={result.hosts} runnerTargetSourceCommit={null} />));
         expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 free"]')?.textContent)
             .toBe("Slots8Running0Free0");
         expect(container.textContent).not.toContain(label);
@@ -92,7 +92,7 @@ describe("compact VPS host inventory", () => {
                 totalSlots: 8, runningServers: 0, availableServers: 0, slotAvailability: details,
             }] },
         }), requestId, true);
-        await act(async () => root.render(<VpsHostInventory hosts={result.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        await act(async () => root.render(<VpsHostInventory hosts={result.hosts} runnerTargetSourceCommit={null} />));
         expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 free"]')?.textContent)
             .toBe("Slots8Running0Free0");
         expect(container.textContent).toContain("future-host");
@@ -100,7 +100,7 @@ describe("compact VPS host inventory", () => {
     });
     it("decodes and renders the captured CP HTTP/IPC response and rejects an incompatible envelope", async () => {
         const decoded = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify(capture), capture.requestId, true);
-        await act(async () => root.render(<VpsHostInventory hosts={decoded.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        await act(async () => root.render(<VpsHostInventory hosts={decoded.hosts} runnerTargetSourceCommit={null} />));
         await act(async () => container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')!.click());
         expect(container.querySelector('[data-label="Storage"]')?.textContent).toBe(shared.cases[0]!.text);
         expect(() => decodeControlPlaneAdminResponse(JSON.stringify({ ...capture, version: 99 }), capture.requestId, true)).toThrow();
@@ -113,7 +113,7 @@ describe("compact VPS host inventory", () => {
         const decoded = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify({
             version: 1, requestId: shared.requestId, ok: true, result: { hosts: [inventoryHost] },
         }), shared.requestId, true);
-        await act(async () => root.render(<VpsHostInventory hosts={decoded.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        await act(async () => root.render(<VpsHostInventory hosts={decoded.hosts} runnerTargetSourceCommit={null} />));
         await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-storage"]')!.click());
         const cell = container.querySelector('[data-label="Storage"]');
         expect(cell?.textContent).toBe(text);
@@ -132,7 +132,7 @@ describe("compact VPS host inventory", () => {
     ])("renders storage $text for missing limits, older peers and pending reads", async ({ storage, pending, text }) => {
         const inventoryHost = host("host-storage", resources(60, 40), 0);
         inventoryHost.occupiedSlots[0]!.storage = storage;
-        await act(async () => root.render(<VpsHostInventory hosts={[inventoryHost]} ownerLabels={{}} runnerTargetSourceCommit={null} liveDataPending={pending} />));
+        await act(async () => root.render(<VpsHostInventory hosts={[inventoryHost]} runnerTargetSourceCommit={null} liveDataPending={pending} />));
         await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-storage"]')!.click());
         expect(container.querySelector('[data-label="Storage"]')?.textContent).toBe(text);
     });
@@ -141,7 +141,7 @@ describe("compact VPS host inventory", () => {
         const timedOut: HostingAdminVpsHost = { ...host("host-frozen", resources(60, 40), 1),
             resources: null, liveData: { status: "unavailable", reason: "timeout" } };
         await act(async () => root.render(<VpsHostInventory hosts={[host("host-healthy", resources(60, 40), 0), timedOut]}
-            ownerLabels={{}} runnerTargetSourceCommit={null} />));
+            runnerTargetSourceCommit={null} />));
         expect(container.textContent).toContain("host-healthy");
         expect(container.textContent).toContain("host-frozen");
         expect(container.textContent).toContain("Live readings timed out.");
@@ -159,7 +159,6 @@ describe("compact VPS host inventory", () => {
     ])("shows $status beneath the price in a collapsed row", async ({ autoRenew, expirationDate, status }) => {
         await act(async () => root.render(<VpsHostInventory
             hosts={[{ ...host("host-billing", resources(60, 40), 0), autoRenew, expirationDate }]}
-            ownerLabels={{}}
             runnerTargetSourceCommit={null}
         />));
 
@@ -171,12 +170,11 @@ describe("compact VPS host inventory", () => {
     it("keeps summaries compact and reveals only one host detail panel at a time", async () => {
         await act(async () => root.render(<VpsHostInventory
             hosts={[host("host-a", resources(70, 30), 0, true), host("host-b", resources(80, 20), 1)]}
-            ownerLabels={{ [ACCOUNT_ID]: "owner@example.com" }}
             runnerTargetSourceCommit="target-source"
         />));
 
         expect(container.textContent).toContain("host-a");
-        expect(container.textContent).toContain("owner@example.com (testserver)");
+        expect(container.textContent).toContain(`${ACCOUNT_ID} (testserver)`);
         const capacity = container.querySelector('dl[aria-label="3 total slots, 1 running, 2 free"]');
         expect(capacity?.querySelectorAll("dt")).toHaveLength(3);
         expect(capacity?.textContent).toBe("Slots3Running1Free2");
@@ -194,13 +192,13 @@ describe("compact VPS host inventory", () => {
         expect(container.querySelector('form[aria-label="Decommission slots of host-a"]')?.getAttribute("data-refresh")).toBe("router");
         expect(container.querySelector('[role="region"][aria-label="Details for host-a"] form[aria-label="Decommission slots of host-a"]')).not.toBeNull();
         expect(container.textContent).toContain("Slot 1 · UDP 4200");
-        expect(container.textContent).toContain("owner@example.com");
+        expect(container.textContent).toContain(ACCOUNT_ID);
         expect(container.textContent).toContain("Player / Server");
         expect(container.textContent).toContain("Target target-sourc");
         expect(container.textContent).toContain("Verifying Capabilities");
         const slotTable = container.querySelector('[role="table"][aria-label="Occupied slots for host-a"]');
         expect(slotTable).not.toBeNull();
-        expect(slotTable?.textContent?.indexOf("owner@example.com")).toBeLessThan(slotTable?.textContent?.indexOf("testserver") ?? 0);
+        expect(slotTable?.textContent?.indexOf(ACCOUNT_ID)).toBeLessThan(slotTable?.textContent?.indexOf("testserver") ?? 0);
 
         const secondToggle = container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-b"]')!;
         await act(async () => secondToggle.click());
@@ -215,7 +213,6 @@ describe("compact VPS host inventory", () => {
         try {
             await act(async () => root.render(<VpsHostInventory
                 hosts={[host("shared-name", resources(70, 30), 0), { ...host("shared-name", resources(80, 20), 1), provider: "contabo-vps" }]}
-                ownerLabels={{}}
                 runnerTargetSourceCommit={null}
             />));
 
@@ -238,10 +235,10 @@ describe("compact VPS host inventory", () => {
             { region: "us-west", placement: { countryCodes: ["US"], locationIds: ["us-west-or"] } },
             { region: "north-america", placement: { countryCodes: ["US", "CA"] } },
         ];
-        await act(async () => root.render(<VpsHostInventory hosts={[host("host-a", resources(60, 40), 0)]} ownerLabels={{}}
+        await act(async () => root.render(<VpsHostInventory hosts={[host("host-a", resources(60, 40), 0)]}
             runnerTargetSourceCommit={null} regionCatalog={stored} />));
         expect(container.textContent).toContain("OVHcloud · US-East, North America · US · os-us-east-va-2");
-        await act(async () => root.render(<VpsHostInventory hosts={[host("host-a", resources(60, 40), 0)]} ownerLabels={{}}
+        await act(async () => root.render(<VpsHostInventory hosts={[host("host-a", resources(60, 40), 0)]}
             runnerTargetSourceCommit={null} regionCatalog={null} />));
         expect(container.textContent).toContain("Regions unavailable · US · os-us-east-va-2");
     });
@@ -249,7 +246,7 @@ describe("compact VPS host inventory", () => {
     it("names a manual-entry provider in the host's placement label", async () => {
         const stored = [{ region: "turkiye", placement: { countryCodes: ["TR"] } }];
         const istanbul: HostingAdminVpsHost = { ...host("vpstc-ist-1", resources(60, 40), 0), provider: "vpstc-vps", countryCode: "TR", locationId: "ist" };
-        await act(async () => root.render(<VpsHostInventory hosts={[istanbul]} ownerLabels={{}} runnerTargetSourceCommit={null} regionCatalog={stored} />));
+        await act(async () => root.render(<VpsHostInventory hosts={[istanbul]} runnerTargetSourceCommit={null} regionCatalog={stored} />));
         expect(container.textContent).toContain("VPS.TC · Türkiye · TR · ist");
         expect(container.textContent).not.toContain("vpstc-vps");
     });
@@ -257,7 +254,6 @@ describe("compact VPS host inventory", () => {
     it("surfaces disk warning state in a collapsed row", async () => {
         await act(async () => root.render(<VpsHostInventory
             hosts={[host("host-warning", resources(82, 18), 0)]}
-            ownerLabels={{}}
             runnerTargetSourceCommit="target-source"
         />));
 
@@ -267,17 +263,16 @@ describe("compact VPS host inventory", () => {
         expect(container.textContent).not.toContain("UDP 4200");
     });
 
-    it("uses the bound account email for a legacy numeric owner", async () => {
+    it("uses the bound account ID for a legacy numeric owner", async () => {
         await act(async () => root.render(<VpsHostInventory
-            hosts={[host("host-email", resources(60, 40), 0)]}
-            ownerLabels={{ [ACCOUNT_ID]: "owner@example.com" }}
+            hosts={[host("host-legacy", resources(60, 40), 0)]}
             runnerTargetSourceCommit="target-source"
         />));
 
-        expect(container.textContent).toContain("owner@example.com (testserver)");
+        expect(container.textContent).toContain(`${ACCOUNT_ID} (testserver)`);
         expect(container.textContent).not.toContain("763278507085922325");
-        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-email"]')!.click());
-        expect(container.querySelector('[aria-label="Occupied slots for host-email"]')?.textContent).toContain("owner@example.com");
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-legacy"]')!.click());
+        expect(container.querySelector('[aria-label="Occupied slots for host-legacy"]')?.textContent).toContain(ACCOUNT_ID);
         expect(container.textContent).not.toContain("763278507085922325");
     });
 });
@@ -368,7 +363,7 @@ function resources(used: number, free: number): HostingAdminHostResources {
 it("uses neutral suspended wording when slot desired state is unavailable", async () => {
     const value = host("sleep-host", resources(60, 40), 0);
     value.occupiedSlots[0].operationState = "suspended";
-    await act(async () => root.render(<VpsHostInventory hosts={[value]} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+    await act(async () => root.render(<VpsHostInventory hosts={[value]} runnerTargetSourceCommit={null} />));
     await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for sleep-host"]')!.click());
     expect(container.textContent).toContain("Suspended (sleeping or hold)");
     expect(container.textContent).not.toContain("Sleeping — wakes when a player connects");

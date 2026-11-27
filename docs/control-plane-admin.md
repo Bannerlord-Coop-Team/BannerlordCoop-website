@@ -343,14 +343,25 @@ for Create server's provider choices. It reads no provider account inventory:
 VPS onboarding is in the VPS view's Add capacity dialog, which takes its
 available hosts from the VPS view's provider billing read.
 
+The VPS tab reads registered hosts in pages on the server and on each browser
+telemetry refresh. Each scan starts with `storedAfter: null`, turns off provider
+inventory, and passes the returned cursor unchanged until it is null. A retryable
+throttle retries the same cursor, preserving pages already read. A supplied
+`Retry-After` sets the delay up to 60 seconds. Without it, the scan uses bounded
+exponential backoff.
+If the registered set changes or the cursor expires or becomes invalid, the website
+discards its partial scan and tries again once. Live scans keep the latest runner
+target reported by a page even if later pages arrive after the telemetry budget.
+An older backend that refuses the initial paging option receives the legacy read.
+The provider billing refresh uses its separate account read. Slot owners are shown
+and filtered by their website account ID or legacy Discord ID.
+
 The bottom of the VPS view also loads the pending region-request queue through
-the `region-requests` operation. Each row shows the requested region, the
-captured requester email or a current verified account-directory match for older
-requests, any current allocated friendly regions (or an empty marker while the
-owner is waiting), and timestamp, with an inline **Dismiss** action. An email
-remains unavailable only when neither the request nor the current verified
-account directory contains one. A successful action removes the row and records the administrator
-resolution; the browser does not collect a free-form reason.
+the `region-requests` operation. Each row shows the requested region, requester
+ID, current allocated regions, and timestamp, with an inline **Dismiss** action.
+A successful dismissal removes the row and records the administrator resolution.
+The Edge Function keeps the email address server-side and sends the browser
+notification eligibility.
 
 Rows whose request captured a requester email also offer **Notify**, which
 emails the requester that the region now has capacity, with a link to

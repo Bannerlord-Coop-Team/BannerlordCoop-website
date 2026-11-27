@@ -20,7 +20,7 @@ export type ControlPlaneAdminHandlerOptions = {
     /** Handles `notify-region-request`; absent when SMTP is not configured. */
     notifyRegionRequest?: RegionRequestNotifier;
 };
-type UpstreamReply = { kind: "unreachable" } | { kind: "invalid" } | { kind: "ok"; status: number; text: string };
+type UpstreamReply = { kind: "unreachable" } | { kind: "invalid" } | { kind: "ok"; status: number; text: string; body: unknown; retryAfter: string | null };
 
 /** Authenticates every request and forwards reads to the authoritative control plane. */
 export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandlerOptions) {
@@ -132,8 +132,9 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
             }
             try {
                 const text = await readBoundedText(upstream, MAXIMUM_UPSTREAM_RESPONSE_BYTES);
-                JSON.parse(text);
-                return { kind: "ok", status: upstream.status, text };
+                const body: unknown = JSON.parse(text);
+                const retryAfter = upstream.status === 429 ? upstream.headers.get("retry-after") : null;
+                return { kind: "ok", status: upstream.status, text, body, retryAfter };
             } catch {
                 return { kind: "invalid" };
             }
@@ -141,6 +142,10 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
 
         if (envelope.operation === "notify-region-request") {
             return notifyRegionRequest(envelope, callUpstream, cors);
+        }
+
+        if (envelope.operation === "claim-region-request-notification" || envelope.operation === "release-region-request-notification") {
+            return envelopeError(400, requestId, "invalid_request", "The request is invalid.", false, cors);
         }
 
         const upstreamStarted = performance.now();
@@ -152,10 +157,19 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
         if (reply.kind === "invalid") {
             return envelopeError(502, requestId, "invalid_response", "The control plane returned an invalid response.", true, cors);
         }
-        return new Response(reply.text, {
+        let text = reply.text;
+        if (envelope.operation === "region-requests" && reply.status >= 200 && reply.status < 300) {
+            const projected = projectRegionRequestPage(reply.body, requestId);
+            if (projected === null) {
+                return envelopeError(502, requestId, "invalid_response", "The control plane returned an invalid response.", true, cors);
+            }
+            text = JSON.stringify(projected);
+        }
+        return new Response(text, {
             status: reply.status,
             headers: {
                 ...cors, "cache-control": "no-store", "content-type": "application/json",
+                ...(reply.retryAfter === null ? {} : { "retry-after": reply.retryAfter }),
                 "server-timing": `edge_auth;dur=${authenticationMilliseconds}, control_plane;dur=${Math.round(performance.now() - upstreamStarted)}`,
             },
         });
@@ -174,7 +188,7 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
         const call: ControlPlaneCall = async (operation, input) => {
             const reply = await callUpstream(JSON.stringify({ version: 1, requestId: crypto.randomUUID(), operation, input }));
             if (reply.kind !== "ok") throw new Error("The control plane could not be reached.");
-            return { status: reply.status, body: JSON.parse(reply.text) };
+            return { status: reply.status, body: reply.body };
         };
         let outcome: Awaited<ReturnType<RegionRequestNotifier>>;
         try {
@@ -191,6 +205,25 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
             { headers: { ...cors, "cache-control": "no-store" } },
         );
     }
+}
+
+/** Exposes requester identity and notification eligibility without sending contact information to the browser. */
+function projectRegionRequestPage(body: unknown, requestId: string) {
+    if (!isRecord(body) || body.version !== 1 || body.requestId !== requestId || body.ok !== true || !isRecord(body.result)) return null;
+    const { items, nextCursor } = body.result;
+    if (!Array.isArray(items) || (nextCursor !== null && typeof nextCursor !== "string")) return null;
+    const requests = [];
+    for (const item of items) {
+        if (!isRecord(item)) return null;
+        const { requestId, discordUserId, region, createdAt, allocatedRegions, notifiedAt, requesterEmail } = item;
+        if (typeof requestId !== "string" || typeof discordUserId !== "string" || typeof region !== "string"
+            || typeof createdAt !== "string" || !Array.isArray(allocatedRegions)
+            || !allocatedRegions.every(value => typeof value === "string")
+            || (notifiedAt !== null && typeof notifiedAt !== "string")
+            || (requesterEmail !== null && typeof requesterEmail !== "string")) return null;
+        requests.push({ requestId, discordUserId, region, createdAt, allocatedRegions, notifiedAt, canNotify: requesterEmail !== null });
+    }
+    return { version: 1, requestId, ok: true, result: { items: requests, nextCursor } };
 }
 
 function validateOrigin(raw: string): string {
@@ -233,6 +266,7 @@ function corsHeaders(origin: string) {
         "access-control-allow-headers": "authorization, apikey, content-type, x-client-info",
         "access-control-allow-methods": "POST, OPTIONS",
         "access-control-allow-origin": origin,
+        "access-control-expose-headers": "retry-after",
         "access-control-max-age": "600",
         vary: "Origin",
     };
