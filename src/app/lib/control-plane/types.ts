@@ -253,6 +253,15 @@ export type HostingAdminVpsHost = {
     totalSlots: number;
     runningServers: number;
     availableServers: number;
+    provenServers?: number;
+    slotAvailability?: {
+        ready: number;
+        launchProven: number;
+        storageObservedAt: string | null;
+        reasons: Array<"storage_evidence_missing" | "storage_evidence_stale" | "storage_identity_changed" | "storage_reserve"
+            | "host_memory" | "shared_image_commission" | "slot_health"
+            | "slot_target" | "runner_onboarding" | "runner_update" | "host_decommission" | "native_ram_commission">;
+    };
     occupiedSlots: Array<{
         slotIndex: number;
         gamePort: number;
@@ -262,6 +271,8 @@ export type HostingAdminVpsHost = {
         ownerAccountId?: string | null;
         operationState: string;
         resources?: HostingServerResources | null;
+        /** Effective runner quota; absent on older control planes. */
+        storage?: { usedBytes: number; quotaBytes: number | null } | null;
     }>;
     cost: {
         priceInMicrocents: number;
@@ -391,7 +402,6 @@ export type HostingAdminRegionRequestNotification = {
 export type OperationsData = {
     overview: Pick<Overview, "controls" | "servers" | "jobs">;
     inventory: HostingAdminVpsInventory;
-    vpsProviderError: string | null;
     selectedServer: ManagedServer | null;
     hostingRegions: HostingRegionCatalogRead;
 };
@@ -404,10 +414,10 @@ export type HostingRegionCatalogRead =
     | { regions: HostingAdminRegionEntry[]; error: null }
     | { regions: null; error: string };
 
-/** The VPS view's data: registered hosts and the stored catalog placements that label them (null when unreadable). */
+/** The VPS view's data: registered hosts and the stored catalog read whose placements label them and feed manual entry. */
 export type VpsViewData = {
     inventory: HostingAdminVpsInventory;
-    regionCatalog: HostingRegionPayload[] | null;
+    hostingRegions: HostingRegionCatalogRead;
 };
 
 /** The Relocate view's data: servers, the slots they occupy, the catalog that places hosts in regions, and active jobs. */

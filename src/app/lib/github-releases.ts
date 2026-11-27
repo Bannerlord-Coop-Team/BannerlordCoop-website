@@ -1,12 +1,11 @@
 import "server-only"
+import { GITHUB_OWNER, GITHUB_RELEASES_URL, GITHUB_REPO } from "@/app/lib/releases/repository";
 
-const GITHUB_OWNER = "Bannerlord-Coop-Team";
-const GITHUB_REPO = "BannerlordCoop";
 const RELEASE_PAGE_SIZE = 100;
 const MAXIMUM_RELEASE_PAGES = 5;
 const RELEASE_CACHE_VERSION = "2";
 
-export const GITHUB_RELEASES_URL = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`;
+export { GITHUB_RELEASES_URL };
 
 const GITHUB_RELEASES_API_URL = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases`;
 

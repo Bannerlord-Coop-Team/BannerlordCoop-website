@@ -144,20 +144,17 @@ it("refreshes non-replayable stale actions without clearing the form or resubmit
     expect(container.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe("Keep settings intent");
     expect(container.querySelector<HTMLSelectElement>('select[name="serverId"]')!.selectedIndex).toBe(1);
 });
-it("onboards the selected VPS with the provider the inventory listed it under", async () => {
-    request.mockResolvedValueOnce({ outcome: "registered" });
-    const value = JSON.stringify({ provider: "contabo-vps", serviceName: "203779521" });
-    await act(async () => root.render(<ControlPlaneActionCard operation="onboard-vps-host" title="Onboard" description="Onboard"
-        fields={[{ name: "host", label: "Available VPS", kind: "select", required: true, defaultValue: value,
-            options: [{ label: "Contabo VPS · 203779521", value }] }]} />));
-    await act(async () => container.querySelector("form")!.requestSubmit());
-    expect(request).toHaveBeenCalledOnce();
-    expect(request.mock.calls[0]?.[0]).toMatchObject({
-        operation: "onboard-vps-host",
-        input: { provider: "contabo-vps", serviceName: "203779521", mode: "enroll" },
-    });
-    expect(request.mock.calls[0]?.[0].input).not.toHaveProperty("host");
-    expect(push).toHaveBeenCalledWith("/admin/control-plane?view=vps");
+it("keeps the chosen server when a refresh brings a new generation of the default server", async () => {
+    const at = (updatedAt: string): AdminActionField => ({ ...servers, defaultValue: JSON.stringify({ id: "server-a", updatedAt }),
+        options: servers.options!.map((option) => option.value === "server-a" ? { ...option, updatedAt } : option) });
+    const renderCard = (field: AdminActionField) => act(async () => root.render(<ControlPlaneActionCard operation="update-server"
+        title="Update" description="Update" fields={[field]} />));
+    await renderCard(at("2026-09-06T12:00:00Z"));
+    await select("serverId", 2);
+    await renderCard(at("2026-09-07T12:00:00Z"));
+    const chosen = container.querySelector<HTMLSelectElement>('select[name="serverId"]')!;
+    expect(chosen.selectedIndex).toBe(2);
+    expect(JSON.parse(chosen.value)).toMatchObject({ id: "server-b" });
 });
 
 it("names an optional select's empty choice and sends a provider pin only when one is chosen", async () => {

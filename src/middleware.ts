@@ -15,7 +15,7 @@ const REFRESH_BEFORE_EXPIRY_SECONDS = 5 * 60;
  * themselves and keep their own headers. The OAuth callbacks also install sessions
  * that a refresh here would overwrite.
  */
-const ROUTE_HANDLER = /^\/(?:api\/|auth\/callback$|account\/(?:discord|patreon)\/callback$)/u;
+const ROUTE_HANDLER = /^\/(?:api\/|download\/|auth\/callback$|account\/(?:discord|patreon)\/callback$)/u;
 
 export async function middleware(request: NextRequest) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

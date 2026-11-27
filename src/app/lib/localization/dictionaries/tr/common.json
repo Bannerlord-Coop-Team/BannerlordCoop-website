@@ -6,6 +6,7 @@
   "metadata.description": "Mount & Blade II: Bannerlord seferini arkadaşlarınızla ortak bir çok oyunculu dünyada oynayın.",
   "nav.homeLabel": "Bannerlord Co-op ana sayfası",
   "nav.primary": "Ana gezinme",
+  "nav.loading": "Gezinme yükleniyor",
   "nav.mobile": "Mobil gezinme",
   "nav.home": "Ana sayfa",
   "nav.servers": "Sunucular",
@@ -42,6 +43,12 @@
   "download.options": "İndirme seçenekleri",
   "download.heading": "Bir platform seçin",
   "download.description": "Herkese açık sürümler aşağıda yer alır. Nightly derlemeler için Tester rolü, Patreon, Boosty veya Afdian destekçi rolü ya da uygun bir üyenin sponsor olduğu 10 Discord hesabı kontenjanından biri gerekir.",
+  "download.direct.mod": "Modu indir",
+  "download.direct.modDetail": "Son sürüm · .zip",
+  "download.direct.server": "Özel sunucuyu indir",
+  "download.direct.serverDetail": "Windows · .7z",
+  "download.or": "veya",
+  "download.unavailable": "Kullanılamıyor",
   "download.recommended": "Önerilen",
   "download.supporterOnly": "Yalnızca destekçiler",
   "download.installer.name": "Rehberli yükleyici",
@@ -50,6 +57,7 @@
   "download.steam.description": "Abone olun ve güncellemeleri Steam üzerinden alın.",
   "download.nexus.name": "Nexus Mods",
   "download.nexus.description": "Bannerlord Co-op'u Nexus Mods üzerinden indirin.",
+  "download.nexus.unavailable": "Bannerlord Co-op şu anda Nexus Mods'ta bulunmuyor.",
   "download.moddb.name": "ModDB",
   "download.moddb.description": "Sürümleri ve proje güncellemelerini ModDB'de görüntüleyin."
 }

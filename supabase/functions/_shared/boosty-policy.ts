@@ -1,5 +1,5 @@
 // Reviewed Boosty adapter configuration. The adapter is disabled unless every field is present
-// and valid; amount and level checks here are the website adapter's half of the CP policy.
+// and valid. Only `minimumPrice` decides qualification; `qualifyingLevelIds` is kept for compatibility.
 import { exact, record } from "./membership.ts";
 import { BOOSTY_BLOG, BOOSTY_IDENTIFIER, BOOSTY_POLICY_VERSION } from "./funding-provider.ts";
 

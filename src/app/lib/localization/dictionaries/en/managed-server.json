@@ -202,6 +202,8 @@
   "configEditor.reloadSettings": "Reload settings",
   "configEditor.managedConfigurationJson": "Managed configuration · JSON",
   "configEditor.noPendingChanges": "No pending changes",
+  "configEditor.warSailsSetByCampaignOn": "Not saved — your campaign sets War Sails. Stop the server: Campaigns → New campaign → War Sails (deletes current campaigns; export your save first). Update the server if not offered. Players need War Sails (NavalDLC) enabled.",
+  "configEditor.warSailsSetByCampaignOff": "Not saved — your campaign sets War Sails. Stop the server and select or start a Classic campaign under Campaigns.",
   "configEditor.discard": "Discard",
   "configEditor.saving": "Saving…",
   "configEditor.saveConfig": "Save config",

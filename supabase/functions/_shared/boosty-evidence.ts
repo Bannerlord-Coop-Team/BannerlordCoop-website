@@ -10,7 +10,8 @@ export type BoostyEvidence = {
     verification: "qualifying" | "nonqualifying" | "unknown"; programId: string; memberId: null; tierIds: string[];
     verifiedAt: string; paidThroughAt: string | null; paidAccessEndedAt?: string; policyVersion: typeof BOOSTY_POLICY_VERSION; evidenceSha256: string;
 };
-export type LinkedBoostyHead = { accountId: string; providerUserId: string; linkGeneration: string; absentSince: string | null };
+/** One linked head to decide; `lost` says its current evidence already records paid-access loss. */
+export type LinkedBoostyHead = { accountId: string; providerUserId: string; linkGeneration: string; absentSince: string | null; lost: boolean };
 export type BoostyDecision = { accountId: string; providerUserId: string; linkGeneration: string; evidence: BoostyEvidence; absentSince: string | null };
 
 type Outcome = { verification: BoostyEvidence["verification"]; tierIds: string[]; paidThroughAt: string | null; endedAt: string | null; absentSince: string | null };
@@ -28,12 +29,13 @@ function classify(policy: BoostyPolicy, head: LinkedBoostyHead, subscriber: Boos
     const { subscribed, status, offTime } = subscriber;
     // Lapsed subscribers stay listed as inactive with the past instant their access ended.
     if (subscribed === false && status === "inactive") return offTime !== null && Date.parse(offTime) <= Date.parse(polledAt) ? outcome("nonqualifying", [], null, offTime) : outcome("unknown");
-    if (status === "paused") return outcome("nonqualifying");
+    if (status === "paused") return outcome("nonqualifying", [], null, polledAt);
     if (subscribed !== true || status !== "active" || subscriber.blacklisted === null || subscriber.levelId === null || subscriber.price === null) return outcome("unknown");
-    if (subscriber.blacklisted) return outcome("nonqualifying");
-    const qualifies = policy.qualifyingLevelIds.includes(subscriber.levelId) && subscriber.price >= policy.minimumPrice;
+    if (subscriber.blacklisted) return outcome("nonqualifying", [], null, polledAt);
+    // Any level priced at the minimum qualifies; a cheaper paid level is loss that keeps its level.
+    if (subscriber.price < policy.minimumPrice) return outcome("nonqualifying", subscriber.price > 0 ? [subscriber.levelId] : [], null, polledAt);
     // A future offTime is a cancelled subscription whose paid period runs until then.
-    return outcome(qualifies ? "qualifying" : "nonqualifying", [subscriber.levelId], qualifies && offTime !== null && Date.parse(offTime) > Date.parse(polledAt) ? offTime : null);
+    return outcome("qualifying", [subscriber.levelId], offTime !== null && Date.parse(offTime) > Date.parse(polledAt) ? offTime : null);
 }
 
 /** Decides one head's evidence; `nextPayTime` is never read, only a cancelled subscription's offTime. */

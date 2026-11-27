@@ -1,4 +1,10 @@
 import { act } from "react";
+import { readFileSync } from "node:fs";
+import { decodeControlPlaneAdminResponse } from "@/app/lib/control-plane/client";
+import { parseSlotAvailability } from "@/app/lib/control-plane/slot-availability";
+import shared from "../../../../test/fixtures/slot-storage/v1.json";
+import capture from "../../../../test/fixtures/slot-storage/capture-v1.json";
+import { readSlotStorage } from "@/app/lib/control-plane/slot-storage";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HostingAdminHostResources, HostingAdminVpsHost } from "@/app/lib/control-plane/types";
@@ -36,6 +42,101 @@ afterEach(async () => {
 });
 
 describe("compact VPS host inventory", () => {
+    it("renders Slots, Running and Free for the shared incident fixture", async () => {
+        const fixture = JSON.parse(readFileSync("test/fixtures/vps-slot-availability/v1.json", "utf8"));
+        const requestId = "11111111-1111-4111-8111-111111111111";
+        const result = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify({
+            version: 1, requestId, ok: true, result: { hosts: [{ ...host("fixture-host", resources(60, 40), 0), ...fixture.expectedHost }] },
+        }), requestId, true);
+        const details = result.hosts[0].slotAvailability!;
+        expect(parseSlotAvailability(details)).toEqual(details);
+        await act(async () => root.render(<VpsHostInventory hosts={result.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 free"]')?.textContent)
+            .toBe("Slots8Running0Free0");
+        expect(container.textContent).not.toContain("Storage evidence is stale");
+        const capacity = container.querySelector('[data-label="Capacity"]')!;
+        expect(capacity.textContent).not.toMatch(/Admissible|Ready|launch-proven|relocation candidates/);
+        expect(capacity.querySelector('dl')?.classList.contains('max-w-28')).toBe(true);
+        for (const invalid of [{ reasons: ["unknown"] }, { ready: 33 }, { launchProven: 6 }, { extra: true }]) {
+            expect(parseSlotAvailability({ ...details, ...invalid })).toBeUndefined();
+        }
+    });
+    it.each([
+        ["host_memory", "Host memory evidence is missing, stale, or below the admission minimum."],
+        ["shared_image_commission", "Shared game image commissioning holds admission."],
+        ["slot_health", "Slot health checks hold admission."],
+    ])("keeps the capacity view compact for %s", async (reason, label) => {
+        const requestId = "11111111-1111-4111-8111-111111111111";
+        const result = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify({
+            version: 1, requestId, ok: true, result: { hosts: [{ ...host("blocked-host", resources(60, 40), 0),
+                totalSlots: 8, runningServers: 0, availableServers: 0, provenServers: 0,
+                slotAvailability: { ready: 5, launchProven: 2, storageObservedAt: "2026-11-11T03:32:28.000Z", reasons: [reason] },
+            }] },
+        }), requestId, true);
+        expect(parseSlotAvailability(result.hosts[0].slotAvailability)).toEqual(result.hosts[0].slotAvailability);
+        await act(async () => root.render(<VpsHostInventory hosts={result.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 free"]')?.textContent)
+            .toBe("Slots8Running0Free0");
+        expect(container.textContent).not.toContain(label);
+    });
+
+    it("keeps free capacity visible when a future reason makes optional details unreadable", async () => {
+        const details = { ready: 5, launchProven: 2, storageObservedAt: null, reasons: ["host_memory", "future_gate"] };
+        for (const reason of ["future_gate", "host-memory", "SLOT_HEALTH", "shared_image_commission_extra"]) {
+            expect(parseSlotAvailability({ ...details, reasons: [reason] })).toBeUndefined();
+        }
+        expect(parseSlotAvailability(details)).toBeUndefined();
+        const requestId = "11111111-1111-4111-8111-111111111111";
+        const result = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify({
+            version: 1, requestId, ok: true, result: { hosts: [{ ...host("future-host", resources(60, 40), 0),
+                totalSlots: 8, runningServers: 0, availableServers: 0, slotAvailability: details,
+            }] },
+        }), requestId, true);
+        await act(async () => root.render(<VpsHostInventory hosts={result.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        expect(container.querySelector('dl[aria-label="8 total slots, 0 running, 0 free"]')?.textContent)
+            .toBe("Slots8Running0Free0");
+        expect(container.textContent).toContain("future-host");
+        expect(container.textContent).not.toContain("future_gate");
+    });
+    it("decodes and renders the captured CP HTTP/IPC response and rejects an incompatible envelope", async () => {
+        const decoded = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify(capture), capture.requestId, true);
+        await act(async () => root.render(<VpsHostInventory hosts={decoded.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-expanded="false"]')!.click());
+        expect(container.querySelector('[data-label="Storage"]')?.textContent).toBe(shared.cases[0]!.text);
+        expect(() => decodeControlPlaneAdminResponse(JSON.stringify({ ...capture, version: 99 }), capture.requestId, true)).toThrow();
+    });
+
+    it.each(shared.cases)("consumes shared v1 storage case $name through the real decoder and table", async ({ storage, text, tone }) => {
+        expect(shared.schemaVersion).toBe(1);
+        const inventoryHost = host("host-storage", resources(60, 40), 0);
+        inventoryHost.occupiedSlots[0]!.storage = storage;
+        const decoded = decodeControlPlaneAdminResponse<{ hosts: HostingAdminVpsHost[] }>(JSON.stringify({
+            version: 1, requestId: shared.requestId, ok: true, result: { hosts: [inventoryHost] },
+        }), shared.requestId, true);
+        await act(async () => root.render(<VpsHostInventory hosts={decoded.hosts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-storage"]')!.click());
+        const cell = container.querySelector('[data-label="Storage"]');
+        expect(cell?.textContent).toBe(text);
+        expect(cell?.querySelector("p")?.classList.contains(tone)).toBe(true);
+        expect(container.querySelectorAll('[aria-label="Occupied slots for host-storage"] [role="columnheader"]')).toHaveLength(6);
+    });
+
+    it.each(shared.invalidStorage)("rejects incompatible storage: %j", storage => {
+        expect(readSlotStorage(storage)).toBeNull();
+    });
+
+    it.each([
+        { storage: undefined, pending: false, text: "Unknown" },
+        { storage: shared.usedOnly, pending: false, text: "2.1 GiB" },
+        { storage: shared.cases[0]!.storage, pending: true, text: "Loading…" },
+    ])("renders storage $text for missing limits, older peers and pending reads", async ({ storage, pending, text }) => {
+        const inventoryHost = host("host-storage", resources(60, 40), 0);
+        inventoryHost.occupiedSlots[0]!.storage = storage;
+        await act(async () => root.render(<VpsHostInventory hosts={[inventoryHost]} ownerLabels={{}} runnerTargetSourceCommit={null} liveDataPending={pending} />));
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-storage"]')!.click());
+        expect(container.querySelector('[data-label="Storage"]')?.textContent).toBe(text);
+    });
+
     it("renders healthy hosts beside a timed-out host and retains its inventory", async () => {
         const timedOut: HostingAdminVpsHost = { ...host("host-frozen", resources(60, 40), 1),
             resources: null, liveData: { status: "unavailable", reason: "timeout" } };
@@ -79,6 +180,8 @@ describe("compact VPS host inventory", () => {
         const capacity = container.querySelector('dl[aria-label="3 total slots, 1 running, 2 free"]');
         expect(capacity?.querySelectorAll("dt")).toHaveLength(3);
         expect(capacity?.textContent).toBe("Slots3Running1Free2");
+        expect(container.querySelector('[data-label="Capacity"]')?.textContent).not.toMatch(/Admissible|Ready|launch-proven/);
+        expect(container.textContent).toContain("2 available");
         expect(container.textContent).not.toContain("UDP 4200");
         expect([...container.querySelectorAll("button")].filter((button) => button.textContent === "Runner current")).toHaveLength(2);
 

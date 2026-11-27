@@ -29,7 +29,8 @@ afterEach(async () => { await act(async () => root.unmount()); container.remove(
 
 /** Renders the card with the given providers and catalog. */
 async function render(providers = PROVIDERS, regions: HostingRegionPayload[] | null = REGIONS) {
-    await act(async () => root.render(<ManualVpsOnboardingCard providers={providers} regions={regions} regionsError={regions === null ? "Catalog down." : null} />));
+    const hostingRegions = regions === null ? { regions: null, error: "Catalog down." } : { regions: regions.map((entry) => ({ ...entry, available: false })), error: null };
+    await act(async () => root.render(<ManualVpsOnboardingCard providers={providers} hostingRegions={hostingRegions} />));
 }
 
 /** The form control with the given name. */
@@ -149,7 +150,7 @@ it("sends nothing when the administrator does not confirm the IPv4 address", asy
     expect(request).not.toHaveBeenCalled();
 });
 
-it("submits the exact strict input without a host key, blank optional fields as null, then opens the VPS view", async () => {
+it("submits the exact strict input without a host key, blank optional fields as null, then refreshes the view in place", async () => {
     vi.spyOn(window, "confirm").mockReturnValue(true);
     request.mockResolvedValueOnce({ onboarding: { state: "queued", progressStage: "queued" } });
     await render();
@@ -161,7 +162,8 @@ it("submits the exact strict input without a host key, blank optional fields as 
         provider: "hosthatch-vps", serviceName: "hosthatch-ams-1", sshLogin: "root@45.91.20.7",
         vCpu: 8, region: "benelux", countryCode: "NL", locationId: "ams", publicHostname: null, datacenter: null,
     });
-    expect(push).toHaveBeenCalledWith("/admin/control-plane?view=vps");
+    expect(refresh).toHaveBeenCalledOnce();
+    expect(push).not.toHaveBeenCalled();
     expect(container.textContent).toContain("VPS onboarding queued: queued.");
 });
 
@@ -175,5 +177,5 @@ it("keeps the entered facts and shows the control plane's rejection", async () =
     expect(request.mock.calls[0]?.[0].input).toMatchObject({ publicHostname: "play.example.com", datacenter: null });
     expect(container.querySelector('[role="alert"]')!.textContent).toContain("The host is unreachable.");
     expect(control("serviceName").value).toBe("hosthatch-ams-1");
-    expect(push).not.toHaveBeenCalled();
+    expect(refresh).not.toHaveBeenCalled();
 });

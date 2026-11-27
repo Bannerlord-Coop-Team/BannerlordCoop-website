@@ -202,6 +202,8 @@
   "configEditor.reloadSettings": "Einstellungen neu laden",
   "configEditor.managedConfigurationJson": "Verwaltete Konfiguration · JSON",
   "configEditor.noPendingChanges": "Keine ausstehenden Änderungen",
+  "configEditor.warSailsSetByCampaignOn": "Nicht gespeichert — deine Kampagne legt War Sails fest. Stoppe den Server: „Campaigns“ → „New campaign“ → War Sails (löscht aktuelle Kampagnen; exportiere deinen Spielstand zuerst). Falls nicht angeboten, aktualisiere den Server. Spieler müssen War Sails (NavalDLC) aktivieren.",
+  "configEditor.warSailsSetByCampaignOff": "Nicht gespeichert — deine Kampagne legt War Sails fest. Stoppe den Server und wähle oder starte unter „Campaigns“ eine klassische Kampagne.",
   "configEditor.discard": "Verwerfen",
   "configEditor.saving": "Wird gespeichert …",
   "configEditor.saveConfig": "Konfiguration speichern",

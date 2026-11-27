@@ -6,6 +6,7 @@
   "metadata.description": "Jogue a campanha de Mount & Blade II: Bannerlord com amigos num mundo multijogador partilhado.",
   "nav.homeLabel": "Página inicial de Bannerlord Co-op",
   "nav.primary": "Navegação principal",
+  "nav.loading": "Carregamento da navegação",
   "nav.mobile": "Navegação em dispositivos móveis",
   "nav.home": "Início",
   "nav.servers": "Servidores",
@@ -42,6 +43,12 @@
   "download.options": "Opções de descarga",
   "download.heading": "Escolher uma plataforma",
   "download.description": "As versões públicas estão disponíveis abaixo. As versões noturnas requerem o cargo Tester, um cargo de apoiante do Patreon, Boosty ou Afdian, ou uma das 10 vagas patrocinadas para contas do Discord de um membro elegível.",
+  "download.direct.mod": "Descarregar mod",
+  "download.direct.modDetail": "Versão mais recente · .zip",
+  "download.direct.server": "Descarregar servidor dedicado",
+  "download.direct.serverDetail": "Windows · .7z",
+  "download.or": "ou",
+  "download.unavailable": "Indisponível",
   "download.recommended": "Recomendado",
   "download.supporterOnly": "Apenas para apoiantes",
   "download.installer.name": "Instalador guiado",
@@ -50,6 +57,7 @@
   "download.steam.description": "Subscreva e receba atualizações através do Steam.",
   "download.nexus.name": "Nexus Mods",
   "download.nexus.description": "Descarregue Bannerlord Co-op do Nexus Mods.",
+  "download.nexus.unavailable": "O Bannerlord Co-op não está disponível no Nexus Mods de momento.",
   "download.moddb.name": "ModDB",
   "download.moddb.description": "Consulte as versões e as atualizações do projeto no ModDB."
 }

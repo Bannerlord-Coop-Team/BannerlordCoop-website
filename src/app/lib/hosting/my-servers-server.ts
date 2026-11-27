@@ -1,6 +1,6 @@
 import "server-only";
 import { isStartQueueDetails, type StartQueueDetails } from "../../../../supabase/functions/_shared/server-start-queue-contract";
-import { isOwnerRuntimeInsight, isOwnerStartInsight, ownerRuntimeInsightValidationIssue, START_INSIGHT_KEYS, type OwnerStartInsight } from "./owner-runtime-insight";
+import { isOwnerRuntimeInsight, isOwnerStartInsight, ownerRuntimeInsightValidationIssue, START_INSIGHT_KEYS, truncateOwnerRuntimeCopy, type OwnerStartInsight } from "./owner-runtime-insight";
 import { isIP } from "node:net";
 import type { MyServerMove, MyServerNotice, MyServerSummary } from "@/app/lib/control-plane/types";
 import { hasExactKeys, isRecord } from "../../../../supabase/functions/_shared/dto-validation";
@@ -59,10 +59,22 @@ export async function getMyServerSummary(accessToken: string, serverId: string, 
         || value.gamePorts.some(port => !Number.isInteger(port) || port < 1 || port > 65535)) {
         throw new MyServersApiError("invalid_response", "The managed-server API returned an invalid summary.", true);
     }
-    if (hasRuntimeInsight && !isOwnerRuntimeInsight(value.runtimeInsight, { operationState: value.operationState, observedGameState: value.observedGameState, subscriptionHold: value.subscriptionHold })) {
-        const issue = ownerRuntimeInsightValidationIssue(value.runtimeInsight, { operationState: value.operationState, observedGameState: value.observedGameState, subscriptionHold: value.subscriptionHold });
+    const runtimeContext = { operationState: value.operationState, observedGameState: value.observedGameState, subscriptionHold: value.subscriptionHold };
+    if (hasRuntimeInsight) {
+        const { runtimeInsight: rawInsight, ...core } = value;
+        const runtimeInsight = truncateOwnerRuntimeCopy(rawInsight);
+        if (isOwnerRuntimeInsight(runtimeInsight, runtimeContext)) return { ...(core as MyServerSummary), runtimeInsight };
+        // Validate the same diagnosis with actions disabled before deciding whether to omit it.
+        if (isRecord(runtimeInsight) && Object.hasOwn(runtimeInsight, "allowedActions")) {
+            const withoutActions = { ...runtimeInsight, allowedActions: [] };
+            if (isOwnerRuntimeInsight(withoutActions, runtimeContext)) {
+                const issue = { fieldPath: "runtimeInsight.allowedActions", reason: "unsupported action posture" };
+                console.warn("Managed server runtime actions rejected", issue);
+                return { ...(core as MyServerSummary), runtimeInsight: withoutActions, runtimeInsightWarning: issue };
+            }
+        }
+        const issue = ownerRuntimeInsightValidationIssue(runtimeInsight, runtimeContext);
         console.warn("Managed server runtime insight rejected", issue);
-        const { runtimeInsight: _runtimeInsight, ...core } = value;
         return { ...core, runtimeInsightWarning: issue } as MyServerSummary;
     }
     if (!hasRuntimeInsight && insightRequested) {

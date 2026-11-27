@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "requestId": "90000000-0000-4000-8000-000000000002",
+  "ok": true,
+  "result": {
+    "liveDataIncluded": true,
+    "controlPlaneHost": null,
+    "hosts": [
+      {
+        "provider": "ovhcloud-vps",
+        "name": "vps-api-qa.vps.ovh.net",
+        "locationId": "eu-central-fra",
+        "countryCode": "DE",
+        "region": null,
+        "regionKeys": [
+          "germany"
+        ],
+        "totalSlots": 6,
+        "runningServers": 0,
+        "availableServers": 5,
+        "provenServers": 0,
+        "slotTarget": {
+          "targetSlots": null,
+          "pendingLowerSlots": null,
+          "pendingLowerSince": null,
+          "changedAt": null,
+          "reason": null
+        },
+        "occupiedSlots": [
+          {
+            "slotIndex": 0,
+            "gamePort": 4200,
+            "serverId": "7bf7c599-530e-599d-86a0-af6a6e55c0f3",
+            "displayName": "Storage fixture",
+            "ownerDiscordUserId": "192469416892432384",
+            "ownerAccountId": null,
+            "operationState": "stopped",
+            "resources": {
+              "observedAt": "2026-11-24T03:08:44.068Z",
+              "sampleDurationMs": 250,
+              "cpuVcpus": 0.01,
+              "cpuLimitVcpus": 2,
+              "memoryUsedBytes": 1073741824,
+              "memoryLimitBytes": 3221225472
+            },
+            "storage": {
+              "usedBytes": 2254857830,
+              "quotaBytes": 12884901888
+            },
+            "launchProofStartedAt": null,
+            "ownerInvocationId": null
+          }
+        ],
+        "cost": null,
+        "expirationDate": null,
+        "autoRenew": null,
+        "providerCheckedAt": null,
+        "resources": {
+          "observedAt": "2026-11-24T03:08:44.067Z",
+          "uptimeSeconds": 0,
+          "cpuPercent": 0.5,
+          "memoryUsedBytes": 134217728,
+          "memoryTotalBytes": 4294967296,
+          "diskUsedBytes": 2147483648,
+          "diskFreeBytes": 40802189312,
+          "diskTotalBytes": 42949672960
+        },
+        "runnerOnboarding": {
+          "state": "succeeded",
+          "progressStage": "runner-active",
+          "errorCode": null,
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "updatedAt": "2026-11-24T03:08:43.833Z",
+          "attemptCount": 1,
+          "maximumAttempts": 3,
+          "timeoutAt": "2026-11-24T09:08:43.833Z",
+          "startedByAutomaticSizing": false
+        },
+        "runnerUpdate": null
+      }
+    ],
+    "availableServiceNames": [],
+    "availableHosts": [],
+    "providerReads": [],
+    "manualEntryProviders": [],
+    "runnerTargetSourceCommit": null
+  }
+}

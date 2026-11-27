@@ -230,15 +230,12 @@ export function overviewStatRowClass(count: number) {
     throw new Error("Overview statistic rows must contain one through four cards.");
 }
 
+/** Groups operation cards into balanced rows: prioritized and input-heavy cards first, compact cards after. */
 export function operationCardRows<T extends {
     fields: readonly unknown[];
     layoutPriority?: number;
-}>(cards: readonly T[], pinnedLeadCount = 0): T[][] {
-    if (!Number.isSafeInteger(pinnedLeadCount) || pinnedLeadCount < 0 || pinnedLeadCount > cards.length) {
-        throw new Error("Pinned operation-card count is invalid.");
-    }
-    const pinned = cards.slice(0, pinnedLeadCount);
-    const ranked = cards.slice(pinnedLeadCount)
+}>(cards: readonly T[]): T[][] {
+    const ranked = cards
         .map((card, index) => ({ card, index }))
         .sort((left, right) => (
             (right.card.layoutPriority ?? 0) - (left.card.layoutPriority ?? 0)
@@ -250,7 +247,6 @@ export function operationCardRows<T extends {
     const compactCards = ranked.filter((card) => card.fields.length < 2);
 
     return [
-        ...(pinned.length === 0 ? [] : [pinned]),
         ...balancedRows(inputCards, 3),
         ...balancedRows(compactCards, 3),
     ];

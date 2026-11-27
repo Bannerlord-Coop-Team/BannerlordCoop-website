@@ -101,12 +101,18 @@ The website does not query the private `control_plane` schema, call a VPS provid
 
 The administrator presentation resolves Discord usernames only from bounded Supabase Auth accounts that signed in with Discord. Numeric Discord IDs remain visible and accepted as a fallback. Dates and provider-check times render only after browser hydration so they use the administrator's browser locale and time zone rather than the Netlify or Oracle server time zone.
 
-The Operations page's **Onboard provider-account VPS** card is the normal additive host-ingestion path for providers with an account API (OVHcloud and Contabo). Its choices are the inventory's `availableHosts` (unregistered hosts from every enabled provider account, labelled `<provider> · <service name>`); each option carries that host's `provider` and `serviceName`, and the card sends both. The inventory's `providerReads` reports each enabled provider's account read; a failed read withholds only that provider's unregistered hosts and billing, and the Operations and VPS views name the failed provider. The control plane verifies that the already-purchased service belongs to that provider's account, derives the reviewed image within the control plane, records `floor(vCPU / 2)` empty slots (more after a [slot capacity raise](#raising-a-vps-slot-capacity)), and writes an administrative audit event. It never purchases, renews, or powers the VPS. The VPS view's per-host **Onboard runner**, **Retry onboarding**, and **Update runner** buttons send the host row's own `provider` with its service name; the control plane requires it and rejects a provider that differs from the stored host. Server creation assigns an existing prepared VPS slot in the selected region; it never orders a VPS, and unavailable capacity fails without creating or billing anything. The Region choices are the stored-catalog entries that `hosting-regions` reports `available: true` (a free slot admissible under the owner admission rules), in stored order, labelled from the website catalog or the humanized key. That flag is advisory: only the region key (`friendlyRegion`) is sent, and the control plane revalidates capacity. Its optional **Provider** select pins the new server to one provider (sent as `provider`, which the control plane accepts only for an enabled provider); it lists the providers holding at least one registered VPS, by name, and its default **Any provider** sends nothing, so the control plane tries the enabled providers in their configured order. Pin a newly onboarded provider to verify it end to end before owners land on it. If the stored catalog cannot be read, Create server is shown unavailable with the read error. The VPS view also reads the stored catalog and labels each host with every stored region whose placement its provider-reported country and zone satisfy, then the country and zone. A host no stored placement covers is labelled **No stored region** until a catalog entry is published, and **Regions unavailable** when the catalog cannot be read. The normal Releases view hides non-validated history, but pending, rejected, and revoked receipts remain retained for explicit inspection and audit rather than being deleted.
+VPS onboarding lives in the VPS view's **Add capacity** dialog, opened from the **Adding capacity** banner. It has two tabs: **Provider account** (the **Onboard provider-account VPS** form) and **Manual entry** (the **Add manual VPS** form). The banner's **Onboard VPS** button opens it on the Provider account tab and **Add manual VPS** on the Manual entry tab. The dialog is a native modal `<dialog>`: it focuses the selected tab when it opens, the arrow, Home and End keys move between tabs, Escape or the close button dismisses it, and focus returns to the button that opened it. Both tabs stay mounted while it is open, so a half-typed form or a submission result survives switching tabs. A successful submission on either tab refreshes the VPS view in place behind the dialog and keeps the result and its progress links visible; closing the dialog discards both forms. VPS onboarding is only in the VPS view. The Operations view reads no provider account inventory: its `vps-hosts` read is `{ includeLiveData: false }`, which is all Create server needs.
+
+The **Provider account** tab is the normal additive host-ingestion path for providers with an account API (OVHcloud and Contabo). Its choices are the `availableHosts` of the VPS view's provider billing read (unregistered hosts from every enabled provider account, labelled `<provider> · <service name>`); each option carries that host's `provider` and `serviceName`, and the form sends both. While that read is still loading the tab says so and its submit stays disabled; if it fails before any result, the tab explains that unregistered VPS products cannot be listed and that Manual entry still works, with the read error; a billing response that lists no hosts counts as a failed read, with that as its error, on both the page banner and this tab. A later failure keeps the last listed hosts with a notice.
+Both notices offer **Retry provider inventory**, which reads billing again at
+once instead of waiting for the next poll, and the hosts stay listed while the read reloads after a submission (see [VPS inventory loading](#vps-inventory-loading)). The inventory's `providerReads` reports each enabled provider's account read; a failed read withholds only that provider's unregistered hosts and billing, and the VPS view and the Provider account tab name the failed provider. The control plane verifies that the already-purchased service belongs to that provider's account, derives the reviewed image within the control plane, records `floor(vCPU / 2)` empty slots (more after a [slot capacity raise](#raising-a-vps-slot-capacity)), and writes an administrative audit event. It never purchases, renews, or powers the VPS. The VPS view's per-host **Onboard runner**, **Retry onboarding**, and **Update runner** buttons send the host row's own `provider` with its service name; the control plane requires it and rejects a provider that differs from the stored host. Server creation assigns an existing prepared VPS slot in the selected region; it never orders a VPS, and unavailable capacity fails without creating or billing anything. The Region choices are the stored-catalog entries that `hosting-regions` reports `available: true` (a free slot admissible under the owner admission rules), in stored order, labelled from the website catalog or the humanized key. That flag is advisory: only the region key (`friendlyRegion`) is sent, and the control plane revalidates capacity. Its optional **Provider** select pins the new server to one provider (sent as `provider`, which the control plane accepts only for an enabled provider); it lists the providers holding at least one registered VPS, by name, and its default **Any provider** sends nothing, so the control plane tries the enabled providers in their configured order. Pin a newly onboarded provider to verify it end to end before owners land on it. If the stored catalog cannot be read, Create server is shown unavailable with the read error. The VPS view also reads the stored catalog and labels each host with every stored region whose placement its provider-reported country and zone satisfy, then the country and zone. A host no stored placement covers is labelled **No stored region** until a catalog entry is published, and **Regions unavailable** when the catalog cannot be read. The normal Releases view hides non-validated history, but pending, rejected, and revoked receipts remain retained for explicit inspection and audit rather than being deleted.
 
 A provider without an account API (HostHatch, VPS.TC) is onboarded with the
-**Add manual VPS** card (`#onboard-manual-vps-host`), which the VPS view's
-**Add manual VPS** button also opens. Its providers are the `vps-hosts`
-result's `manualEntryProviders` (`{ provider, displayName }`); a backend that
+**Add manual VPS** form on the Add capacity dialog's **Manual entry** tab. Its
+providers are the VPS view's base `vps-hosts` result's `manualEntryProviders`
+(`{ provider, displayName }`), and its regions and their read error are the
+stored catalog the VPS view already reads to label hosts, so opening the dialog
+makes no extra request; a backend that
 omits the field is treated as offering none, and the card then explains that it
 is unavailable instead of showing the form. The administrator types the host's
 facts from the provider panel: a permanent server name
@@ -129,7 +135,7 @@ administrator need not copy anything from the provider console. Because that
 first contact trusts whatever machine answers at the address, the IPv4 address
 is the fact to double-check. The control plane remains authoritative for every
 check. Success
-opens the VPS view, and a failed attempt is retried there with the existing
+refreshes the VPS view behind the dialog, and a failed attempt is retried there with the existing
 **Retry onboarding** button, which sends `onboard-vps-host` with the host row's
 own provider, its service name and `mode: "retry"`. The `control-plane-admin`
 Edge Function forwards the envelope unchanged, so it needs no redeploy; deploy
@@ -332,18 +338,17 @@ membership and manifest bytes. Requests retain current authentication, session
 revocation checks, request IDs, origin restrictions, and `Cache-Control: no-store`.
 Deploy the `control-plane-admin` Edge Function separately after merging this change.
 
-Operations requests registered VPS capacity and authenticated provider inventory
-with `includeLiveData: false, includeProviderInventory: "service-names"`. It reads
-fresh available VPS names without fetching unused per-host billing metadata,
-CPU/memory samples or the runner target revision. Registered-host membership and
-the available-service limit are still checked against the current provider list;
-failures remain visible. Deploy the control-plane version supporting this literal
-before the website rollout; older backends reject it without a fallback.
+Operations requests only registered VPS capacity, with `includeLiveData: false`,
+for Create server's provider choices. It reads no provider account inventory:
+VPS onboarding is in the VPS view's Add capacity dialog, which takes its
+available hosts from the VPS view's provider billing read.
 
 The VPS tab reads registered hosts in pages on the server and on each browser
 telemetry refresh. Each scan starts with `storedAfter: null`, turns off provider
 inventory, and passes the returned cursor unchanged until it is null. If the
-registered set changes, the website discards its partial scan and tries again once.
+registered set changes or the cursor expires or becomes invalid, the website
+discards its partial scan and tries again once. Live scans keep the latest runner
+target reported by a page even if later pages arrive after the telemetry budget.
 An older backend that refuses the initial paging option receives the legacy read.
 The provider billing refresh uses its separate account read.
 
@@ -397,6 +402,15 @@ back to the slow fleet request. A slow billing response cannot
 hold up resource readings or runner controls; a slow telemetry response cannot
 hold up billing. Provider fields merge by host name without replacing current
 capacity, assignments, runner state or telemetry.
+When the server hands the view a new registered inventory (for example
+`router.refresh()` after an onboarding submission), billing and Oracle read
+again at once but never reset: they keep their last result, without a loading
+state, and a failed read shows its error beside that result. The billing
+banner, cost columns and the Add capacity dialog's host list therefore never
+blank, and a just-onboarded host drops out of the available list as soon as
+the new billing read returns. Fleet telemetry is not kept: it replaces the registered
+inventory, so the refreshed inventory, including a newly onboarded host, shows
+at once while its live readings load.
 While visible, Oracle telemetry refreshes five seconds after each completed request;
 fleet telemetry refreshes fifteen seconds after each completed request and uses the
 normal control-plane request horizon so complete resource readings are retained.
@@ -1339,8 +1353,8 @@ A VPS provider the control plane adds to `VPS_PROVIDER_IDS` needs a website
 update first: add it to `VPS_PROVIDERS` with a readable name in
 `VPS_PROVIDER_LABELS` (`src/app/lib/control-plane/vps-providers.ts`), and
 deploy that before the control plane reports the provider. Until then the
-capacity read is an unexpected response, the **Onboard provider-account VPS**
-card refuses its hosts, and other views show its raw id.
+capacity read is an unexpected response, the Add capacity dialog's
+**Provider account** tab refuses its hosts, and other views show its raw id.
 
 ### Slot sizing
 

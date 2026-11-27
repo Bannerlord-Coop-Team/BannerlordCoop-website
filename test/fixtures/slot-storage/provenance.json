@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "contract": "managed-hosting.web-admin.slot-storage",
+  "fixtureSha256": "609bbb0f5c83ae35a285505b04b9735cce5dc5991423b685304408586891a41b",
+  "captureSha256": "e53ca88a8f8e5aacd86a2d8d0b22917acd86a8f1d10a68d569f6cbb3864e1ece",
+  "producer": {
+    "repository": "Bannerlord-Coop-Team/BannerlordCoop.ControlPlane",
+    "pullRequest": "https://github.com/Bannerlord-Coop-Team/BannerlordCoop.ControlPlane/pull/1447",
+    "captureHead": "4b8153c0ddd6e6065f7d43e70cf08d72b8a6a329",
+    "sources": {
+      "src/hosting/lifecycle/vps-inventory-reads.ts": "36c7ed703cfcc9d20e4c6c3daaecdc29199ed6c8a10b15d69eebcfc600a32c79",
+      "src/hosting/fleet/vps-contract.ts": "2408491f7dc8c93e74a6e94b54884f1205e235fff8b17357edffbec2cfdaf882",
+      "src/hosting/control-plane/ipc/control-plane-protocol.ts": "52120f412709857479db1e0d6c55808c94fbcffc4104ed4ab263c8946847839b"
+    }
+  },
+  "consumer": {
+    "repository": "Bannerlord-Coop-Team/BannerlordCoop-website",
+    "pullRequest": "https://github.com/Bannerlord-Coop-Team/BannerlordCoop-website/pull/477",
+    "implementationHead": "a46165332f94d36fd53a807b895eadfdc790aac6",
+    "sources": {
+      "src/app/lib/control-plane/client.ts": "076d42782ad896dc92f9e2cc9fa2f69aafc8a060bbbb41c453e478a5be90d6b0",
+      "src/app/lib/control-plane/slot-storage.ts": "e0678b2ca5d946981bdbe4ac866d9a262c8e0ba8293c9c3dde679278722bbb3d",
+      "src/app/components/admin/VpsHostInventory.tsx": "13d561571677eed69b44b1be4a83a8ca4e5b199b01b3100fc09ee12d94b2c60f"
+    }
+  },
+  "capture": {
+    "kind": "isolated synthetic runtime; real HTTP and IPC implementations",
+    "command": "SLOT_STORAGE_CAPTURE_PATH=<capture-path> npm run test:hosting:api -- test/hosting-api/vps-inventory.test.ts",
+    "request": {
+      "method": "POST",
+      "path": "/v1/admin/control-plane",
+      "version": 1,
+      "operation": "vps-hosts",
+      "input": {
+        "includeLiveData": true,
+        "includeProviderInventory": false
+      }
+    },
+    "runnerRequest": {
+      "operation": "report-disk-usage",
+      "input": {}
+    },
+    "transport": "CP admin HTTP -> real IPC bridge -> live inventory -> bounded synthetic runner; ephemeral migrated PGlite",
+    "sanitization": "All accounts, host names, servers, generations and runtime state are synthetic. No authorization headers or tokens are retained.",
+    "limits": "Not proven: deployed website/Edge authentication/TLS, live runner files, Podman, production or gameplay. The runner disk report is a declared synthetic reading, not a live filesystem capture."
+  },
+  "validation": {
+    "producer": "npm test -- test/hosting-vps-live-read-isolation.test.ts test/hosting-vps-inventory-reads.test.ts; npm run test:hosting:api -- test/hosting-api/vps-inventory.test.ts",
+    "consumer": "npm run test:components -- src/app/components/admin/VpsHostInventory.component.test.tsx",
+    "contractCases": "normal, 80% warning, over quota, zero/exhausted quota, unknown/failed report, invalid byte fields, older producer omitting storage, nullable quota, pending state, incompatible envelope",
+    "rollingRollout": "Existing consumers ignore additive storage; updated consumers render Unknown when an older producer omits it. No runner wire or IPC protocol version changes.",
+    "finalHeads": "Both exact final tested heads are pinned in both PR bodies; implementation heads and LF-normalized source digests above identify the captured code.",
+    "sourceDigestEncoding": "sha256 of UTF-8 source with CRLF normalized to LF"
+  }
+}

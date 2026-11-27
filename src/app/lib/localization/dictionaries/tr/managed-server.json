@@ -202,6 +202,8 @@
   "configEditor.reloadSettings": "Ayarları yeniden yükle",
   "configEditor.managedConfigurationJson": "Yönetilen yapılandırma · JSON",
   "configEditor.noPendingChanges": "Bekleyen değişiklik yok",
+  "configEditor.warSailsSetByCampaignOn": "Kaydedilmez — War Sails'i kampanyanız belirler. Sunucuyu durdurun: Campaigns → New campaign → War Sails (mevcut kampanyaları siler; önce kaydınızı dışa aktarın). Sunulmuyorsa sunucuyu güncelleyin. Oyuncuların War Sails'i (NavalDLC) etkinleştirmesi gerekir.",
+  "configEditor.warSailsSetByCampaignOff": "Kaydedilmez — War Sails'i kampanyanız belirler. Sunucuyu durdurun ve Campaigns altında bir Klasik kampanya seçin veya başlatın.",
   "configEditor.discard": "Değişiklikleri at",
   "configEditor.saving": "Kaydediliyor…",
   "configEditor.saveConfig": "Yapılandırmayı kaydet",
