@@ -790,6 +790,8 @@
   "campaigns.deleteStatusUnavailable": "Статус удаления недоступен. Обновите страницу позже, чтобы проверить исходный запрос.",
   "campaigns.deleted": "Campaign deletion queued.",
   "campaigns.mode.legend": "Режим кампании",
+  "campaigns.mode.unknownHelp": "Поддержка War Sails неизвестна. Перезапустите сервер, чтобы проверить её снова.",
+  "campaigns.mode.unknownReset": "Если продолжить сейчас, будет создана классическая кампания.",
   "campaigns.mode.classic": "Классическая",
   "campaigns.mode.classicHelp": "Обычная кампания без War Sails.",
   "campaigns.mode.warSails": "War Sails",

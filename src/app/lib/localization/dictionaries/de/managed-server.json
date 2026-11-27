@@ -788,6 +788,8 @@
   "campaigns.deleteStatusUnavailable": "Der Löschstatus ist nicht verfügbar. Lade die Seite später neu, um die ursprüngliche Anfrage zu prüfen.",
   "campaigns.deleted": "Campaign deletion queued.",
   "campaigns.mode.legend": "Kampagnenmodus",
+  "campaigns.mode.unknownHelp": "Die War-Sails-Unterstützung ist unbekannt. Starte den Server neu, um sie erneut zu prüfen.",
+  "campaigns.mode.unknownReset": "Wenn du jetzt fortfährst, wird eine klassische Kampagne erstellt.",
   "campaigns.mode.classic": "Klassisch",
   "campaigns.mode.classicHelp": "Die Standardkampagne ohne War Sails.",
   "campaigns.mode.warSails": "War Sails",

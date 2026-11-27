@@ -788,6 +788,8 @@
   "campaigns.deleteStatusUnavailable": "O status da exclusão está indisponível. Atualize mais tarde para conferir a solicitação original.",
   "campaigns.deleted": "Campaign deletion queued.",
   "campaigns.mode.legend": "Modo da campanha",
+  "campaigns.mode.unknownHelp": "O suporte ao War Sails é desconhecido. Reinicie o servidor para verificar novamente.",
+  "campaigns.mode.unknownReset": "Se continuar agora, uma campanha clássica será criada.",
   "campaigns.mode.classic": "Clássica",
   "campaigns.mode.classicHelp": "A campanha padrão, sem War Sails.",
   "campaigns.mode.warSails": "War Sails",

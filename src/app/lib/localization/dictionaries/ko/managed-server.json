@@ -787,6 +787,8 @@
   "campaigns.deleteStatusUnavailable": "삭제 상태를 확인할 수 없습니다. 나중에 새로 고침하여 원래 요청을 확인하세요.",
   "campaigns.deleted": "Campaign deletion queued.",
   "campaigns.mode.legend": "캠페인 모드",
+  "campaigns.mode.unknownHelp": "War Sails 지원 여부를 알 수 없습니다. 서버를 재시작하여 다시 확인하세요.",
+  "campaigns.mode.unknownReset": "지금 계속하면 클래식 캠페인이 생성됩니다.",
   "campaigns.mode.classic": "클래식",
   "campaigns.mode.classicHelp": "War Sails가 없는 기본 캠페인입니다.",
   "campaigns.mode.warSails": "War Sails",

@@ -57,7 +57,7 @@ export type MyServerSummary = Pick<
     // Optional for older deployments; independent of the visibility rollout.
     connectionIp?: string | null;
     gamePorts?: number[];
-    // True only when the installed build can run a War Sails campaign; missing from older control planes.
+    // Verified support for the installed build. Missing means support is unknown.
     warSailsCapable?: boolean;
 };
 
