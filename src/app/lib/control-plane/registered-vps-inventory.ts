@@ -20,6 +20,7 @@ export async function readRegisteredVpsInventory(
         const hosts: HostingAdminVpsInventory["hosts"] = [];
         const seen = new Set<string>();
         let storedAfter: string | null = null;
+        let runnerTargetSourceCommit: string | undefined;
         for (;;) {
             scanSignal.throwIfAborted();
             let page: HostingAdminVpsInventory;
@@ -47,7 +48,10 @@ export async function readRegisteredVpsInventory(
                 seen.add(host.name);
                 hosts.push(host);
             }
-            if (page.nextCursor === null) return { ...page, hosts };
+            runnerTargetSourceCommit = page.runnerTargetSourceCommit ?? runnerTargetSourceCommit;
+            if (page.nextCursor === null) {
+                return { ...page, hosts, ...(runnerTargetSourceCommit === undefined ? {} : { runnerTargetSourceCommit }) };
+            }
             storedAfter = page.nextCursor;
         }
     }

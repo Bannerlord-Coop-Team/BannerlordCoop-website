@@ -27,13 +27,28 @@ for (const includeLiveData of [false, true]) {
     });
 }
 
+test("retains the latest runner target when the terminal page has no sample", async () => {
+    const pages = [
+        { ...page(["first"], "second", true), runnerTargetSourceCommit: "a".repeat(40) },
+        { ...page(["second"], "last", true), runnerTargetSourceCommit: "b".repeat(40) },
+        { ...page(["last"], null, true), runnerTargetSourceCommit: null },
+    ];
+    const result = await readRegisteredVpsInventory(async () => {
+        const next = pages.shift();
+        assert.ok(next);
+        return next;
+    }, true);
+    assert.deepEqual(result.hosts.map(host => host.name), ["first", "second", "last"]);
+    assert.equal(result.runnerTargetSourceCommit, "b".repeat(40));
+});
+
 for (const code of ["vps_inventory_changed", "vps_inventory_cursor_expired", "vps_inventory_cursor_invalid"]) {
     test(`restarts a paged VPS scan after ${code}`, async () => {
         const calls: unknown[] = [];
         const result = await readRegisteredVpsInventory(async input => {
             calls.push(input);
             switch (calls.length) {
-                case 1: return page(["before"], "before-token");
+                case 1: return { ...page(["before"], "before-token"), runnerTargetSourceCommit: "a".repeat(40) };
                 case 2: throw new ControlPlaneAdminError(code, "Start a new scan");
                 case 3: return page(["after"], "after-token");
                 case 4: return page(["last"], null);
@@ -42,6 +57,7 @@ for (const code of ["vps_inventory_changed", "vps_inventory_cursor_expired", "vp
         }, false);
         assert.deepEqual(result.hosts.map(host => host.name), ["after", "last"]);
         assert.equal(result.nextCursor, null);
+        assert.equal(result.runnerTargetSourceCommit, undefined);
         assert.deepEqual(calls, [null, "before-token", null, "after-token"].map(storedAfter =>
             ({ includeLiveData: false, includeProviderInventory: false, storedAfter })));
     });
