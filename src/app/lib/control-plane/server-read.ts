@@ -69,7 +69,8 @@ export async function readControlPlaneAdmin<T>(options: {
         // The result still requires bounded decoding and matching envelope correlation.
         options.onAuthenticated?.();
     }
-    const result = decodeControlPlaneAdminResponse<T>(await readResponse(response, signal, requestId), requestId, response.ok);
+    const result = decodeControlPlaneAdminResponse<T>(await readResponse(response, signal, requestId), requestId, response.ok,
+        response.status === 429 ? response.headers.get("retry-after") : null);
     if (!response.ok) throw new ControlPlaneAdminError("invalid_response", "The control plane returned an invalid response.", true, requestId);
     return result;
 }

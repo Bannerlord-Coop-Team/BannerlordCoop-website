@@ -61,7 +61,7 @@ const JOB_ACTION_EXPLANATIONS: Record<string, string> = {
 };
 
 const OPERATION_EXPLANATIONS: Record<string, string> = {
-    "batch-maintenance": "Takes a bounded fleet snapshot and queues eligible server updates. It does not bypass compatibility, backup, or current-state checks.",
+    "batch-maintenance": "Queues eligible server updates in pages. Compatibility, backup, and current-state checks apply to each server.",
     "cancel-deletion": "Cancels a pending deletion only while entitlement and lifecycle rules still permit cancellation.",
     "cancel-job": "Requests cancellation. A running worker stops only at its next reviewed safe checkpoint.",
     "create-notice": "Shows a plain-text notice at the top of up to 500 selected servers' pages to everyone who can view them, until each person dismisses it, it expires or it is withdrawn. It is not an email or a Discord message.",

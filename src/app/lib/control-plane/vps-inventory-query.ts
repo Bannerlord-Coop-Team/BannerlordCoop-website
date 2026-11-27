@@ -1,8 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react";
-import { hostServedRegionKeys, slotOwnerAccountId } from "@/app/lib/control-plane/presentation";
+import { hostServedRegionKeys } from "@/app/lib/control-plane/presentation";
 import { classifyRunnerUpdate } from "@/app/lib/control-plane/runner-update-status";
 import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
-import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 import { paginateItems } from "@/app/lib/pagination";
 import { HOSTING_REGIONS, hostingRegionLabel, type HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
@@ -17,15 +16,11 @@ const DEFAULT_VPS_PAGE_SIZE: VpsPageSize = 10;
 
 export type VpsInventoryFilters = {
     regions: readonly string[];
-    email: string;
+    ownerId: string;
     emptySlotsOnly: boolean;
 };
 
 type OccupiedSlot = HostingAdminVpsHost["occupiedSlots"][number];
-type EmailLookup = {
-    byAccount: Map<string, string>;
-    byDiscord: Map<string, string>;
-};
 
 const pageSizeListeners = new Set<() => void>();
 let rememberedPageSize: VpsPageSize = DEFAULT_VPS_PAGE_SIZE;
@@ -164,25 +159,25 @@ export function summarizeVpsSlots(hosts: readonly PlacedHost[], catalog: RegionC
     return { totalSlots, takenSlots, allocatableSlots, regions };
 }
 
-export function vpsOwnerEmails(hosts: readonly HostingAdminVpsHost[], accounts: readonly WebsiteAccountSummary[]) {
-    const lookup = emailLookup(accounts);
-    const emails = new Set<string>();
-    for (const host of hosts) {
-        for (const slot of occupiedSlots(host)) {
-            const email = slotOwnerEmail(slot, lookup);
-            if (email !== null) emails.add(email);
-        }
-    }
-    return [...emails].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
+export function vpsSlotOwnerId(slot: OccupiedSlot) {
+    return slot.ownerAccountId ?? slot.ownerDiscordUserId;
 }
 
-export function emailSuggestions(emails: readonly string[], query: string, limit = 8) {
+export function vpsOwnerIds(hosts: readonly HostingAdminVpsHost[]) {
+    const ownerIds = new Set<string>();
+    for (const host of hosts) {
+        for (const slot of occupiedSlots(host)) ownerIds.add(vpsSlotOwnerId(slot));
+    }
+    return [...ownerIds].sort((left, right) => left.localeCompare(right, undefined, { sensitivity: "base" }));
+}
+
+export function ownerIdSuggestions(ownerIds: readonly string[], query: string, limit = 8) {
     const needle = query.trim().toLowerCase();
     if (needle.length === 0 || limit <= 0) return [];
     const matches: string[] = [];
-    for (const email of emails) {
-        if (!email.toLowerCase().includes(needle)) continue;
-        matches.push(email);
+    for (const ownerId of ownerIds) {
+        if (!ownerId.toLowerCase().includes(needle)) continue;
+        matches.push(ownerId);
         if (matches.length === limit) break;
     }
     return matches;
@@ -190,20 +185,15 @@ export function emailSuggestions(emails: readonly string[], query: string, limit
 
 export function filterVpsHosts(
     hosts: readonly HostingAdminVpsHost[],
-    accounts: readonly WebsiteAccountSummary[],
     filters: VpsInventoryFilters,
     catalog: RegionCatalog = null,
 ) {
     const regions = new Set(filters.regions);
-    const needle = filters.email.trim().toLowerCase();
-    const lookup = needle.length > 0 ? emailLookup(accounts) : null;
+    const needle = filters.ownerId.trim().toLowerCase();
     return hosts.filter((host) => {
         if (regions.size > 0 && !hostMatchesRegions(host, regions, catalog)) return false;
         if (filters.emptySlotsOnly && !hostHasEmptySlot(host)) return false;
-        if (lookup !== null && !occupiedSlots(host).some((slot) => {
-            const email = slotOwnerEmail(slot, lookup);
-            return email !== null && email.toLowerCase().includes(needle);
-        })) return false;
+        if (needle && !occupiedSlots(host).some(slot => vpsSlotOwnerId(slot).toLowerCase().includes(needle))) return false;
         return true;
     });
 }
@@ -219,27 +209,6 @@ export function sortVpsHosts(hosts: readonly HostingAdminVpsHost[]) {
 export function paginateVpsHosts<T>(items: readonly T[], page: number, pageSize: number) {
     const safeSize = Number.isSafeInteger(pageSize) && pageSize > 0 ? pageSize : DEFAULT_VPS_PAGE_SIZE;
     return paginateItems(items, page, safeSize);
-}
-
-function emailLookup(accounts: readonly WebsiteAccountSummary[]): EmailLookup {
-    const byAccount = new Map<string, string>();
-    const byDiscord = new Map<string, string>();
-    for (const account of accounts) {
-        const email = account.email?.trim() ?? "";
-        if (email.length === 0) continue;
-        byAccount.set(account.accountId.toLowerCase(), email);
-        if (account.discordUserId) byDiscord.set(account.discordUserId, email);
-    }
-    return { byAccount, byDiscord };
-}
-
-function slotOwnerEmail(slot: OccupiedSlot, lookup: EmailLookup) {
-    const accountId = slotOwnerAccountId(slot);
-    if (accountId !== null) {
-        const email = lookup.byAccount.get(accountId.toLowerCase());
-        if (email !== undefined) return email;
-    }
-    return lookup.byDiscord.get(slot.ownerDiscordUserId) ?? null;
 }
 
 function occupiedSlots(host: HostingAdminVpsHost) {

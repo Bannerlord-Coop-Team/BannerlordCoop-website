@@ -2,6 +2,7 @@
 
 import { CircleHelp, LoaderCircle, Play, TriangleAlert } from "lucide-react";
 import { requestControlPlaneAdminWithRefresh } from "@/app/lib/control-plane/stale-request";
+import { continueBatchMaintenance } from "@/app/lib/control-plane/batch-maintenance";
 import { getSupabaseBrowserClient } from "@/app/lib/supabase/client";
 import {
     adminActionOptionValue,
@@ -66,6 +67,7 @@ export function ControlPlaneActionCard({
     const router = useRouter();
     const { cardRef, isTargeted } = useOperationTarget(operation);
     const [pending, setPending] = useState(false);
+    const batchResume = useRef<{ intent: string; requestId: string; cursor?: string } | null>(null);
     const [result, setResult] = useState<{
         ok: boolean;
         message: string;
@@ -100,12 +102,23 @@ export function ControlPlaneActionCard({
             const requestId = crypto.randomUUID();
             const { data: { session } } = await getSupabaseBrowserClient().auth.getSession();
             if (!session?.access_token) throw new Error("Authentication is required.");
-            const response = await requestControlPlaneAdminWithRefresh({
+            const options = {
                 accessToken: session.access_token,
                 requestId,
                 operation,
                 ...(fields.length === 0 ? {} : { input }),
-            }, () => router.refresh());
+            };
+            const send = (request: typeof options) => requestControlPlaneAdminWithRefresh(request, () => router.refresh());
+            let response: unknown;
+            if (operation === "batch-maintenance") {
+                const intent = JSON.stringify(input);
+                const batch = batchResume.current?.intent === intent ? batchResume.current : { intent, requestId };
+                batchResume.current = batch;
+                response = await continueBatchMaintenance(batch, input, page => send({ ...options, ...page }));
+                batchResume.current = null;
+            } else {
+                response = await send(options);
+            }
             setResult({ ok: true, ...presentControlPlaneOperationResult(operation, response) });
             // Every card refreshes the current view in place, so the result stays visible beside the updated state.
             router.refresh();

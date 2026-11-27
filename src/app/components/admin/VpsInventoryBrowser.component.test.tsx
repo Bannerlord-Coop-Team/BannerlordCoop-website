@@ -9,10 +9,9 @@ import {
     setRememberedVpsPageSize,
     regionSlotOutline,
     summarizeVpsSlots,
-    vpsOwnerEmails,
+    vpsOwnerIds,
     vpsRegionOptions,
 } from "@/app/lib/control-plane/vps-inventory-query";
-import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 import { VpsInventoryBrowser } from "./VpsInventoryBrowser";
 import { VpsSlotSummary } from "./VpsSlotSummary";
@@ -23,12 +22,6 @@ vi.mock("@/app/components/admin/RunnerOnboardingStatus", () => ({
 
 const ADA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const BEA = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-const CARA = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
-const accounts: WebsiteAccountSummary[] = [
-    { accountId: ADA, label: "ada@example.com", email: "ada@example.com", discordUserId: null },
-    { accountId: BEA, label: "bea@example.com", email: "Bea@Example.com", discordUserId: null },
-    { accountId: CARA, label: "cara@example.com", email: "cara@example.com", discordUserId: "123456789012345678" },
-];
 
 let container: HTMLDivElement;
 let root: Root;
@@ -121,7 +114,7 @@ describe("VPS inventory filters", () => {
         const warsaw = { ...host("warsaw", "us-east", 1, ADA), countryCode: "PL", locationId: "os-waw2", region: null };
         const gravelines = { ...host("gravelines", "", 2, BEA), countryCode: "FR", locationId: "gra", region: null };
         await act(async () => root.render(
-            <VpsInventoryBrowser hosts={[warsaw, gravelines]} accounts={accounts} ownerLabels={{}} runnerTargetSourceCommit={null} regionCatalog={hostingRegionCatalogPayload()} />,
+            <VpsInventoryBrowser hosts={[warsaw, gravelines]} runnerTargetSourceCommit={null} regionCatalog={hostingRegionCatalogPayload()} />,
         ));
         expect(regionBox("us-east")).toBeNull();
         expect(regionBox("france")).not.toBeNull();
@@ -130,7 +123,7 @@ describe("VPS inventory filters", () => {
         expect(visibleNames()).toEqual(["warsaw"]);
     });
 
-    it("filters by several regions, owner email, and empty slots", async () => {
+    it("filters by several regions, owner ID, and empty slots", async () => {
         const hosts = [
             host("ada-east", "us-east", 1, ADA),
             host("ada-france", "france", 0, ADA),
@@ -148,13 +141,13 @@ describe("VPS inventory filters", () => {
         await act(async () => regionBox("us-east")!.click());
         expect(visibleNames()).toEqual(["ada-east", "ada-france", "bea-france"]);
 
-        await typeEmail("bea");
-        expect(suggestionButtons().map((suggestion) => suggestion.textContent)).toEqual(["Bea@Example.com"]);
+        await typeOwnerId("BBB");
+        expect(suggestionButtons().map((suggestion) => suggestion.textContent)).toEqual([BEA]);
         await act(async () => suggestionButtons()[0]!.click());
-        expect(emailInput().value).toBe("Bea@Example.com");
+        expect(ownerIdInput().value).toBe(BEA);
         expect(visibleNames()).toEqual(["bea-france"]);
 
-        await typeEmail("");
+        await typeOwnerId("");
         await act(async () => emptySlotsBox().click());
         expect(visibleNames()).toEqual(["ada-east", "bea-france"]);
         expect(container.textContent).not.toContain("ada-france");
@@ -178,7 +171,7 @@ describe("VPS inventory filters", () => {
         expect(container.textContent).toContain("Showing 0 VPS");
         expect(container.textContent).not.toContain("No registered VPS hosts.");
 
-        await act(async () => root.render(<VpsInventoryBrowser hosts={[]} accounts={accounts} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        await act(async () => root.render(<VpsInventoryBrowser hosts={[]} runnerTargetSourceCommit={null} />));
         expect(container.textContent).toContain("No registered VPS hosts.");
         expect(container.textContent).not.toContain("Rows per page");
         expect(container.textContent).not.toContain("Only show VPS with empty slots");
@@ -192,9 +185,10 @@ describe("VPS inventory query", () => {
             host("cara-host", "poland", 0, null, "123456789012345678"),
             host("unknown-host", "poland", 1, null, "999999999999999999"),
         ];
-        expect(vpsOwnerEmails(hosts, accounts)).toEqual(["ada@example.com", "cara@example.com"]);
-        expect(filterVpsHosts(hosts, accounts, { regions: ["poland"], email: "CARA@", emptySlotsOnly: false }).map((item) => item.name)).toEqual(["cara-host"]);
-        expect(filterVpsHosts(hosts, accounts, { regions: [], email: "", emptySlotsOnly: true }).map((item) => item.name)).toEqual(["ada-host", "unknown-host"]);
+        expect(vpsOwnerIds(hosts)).toEqual(["123456789012345678", "999999999999999999", ADA.toUpperCase()]);
+        expect(filterVpsHosts(hosts, { regions: [], ownerId: "aaaa", emptySlotsOnly: false }).map(item => item.name)).toEqual(["ada-host"]);
+        expect(filterVpsHosts(hosts, { regions: ["poland"], ownerId: "1234567", emptySlotsOnly: false }).map((item) => item.name)).toEqual(["cara-host"]);
+        expect(filterVpsHosts(hosts, { regions: [], ownerId: "", emptySlotsOnly: true }).map((item) => item.name)).toEqual(["ada-host", "unknown-host"]);
         expect(vpsRegionOptions(hosts).map((option) => option.label)).toEqual(["US-West", "Poland"]);
         const summary = summarizeVpsSlots([
             ...hosts,
@@ -223,8 +217,8 @@ describe("VPS inventory query", () => {
         const warsaw = { ...host("warsaw", "us-east", 1, ADA), countryCode: "PL", locationId: "os-waw2", region: null };
         const gravelines = { ...host("gravelines", "", 0, null), countryCode: "FR", locationId: "gra", region: null };
         expect(vpsRegionOptions([warsaw, gravelines], catalog).map((option) => option.label)).toEqual(["France", "Poland"]);
-        expect(filterVpsHosts([warsaw], accounts, { regions: ["us-east"], email: "", emptySlotsOnly: false }, catalog)).toEqual([]);
-        expect(filterVpsHosts([warsaw], accounts, { regions: ["poland"], email: "", emptySlotsOnly: false }, catalog).map((item) => item.name)).toEqual(["warsaw"]);
+        expect(filterVpsHosts([warsaw], { regions: ["us-east"], ownerId: "", emptySlotsOnly: false }, catalog)).toEqual([]);
+        expect(filterVpsHosts([warsaw], { regions: ["poland"], ownerId: "", emptySlotsOnly: false }, catalog).map((item) => item.name)).toEqual(["warsaw"]);
         expect(summarizeVpsSlots([warsaw, gravelines], catalog)).toMatchObject({
             totalSlots: 6,
             takenSlots: 1,
@@ -249,7 +243,7 @@ describe("VPS inventory query", () => {
 
 function render(hosts: HostingAdminVpsHost[]) {
     return act(async () => root.render(
-        <VpsInventoryBrowser hosts={hosts} accounts={accounts} ownerLabels={{}} runnerTargetSourceCommit={null} />,
+        <VpsInventoryBrowser hosts={hosts} runnerTargetSourceCommit={null} />,
     ));
 }
 
@@ -305,9 +299,9 @@ function emptySlotsBox() {
     return input;
 }
 
-function emailInput() {
+function ownerIdInput() {
     const input = container.querySelector('input[type="search"]');
-    if (!(input instanceof HTMLInputElement)) throw new Error("Missing email filter");
+    if (!(input instanceof HTMLInputElement)) throw new Error("Missing owner ID filter");
     return input;
 }
 
@@ -315,8 +309,8 @@ function suggestionButtons() {
     return [...container.querySelectorAll<HTMLButtonElement>('[role="listbox"] button')];
 }
 
-async function typeEmail(value: string) {
-    const input = emailInput();
+async function typeOwnerId(value: string) {
+    const input = ownerIdInput();
     await act(async () => {
         Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
         input.dispatchEvent(new Event("input", { bubbles: true }));

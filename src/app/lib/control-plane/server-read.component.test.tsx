@@ -116,6 +116,16 @@ it("preserves correlated backend errors and refuses success data on failed HTTP 
     await expect(readControlPlaneAdmin(options)).rejects.toMatchObject({ code: "invalid_response" });
 });
 
+it("preserves the Retry-After delay on a direct VPS throttle response", async () => {
+    vi.stubGlobal("fetch", async () => Response.json({
+        version: 1, requestId: REQUEST_ID, ok: false,
+        error: { code: "rate_limited", message: "Try again shortly.", retryable: true },
+    }, { status: 429, headers: { "Retry-After": "30" } }));
+    await expect(readControlPlaneAdmin({ ...options, operation: "vps-hosts" })).rejects.toMatchObject({
+        code: "rate_limited", retryable: true, requestId: REQUEST_ID, retryAfterMilliseconds: 30_000,
+    });
+});
+
 it("bounds streamed bytes and chunk count, validates UTF8, and cancels rejected bodies", async () => {
     for (const chunks of [
         [new Uint8Array(CONTROL_PLANE_ADMIN_MAXIMUM_RESPONSE_BYTES), new Uint8Array(1)],

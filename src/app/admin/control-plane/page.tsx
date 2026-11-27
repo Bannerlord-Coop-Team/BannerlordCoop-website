@@ -21,6 +21,7 @@ import { getLoginRedirect } from "@/app/lib/auth/redirect";
 import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
 import { serverProgressView } from "@/app/lib/control-plane/server-progress";
 import { readControlPlaneAdmin } from "@/app/lib/control-plane/server-read";
+import { readRegisteredVpsInventory } from "@/app/lib/control-plane/registered-vps-inventory";
 import { readHostingRegionCatalog } from "@/app/lib/control-plane/hosting-region-catalog";
 import { recordReleaseFirstObservations } from "@/app/lib/control-plane/release-observations";
 import { ADMIN_READ_PAGE_LIMIT, readBoundedHostingPage, type BoundedHostingPage } from "@/app/lib/control-plane/pagination";
@@ -214,7 +215,7 @@ async function ControlPlaneViewContent({
     let accounts: WebsiteAccountSummary[] = [];
     let error = "";
     try {
-        const needsAccounts = view === "vps" || view === "servers" || view === "operations" || view === "relocate";
+        const needsAccounts = view === "servers" || view === "operations" || view === "relocate";
         const [viewResult, usersResult] = await Promise.allSettled([
             read.then(result => {
                 if (result.status === "rejected") throw result.reason;
@@ -250,7 +251,7 @@ async function ControlPlaneViewContent({
                 </div>
             )}
             {!error && view === "overview" && <OverviewView overview={data as OverviewSummary} />}
-            {!error && view === "vps" && <VpsView {...data as VpsViewData} accounts={accounts} />}
+            {!error && view === "vps" && <VpsView {...data as VpsViewData} />}
             {!error && view === "servers" && <ServersView page={data as HostingPage<ManagedServer>} query={query} accounts={accounts} />}
             {!error && view === "server" && <ControlPlaneServerView key={serverId} initial={serverProgressView(data as ServerDashboardResult)} accounts={accounts} />}
             {!error && view === "jobs" && <JobsView page={data as HostingPage<HostingJob>} state={jobState} action={jobAction} unacknowledgedOnly={unacknowledgedOnly} cursor={jobCursor} serverId={serverId} />}
@@ -303,7 +304,9 @@ async function loadView(token: string, view: View, query: string, serverId: stri
         }
         case "vps": {
             const [inventory, hostingRegions] = await Promise.all([
-                readRegisteredVpsHosts(token, signal, identity),
+                readRegisteredVpsInventory((input, pageSignal) => readControlPlaneAdmin<HostingAdminVpsInventory>({
+                    accessToken: token, signal: pageSignal, ...identity, operation: "vps-hosts", input,
+                }), false, signal),
                 loadHostingRegionCatalog(token, signal, identity),
             ]);
             // Host labels match the stored placements; an unreadable catalog leaves the hosts listed without regions
@@ -692,7 +695,7 @@ function OperationsView({ data, accounts }: { data: OperationsData; accounts: We
         { group: "Jobs", operation: "retry-job", title: "Retry job", description: "Move an eligible failed/retry-wait job back to the durable queue.", fields: [{ name: "jobId", label: "Job", kind: "job", required: true, options: jobOptions }, reasonField] },
         { group: "Jobs", operation: "cancel-job", title: "Cancel job", description: "Request cancellation at the next safe checkpoint.", destructive: true, fields: [{ name: "jobId", label: "Job", kind: "job", required: true, options: jobOptions }, reasonField] },
         { group: "Jobs", operation: "diagnostics", title: "Open diagnostics result", description: "Read the sanitized result of a completed diagnostics job.", fields: [{ name: "jobId", label: "Diagnostics job UUID", required: true }] },
-        { group: "Maintenance", operation: "batch-maintenance", title: "Batch maintenance", description: "Queue updates for a bounded fleet snapshot, optionally limited to one channel.", fields: [{ name: "releaseChannel", label: "Channel", kind: "select", valueType: "nullable", options: ["stable", "nightly"].map((value) => ({ label: releaseChannelLabel(value), value })) }, reasonField] },
+        { group: "Maintenance", operation: "batch-maintenance", title: "Batch maintenance", description: "Queue eligible server updates across the fleet, optionally limited to one channel.", fields: [{ name: "releaseChannel", label: "Channel", kind: "select", valueType: "nullable", options: ["stable", "nightly"].map((value) => ({ label: releaseChannelLabel(value), value })) }, reasonField] },
     ];
     const groups = [...new Set(cards.map((card) => card.group))];
     const serverOlder = overview.servers.nextCursor ? `/admin/control-plane?view=servers&cursor=${encodeURIComponent(overview.servers.nextCursor)}` : null;

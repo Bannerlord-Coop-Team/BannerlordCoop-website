@@ -1,10 +1,17 @@
 import { renderToReadableStream } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ session: vi.fn(), auth: vi.fn(), request: vi.fn(), accounts: vi.fn(), account: vi.fn(), tables: vi.fn(), observations: vi.fn() }));
+const mocks = vi.hoisted(() => ({ session: vi.fn(), auth: vi.fn(), request: vi.fn(), accounts: vi.fn(), account: vi.fn(), tables: vi.fn(), vps: vi.fn(), observations: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerReadSession: mocks.session, getSupabaseServerViewer: mocks.auth }));
 vi.mock("@/app/lib/supabase/users", () => ({ listWebsiteAccounts: mocks.accounts, getWebsiteAccount: mocks.account }));
 vi.mock("@/app/lib/control-plane/server-read", () => ({ readControlPlaneAdmin: mocks.request }));
 vi.mock("@/app/lib/control-plane/release-observations", () => ({ recordReleaseFirstObservations: mocks.observations }));
+vi.mock("@/app/components/admin/VpsView", async importOriginal => {
+    const { VpsView } = await importOriginal<typeof import("@/app/components/admin/VpsView")>();
+    return { VpsView: (props: Parameters<typeof VpsView>[0]) => {
+        mocks.vps(props);
+        return <VpsView {...props} />;
+    } };
+});
 vi.mock("@/app/components/admin/RefreshReleaseCatalog", () => ({ RefreshReleaseCatalog: () => null }));
 vi.mock("next/navigation", async importOriginal => ({
     ...await importOriginal<typeof import("next/navigation")>(), useRouter: () => ({ refresh: vi.fn() }),
@@ -24,6 +31,7 @@ vi.mock("@/app/components/admin/ControlPlaneReadTables", async importOriginal =>
 });
 import ControlPlaneAdminPage from "./page";
 import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
+import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
 import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 
 beforeEach(() => {
@@ -198,14 +206,14 @@ it("keeps Operations usable when the stored hosting-region catalog cannot be rea
 it("reads only the base inventory and region catalog for the VPS view", async () => {
     mocks.accounts.mockResolvedValue({ users: [], truncated: false });
     mocks.request.mockImplementation(async request => {
-        if (request.operation === "vps-hosts") return { liveDataIncluded: false, controlPlaneHost: null, hosts: [], availableHosts: [] };
+        if (request.operation === "vps-hosts") return { liveDataIncluded: false, controlPlaneHost: null, hosts: [], availableHosts: [], nextCursor: null };
         if (request.operation === "hosting-regions") return { regions: hostingRegionCatalogPayload().map((entry) => ({ ...entry, available: false })) };
         throw new Error("Unexpected read");
     });
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "vps" }) }));
     await stream.allReady;
     expect(mocks.request.mock.calls.map(([request]) => [request.operation, request.input])).toEqual([
-        ["vps-hosts", { includeLiveData: false }], ["hosting-regions", {}],
+        ["vps-hosts", { includeLiveData: false, includeProviderInventory: false, storedAfter: null }], ["hosting-regions", {}],
     ]);
 });
 
@@ -268,6 +276,44 @@ it.each(["revoked", "member", "mismatched"])("aborts and does not render early d
     await expect(ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "servers" }) })).rejects.toThrow();
     expect(mocks.request.mock.calls[0][0].signal.aborted).toBe(true);
     expect(mocks.accounts).not.toHaveBeenCalled();
+});
+
+it("passes the paged VPS inventory to the client without customer contact data", async () => {
+    const options = { operation: "vps-hosts", accessToken: "test-admin-token", signal: expect.any(AbortSignal),
+        expectedUserId: "admin", requireOrdinarySession: true, onAuthenticated: expect.any(Function) };
+    const host = (name: string): HostingAdminVpsHost => ({
+        name, provider: "ovhcloud-vps", locationId: "us-east-va", countryCode: "US", region: null,
+        occupiedSlots: [], totalSlots: 1, availableServers: 1, runningServers: 0,
+        resources: null, cost: null, expirationDate: null, autoRenew: null, providerCheckedAt: null,
+        runnerOnboarding: null, runnerUpdate: null,
+    });
+    mocks.request.mockImplementation(async request => {
+        request.onAuthenticated();
+        if (request.operation === "hosting-regions") return { revision: 1, regions: hostingRegionCatalogPayload() };
+        const cursor = request.input.storedAfter;
+        if (cursor !== null && cursor !== "stored-continuation") throw new Error("Unexpected VPS cursor");
+        return { liveDataIncluded: false, availableHosts: [], controlPlaneHost: null,
+            hosts: [host(cursor === null ? "first-vps" : "last-vps")],
+            nextCursor: cursor === null ? "stored-continuation" : null };
+    });
+    const email = "customer@example.test";
+    mocks.accounts.mockResolvedValue({ users: [{
+        accountId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", email, label: email, discordUserId: null,
+    }], truncated: false });
+    const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "vps" }) }));
+    await stream.allReady;
+    const html = await new Response(stream).text();
+    expect(html).toContain("first-vps");
+    expect(html).toContain("last-vps");
+    expect(mocks.vps).toHaveBeenCalledTimes(1);
+    const [clientProps] = mocks.vps.mock.calls[0];
+    expect(clientProps).not.toHaveProperty("accounts");
+    expect(JSON.stringify(clientProps)).not.toContain(email);
+    expect(mocks.accounts).not.toHaveBeenCalled();
+    expect(mocks.request.mock.calls.filter(([request]) => request.operation === "vps-hosts")).toEqual(
+        [null, "stored-continuation"].map(storedAfter => [{ ...options,
+            input: { includeLiveData: false, includeProviderInventory: false, storedAfter },
+        }]));
 });
 
 it("never renders the VPS view, where the slot decommission controls live, for a member", async () => {
