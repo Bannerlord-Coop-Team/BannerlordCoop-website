@@ -107,7 +107,7 @@ function retryAfterDelay(header: string | null | undefined): number | undefined 
     if (/^[0-9]+$/u.test(value)) return Number(value) * 1_000;
     const now = Date.now();
     const timestamp = parseHttpDate(value, now);
-    return timestamp === undefined ? undefined : Math.max(0, timestamp - now);
+    return timestamp !== undefined && timestamp > now ? timestamp - now : undefined;
 }
 
 function parseHttpDate(value: string, now: number): number | undefined {

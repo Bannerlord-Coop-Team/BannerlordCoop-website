@@ -67,6 +67,9 @@ test("resumes a fleet scan across consecutive control-plane quota windows", asyn
     assert.ok(Date.now() >= 120_000);
 });
 
+const throttleResponse = JSON.stringify({ version: 1, requestId: "throttle", ok: false,
+    error: { code: "rate_limited", message: "Try again shortly.", retryable: true } });
+
 const retryCases = [
     { header: "30", delay: 30_000 },
     { header: "Fri, 27 Nov 2026 12:00:30 GMT", delay: 30_000 },
@@ -76,6 +79,9 @@ const retryCases = [
     { header: "Friday, 01-Jan-00 00:00:10 GMT", delay: 30_000, now: "2099-12-31T23:59:40Z" },
     { header: "Sat, 31 Dec 2016 23:59:60 GMT", delay: 30_000, now: "2016-12-31T23:59:30Z" },
     { header: "3600", delay: 60_000 },
+    { header: "0", delay: 1_000 },
+    { header: "Fri, 27 Nov 2026 12:00:00 GMT", delay: 1_000 },
+    { header: "Fri, 27 Nov 2026 12:00:01 GMT", delay: 1_000, now: "2026-11-27T12:00:00.999Z" },
     { header: "-30", delay: 1_000 },
     { header: "January 1", delay: 1_000 },
     { header: "Fri, 31 Nov 2026 12:00:30 GMT", delay: 1_000 },
@@ -93,14 +99,12 @@ for (const { header, delay, now = "2026-11-27T12:00:00Z" } of retryCases) {
             else process.env.TZ = timezone;
         });
         context.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.parse(now) });
-        const throttle = JSON.stringify({ version: 1, requestId: "throttle", ok: false,
-            error: { code: "rate_limited", message: "Try again shortly.", retryable: true } });
         const cursors: (string | null | undefined)[] = [];
         const result = readRegisteredVpsInventory(async ({ storedAfter }) => {
             cursors.push(storedAfter);
             if (storedAfter === null) return page(["first"], "continue");
             if (cursors.length === 2) return decodeControlPlaneAdminResponse<HostingAdminVpsInventory>(
-                throttle, "throttle", false, header);
+                throttleResponse, "throttle", false, header);
             return page(["last"], null);
         }, false);
         await new Promise<void>(resolve => setImmediate(resolve));
@@ -113,6 +117,31 @@ for (const { header, delay, now = "2026-11-27T12:00:00Z" } of retryCases) {
         assert.deepEqual((await result).hosts.map(host => host.name), ["first", "last"]);
     });
 }
+
+test("backs off on every persistent throttle with an ancient Retry-After date", async ({ mock }) => {
+    const started = Date.parse("2026-11-27T12:00:00Z");
+    mock.timers.enable({ apis: ["Date", "setTimeout"], now: started });
+    const reads: number[] = [];
+    const rejected = assert.rejects(readRegisteredVpsInventory(async () => {
+        reads.push(Date.now() - started);
+        return decodeControlPlaneAdminResponse<HostingAdminVpsInventory>(
+            throttleResponse, "throttle", false, "Mon, 01 Jan 0001 00:00:00 GMT");
+    }, false), { code: "rate_limited" });
+
+    const delays = [1_000, 2_000, 4_000, 8_000, 10_000, 10_000, 10_000, 10_000, 10_000, 10_000];
+    let elapsed = 0;
+    await new Promise<void>(resolve => setImmediate(resolve));
+    for (const [retry, delay] of delays.entries()) {
+        mock.timers.tick(delay - 1);
+        await new Promise<void>(resolve => setImmediate(resolve));
+        assert.equal(reads.length, retry + 1);
+        mock.timers.tick(1);
+        elapsed += delay;
+        await new Promise<void>(resolve => setImmediate(resolve));
+        assert.equal(reads[retry + 1], elapsed);
+    }
+    await rejected;
+});
 
 test("stops after using the wait budget for one throttled cursor", async ({ mock }) => {
     mock.timers.enable({ apis: ["setTimeout"] });
