@@ -95,13 +95,54 @@ export function decodeControlPlaneAdminResponse<T>(text: string, requestId: stri
     return parsed.result as T;
 }
 
+const IMF_FIXDATE = /^([A-Z][a-z]{2}), (\d{2}) ([A-Z][a-z]{2}) (\d{4}) (\d{2}:\d{2}:\d{2}) GMT$/u;
+const RFC850_DATE = /^([A-Z][a-z]+), (\d{2})-([A-Z][a-z]{2})-(\d{2}) (\d{2}:\d{2}:\d{2}) GMT$/u;
+const ASCTIME_DATE = /^([A-Z][a-z]{2}) ([A-Z][a-z]{2}) (\d{2}| \d) (\d{2}:\d{2}:\d{2}) (\d{4})$/u;
+const HTTP_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const HTTP_WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
 function retryAfterDelay(header: string | null | undefined): number | undefined {
     const value = header?.trim();
     if (!value) return undefined;
     if (/^[0-9]+$/u.test(value)) return Number(value) * 1_000;
-    // HTTP dates start with a weekday. Reject numeric lookalikes that Date.parse would accept.
-    const timestamp = /^[a-z]{3}/iu.test(value) ? Date.parse(value) : NaN;
-    return Number.isFinite(timestamp) ? Math.max(0, timestamp - Date.now()) : undefined;
+    const now = Date.now();
+    const timestamp = parseHttpDate(value, now);
+    return timestamp === undefined ? undefined : Math.max(0, timestamp - now);
+}
+
+function parseHttpDate(value: string, now: number): number | undefined {
+    const gmt = IMF_FIXDATE.exec(value) ?? RFC850_DATE.exec(value);
+    let parts = gmt?.slice(1);
+    if (parts === undefined) {
+        const asctime = ASCTIME_DATE.exec(value);
+        if (asctime === null) return undefined;
+        const [, weekday, month, day, time, year] = asctime;
+        parts = [weekday, day, month, year, time];
+    }
+
+    const [weekday, dayText, monthText, yearText, time] = parts;
+    const month = HTTP_MONTHS.indexOf(monthText);
+    const day = Number(dayText);
+    const [hour, minute, second] = time.split(":").map(Number);
+    const leapSecond = second === 60 && hour === 23 && minute === 59;
+    if (month === -1 || hour > 23 || minute > 59 || (second > 59 && !leapSecond)) return undefined;
+
+    const shortYear = yearText.length === 2;
+    const futureLimit = new Date(now);
+    // RFC 850 uses the most recent matching year at or before this boundary.
+    futureLimit.setUTCFullYear(futureLimit.getUTCFullYear() + 50);
+    const century = shortYear ? Math.floor(futureLimit.getUTCFullYear() / 100) * 100 : 0;
+    const year = century + Number(yearText);
+    const date = new Date(0);
+    date.setUTCFullYear(year, month, day);
+    date.setUTCHours(hour, minute, Math.min(second, 59));
+    const leapOffset = leapSecond ? 1_000 : 0;
+    if (shortYear && date.getTime() + leapOffset > futureLimit.getTime()) date.setUTCFullYear(year - 100, month, day);
+
+    const dayName = HTTP_WEEKDAYS[date.getUTCDay()];
+    if (date.getUTCMonth() !== month || date.getUTCDate() !== day
+        || weekday !== (shortYear ? dayName : dayName.slice(0, 3))) return undefined;
+    return date.getTime() + leapOffset;
 }
 
 function controlPlaneAdminEndpoint() {

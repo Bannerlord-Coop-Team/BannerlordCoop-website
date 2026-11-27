@@ -70,13 +70,29 @@ test("resumes a fleet scan across consecutive control-plane quota windows", asyn
 const retryCases = [
     { header: "30", delay: 30_000 },
     { header: "Fri, 27 Nov 2026 12:00:30 GMT", delay: 30_000 },
+    { header: "Friday, 27-Nov-26 12:00:30 GMT", delay: 30_000 },
+    { header: "Fri Nov 27 12:00:30 2026", delay: 30_000 },
+    { header: "Sun Nov  1 12:00:30 2026", delay: 30_000, now: "2026-11-01T12:00:00Z" },
+    { header: "Friday, 01-Jan-00 00:00:10 GMT", delay: 30_000, now: "2099-12-31T23:59:40Z" },
+    { header: "Sat, 31 Dec 2016 23:59:60 GMT", delay: 30_000, now: "2016-12-31T23:59:30Z" },
     { header: "3600", delay: 60_000 },
     { header: "-30", delay: 1_000 },
+    { header: "January 1", delay: 1_000 },
+    { header: "Fri, 31 Nov 2026 12:00:30 GMT", delay: 1_000 },
+    { header: "Sat, 27 Nov 2026 12:00:30 GMT", delay: 1_000 },
+    { header: "Fri Nov 27 12:60:30 2026", delay: 1_000 },
+    { header: "Fri, 27 Nov 2026 12:00:30 CST", delay: 1_000 },
 ];
 
-for (const { header, delay } of retryCases) {
-    test("resumes the same VPS cursor at the bounded Retry-After delay for " + header, async ({ mock }) => {
-        mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.parse("2026-11-27T12:00:00Z") });
+for (const { header, delay, now = "2026-11-27T12:00:00Z" } of retryCases) {
+    test("resumes the same VPS cursor at the bounded Retry-After delay for " + header, async context => {
+        const timezone = process.env.TZ;
+        process.env.TZ = "America/Chicago";
+        context.after(() => {
+            if (timezone === undefined) delete process.env.TZ;
+            else process.env.TZ = timezone;
+        });
+        context.mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.parse(now) });
         const throttle = JSON.stringify({ version: 1, requestId: "throttle", ok: false,
             error: { code: "rate_limited", message: "Try again shortly.", retryable: true } });
         const cursors: (string | null | undefined)[] = [];
@@ -88,10 +104,10 @@ for (const { header, delay } of retryCases) {
             return page(["last"], null);
         }, false);
         await new Promise<void>(resolve => setImmediate(resolve));
-        mock.timers.tick(delay - 1);
+        context.mock.timers.tick(delay - 1);
         await new Promise<void>(resolve => setImmediate(resolve));
         assert.deepEqual(cursors, [null, "continue"]);
-        mock.timers.tick(1);
+        context.mock.timers.tick(1);
         await new Promise<void>(resolve => setImmediate(resolve));
         assert.deepEqual(cursors, [null, "continue", "continue"]);
         assert.deepEqual((await result).hosts.map(host => host.name), ["first", "last"]);
