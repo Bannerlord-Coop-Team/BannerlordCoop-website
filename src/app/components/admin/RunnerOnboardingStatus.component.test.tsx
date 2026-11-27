@@ -55,6 +55,30 @@ it("preserves the stopped-server gate in compact mode", async () => {
     expect(actionButton("Stop servers first").disabled).toBe(true);
 });
 
+it.each([
+    [true, "runner_isolated_rolled_back", "settled"],
+    [false, "runner_isolated_applied_recovered", "settled"],
+    [true, "runner_update_not_applied", "settled"],
+    [false, "runner_isolated_applied_recovery_incomplete", "failed"],
+    [true, "runner_update_native_owner_template_incompatible", "failed"],
+] as const)("shows the proved update outcome in the badge (compact=%s, %s)", async (compact, errorCode, badge) => {
+    await act(async () => root.render(<RunnerOnboardingStatus
+        compact={compact}
+        provider="contabo-vps"
+        serviceName="host-a"
+        runningServers={1}
+        targetSourceCommit="new-source"
+        onboarding={{ state: "succeeded", progressStage: "runner-active", errorCode: null, sourceCommit: "current-source", updatedAt: "2026-09-10T18:00:00.000Z" }}
+        update={{ state: "failed", correlationId: "update-a", progressStage: "failed", errorCode,
+            targetSourceCommit: "new-source", priorSourceCommit: "current-source", updatedAt: "2026-09-10T18:00:00.000Z" }}
+    />));
+    const updateBadge = [...container.querySelectorAll("span[title]")].find(element => element.textContent === badge);
+    expect(updateBadge).toBeDefined();
+    expect(container.textContent).toContain(errorCode);
+    expect(container.querySelector(".text-red-200") !== null).toBe(badge === "failed");
+    expect(actionButton("Stop servers first").disabled).toBe(true);
+});
+
 async function renderRunner({ targetSourceCommit, runningServers }: { targetSourceCommit: string; runningServers: number }) {
     await act(async () => root.render(<RunnerOnboardingStatus
         compact

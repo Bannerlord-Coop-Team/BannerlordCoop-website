@@ -39,6 +39,7 @@ export function RunnerOnboardingStatus({
     const [requestError, setRequestError] = useState("");
     const onboardingPending = onboarding !== null && isPending(onboarding.state);
     const updatePending = update !== null && isPending(update.state);
+    const settlement = runnerUpdateSettlement(update);
     const pending = onboardingPending || updatePending;
     const current = onboarding?.state === "succeeded"
         && targetSourceCommit !== null
@@ -142,20 +143,20 @@ export function RunnerOnboardingStatus({
                 <div className="mt-3 border-t border-white/10 pt-3">
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[0.6rem] uppercase tracking-[0.08em] text-foreground-dim">Latest update</span>
-                        <RunnerStateBadge state={update.state} explanation={runnerUpdateStateExplanation(update.state)} />
+                        <RunnerStateBadge state={settlement === null ? update.state : "settled"} explanation={settlement ?? runnerUpdateStateExplanation(update.state)} />
                     </div>
                     <p className="mt-2 max-w-56 text-[0.65rem] text-foreground-muted">{humanize(update.progressStage)}</p>
                     <p className="mt-1 font-mono text-[0.58rem] text-foreground-dim" title={`${update.priorSourceCommit} → ${update.targetSourceCommit}`}>
                         {update.priorSourceCommit.slice(0, 8)} → {update.targetSourceCommit.slice(0, 8)}
                     </p>
-                    {update.errorCode && <p className="mt-1 max-w-56 font-mono text-[0.6rem] text-red-200">{update.errorCode}</p>}
+                    {update.errorCode && <p className={`mt-1 max-w-56 font-mono text-[0.6rem] ${settlement === null ? "text-red-200" : "text-foreground-muted"}`}>{update.errorCode}</p>}
                 </div>
             )}
             {compact && update && update.state !== "succeeded" && (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                     <span className="text-[0.58rem] uppercase tracking-[0.08em] text-foreground-dim">Update</span>
-                    <RunnerStateBadge state={update.state} explanation={runnerUpdateStateExplanation(update.state)} />
-                    {update.errorCode && <span className="font-mono text-[0.58rem] text-red-200">{update.errorCode}</span>}
+                    <RunnerStateBadge state={settlement === null ? update.state : "settled"} explanation={settlement ?? runnerUpdateStateExplanation(update.state)} />
+                    {update.errorCode && <span className={`font-mono text-[0.58rem] ${settlement === null ? "text-red-200" : "text-foreground-muted"}`}>{update.errorCode}</span>}
                 </div>
             )}
             {!compact && (onboardingPending || updatePending) && <p className="mt-2 text-[0.58rem] uppercase tracking-[0.08em] text-gold/70">Refreshing progress automatically</p>}
@@ -192,7 +193,7 @@ export function RunnerOnboardingStatus({
     );
 }
 
-function RunnerStateBadge({ state, explanation }: { state: RunnerUpdate["state"]; explanation: string }) {
+function RunnerStateBadge({ state, explanation }: { state: RunnerUpdate["state"] | "settled"; explanation: string }) {
     const good = state === "succeeded";
     const bad = state === "failed";
     return (
@@ -229,6 +230,16 @@ function runnerUpdateStateExplanation(state: RunnerUpdate["state"]) {
         case "running": return "Every slot is being updated transactionally with stopped-state continuity checks.";
         case "retry-wait": return "A retryable update boundary failed; the durable workflow will resume after backoff.";
         case "succeeded": return "Every isolated slot passed revision, identity, build, save, and capability verification.";
-        case "failed": return "The update stopped safely after a terminal error; the retained prior revision remains the rollback target.";
+        case "failed": return "The update did not complete. Inspect the error code before retrying.";
+    }
+}
+
+function runnerUpdateSettlement(update: RunnerUpdate | null): string | null {
+    if (update?.state !== "failed") return null;
+    switch (update.errorCode) {
+        case "runner_isolated_rolled_back": return "The rollback was verified and the prior runner revision is active.";
+        case "runner_isolated_applied_recovered": return "Recovery verified the applied runner revision and completed the update.";
+        case "runner_update_not_applied": return "The attempt ended before the runner was switched.";
+        default: return null;
     }
 }
