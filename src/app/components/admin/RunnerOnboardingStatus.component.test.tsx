@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { RunnerOnboardingStatus } from "./RunnerOnboardingStatus";
@@ -10,6 +10,8 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: mocks.refresh }
 
 let container: HTMLDivElement;
 let root: Root;
+type RunnerProps = ComponentProps<typeof RunnerOnboardingStatus>;
+type RunnerUpdate = NonNullable<RunnerProps["update"]>;
 
 beforeEach(() => {
     vi.resetAllMocks();
@@ -55,15 +57,55 @@ it("preserves the stopped-server gate in compact mode", async () => {
     expect(actionButton("Stop servers first").disabled).toBe(true);
 });
 
-async function renderRunner({ targetSourceCommit, runningServers }: { targetSourceCommit: string; runningServers: number }) {
+it.each([
+    [true, "failed", "runner_isolated_rolled_back", "settled"],
+    [false, "failed", "runner_isolated_applied_recovered", "settled"],
+    [true, "failed", "runner_update_not_applied", "settled"],
+    [false, "failed", "runner_isolated_applied_recovery_incomplete", "failed"],
+    [true, "failed", "runner_update_native_owner_template_incompatible", "failed"],
+    [true, "settled", "runner_isolated_rolled_back", "unknown"],
+] as const)("shows the outcome in the badge (compact=%s, wire state=%s, %s)", async (compact, state, errorCode, badge) => {
+    await renderRunner({ compact, targetSourceCommit: "new-source", runningServers: 1,
+        update: { state: state as RunnerUpdate["state"], progressStage: "failed", errorCode,
+            targetSourceCommit: "new-source", priorSourceCommit: "current-source", updatedAt: "2026-09-10T18:00:00.000Z" } });
+    const updateBadge = [...container.querySelectorAll("span[title]")].find(element => element.textContent === badge);
+    expect(updateBadge).toBeDefined();
+    expect(container.textContent).toContain(errorCode);
+    expect(container.querySelector(".text-red-200") !== null).toBe(badge === "failed");
+    if (!compact) expect(container.textContent?.includes("Failed")).toBe(badge === "failed");
+    expect(actionButton("Stop servers first").disabled).toBe(true);
+});
+
+it.each([
+    ["queued", "queued", "waiting for the fleet worker", true],
+    ["running", "running", "being updated transactionally", true],
+    ["retry-wait", "retry-wait", "resume after backoff", true],
+    ["succeeded", "succeeded", "Every isolated slot passed", false],
+    ["failed", "failed", "Inspect the error code", false],
+    ["settled", "unknown", "unrecognized runner update state", false],
+    ["future-state", "unknown", "unrecognized runner update state", false],
+    ["constructor", "unknown", "unrecognized runner update state", false],
+] as const)("classifies wire state %s and preserves the update button gate", async (state, label, explanation, pending) => {
+    await renderRunner({ compact: false, targetSourceCommit: "new-source", runningServers: 0,
+        update: { state: state as RunnerUpdate["state"], progressStage: "switching-runner",
+            errorCode: state === "failed" ? "runner_isolated_applied_recovery_incomplete" : "runner_isolated_rolled_back",
+            targetSourceCommit: "new-source", priorSourceCommit: "current-source", updatedAt: "2026-09-10T18:00:00.000Z" } });
+    const badge = [...container.querySelectorAll("span[title]")].find(element => element.getAttribute("title")?.includes(explanation));
+    expect(badge?.textContent).toBe(label);
+    expect(container.textContent?.includes("Switching Runner")).toBe(label !== "unknown");
+    expect(actionButton(pending ? "Updating" : "Update runner").disabled).toBe(pending);
+});
+
+async function renderRunner({ targetSourceCommit, runningServers, compact = true, update = null }:
+    Pick<RunnerProps, "targetSourceCommit" | "runningServers"> & Partial<Pick<RunnerProps, "compact" | "update">>) {
     await act(async () => root.render(<RunnerOnboardingStatus
-        compact
+        compact={compact}
         provider="contabo-vps"
         serviceName="host-a"
         runningServers={runningServers}
         targetSourceCommit={targetSourceCommit}
         onboarding={{ state: "succeeded", progressStage: "runner-active", errorCode: null, sourceCommit: "current-source", updatedAt: "2026-09-10T18:00:00.000Z" }}
-        update={null}
+        update={update}
     />));
 }
 

@@ -7,6 +7,7 @@ import { VpsSlotDecommission } from "@/app/components/admin/VpsSlotDecommission"
 import { hostPlacementLabel } from "@/app/lib/control-plane/presentation";
 import { vpsSlotOwnerId } from "@/app/lib/control-plane/vps-inventory-query";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
+import { classifyRunnerUpdate } from "@/app/lib/control-plane/runner-update-status";
 import { readSlotStorage } from "@/app/lib/control-plane/slot-storage";
 import { vpsProviderLabel } from "@/app/lib/control-plane/vps-providers";
 import type {
@@ -238,6 +239,7 @@ function HostDetailFooter({ host, runnerTargetSourceCommit }: { host: HostingAdm
     const resources = host.resources;
     const runnerSource = host.runnerOnboarding?.sourceCommit;
     const latestUpdate = host.runnerUpdate;
+    const updateStatus = classifyRunnerUpdate(latestUpdate);
     return <div className="flex flex-wrap gap-x-5 gap-y-1 [overflow-wrap:anywhere] [&>span]:min-w-0 border-t border-white/10 px-6 py-2.5 text-[0.68rem] text-foreground-muted">
         {resources && <>
             <span>Disk {formatStorageBytes(resources.diskUsedBytes)} used / {formatStorageBytes(resources.diskFreeBytes)} free</span>
@@ -248,7 +250,12 @@ function HostDetailFooter({ host, runnerTargetSourceCommit }: { host: HostingAdm
         <span>Auto-renew {host.autoRenew === true ? "enabled" : host.autoRenew === false ? "disabled" : "unknown"}</span>
         {runnerSource && <span title={runnerSource}>Runner {runnerSource.slice(0, 12)}</span>}
         {runnerTargetSourceCommit && <span title={runnerTargetSourceCommit}>Target {runnerTargetSourceCommit.slice(0, 12)}</span>}
-        {latestUpdate && <span title={`${latestUpdate.priorSourceCommit} → ${latestUpdate.targetSourceCommit}`}>Latest update {latestUpdate.state} · {humanize(latestUpdate.progressStage)} · {latestUpdate.priorSourceCommit.slice(0, 8)} → {latestUpdate.targetSourceCommit.slice(0, 8)}{latestUpdate.errorCode ? ` · ${latestUpdate.errorCode}` : ""}</span>}
+        {latestUpdate && updateStatus && <span title={`${updateStatus.explanation} ${latestUpdate.priorSourceCommit} → ${latestUpdate.targetSourceCommit}`}>
+            Latest update {updateStatus.label}
+            {updateStatus.progressStage !== null && ` · ${humanize(updateStatus.progressStage)}`}
+            {" · "}{latestUpdate.priorSourceCommit.slice(0, 8)} → {latestUpdate.targetSourceCommit.slice(0, 8)}
+            {latestUpdate.errorCode ? ` · ${latestUpdate.errorCode}` : ""}
+        </span>}
     </div>;
 }
 

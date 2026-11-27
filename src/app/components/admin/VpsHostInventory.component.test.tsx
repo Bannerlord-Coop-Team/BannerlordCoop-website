@@ -167,6 +167,22 @@ describe("compact VPS host inventory", () => {
         expect(container.querySelector('[role="region"]')).toBeNull();
     });
 
+    it.each([
+        ["failed", "runner_isolated_rolled_back", "settled"],
+        ["failed", "runner_isolated_applied_recovery_incomplete", "failed"],
+        ["settled", null, "unknown"],
+    ] as const)("shows wire state %s with %s as %s in expanded runner details", async (wireState, errorCode, label) => {
+        const row = host("host-a", resources(70, 30), 0, true);
+        row.runnerUpdate = { ...row.runnerUpdate!, state: wireState as NonNullable<typeof row.runnerUpdate>["state"], progressStage: "failed", errorCode };
+        await act(async () => root.render(<VpsHostInventory hosts={[row]} runnerTargetSourceCommit={null} />));
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-a"]')!.click());
+        const details = container.querySelector('[role="region"][aria-label="Details for host-a"]');
+        expect(details?.textContent).toContain(`Latest update ${label}`);
+        if (errorCode !== null) expect(details?.textContent).toContain(errorCode);
+        expect(details?.textContent?.includes(" · Failed")).toBe(label === "failed");
+        if (label === "unknown") expect(details?.textContent).not.toContain("Latest update settled");
+    });
+
     it("keeps summaries compact and reveals only one host detail panel at a time", async () => {
         await act(async () => root.render(<VpsHostInventory
             hosts={[host("host-a", resources(70, 30), 0, true), host("host-b", resources(80, 20), 1)]}
