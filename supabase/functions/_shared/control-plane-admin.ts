@@ -20,7 +20,7 @@ export type ControlPlaneAdminHandlerOptions = {
     /** Handles `notify-region-request`; absent when SMTP is not configured. */
     notifyRegionRequest?: RegionRequestNotifier;
 };
-type UpstreamReply = { kind: "unreachable" } | { kind: "invalid" } | { kind: "ok"; status: number; text: string; body: unknown };
+type UpstreamReply = { kind: "unreachable" } | { kind: "invalid" } | { kind: "ok"; status: number; text: string; body: unknown; retryAfter: string | null };
 
 /** Authenticates every request and forwards reads to the authoritative control plane. */
 export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandlerOptions) {
@@ -133,7 +133,8 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
             try {
                 const text = await readBoundedText(upstream, MAXIMUM_UPSTREAM_RESPONSE_BYTES);
                 const body: unknown = JSON.parse(text);
-                return { kind: "ok", status: upstream.status, text, body };
+                const retryAfter = upstream.status === 429 ? upstream.headers.get("retry-after") : null;
+                return { kind: "ok", status: upstream.status, text, body, retryAfter };
             } catch {
                 return { kind: "invalid" };
             }
@@ -168,6 +169,7 @@ export function createControlPlaneAdminHandler(options: ControlPlaneAdminHandler
             status: reply.status,
             headers: {
                 ...cors, "cache-control": "no-store", "content-type": "application/json",
+                ...(reply.retryAfter === null ? {} : { "retry-after": reply.retryAfter }),
                 "server-timing": `edge_auth;dur=${authenticationMilliseconds}, control_plane;dur=${Math.round(performance.now() - upstreamStarted)}`,
             },
         });
@@ -264,6 +266,7 @@ function corsHeaders(origin: string) {
         "access-control-allow-headers": "authorization, apikey, content-type, x-client-info",
         "access-control-allow-methods": "POST, OPTIONS",
         "access-control-allow-origin": origin,
+        "access-control-expose-headers": "retry-after",
         "access-control-max-age": "600",
         vary: "Origin",
     };

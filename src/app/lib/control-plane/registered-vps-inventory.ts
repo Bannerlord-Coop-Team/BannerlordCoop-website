@@ -3,7 +3,9 @@ import type { HostingAdminVpsInventory } from "./types";
 
 // Allow a full control-plane quota window per cursor, even across a long scan.
 const MAXIMUM_THROTTLE_RETRIES = 10;
-const MAXIMUM_THROTTLE_DELAY_MILLISECONDS = 10_000;
+const MAXIMUM_BACKOFF_MILLISECONDS = 10_000;
+const MAXIMUM_RETRY_AFTER_MILLISECONDS = 60_000;
+const MAXIMUM_THROTTLE_WAIT_MILLISECONDS = 120_000;
 
 type VpsRead = {
     includeLiveData: boolean;
@@ -18,7 +20,8 @@ export async function readRegisteredVpsInventory(
     signal = new AbortController().signal,
 ): Promise<HostingAdminVpsInventory> {
     async function readPage(input: VpsRead) {
-        let delay = 1_000;
+        let backoff = 1_000;
+        let waited = 0;
         for (let retries = 0;; retries++) {
             signal.throwIfAborted();
             try {
@@ -26,8 +29,11 @@ export async function readRegisteredVpsInventory(
             } catch (error) {
                 if (!(error instanceof ControlPlaneAdminError) || error.code !== "rate_limited"
                     || !error.retryable || retries >= MAXIMUM_THROTTLE_RETRIES) throw error;
+                const delay = Math.min(error.retryAfterMilliseconds ?? backoff, MAXIMUM_RETRY_AFTER_MILLISECONDS);
+                if (waited + delay > MAXIMUM_THROTTLE_WAIT_MILLISECONDS) throw error;
                 await waitForThrottle(delay, signal);
-                delay = Math.min(delay * 2, MAXIMUM_THROTTLE_DELAY_MILLISECONDS);
+                waited += delay;
+                backoff = Math.min(backoff * 2, MAXIMUM_BACKOFF_MILLISECONDS);
             }
         }
     }

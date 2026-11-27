@@ -8,6 +8,7 @@ export class ControlPlaneAdminError extends Error {
         readonly retryable = false,
         readonly requestId?: string,
         readonly operationId?: string,
+        readonly retryAfterMilliseconds?: number,
     ) {
         super(message);
         this.name = "ControlPlaneAdminError";
@@ -64,10 +65,11 @@ export async function requestControlPlaneAdmin<T>(options: {
     if (new TextEncoder().encode(text).byteLength > CONTROL_PLANE_ADMIN_MAXIMUM_RESPONSE_BYTES) {
         throw new ControlPlaneAdminError("response_too_large", "The control plane response was too large.");
     }
-    return decodeControlPlaneAdminResponse<T>(text, requestId, response.ok);
+    return decodeControlPlaneAdminResponse<T>(text, requestId, response.ok,
+        response.status === 429 ? response.headers.get("retry-after") : null);
 }
 
-export function decodeControlPlaneAdminResponse<T>(text: string, requestId: string, responseOk: boolean): T {
+export function decodeControlPlaneAdminResponse<T>(text: string, requestId: string, responseOk: boolean, retryAfter?: string | null): T {
     let parsed: unknown;
     try {
         parsed = JSON.parse(text);
@@ -80,12 +82,26 @@ export function decodeControlPlaneAdminResponse<T>(text: string, requestId: stri
             fallback?.code ?? "invalid_response",
             fallback?.message ?? "The control plane returned an invalid response.",
             fallback?.retryable ?? true,
+            undefined,
+            undefined,
+            fallback?.code === "rate_limited" ? retryAfterDelay(retryAfter) : undefined,
         );
     }
     if (!parsed.ok) {
-        throw new ControlPlaneAdminError(parsed.error.code, parsed.error.message, parsed.error.retryable, responseOk ? undefined : requestId, parsed.error.operationId);
+        const { code, message, retryable, operationId } = parsed.error;
+        throw new ControlPlaneAdminError(code, message, retryable, responseOk ? undefined : requestId, operationId,
+            code === "rate_limited" ? retryAfterDelay(retryAfter) : undefined);
     }
     return parsed.result as T;
+}
+
+function retryAfterDelay(header: string | null | undefined): number | undefined {
+    const value = header?.trim();
+    if (!value) return undefined;
+    if (/^[0-9]+$/u.test(value)) return Number(value) * 1_000;
+    // HTTP dates start with a weekday. Reject numeric lookalikes that Date.parse would accept.
+    const timestamp = /^[a-z]{3}/iu.test(value) ? Date.parse(value) : NaN;
+    return Number.isFinite(timestamp) ? Math.max(0, timestamp - Date.now()) : undefined;
 }
 
 function controlPlaneAdminEndpoint() {

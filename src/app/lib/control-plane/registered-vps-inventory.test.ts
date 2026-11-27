@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ControlPlaneAdminError } from "./client";
+import { ControlPlaneAdminError, decodeControlPlaneAdminResponse } from "./client";
 import { readRegisteredVpsInventory } from "./registered-vps-inventory";
 import type { HostingAdminVpsInventory } from "./types";
 
@@ -65,6 +65,53 @@ test("resumes a fleet scan across consecutive control-plane quota windows", asyn
     assert.deepEqual(accepted, [null, ...Array.from({ length: 241 }, (_, index) => String((index + 1) * 8))]);
     assert.deepEqual([...throttled], ["968", "1928"]);
     assert.ok(Date.now() >= 120_000);
+});
+
+const retryCases = [
+    { header: "30", delay: 30_000 },
+    { header: "Fri, 27 Nov 2026 12:00:30 GMT", delay: 30_000 },
+    { header: "3600", delay: 60_000 },
+    { header: "-30", delay: 1_000 },
+];
+
+for (const { header, delay } of retryCases) {
+    test("resumes the same VPS cursor at the bounded Retry-After delay for " + header, async ({ mock }) => {
+        mock.timers.enable({ apis: ["Date", "setTimeout"], now: Date.parse("2026-11-27T12:00:00Z") });
+        const throttle = JSON.stringify({ version: 1, requestId: "throttle", ok: false,
+            error: { code: "rate_limited", message: "Try again shortly.", retryable: true } });
+        const cursors: (string | null | undefined)[] = [];
+        const result = readRegisteredVpsInventory(async ({ storedAfter }) => {
+            cursors.push(storedAfter);
+            if (storedAfter === null) return page(["first"], "continue");
+            if (cursors.length === 2) return decodeControlPlaneAdminResponse<HostingAdminVpsInventory>(
+                throttle, "throttle", false, header);
+            return page(["last"], null);
+        }, false);
+        await new Promise<void>(resolve => setImmediate(resolve));
+        mock.timers.tick(delay - 1);
+        await new Promise<void>(resolve => setImmediate(resolve));
+        assert.deepEqual(cursors, [null, "continue"]);
+        mock.timers.tick(1);
+        await new Promise<void>(resolve => setImmediate(resolve));
+        assert.deepEqual(cursors, [null, "continue", "continue"]);
+        assert.deepEqual((await result).hosts.map(host => host.name), ["first", "last"]);
+    });
+}
+
+test("stops after using the wait budget for one throttled cursor", async ({ mock }) => {
+    mock.timers.enable({ apis: ["setTimeout"] });
+    const throttle = new ControlPlaneAdminError("rate_limited", "Try again shortly.", true, undefined, undefined, 60_000);
+    let reads = 0;
+    const rejected = assert.rejects(readRegisteredVpsInventory(async () => {
+        reads++;
+        throw throttle;
+    }, false), throttle);
+    for (let retry = 0; retry < 2; retry++) {
+        await new Promise<void>(resolve => setImmediate(resolve));
+        mock.timers.tick(60_000);
+    }
+    await rejected;
+    assert.equal(reads, 3);
 });
 
 test("aborts a throttled scan while it is waiting to retry", async ({ mock }) => {

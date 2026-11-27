@@ -346,7 +346,9 @@ available hosts from the VPS view's provider billing read.
 The VPS tab reads registered hosts in pages on the server and on each browser
 telemetry refresh. Each scan starts with `storedAfter: null`, turns off provider
 inventory, and passes the returned cursor unchanged until it is null. A retryable
-throttle backs off and retries the same cursor, preserving pages already read.
+throttle retries the same cursor, preserving pages already read. A supplied
+`Retry-After` sets the delay up to 60 seconds. Without it, the scan uses bounded
+exponential backoff.
 If the registered set changes or the cursor expires or becomes invalid, the website
 discards its partial scan and tries again once. Live scans keep the latest runner
 target reported by a page even if later pages arrive after the telemetry budget.

@@ -63,6 +63,24 @@ test("reauthenticates a Discord Admin and forwards the closed envelope", async (
     assert.match(calls[1]?.body ?? "", new RegExp(REQUEST_ID, "u"));
 });
 
+test("forwards and exposes the Retry-After header on an upstream VPS throttle", async () => {
+    const request = { version: 1, requestId: REQUEST_ID, operation: "vps-hosts",
+        input: { includeLiveData: true, includeProviderInventory: false, storedAfter: "cursor" } };
+    const throttle = { version: 1, requestId: REQUEST_ID, ok: false,
+        error: { code: "rate_limited", message: "Try again shortly.", retryable: true } };
+    const handler = createHandler(async (input, init) => {
+        if (String(input).endsWith("/auth/v1/user")) return Response.json(ADMIN);
+        assert.equal(String(input), "https://control-plane.example.test/v1/admin/control-plane");
+        assert.deepEqual(JSON.parse(String(init?.body)), request);
+        return Response.json(throttle, { status: 429, headers: { "Retry-After": "30" } });
+    });
+    const response = await handler(adminRequest(JSON.stringify(request)));
+    assert.equal(response.status, 429);
+    assert.equal(response.headers.get("retry-after"), "30");
+    assert.equal(response.headers.get("access-control-expose-headers"), "retry-after");
+    assert.deepEqual(await response.json(), throttle);
+});
+
 test("reports only its measured authentication and complete upstream durations", async (context) => {
     const times = [100, 127, 228];
     context.mock.method(performance, "now", () => times.shift() ?? 228);
