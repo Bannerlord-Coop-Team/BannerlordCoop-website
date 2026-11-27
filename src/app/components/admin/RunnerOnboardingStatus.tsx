@@ -1,9 +1,8 @@
 "use client";
 
-import { runnerUpdateSettlement } from "./runner-update-settlement";
-
 import { LoaderCircle, RefreshCw } from "lucide-react";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
+import { classifyRunnerUpdate, type RunnerUpdateStatus } from "@/app/lib/control-plane/runner-update-status";
 import { SLOT_DECOMMISSION_PAUSED, slotDecommissionPaused } from "@/app/lib/control-plane/slot-decommission";
 import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
 import { PROVIDER_VPS_OPERATION } from "@/app/lib/control-plane/vps-providers";
@@ -40,8 +39,8 @@ export function RunnerOnboardingStatus({
     const [submitting, setSubmitting] = useState(false);
     const [requestError, setRequestError] = useState("");
     const onboardingPending = onboarding !== null && isPending(onboarding.state);
-    const updatePending = update !== null && isPending(update.state);
-    const settlement = runnerUpdateSettlement(update);
+    const updateStatus = classifyRunnerUpdate(update);
+    const updatePending = updateStatus?.pending === true;
     const pending = onboardingPending || updatePending;
     const current = onboarding?.state === "succeeded"
         && targetSourceCommit !== null
@@ -141,24 +140,24 @@ export function RunnerOnboardingStatus({
                 : onboarding.errorCode && <p className="mt-1 max-w-56 font-mono text-[0.6rem] text-red-200">{onboarding.errorCode}</p>}
             {!compact && onboarding.sourceCommit && <p className="mt-1 font-mono text-[0.6rem] text-foreground-dim" title={onboarding.sourceCommit}>{onboarding.sourceCommit.slice(0, 12)}</p>}
             {!compact && targetSourceCommit && !current && <p className="mt-1 font-mono text-[0.58rem] text-gold/75" title={`Available runner target ${targetSourceCommit}`}>Target {targetSourceCommit.slice(0, 12)}</p>}
-            {!compact && update && (
+            {!compact && update && updateStatus && (
                 <div className="mt-3 border-t border-white/10 pt-3">
                     <div className="flex flex-wrap items-center gap-2">
                         <span className="text-[0.6rem] uppercase tracking-[0.08em] text-foreground-dim">Latest update</span>
-                        <RunnerStateBadge state={settlement === null ? update.state : "settled"} explanation={settlement ?? runnerUpdateStateExplanation(update.state)} />
+                        <RunnerStateBadge label={updateStatus.label} explanation={updateStatus.explanation} />
                     </div>
-                    <p className="mt-2 max-w-56 text-[0.65rem] text-foreground-muted">{humanize(update.progressStage)}</p>
+                    {updateStatus.progressStage !== null && <p className="mt-2 max-w-56 text-[0.65rem] text-foreground-muted">{humanize(updateStatus.progressStage)}</p>}
                     <p className="mt-1 font-mono text-[0.58rem] text-foreground-dim" title={`${update.priorSourceCommit} → ${update.targetSourceCommit}`}>
                         {update.priorSourceCommit.slice(0, 8)} → {update.targetSourceCommit.slice(0, 8)}
                     </p>
-                    {update.errorCode && <p className={`mt-1 max-w-56 font-mono text-[0.6rem] ${settlement === null ? "text-red-200" : "text-foreground-muted"}`}>{update.errorCode}</p>}
+                    {update.errorCode && <p className={`mt-1 max-w-56 font-mono text-[0.6rem] ${updateStatus.highlightError ? "text-red-200" : "text-foreground-muted"}`}>{update.errorCode}</p>}
                 </div>
             )}
-            {compact && update && update.state !== "succeeded" && (
+            {compact && update && updateStatus && updateStatus.label !== "succeeded" && (
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                     <span className="text-[0.58rem] uppercase tracking-[0.08em] text-foreground-dim">Update</span>
-                    <RunnerStateBadge state={settlement === null ? update.state : "settled"} explanation={settlement ?? runnerUpdateStateExplanation(update.state)} />
-                    {update.errorCode && <span className={`font-mono text-[0.58rem] ${settlement === null ? "text-red-200" : "text-foreground-muted"}`}>{update.errorCode}</span>}
+                    <RunnerStateBadge label={updateStatus.label} explanation={updateStatus.explanation} />
+                    {update.errorCode && <span className={`font-mono text-[0.58rem] ${updateStatus.highlightError ? "text-red-200" : "text-foreground-muted"}`}>{update.errorCode}</span>}
                 </div>
             )}
             {!compact && (onboardingPending || updatePending) && <p className="mt-2 text-[0.58rem] uppercase tracking-[0.08em] text-gold/70">Refreshing progress automatically</p>}
@@ -195,20 +194,20 @@ export function RunnerOnboardingStatus({
     );
 }
 
-function RunnerStateBadge({ state, explanation }: { state: RunnerUpdate["state"] | "settled"; explanation: string }) {
-    const good = state === "succeeded";
-    const bad = state === "failed";
+function RunnerStateBadge({ label, explanation }: Pick<RunnerUpdateStatus, "label" | "explanation">) {
+    const good = label === "succeeded";
+    const bad = label === "failed";
     return (
         <span
             title={explanation}
             className={`inline-flex cursor-help border px-2 py-0.5 font-label text-[0.55rem] font-semibold uppercase tracking-[0.08em] ${good ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : bad ? "border-crimson/30 bg-crimson/10 text-red-200" : "border-gold/25 bg-gold/8 text-gold"}`}
         >
-            {state}
+            {label}
         </span>
     );
 }
 
-function isPending(state: RunnerOnboarding["state"] | RunnerUpdate["state"]) {
+function isPending(state: RunnerOnboarding["state"]) {
     return ["queued", "running", "retry-wait"].includes(state);
 }
 
@@ -223,15 +222,5 @@ function runnerStateExplanation(state: RunnerOnboarding["state"]) {
         case "retry-wait": return "A retryable enrollment step failed; the durable workflow will resume after backoff.";
         case "succeeded": return "Every prepared slot has an active private route and verified mTLS agent health, so capacity is available.";
         case "failed": return "Runner enrollment stopped safely after a terminal error. The error code identifies the failed boundary.";
-    }
-}
-
-function runnerUpdateStateExplanation(state: RunnerUpdate["state"]) {
-    switch (state) {
-        case "queued": return "The durable host-wide runner update is waiting for the fleet worker.";
-        case "running": return "Every slot is being updated transactionally with stopped-state continuity checks.";
-        case "retry-wait": return "A retryable update boundary failed; the durable workflow will resume after backoff.";
-        case "succeeded": return "Every isolated slot passed revision, identity, build, save, and capability verification.";
-        case "failed": return "The update did not complete. Inspect the error code before retrying.";
     }
 }

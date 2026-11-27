@@ -1,5 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { hostServedRegionKeys, slotOwnerAccountId } from "@/app/lib/control-plane/presentation";
+import { classifyRunnerUpdate } from "@/app/lib/control-plane/runner-update-status";
 import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 import { paginateItems } from "@/app/lib/pagination";
@@ -210,8 +211,8 @@ export function filterVpsHosts(
 /** Keeps VPS hosts with a terminal runner error ahead of healthy or in-progress hosts. */
 export function sortVpsHosts(hosts: readonly HostingAdminVpsHost[]) {
     return hosts
-        .map((host, index) => ({ host, index }))
-        .sort((left, right) => runnerErrorRank(right.host) - runnerErrorRank(left.host) || left.index - right.index)
+        .map((host, index) => ({ host, index, errorRank: runnerErrorRank(host) }))
+        .sort((left, right) => right.errorRank - left.errorRank || left.index - right.index)
         .map(({ host }) => host);
 }
 
@@ -246,7 +247,7 @@ function occupiedSlots(host: HostingAdminVpsHost) {
 }
 
 function runnerErrorRank(host: HostingAdminVpsHost) {
-    return host.runnerOnboarding?.state === "failed" || host.runnerUpdate?.state === "failed" ? 1 : 0;
+    return host.runnerOnboarding?.state === "failed" || classifyRunnerUpdate(host.runnerUpdate)?.label === "failed" ? 1 : 0;
 }
 
 function hostMatchesRegions(host: PlacedHost, regions: ReadonlySet<string>, catalog: RegionCatalog) {
