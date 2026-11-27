@@ -284,6 +284,8 @@
   "campaigns.deleteStatusUnavailable": "Campaign deletion status is unavailable. Refresh later to check the original request.",
   "campaigns.deleted": "Campaign deletion queued.",
   "campaigns.mode.legend": "Campaign mode",
+  "campaigns.mode.unknownHelp": "War Sails support is unknown. Restart the server to re-check support.",
+  "campaigns.mode.unknownReset": "Continuing now creates a Classic campaign.",
   "campaigns.mode.classic": "Classic",
   "campaigns.mode.classicHelp": "The standard campaign, without War Sails.",
   "campaigns.mode.warSails": "War Sails",

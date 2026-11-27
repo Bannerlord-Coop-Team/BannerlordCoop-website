@@ -788,6 +788,8 @@
   "campaigns.deleteStatusUnavailable": "Le statut de suppression est indisponible. Actualisez plus tard pour vérifier la demande initiale.",
   "campaigns.deleted": "Campaign deletion queued.",
   "campaigns.mode.legend": "Mode de campagne",
+  "campaigns.mode.unknownHelp": "La prise en charge de War Sails est inconnue. Redémarrez le serveur pour la vérifier à nouveau.",
+  "campaigns.mode.unknownReset": "Si vous continuez maintenant, une campagne classique sera créée.",
   "campaigns.mode.classic": "Classique",
   "campaigns.mode.classicHelp": "La campagne standard, sans War Sails.",
   "campaigns.mode.warSails": "War Sails",

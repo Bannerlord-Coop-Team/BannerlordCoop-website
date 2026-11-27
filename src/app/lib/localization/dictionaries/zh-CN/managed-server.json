@@ -787,6 +787,8 @@
   "campaigns.deleteStatusUnavailable": "暂时无法查询删除状态。请稍后刷新以检查原始请求。",
   "campaigns.deleted": "Campaign deletion queued.",
   "campaigns.mode.legend": "战役模式",
+  "campaigns.mode.unknownHelp": "尚未确认是否支持 War Sails。重新启动服务器即可再次检查。",
+  "campaigns.mode.unknownReset": "现在继续将创建经典战役。",
   "campaigns.mode.classic": "经典",
   "campaigns.mode.classicHelp": "不含 War Sails 的标准战役。",
   "campaigns.mode.warSails": "War Sails",

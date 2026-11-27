@@ -197,12 +197,12 @@ function sentReset(call = 0) {
 }
 const classicReset = JSON.stringify({ action: "reset-campaign", serverId, expectedUpdatedAt: stopped.updatedAt });
 
-it("keeps today's campaign list and exact Classic reset request when the control plane sends no War Sails fields", async () => {
+it("explains unknown War Sails support and preserves the explicit Classic fallback on reset", async () => {
     mocks.change.mockResolvedValue({ ok: true, reset: { outcome: "enqueued", jobId: freshId, action: "reset-campaign" } });
     await render();
-    expect(container.textContent).not.toContain("Classic");
-    expect(container.textContent).not.toContain("War Sails");
+    expect(container.textContent).toContain("War Sails support is unknown. Restart the server to re-check support.");
     await act(async () => button("New campaign").click());
+    expect(dialog().textContent).toContain("Continuing now creates a Classic campaign.");
     expect(dialog().querySelector('input[type="radio"]')).toBeNull();
     await act(async () => button("Delete saves and start fresh").click());
     expect(sentReset()).toBe(classicReset);
@@ -231,6 +231,7 @@ it("notes that selecting a campaign in the other mode changes War Sails, only wh
 it("offers the War Sails mode for a new campaign only when the build can run it and sends warSails only when chosen", async () => {
     mocks.change.mockResolvedValue({ ok: false, notSubmitted: true, refresh: false, message: "Not sent." });
     await renderModes({}, false);
+    expect(container.textContent).not.toContain("War Sails support is unknown");
     await act(async () => button("New campaign").click());
     expect(dialog().querySelector('input[type="radio"]')).toBeNull();
     await act(async () => button("Cancel").click());

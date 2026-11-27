@@ -20,7 +20,7 @@ type CampaignMode = "classic" | "warSails";
 type ResetReceipt = { serverId: string; userId: string; jobId: string; previousSaveId: string | null; since: number };
 
 /** Lists, selects, deletes and resets campaigns, with War Sails available when supported. */
-export function ManagedServerCampaigns({ userId, serverId, status, canDelete = false, warSailsCapable = false }: { userId: string; serverId: string; status: OwnerFileStatus | null; canDelete?: boolean; warSailsCapable?: boolean }) {
+export function ManagedServerCampaigns({ userId, serverId, status, canDelete = false, warSailsCapable }: { userId: string; serverId: string; status: OwnerFileStatus | null; canDelete?: boolean; warSailsCapable?: boolean }) {
     const { t } = useTranslations("managed-server");
     const unconfirmedResetMessage = t("campaigns.resetOutcomeHelp", { supportLink: DISCORD_SUPPORT_URL });
     const router = useRouter();
@@ -155,6 +155,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
     // A server that never started has no campaign yet; the control plane refuses a reset until its first Start creates one.
     const noCampaignYet = campaigns !== null && campaigns.items.length === 0;
     const newCampaignDisabled = busy || !stopped || !campaigns || noCampaignYet;
+    const warSailsUnknown = warSailsCapable === undefined && campaigns !== null && !noCampaignYet;
     const activeWarSails = campaigns?.items.find((item) => item.saveId === campaigns.activeSaveId)?.warSails;
     const newCampaignHint = status === null ? "Campaign changes are unavailable until the server status loads." : !stopped ? "Stop the server before starting a new campaign." : busy ? "Finish the current campaign operation first." : !campaigns ? "Campaigns are still loading." : "This server has no campaign yet. Starting it creates a fresh one.";
 
@@ -191,6 +192,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
                 </DisabledControlHint>
             </div>
         </div>
+        {warSailsUnknown && <p className="mt-2 text-xs leading-5 text-foreground-muted">{t("campaigns.mode.unknownHelp")}</p>}
         {message && <p role="status" className="mt-3 text-sm text-foreground-muted"><DiscordSupportText message={message} label={t("support.discord")} /></p>}
         {deletion.message && <p role="status" className="mt-3 text-sm text-foreground-muted"><DiscordSupportText message={deletion.message} label={t("support.discord")} /></p>}
         {deletion.canRecover && canDelete && <button type="button" className={fileButtonClass} onClick={deletion.recover}>Recover deletion request</button>}
@@ -200,6 +202,7 @@ export function ManagedServerCampaigns({ userId, serverId, status, canDelete = f
             <h3 id="new-campaign-heading" className="text-base font-semibold">Start a new campaign?</h3>
             <p className="mt-2 text-sm leading-6 text-foreground-muted">This deletes every campaign on this server and creates a fresh one. Export your save first if you want to keep it. The server stays stopped until you start it.</p>
             {warSailsCapable && <NewCampaignModeChoice mode={newMode} disabled={pending} onChange={setNewMode} />}
+            {warSailsUnknown && <p className="mt-2 text-sm leading-6 text-foreground-muted">{t("campaigns.mode.unknownHelp")} {t("campaigns.mode.unknownReset")}</p>}
             <div className="mt-4 flex flex-wrap justify-end gap-2">
                 <button type="button" className={fileButtonClass} disabled={pending} onClick={() => setConfirming(false)}>Cancel</button>
                 <button type="button" className={filePrimaryButtonClass} disabled={pending || !stopped} onClick={() => change(warSailsCapable && newMode === "warSails" ? { action: "reset-campaign", warSails: true } : { action: "reset-campaign" })}>{pending ? "Starting…" : "Delete saves and start fresh"}</button>

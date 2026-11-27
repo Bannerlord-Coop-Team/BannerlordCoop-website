@@ -788,6 +788,8 @@
   "campaigns.deleteStatusUnavailable": "Silme durumu kullanılamıyor. İlk isteği kontrol etmek için daha sonra yenileyin.",
   "campaigns.deleted": "Campaign deletion queued.",
   "campaigns.mode.legend": "Sefer modu",
+  "campaigns.mode.unknownHelp": "War Sails desteği bilinmiyor. Tekrar kontrol etmek için sunucuyu yeniden başlatın.",
+  "campaigns.mode.unknownReset": "Şimdi devam ederseniz klasik bir sefer oluşturulur.",
   "campaigns.mode.classic": "Klasik",
   "campaigns.mode.classicHelp": "War Sails olmadan standart sefer.",
   "campaigns.mode.warSails": "War Sails",
