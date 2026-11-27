@@ -27,22 +27,34 @@ for (const includeLiveData of [false, true]) {
     });
 }
 
-test("restarts from an empty cursor and discards pages of the changed revision", async () => {
-    const calls: unknown[] = [];
-    const result = await readRegisteredVpsInventory(async input => {
-        calls.push(input);
-        switch (calls.length) {
-            case 1: return page(["before"], "before-token");
-            case 2: throw new ControlPlaneAdminError("vps_inventory_changed", "Start a new scan");
-            case 3: return page(["after"], "after-token");
-            case 4: return page(["last"], null);
-            default: throw new Error("Unexpected VPS request");
-        }
-    }, false);
-    assert.deepEqual(result.hosts.map(host => host.name), ["after", "last"]);
-    assert.equal(result.nextCursor, null);
-    assert.deepEqual(calls, [null, "before-token", null, "after-token"].map(storedAfter =>
-        ({ includeLiveData: false, includeProviderInventory: false, storedAfter })));
+for (const code of ["vps_inventory_changed", "vps_inventory_cursor_expired", "vps_inventory_cursor_invalid"]) {
+    test(`restarts a paged VPS scan after ${code}`, async () => {
+        const calls: unknown[] = [];
+        const result = await readRegisteredVpsInventory(async input => {
+            calls.push(input);
+            switch (calls.length) {
+                case 1: return page(["before"], "before-token");
+                case 2: throw new ControlPlaneAdminError(code, "Start a new scan");
+                case 3: return page(["after"], "after-token");
+                case 4: return page(["last"], null);
+                default: throw new Error("Unexpected VPS request");
+            }
+        }, false);
+        assert.deepEqual(result.hosts.map(host => host.name), ["after", "last"]);
+        assert.equal(result.nextCursor, null);
+        assert.deepEqual(calls, [null, "before-token", null, "after-token"].map(storedAfter =>
+            ({ includeLiveData: false, includeProviderInventory: false, storedAfter })));
+    });
+}
+
+test("stops after a second invalid cursor", async () => {
+    const positions: Array<string | null | undefined> = [];
+    await assert.rejects(readRegisteredVpsInventory(async ({ storedAfter }) => {
+        positions.push(storedAfter);
+        if (storedAfter === null) return page(["first"], "continue");
+        throw new ControlPlaneAdminError("vps_inventory_cursor_invalid", "Reader restarted");
+    }, false), { code: "vps_inventory_cursor_invalid" });
+    assert.deepEqual(positions, [null, "continue", null, "continue"]);
 });
 
 test("never converts a continuation error into a bulk request", async () => {

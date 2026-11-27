@@ -56,7 +56,8 @@ export async function readRegisteredVpsInventory(
         return await scan();
     } catch (error) {
         if (!(error instanceof ControlPlaneAdminError)
-            || (error.code !== "vps_inventory_changed" && error.code !== "vps_inventory_cursor_expired")) throw error;
+            || (error.code !== "vps_inventory_changed" && error.code !== "vps_inventory_cursor_expired"
+                && error.code !== "vps_inventory_cursor_invalid")) throw error;
         return await scan();
     }
 }
