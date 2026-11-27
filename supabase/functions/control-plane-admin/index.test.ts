@@ -430,6 +430,54 @@ test("a completed context is not expired by its fetch timer while the verified u
     } finally { AbortSignal.timeout = originalTimeout; }
 });
 
+test("projects the region request page for the browser without requester contact data", async () => {
+    const email = "owner@example.test";
+    const request = {
+        requestId: REQUEST_ID, guildId: "709516043332354119", discordUserId: "123456789012345678",
+        region: "germany", status: "outstanding", createdAt: "2026-10-08T12:00:00.000Z",
+        requesterEmail: email, allocatedRegions: ["france"], notifiedAt: null,
+    };
+    const nextCursor = "next-region-request";
+    const handler = createHandler(async input => {
+        if (String(input).endsWith("/auth/v1/user")) return Response.json(ADMIN);
+        return Response.json({ version: 1, requestId: REQUEST_ID, ok: true, result: {
+            items: [request, { ...request, requestId: "22222222-2222-4222-8222-222222222222", requesterEmail: null }],
+            nextCursor,
+        } });
+    });
+    const response = await handler(adminRequest(JSON.stringify({
+        version: 1, requestId: REQUEST_ID, operation: "region-requests", input: { cursor: null, limit: 100 },
+    })));
+    assert.equal(response.status, 200);
+    const payload = await response.text();
+    assert.ok(!payload.includes(email));
+    const projected = {
+        requestId: REQUEST_ID, discordUserId: request.discordUserId, region: request.region,
+        createdAt: request.createdAt, allocatedRegions: request.allocatedRegions, notifiedAt: null, canNotify: true,
+    };
+    assert.deepEqual(JSON.parse(payload), { version: 1, requestId: REQUEST_ID, ok: true, result: {
+        items: [projected, { ...projected, requestId: "22222222-2222-4222-8222-222222222222", canNotify: false }],
+        nextCursor,
+    } });
+});
+
+test("keeps region notification claim and release operations internal", async () => {
+    let upstreamCalls = 0;
+    const handler = createHandler(async input => {
+        if (String(input).endsWith("/auth/v1/user")) return Response.json(ADMIN);
+        upstreamCalls++;
+        return Response.json({});
+    });
+    for (const operation of ["claim-region-request-notification", "release-region-request-notification"]) {
+        const response = await handler(adminRequest(JSON.stringify({
+            version: 1, requestId: REQUEST_ID, operation, input: { requestId: REQUEST_ID },
+        })));
+        assert.equal(response.status, 400);
+        assert.equal((await response.json()).error.code, "invalid_request");
+    }
+    assert.equal(upstreamCalls, 0);
+});
+
 test("notifies a region requester through internal claim operations and returns the browser envelope", async () => {
     const upstream: Array<{ operation: string; input: unknown }> = [];
     const sent: string[] = [];

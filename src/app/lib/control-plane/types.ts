@@ -380,14 +380,13 @@ export type HostingAdminVpsAvailableHost = {
     label: string;
 };
 
+/** Browser projection of an outstanding region request. */
 export type HostingAdminRegionRequest = {
     requestId: string;
-    guildId: string;
     discordUserId: string;
     region: string;
-    status: "outstanding";
     createdAt: string;
-    requesterEmail: string | null;
+    canNotify: boolean;
     allocatedRegions: string[];
     notifiedAt: string | null;
 };

@@ -1,5 +1,9 @@
-import { CONTROL_PLANE_ADMIN_BROWSER_TIMEOUT_MILLISECONDS, ControlPlaneAdminError } from "./client";
+import { ControlPlaneAdminError } from "./client";
 import type { HostingAdminVpsInventory } from "./types";
+
+// Allow a full control-plane quota window per cursor, even across a long scan.
+const MAXIMUM_THROTTLE_RETRIES = 10;
+const MAXIMUM_THROTTLE_DELAY_MILLISECONDS = 10_000;
 
 type VpsRead = {
     includeLiveData: boolean;
@@ -11,10 +15,22 @@ type VpsRead = {
 export async function readRegisteredVpsInventory(
     read: (input: VpsRead, signal: AbortSignal) => Promise<HostingAdminVpsInventory>,
     includeLiveData: boolean,
-    signal?: AbortSignal,
+    signal = new AbortController().signal,
 ): Promise<HostingAdminVpsInventory> {
-    const deadline = AbortSignal.timeout(CONTROL_PLANE_ADMIN_BROWSER_TIMEOUT_MILLISECONDS);
-    const scanSignal = signal === undefined ? deadline : AbortSignal.any([signal, deadline]);
+    async function readPage(input: VpsRead) {
+        let delay = 1_000;
+        for (let retries = 0;; retries++) {
+            signal.throwIfAborted();
+            try {
+                return await read(input, signal);
+            } catch (error) {
+                if (!(error instanceof ControlPlaneAdminError) || error.code !== "rate_limited"
+                    || !error.retryable || retries >= MAXIMUM_THROTTLE_RETRIES) throw error;
+                await waitForThrottle(delay, signal);
+                delay = Math.min(delay * 2, MAXIMUM_THROTTLE_DELAY_MILLISECONDS);
+            }
+        }
+    }
 
     async function scan(): Promise<HostingAdminVpsInventory> {
         const hosts: HostingAdminVpsInventory["hosts"] = [];
@@ -22,17 +38,16 @@ export async function readRegisteredVpsInventory(
         let storedAfter: string | null = null;
         let runnerTargetSourceCommit: string | undefined;
         for (;;) {
-            scanSignal.throwIfAborted();
             let page: HostingAdminVpsInventory;
             try {
-                page = await read({ includeLiveData, includeProviderInventory: false, storedAfter }, scanSignal);
+                page = await readPage({ includeLiveData, includeProviderInventory: false, storedAfter });
             } catch (error) {
                 // The old strict request parser refuses the initial paging option with this code.
                 if (storedAfter === null && error instanceof ControlPlaneAdminError
                     && error.code === "invalid_request" && !error.retryable) {
-                    return read(includeLiveData
+                    return readPage(includeLiveData
                         ? { includeLiveData: true, includeProviderInventory: false }
-                        : { includeLiveData: false }, scanSignal);
+                        : { includeLiveData: false });
                 }
                 throw error;
             }
@@ -64,4 +79,19 @@ export async function readRegisteredVpsInventory(
                 && error.code !== "vps_inventory_cursor_invalid")) throw error;
         return await scan();
     }
+}
+
+function waitForThrottle(delay: number, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted();
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            signal.removeEventListener("abort", abort);
+            resolve();
+        }, delay);
+        function abort() {
+            clearTimeout(timer);
+            reject(signal.reason);
+        }
+        signal.addEventListener("abort", abort, { once: true });
+    });
 }

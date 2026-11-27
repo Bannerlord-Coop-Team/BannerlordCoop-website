@@ -17,10 +17,9 @@ import { billingListedHosts, billingReadState, type BillingReadState } from "@/a
 import { manualEntryProviders } from "@/app/lib/control-plane/manual-vps";
 import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosting-regions";
 import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminRegionRequestNotification, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
-import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 
 /** Shows registered VPS capacity, labelled by the stored region catalog, with live readings and region requests. */
-export function VpsView({ inventory: initialInventory, hostingRegions, accounts }: VpsViewData & { accounts: WebsiteAccountSummary[] }) {
+export function VpsView({ inventory: initialInventory, hostingRegions }: VpsViewData) {
     const readings = useLiveInventoryReading(initialInventory, RESOURCES_READING);
     const billing = useSupplementaryReading(initialInventory, BILLING_READING);
     const oracle = useSupplementaryReading(initialInventory, ORACLE_READING);
@@ -34,7 +33,6 @@ export function VpsView({ inventory: initialInventory, hostingRegions, accounts 
             autoRenew: provider?.autoRenew ?? null, providerCheckedAt: provider?.providerCheckedAt ?? null };
     });
     const controlPlaneHost = oracle.result ?? null;
-    const ownerLabels = new Map(accounts.map(account => [account.accountId, account.label]));
     const billingState = billingReadState(billing);
     const listedHosts = billingListedHosts(billingState);
     const runnerTargetSourceCommit = inventory.runnerTargetSourceCommit ?? null;
@@ -61,21 +59,19 @@ export function VpsView({ inventory: initialInventory, hostingRegions, accounts 
             </div>
             <VpsInventoryBrowser
                 hosts={hosts}
-                accounts={accounts}
                 liveDataPending={pending}
                 billingPending={billingState.kind === "loading"}
                 billingUnavailable={billingState.kind === "failed"}
                 onRefresh={readings.refreshReadings}
-                ownerLabels={Object.fromEntries(ownerLabels)}
                 runnerTargetSourceCommit={runnerTargetSourceCommit}
                 regionCatalog={hostingRegions.regions}
             />
-            <RegionRequestsPane accounts={accounts} />
+            <RegionRequestsPane />
         </section>
     );
 }
 
-function RegionRequestsPane({ accounts }: { accounts: WebsiteAccountSummary[] }) {
+function RegionRequestsPane() {
     const [requests, setRequests] = useState<HostingPage<HostingAdminRegionRequest> | null>(null);
     const [error, setError] = useState("");
     const [pendingRequest, setPendingRequest] = useState<string | null>(null);
@@ -166,20 +162,20 @@ function RegionRequestsPane({ accounts }: { accounts: WebsiteAccountSummary[] })
                 <div className="overflow-x-auto">
                     <table className="w-full min-w-190 text-left text-sm">
                         <thead className="border-b border-white/10 font-label text-[0.62rem] uppercase tracking-[0.12em] text-foreground-muted">
-                            <tr><th className="p-4">Region</th><th className="p-4">Requester email</th><th className="p-4">Current allocation</th><th className="p-4">Requested</th><th className="p-4 text-right">Actions</th></tr>
+                            <tr><th className="p-4">Region</th><th className="p-4">Requester ID</th><th className="p-4">Current allocation</th><th className="p-4">Requested</th><th className="p-4 text-right">Actions</th></tr>
                         </thead>
                         <tbody className="divide-y divide-white/10">
                             {requests.items.map(request => (
                                 <tr key={request.requestId}>
                                     <td className="p-4 font-semibold text-foreground">{hostingRegionLabel(request.region)}<span className="mt-1 block font-mono text-[0.62rem] font-normal text-foreground-dim">{request.requestId}</span></td>
                                     <td className="p-4 text-xs text-foreground-muted">
-                                        {formatRequesterEmail(request, accounts)}
+                                        {request.discordUserId}
                                         {request.notifiedAt !== null && <span className="mt-1 block w-fit border border-gold/40 bg-gold/10 px-2 py-0.5 font-label text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-gold">Notified <LocalDateTime value={request.notifiedAt} /></span>}
                                     </td>
                                     <td className="p-4 text-xs text-foreground-muted">{formatAllocatedRegions(request.allocatedRegions)}</td>
                                     <td className="p-4 text-xs text-foreground-muted"><LocalDateTime value={request.createdAt} /></td>
                                     <td className="p-4"><div className="flex justify-end gap-2">
-                                        {request.notifiedAt === null && request.requesterEmail !== null && <button type="button" disabled={pendingRequest !== null} onClick={() => void notify(request.requestId)} title="Sends the user a notification email from admin@bannerlordcoop.com." className="min-h-9 border border-gold/40 px-3 font-label text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-gold hover:border-gold hover:bg-gold/10 disabled:cursor-wait disabled:opacity-50">Notify</button>}
+                                        {request.notifiedAt === null && request.canNotify && <button type="button" disabled={pendingRequest !== null} onClick={() => void notify(request.requestId)} title="Sends the user a notification email from admin@bannerlordcoop.com." className="min-h-9 border border-gold/40 px-3 font-label text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-gold hover:border-gold hover:bg-gold/10 disabled:cursor-wait disabled:opacity-50">Notify</button>}
                                         <button type="button" disabled={pendingRequest !== null} onClick={() => void resolve(request.requestId, "dismissed")} className="min-h-9 border border-white/20 px-3 font-label text-[0.6rem] font-semibold uppercase tracking-[0.1em] text-foreground-muted hover:border-white/40 hover:text-foreground disabled:cursor-wait disabled:opacity-50">Dismiss</button>
                                     </div></td>
                                 </tr>
@@ -190,14 +186,6 @@ function RegionRequestsPane({ accounts }: { accounts: WebsiteAccountSummary[] })
             )}
         </section>
     );
-}
-
-function formatRequesterEmail(request: HostingAdminRegionRequest, accounts: readonly WebsiteAccountSummary[]) {
-    if (request.requesterEmail !== null) return request.requesterEmail;
-    const principal = request.discordUserId.toLowerCase();
-    return accounts.find(account => account.email !== null
-        && (account.accountId.toLowerCase() === principal || account.discordUserId === request.discordUserId))?.email
-        ?? "Email unavailable";
 }
 
 function formatAllocatedRegions(regions: readonly string[]) {

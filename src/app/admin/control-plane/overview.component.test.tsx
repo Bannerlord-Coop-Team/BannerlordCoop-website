@@ -1,10 +1,17 @@
 import { renderToReadableStream } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ session: vi.fn(), auth: vi.fn(), request: vi.fn(), accounts: vi.fn(), account: vi.fn(), tables: vi.fn(), observations: vi.fn() }));
+const mocks = vi.hoisted(() => ({ session: vi.fn(), auth: vi.fn(), request: vi.fn(), accounts: vi.fn(), account: vi.fn(), tables: vi.fn(), vps: vi.fn(), observations: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerReadSession: mocks.session, getSupabaseServerViewer: mocks.auth }));
 vi.mock("@/app/lib/supabase/users", () => ({ listWebsiteAccounts: mocks.accounts, getWebsiteAccount: mocks.account }));
 vi.mock("@/app/lib/control-plane/server-read", () => ({ readControlPlaneAdmin: mocks.request }));
 vi.mock("@/app/lib/control-plane/release-observations", () => ({ recordReleaseFirstObservations: mocks.observations }));
+vi.mock("@/app/components/admin/VpsView", async importOriginal => {
+    const { VpsView } = await importOriginal<typeof import("@/app/components/admin/VpsView")>();
+    return { VpsView: (props: Parameters<typeof VpsView>[0]) => {
+        mocks.vps(props);
+        return <VpsView {...props} />;
+    } };
+});
 vi.mock("@/app/components/admin/RefreshReleaseCatalog", () => ({ RefreshReleaseCatalog: () => null }));
 vi.mock("next/navigation", async importOriginal => ({
     ...await importOriginal<typeof import("next/navigation")>(), useRouter: () => ({ refresh: vi.fn() }),
@@ -271,7 +278,7 @@ it.each(["revoked", "member", "mismatched"])("aborts and does not render early d
     expect(mocks.accounts).not.toHaveBeenCalled();
 });
 
-it("loads the registered VPS view through stored pages", async () => {
+it("passes the paged VPS inventory to the client without customer contact data", async () => {
     const options = { operation: "vps-hosts", accessToken: "test-admin-token", signal: expect.any(AbortSignal),
         expectedUserId: "admin", requireOrdinarySession: true, onAuthenticated: expect.any(Function) };
     const host = (name: string): HostingAdminVpsHost => ({
@@ -289,12 +296,20 @@ it("loads the registered VPS view through stored pages", async () => {
             hosts: [host(cursor === null ? "first-vps" : "last-vps")],
             nextCursor: cursor === null ? "stored-continuation" : null };
     });
-    mocks.accounts.mockResolvedValue({ users: [], truncated: false });
+    const email = "customer@example.test";
+    mocks.accounts.mockResolvedValue({ users: [{
+        accountId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", email, label: email, discordUserId: null,
+    }], truncated: false });
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "vps" }) }));
     await stream.allReady;
     const html = await new Response(stream).text();
     expect(html).toContain("first-vps");
     expect(html).toContain("last-vps");
+    expect(mocks.vps).toHaveBeenCalledTimes(1);
+    const [clientProps] = mocks.vps.mock.calls[0];
+    expect(clientProps).not.toHaveProperty("accounts");
+    expect(JSON.stringify(clientProps)).not.toContain(email);
+    expect(mocks.accounts).not.toHaveBeenCalled();
     expect(mocks.request.mock.calls.filter(([request]) => request.operation === "vps-hosts")).toEqual(
         [null, "stored-continuation"].map(storedAfter => [{ ...options,
             input: { includeLiveData: false, includeProviderInventory: false, storedAfter },

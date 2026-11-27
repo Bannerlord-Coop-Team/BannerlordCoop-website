@@ -27,6 +27,63 @@ for (const includeLiveData of [false, true]) {
     });
 }
 
+test("resumes a fleet scan across consecutive control-plane quota windows", async ({ mock }) => {
+    mock.timers.enable({ apis: ["Date", "setTimeout"], now: 0 });
+    const hosts = Array.from({ length: 1_929 }, (_, index) => `vps-${index}`);
+    const throttled = new Set<string>();
+    const throttleError = new ControlPlaneAdminError("rate_limited", "VPS inventory is being refreshed too frequently.", true);
+    const accepted: Array<string | null> = [];
+    let remaining = 120;
+    let windowStarted = Date.now();
+    let completed = false;
+    const result = readRegisteredVpsInventory(async ({ storedAfter }) => {
+        assert.notEqual(storedAfter, undefined);
+        storedAfter ??= null;
+        if (storedAfter !== null) {
+            if (Date.now() - windowStarted >= 60_000) {
+                windowStarted = Date.now();
+                remaining = 120;
+            }
+            if (remaining === 0) {
+                throttled.add(storedAfter);
+                throw throttleError;
+            }
+            remaining--;
+        }
+        accepted.push(storedAfter);
+        const start = Number(storedAfter ?? 0);
+        const next = start + 8;
+        return page(hosts.slice(start, next), next < hosts.length ? String(next) : null);
+    }, false).finally(() => { completed = true; });
+    for (let second = 0; !completed && second < 150; second++) {
+        await new Promise<void>(resolve => setImmediate(resolve));
+        mock.timers.tick(1_000);
+    }
+
+    assert.ok(completed);
+    assert.deepEqual((await result).hosts.map(host => host.name), hosts);
+    assert.deepEqual(accepted, [null, ...Array.from({ length: 241 }, (_, index) => String((index + 1) * 8))]);
+    assert.deepEqual([...throttled], ["968", "1928"]);
+    assert.ok(Date.now() >= 120_000);
+});
+
+test("aborts a throttled scan while it is waiting to retry", async ({ mock }) => {
+    mock.timers.enable({ apis: ["setTimeout"] });
+    const controller = new AbortController();
+    const reason = new Error("Inventory read cancelled");
+    const cursors: unknown[] = [];
+    const result = readRegisteredVpsInventory(async ({ storedAfter }) => {
+        cursors.push(storedAfter);
+        if (storedAfter === null) return page(["first"], "continue");
+        throw new ControlPlaneAdminError("rate_limited", "Wait to read the next page.", true);
+    }, false, controller.signal);
+    await new Promise<void>(resolve => setImmediate(resolve));
+    controller.abort(reason);
+    await assert.rejects(result, reason);
+    mock.timers.tick(60_000);
+    assert.deepEqual(cursors, [null, "continue"]);
+});
+
 test("retains the latest runner target when the terminal page has no sample", async () => {
     const pages = [
         { ...page(["first"], "second", true), runnerTargetSourceCommit: "a".repeat(40) },

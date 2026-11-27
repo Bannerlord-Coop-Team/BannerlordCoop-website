@@ -215,7 +215,7 @@ async function ControlPlaneViewContent({
     let accounts: WebsiteAccountSummary[] = [];
     let error = "";
     try {
-        const needsAccounts = view === "vps" || view === "servers" || view === "operations" || view === "relocate";
+        const needsAccounts = view === "servers" || view === "operations" || view === "relocate";
         const [viewResult, usersResult] = await Promise.allSettled([
             read.then(result => {
                 if (result.status === "rejected") throw result.reason;
@@ -251,7 +251,7 @@ async function ControlPlaneViewContent({
                 </div>
             )}
             {!error && view === "overview" && <OverviewView overview={data as OverviewSummary} />}
-            {!error && view === "vps" && <VpsView {...data as VpsViewData} accounts={accounts} />}
+            {!error && view === "vps" && <VpsView {...data as VpsViewData} />}
             {!error && view === "servers" && <ServersView page={data as HostingPage<ManagedServer>} query={query} accounts={accounts} />}
             {!error && view === "server" && <ControlPlaneServerView key={serverId} initial={serverProgressView(data as ServerDashboardResult)} accounts={accounts} />}
             {!error && view === "jobs" && <JobsView page={data as HostingPage<HostingJob>} state={jobState} action={jobAction} unacknowledgedOnly={unacknowledgedOnly} cursor={jobCursor} serverId={serverId} />}

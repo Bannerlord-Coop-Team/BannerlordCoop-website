@@ -4,7 +4,8 @@ import { LocalDateTime } from "@/app/components/admin/LocalDateTime";
 import { RunnerOnboardingStatus } from "@/app/components/admin/RunnerOnboardingStatus";
 import { VpsSlotCapacityRaise } from "@/app/components/admin/VpsSlotCapacityRaise";
 import { VpsSlotDecommission } from "@/app/components/admin/VpsSlotDecommission";
-import { formatAccountOwner, hostPlacementLabel } from "@/app/lib/control-plane/presentation";
+import { hostPlacementLabel } from "@/app/lib/control-plane/presentation";
+import { vpsSlotOwnerId } from "@/app/lib/control-plane/vps-inventory-query";
 import { stateExplanation } from "@/app/lib/control-plane/explanations";
 import { readSlotStorage } from "@/app/lib/control-plane/slot-storage";
 import { vpsProviderLabel } from "@/app/lib/control-plane/vps-providers";
@@ -29,7 +30,6 @@ type VpsHostInventoryProps = {
     billingUnavailable?: boolean;
     onRefresh?: () => void;
     hosts: HostingAdminVpsHost[];
-    ownerLabels: Record<string, string>;
     runnerTargetSourceCommit: string | null;
     // Stored catalog placements that name each host's regions; null when the catalog could not be read.
     regionCatalog?: readonly HostingRegionPayload[] | null;
@@ -51,7 +51,6 @@ export function VpsHostInventory({
     billingPending = liveDataPending,
     billingUnavailable = false,
     onRefresh,
-    ownerLabels,
     runnerTargetSourceCommit,
     regionCatalog = null,
 }: VpsHostInventoryProps) {
@@ -93,7 +92,7 @@ export function VpsHostInventory({
                                 <div role="row" className={`grid ${SUMMARY_GRID} items-center gap-x-4 gap-y-4 px-4 py-3 hover:bg-white/[0.025]`}>
                                     <div role="cell" data-label="Host" className={SUMMARY_LABEL}><HostIdentity host={host} regionCatalog={regionCatalog} /></div>
                                     <div role="cell" data-label="Capacity" className={SUMMARY_LABEL}><CapacitySummary host={host} /></div>
-                                    <div role="cell" data-label="Slots" className={SUMMARY_LABEL}><SlotSummary host={host} ownerLabels={ownerLabels} /></div>
+                                    <div role="cell" data-label="Slots" className={SUMMARY_LABEL}><SlotSummary host={host} /></div>
                                     <div role="cell" data-label="System" className={SUMMARY_LABEL}>
                                         <SystemSummary resources={host.resources} pending={liveDataPending} />
                                         {host.liveData?.status === "unavailable" && <p className="mt-1 text-xs text-amber-300">
@@ -125,7 +124,7 @@ export function VpsHostInventory({
                                         <ChevronDown aria-hidden="true" className={`size-5 transition-transform ${expanded ? "rotate-180" : "-rotate-90"}`} />
                                     </button></div>
                                 </div>
-                                {expanded && <ExpandedHost id={panelId} host={host} ownerLabels={ownerLabels} runnerTargetSourceCommit={runnerTargetSourceCommit} pending={liveDataPending} onRefresh={onRefresh} />}
+                                {expanded && <ExpandedHost id={panelId} host={host} runnerTargetSourceCommit={runnerTargetSourceCommit} pending={liveDataPending} onRefresh={onRefresh} />}
                             </section>
                         );
                     })}
@@ -168,12 +167,11 @@ function CapacitySummary({ host }: { host: HostingAdminVpsHost }) {
     </dl>;
 }
 
-function SlotSummary({ host, ownerLabels }: { host: HostingAdminVpsHost; ownerLabels: Record<string, string> }) {
+function SlotSummary({ host }: { host: HostingAdminVpsHost }) {
     const slots = Array.isArray(host.occupiedSlots) ? host.occupiedSlots : [];
     return <ul className="space-y-1 text-[0.625rem] leading-4">
         {slots.map((slot) => {
-            const ownerName = formatAccountOwner(slot, ownerLabels);
-            const label = `${ownerName} (${slot.displayName})`;
+            const label = `${vpsSlotOwnerId(slot)} (${slot.displayName})`;
             return <li key={`${slot.slotIndex}:${slot.serverId}`} className="flex min-w-0 items-center gap-2"><span aria-hidden="true" className={`size-2 shrink-0 rounded-full ${slot.operationState === "running" ? "bg-emerald-400" : "bg-white/30"}`} /><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="min-w-0 break-words font-medium text-foreground hover:text-gold hover:underline" title={label}>{label}</Link></li>;
         })}
         {host.availableServers > 0 && <li className="flex items-center gap-2 text-foreground-dim"><span aria-hidden="true" className="size-2 rounded-full bg-white/20" />{host.availableServers} available</li>}
@@ -194,7 +192,7 @@ function SystemSummary({ resources, pending }: { resources: HostingAdminHostReso
     </dl>;
 }
 
-function ExpandedHost({ id, host, ownerLabels, runnerTargetSourceCommit, pending, onRefresh }: { pending: boolean; id: string; host: HostingAdminVpsHost; ownerLabels: Record<string, string>; runnerTargetSourceCommit: string | null; onRefresh?: () => void }) {
+function ExpandedHost({ id, host, runnerTargetSourceCommit, pending, onRefresh }: { pending: boolean; id: string; host: HostingAdminVpsHost; runnerTargetSourceCommit: string | null; onRefresh?: () => void }) {
     const slots = Array.isArray(host.occupiedSlots) ? host.occupiedSlots : [];
     return (
         <div role="row" className="min-w-0">
@@ -209,7 +207,7 @@ function ExpandedHost({ id, host, ownerLabels, runnerTargetSourceCommit, pending
                         <div role="rowgroup" className="divide-y divide-white/10">
                             {slots.map((slot) => <div role="row" key={`${slot.slotIndex}:${slot.serverId}`} className={`grid ${SLOT_GRID} items-center justify-center gap-x-4 gap-y-4 px-6 py-2.5 text-xs`}>
                                 <div role="cell" data-label="Slot / UDP" className={SLOT_LABEL}><p className="font-label font-semibold uppercase tracking-[0.08em] text-gold">Slot {slot.slotIndex + 1} · UDP {slot.gamePort}</p></div>
-                                <div role="cell" data-label="Player / Server" className={SLOT_LABEL}><p className="truncate font-semibold text-foreground" title={formatAccountOwner(slot, ownerLabels)}>{formatAccountOwner(slot, ownerLabels)}</p><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="block truncate font-mono text-[0.62rem] text-foreground-muted hover:text-gold hover:underline" title={slot.displayName}>{slot.displayName}</Link></div>
+                                <div role="cell" data-label="Player / Server" className={SLOT_LABEL}><p className="truncate font-semibold text-foreground" title={vpsSlotOwnerId(slot)}>{vpsSlotOwnerId(slot)}</p><Link href={`/admin/control-plane?view=server&serverId=${encodeURIComponent(slot.serverId)}`} className="block truncate font-mono text-[0.62rem] text-foreground-muted hover:text-gold hover:underline" title={slot.displayName}>{slot.displayName}</Link></div>
                                 <div role="cell" data-label="CPU" className={SLOT_LABEL}><p className="text-foreground-muted">{pending ? "Loading…" : formatCpu(slot.resources)}</p></div>
                                 <div role="cell" data-label="Memory" className={SLOT_LABEL}><p className="text-foreground-muted">{pending ? "Loading…" : formatMemory(slot.resources)}</p></div>
                                 <div role="cell" data-label="Storage" className={SLOT_LABEL}><SlotStorage storage={slot.storage} pending={pending} /></div>

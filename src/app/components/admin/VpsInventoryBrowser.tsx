@@ -3,28 +3,25 @@
 import { VpsHostInventory } from "@/app/components/admin/VpsHostInventory";
 import {
     VPS_PAGE_SIZES,
-    emailSuggestions,
+    ownerIdSuggestions,
     filterVpsHosts,
     isVpsPageSize,
     paginateVpsHosts,
     sortVpsHosts,
     useRememberedVpsPageSize,
-    vpsOwnerEmails,
+    vpsOwnerIds,
     vpsRegionOptions,
 } from "@/app/lib/control-plane/vps-inventory-query";
 import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
-import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 import type { HostingRegionPayload } from "../../../../supabase/functions/_shared/hosting-regions";
 import { useId, useMemo, useState } from "react";
 
 type VpsInventoryBrowserProps = {
     hosts: HostingAdminVpsHost[];
-    accounts: readonly WebsiteAccountSummary[];
     liveDataPending?: boolean;
     billingPending?: boolean;
     billingUnavailable?: boolean;
     onRefresh?: () => void;
-    ownerLabels: Record<string, string>;
     runnerTargetSourceCommit: string | null;
     regionCatalog?: readonly HostingRegionPayload[] | null;
 };
@@ -36,28 +33,26 @@ export function VpsInventoryBrowser(props: VpsInventoryBrowserProps) {
 
 function FilteredVpsInventory({
     hosts,
-    accounts,
     liveDataPending = false,
     billingPending = false,
     billingUnavailable = false,
     onRefresh,
-    ownerLabels,
     runnerTargetSourceCommit,
     regionCatalog = null,
 }: VpsInventoryBrowserProps) {
     const [regions, setRegions] = useState<string[]>([]);
-    const [email, setEmail] = useState("");
+    const [ownerId, setOwnerId] = useState("");
     const [emptySlotsOnly, setEmptySlotsOnly] = useState(false);
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useRememberedVpsPageSize();
     const regionOptions = useMemo(() => vpsRegionOptions(hosts, regionCatalog), [hosts, regionCatalog]);
-    const ownerEmails = useMemo(() => vpsOwnerEmails(hosts, accounts), [hosts, accounts]);
+    const ownerIds = useMemo(() => vpsOwnerIds(hosts), [hosts]);
     const filtered = useMemo(
-        () => filterVpsHosts(hosts, accounts, { regions, email, emptySlotsOnly }, regionCatalog),
-        [hosts, accounts, regions, email, emptySlotsOnly, regionCatalog],
+        () => filterVpsHosts(hosts, { regions, ownerId, emptySlotsOnly }, regionCatalog),
+        [hosts, regions, ownerId, emptySlotsOnly, regionCatalog],
     );
     const pagination = paginateVpsHosts(sortVpsHosts(filtered), page, pageSize);
-    const filtersActive = regions.length > 0 || email.trim().length > 0 || emptySlotsOnly;
+    const filtersActive = regions.length > 0 || ownerId.trim().length > 0 || emptySlotsOnly;
     const pageSizeId = useId();
 
     function toggleRegion(region: string) {
@@ -71,9 +66,9 @@ function FilteredVpsInventory({
                 regionOptions={regionOptions}
                 regions={regions}
                 onToggleRegion={toggleRegion}
-                email={email}
-                ownerEmails={ownerEmails}
-                onEmailChange={(value) => { setEmail(value); setPage(1); }}
+                ownerId={ownerId}
+                ownerIds={ownerIds}
+                onOwnerIdChange={(value) => { setOwnerId(value); setPage(1); }}
                 emptySlotsOnly={emptySlotsOnly}
                 onEmptySlotsOnlyChange={(value) => { setEmptySlotsOnly(value); setPage(1); }}
             />
@@ -89,7 +84,6 @@ function FilteredVpsInventory({
                     billingPending={billingPending}
                     billingUnavailable={billingUnavailable}
                     onRefresh={onRefresh}
-                    ownerLabels={ownerLabels}
                     runnerTargetSourceCommit={runnerTargetSourceCommit}
                     regionCatalog={regionCatalog}
                 />
@@ -124,31 +118,31 @@ function VpsFilters({
     regionOptions,
     regions,
     onToggleRegion,
-    email,
-    ownerEmails,
-    onEmailChange,
+    ownerId,
+    ownerIds,
+    onOwnerIdChange,
     emptySlotsOnly,
     onEmptySlotsOnlyChange,
 }: {
     regionOptions: readonly { value: string; label: string }[];
     regions: readonly string[];
     onToggleRegion: (region: string) => void;
-    email: string;
-    ownerEmails: readonly string[];
-    onEmailChange: (email: string) => void;
+    ownerId: string;
+    ownerIds: readonly string[];
+    onOwnerIdChange: (ownerId: string) => void;
     emptySlotsOnly: boolean;
     onEmptySlotsOnlyChange: (value: boolean) => void;
 }) {
     const listId = useId();
-    const emailId = useId();
+    const ownerIdInputId = useId();
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(0);
-    const suggestions = emailSuggestions(ownerEmails, email);
+    const suggestions = ownerIdSuggestions(ownerIds, ownerId);
     const showSuggestions = open && suggestions.length > 0;
     const activeIndex = suggestions.length === 0 ? 0 : Math.min(active, suggestions.length - 1);
 
-    function selectEmail(value: string) {
-        onEmailChange(value);
+    function selectOwnerId(value: string) {
+        onOwnerIdChange(value);
         setOpen(false);
     }
 
@@ -180,20 +174,20 @@ function VpsFilters({
                 </div>
             </fieldset>
             <div className="relative">
-                <label htmlFor={emailId} className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted">Email</label>
+                <label htmlFor={ownerIdInputId} className="font-label text-[0.62rem] font-semibold uppercase tracking-[0.12em] text-foreground-muted">Owner ID</label>
                 <input
-                    id={emailId}
+                    id={ownerIdInputId}
                     type="search"
                     role="combobox"
                     aria-autocomplete="list"
                     aria-expanded={showSuggestions}
                     aria-controls={showSuggestions ? listId : undefined}
                     aria-activedescendant={showSuggestions ? `${listId}-option-${activeIndex}` : undefined}
-                    value={email}
+                    value={ownerId}
                     autoComplete="off"
-                    placeholder="Filter by owner email"
+                    placeholder="Filter by owner ID"
                     onChange={(event) => {
-                        onEmailChange(event.target.value);
+                        onOwnerIdChange(event.target.value);
                         setOpen(true);
                         setActive(0);
                     }}
@@ -210,7 +204,7 @@ function VpsFilters({
                             setActive((current) => Math.max(current - 1, 0));
                         } else if (event.key === "Enter" && showSuggestions && suggestions[activeIndex] !== undefined) {
                             event.preventDefault();
-                            selectEmail(suggestions[activeIndex]);
+                            selectOwnerId(suggestions[activeIndex]);
                         } else if (event.key === "Escape") setOpen(false);
                     }}
                     className="mt-2 min-h-10 w-full border border-white/15 bg-background px-3 text-xs text-foreground outline-none placeholder:text-foreground-dim focus:border-gold"
@@ -223,7 +217,7 @@ function VpsFilters({
                                     type="button"
                                     onMouseDown={(event) => event.preventDefault()}
                                     onMouseEnter={() => setActive(index)}
-                                    onClick={() => selectEmail(suggestion)}
+                                    onClick={() => selectOwnerId(suggestion)}
                                     className={`w-full px-3 py-2 text-left text-xs ${index === activeIndex ? "bg-gold/10 text-gold" : "text-foreground hover:bg-white/5"}`}
                                 >
                                     {suggestion}
@@ -252,7 +246,6 @@ function inventoryProps(props: VpsInventoryBrowserProps) {
         billingPending: props.billingPending,
         billingUnavailable: props.billingUnavailable,
         onRefresh: props.onRefresh,
-        ownerLabels: props.ownerLabels,
         runnerTargetSourceCommit: props.runnerTargetSourceCommit,
         regionCatalog: props.regionCatalog,
     };
