@@ -1,5 +1,7 @@
 "use client";
 
+import { runnerUpdateSettlement } from "./runner-update-settlement";
+
 import { LoaderCircle, RefreshCw } from "lucide-react";
 import { requestControlPlaneAdmin } from "@/app/lib/control-plane/client";
 import { SLOT_DECOMMISSION_PAUSED, slotDecommissionPaused } from "@/app/lib/control-plane/slot-decommission";
@@ -231,15 +233,5 @@ function runnerUpdateStateExplanation(state: RunnerUpdate["state"]) {
         case "retry-wait": return "A retryable update boundary failed; the durable workflow will resume after backoff.";
         case "succeeded": return "Every isolated slot passed revision, identity, build, save, and capability verification.";
         case "failed": return "The update did not complete. Inspect the error code before retrying.";
-    }
-}
-
-function runnerUpdateSettlement(update: RunnerUpdate | null): string | null {
-    if (update?.state !== "failed") return null;
-    switch (update.errorCode) {
-        case "runner_isolated_rolled_back": return "The rollback was verified and the prior runner revision is active.";
-        case "runner_isolated_applied_recovered": return "Recovery verified the applied runner revision and completed the update.";
-        case "runner_update_not_applied": return "The attempt ended before the runner was switched.";
-        default: return null;
     }
 }

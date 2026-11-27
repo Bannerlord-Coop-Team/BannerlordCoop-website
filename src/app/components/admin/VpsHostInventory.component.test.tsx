@@ -168,6 +168,20 @@ describe("compact VPS host inventory", () => {
         expect(container.querySelector('[role="region"]')).toBeNull();
     });
 
+    it.each([
+        ["runner_isolated_rolled_back", "settled"],
+        ["runner_isolated_applied_recovery_incomplete", "failed"],
+    ] as const)("shows %s as %s in expanded runner details", async (errorCode, state) => {
+        const row = host("host-a", resources(70, 30), 0, true);
+        row.runnerUpdate = { ...row.runnerUpdate!, state: "failed", progressStage: "failed", errorCode };
+        await act(async () => root.render(<VpsHostInventory hosts={[row]} ownerLabels={{}} runnerTargetSourceCommit={null} />));
+        await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-a"]')!.click());
+        const details = container.querySelector('[role="region"][aria-label="Details for host-a"]');
+        expect(details?.textContent).toContain(`Latest update ${state}`);
+        expect(details?.textContent).toContain(errorCode);
+        if (state === "settled") expect(details?.textContent).not.toMatch(/latest update failed| · Failed/iu);
+    });
+
     it("keeps summaries compact and reveals only one host detail panel at a time", async () => {
         await act(async () => root.render(<VpsHostInventory
             hosts={[host("host-a", resources(70, 30), 0, true), host("host-b", resources(80, 20), 1)]}

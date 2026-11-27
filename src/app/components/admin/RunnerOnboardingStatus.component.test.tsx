@@ -69,7 +69,7 @@ it.each([
         runningServers={1}
         targetSourceCommit="new-source"
         onboarding={{ state: "succeeded", progressStage: "runner-active", errorCode: null, sourceCommit: "current-source", updatedAt: "2026-09-10T18:00:00.000Z" }}
-        update={{ state: "failed", correlationId: "update-a", progressStage: "failed", errorCode,
+        update={{ state: "failed", progressStage: "failed", errorCode,
             targetSourceCommit: "new-source", priorSourceCommit: "current-source", updatedAt: "2026-09-10T18:00:00.000Z" }}
     />));
     const updateBadge = [...container.querySelectorAll("span[title]")].find(element => element.textContent === badge);
