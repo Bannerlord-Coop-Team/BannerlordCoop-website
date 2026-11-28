@@ -19,7 +19,7 @@ import { hostingRegionLabel } from "../../../../supabase/functions/_shared/hosti
 import type { HostingAdminHostResources, HostingAdminRegionRequest, HostingAdminRegionRequestNotification, HostingPage, VpsViewData } from "@/app/lib/control-plane/types";
 
 /** Shows registered VPS capacity, labelled by the stored region catalog, with live readings and region requests. */
-export function VpsView({ inventory: initialInventory, hostingRegions }: VpsViewData) {
+export function VpsView({ inventory: initialInventory, hostingRegions, ownerLabels }: VpsViewData) {
     const readings = useLiveInventoryReading(initialInventory, RESOURCES_READING);
     const billing = useSupplementaryReading(initialInventory, BILLING_READING);
     const oracle = useSupplementaryReading(initialInventory, ORACLE_READING);
@@ -59,6 +59,7 @@ export function VpsView({ inventory: initialInventory, hostingRegions }: VpsView
             </div>
             <VpsInventoryBrowser
                 hosts={hosts}
+                ownerLabels={ownerLabels}
                 liveDataPending={pending}
                 billingPending={billingState.kind === "loading"}
                 billingUnavailable={billingState.kind === "failed"}

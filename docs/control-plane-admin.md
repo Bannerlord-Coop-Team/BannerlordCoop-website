@@ -353,8 +353,9 @@ If the registered set changes or the cursor expires or becomes invalid, the webs
 discards its partial scan and tries again once. Live scans keep the latest runner
 target reported by a page even if later pages arrive after the telemetry budget.
 An older backend that refuses the initial paging option receives the legacy read.
-The provider billing refresh uses its separate account read. Slot owners are shown
-and filtered by their website account ID or legacy Discord ID.
+The provider billing refresh uses its separate account read. The admin page
+labels occupied slots with the owner's website email or Discord ID when available.
+The owner filter uses the website account ID or legacy Discord ID.
 
 The bottom of the VPS view also loads the pending region-request queue through
 the `region-requests` operation. Each row shows the requested region, requester
