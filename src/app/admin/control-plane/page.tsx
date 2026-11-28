@@ -36,6 +36,7 @@ import {
     createServerProviderOptions,
     createServerRegionOptions,
     formatAccountOwner,
+    slotOwnerAccountId,
     installableBuilds,
     MAINTENANCE_TIME_ZONE,
     maintenanceSlotOptions,
@@ -192,6 +193,21 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
     );
 }
 
+async function readVpsOwnerLabels(inventory: HostingAdminVpsInventory): Promise<Record<string, string>> {
+    const accountIds = [...new Set(inventory.hosts.flatMap(host => host.occupiedSlots ?? [])
+        .map(slotOwnerAccountId).filter(id => id !== null))];
+    const labels: Record<string, string> = {};
+    const batchSize = 8;
+    for (let offset = 0; offset < accountIds.length; offset += batchSize) {
+        await Promise.all(accountIds.slice(offset, offset + batchSize).map(async id => {
+            const account = await getWebsiteAccount(id).catch(() => null);
+            const label = account?.email || account?.discordUserId;
+            if (label) labels[id] = label;
+        }));
+    }
+    return labels;
+}
+
 async function ControlPlaneViewContent({
     read,
     view,
@@ -311,7 +327,8 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             ]);
             // Host labels match the stored placements; an unreadable catalog leaves the hosts listed without regions
             // and the Add capacity dialog's manual entry explains why it is unavailable.
-            return { inventory, hostingRegions } satisfies VpsViewData;
+            const ownerLabels = await readVpsOwnerLabels(inventory);
+            return { inventory, hostingRegions, ownerLabels } satisfies VpsViewData;
         }
         case "servers":
             return readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<ManagedServer>>({

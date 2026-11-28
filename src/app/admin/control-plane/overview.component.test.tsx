@@ -278,7 +278,19 @@ it.each(["revoked", "member", "mismatched"])("aborts and does not render early d
     expect(mocks.accounts).not.toHaveBeenCalled();
 });
 
-it("passes the paged VPS inventory to the client without customer contact data", async () => {
+it.each([true, false])("labels only owners in the paged VPS inventory: occupied=%s", async occupied => {
+    const ownerAccountId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const linkedAccountId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+    const otherAccountId = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+    const ownerDiscordId = "111111111111111111";
+    const linkedDiscordId = "222222222222222222";
+    const legacyDiscordId = "333333333333333333";
+    const email = "slot-owner@example.test";
+    const otherEmail = "unrelated@example.test";
+    const slot = (name: string, ownerDiscordUserId: string, ownerAccountId: string | null, slotIndex: number) => ({
+        slotIndex, gamePort: 7210 + slotIndex, serverId: `server-${name}`, displayName: name,
+        ownerDiscordUserId, ownerAccountId, operationState: "running",
+    });
     const options = { operation: "vps-hosts", accessToken: "test-admin-token", signal: expect.any(AbortSignal),
         expectedUserId: "admin", requireOrdinarySession: true, onAuthenticated: expect.any(Function) };
     const host = (name: string): HostingAdminVpsHost => ({
@@ -292,14 +304,24 @@ it("passes the paged VPS inventory to the client without customer contact data",
         if (request.operation === "hosting-regions") return { revision: 1, regions: hostingRegionCatalogPayload() };
         const cursor = request.input.storedAfter;
         if (cursor !== null && cursor !== "stored-continuation") throw new Error("Unexpected VPS cursor");
+        const firstPage = cursor === null;
+        const entry = host(firstPage ? "first-vps" : "last-vps");
+        if (occupied) entry.occupiedSlots = firstPage
+            ? [slot("Campaign", ownerDiscordId, ownerAccountId, 0)]
+            : [slot("Another campaign", ownerDiscordId, ownerAccountId, 0),
+                slot("Linked campaign", linkedAccountId, linkedAccountId, 1),
+                slot("Legacy campaign", legacyDiscordId, null, 2)];
         return { liveDataIncluded: false, availableHosts: [], controlPlaneHost: null,
-            hosts: [host(cursor === null ? "first-vps" : "last-vps")],
-            nextCursor: cursor === null ? "stored-continuation" : null };
+            hosts: [entry], nextCursor: firstPage ? "stored-continuation" : null };
     });
-    const email = "customer@example.test";
     mocks.accounts.mockResolvedValue({ users: [{
-        accountId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", email, label: email, discordUserId: null,
+        accountId: otherAccountId, email: otherEmail, label: otherEmail, discordUserId: null,
     }], truncated: false });
+    mocks.account.mockImplementation(async accountId => {
+        if (accountId === ownerAccountId) return { accountId, email, label: email, discordUserId: ownerDiscordId };
+        if (accountId === linkedAccountId) return { accountId, email: null, label: accountId, discordUserId: linkedDiscordId };
+        throw new Error("Unexpected owner lookup");
+    });
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "vps" }) }));
     await stream.allReady;
     const html = await new Response(stream).text();
@@ -308,8 +330,20 @@ it("passes the paged VPS inventory to the client without customer contact data",
     expect(mocks.vps).toHaveBeenCalledTimes(1);
     const [clientProps] = mocks.vps.mock.calls[0];
     expect(clientProps).not.toHaveProperty("accounts");
-    expect(JSON.stringify(clientProps)).not.toContain(email);
+    expect(JSON.stringify(clientProps)).not.toContain(otherEmail);
+    expect(html).not.toContain(otherEmail);
     expect(mocks.accounts).not.toHaveBeenCalled();
+    expect(mocks.account.mock.calls).toEqual(occupied ? [[ownerAccountId], [linkedAccountId]] : []);
+    if (occupied) {
+        expect(clientProps.ownerLabels).toEqual({ [ownerAccountId]: email, [linkedAccountId]: linkedDiscordId });
+        expect(html).toContain(`${email} (Campaign)`);
+        expect(html).toContain(`${email} (Another campaign)`);
+        expect(html).toContain(`${linkedDiscordId} (Linked campaign)`);
+        expect(html).toContain(`${legacyDiscordId} (Legacy campaign)`);
+    } else {
+        expect(clientProps.ownerLabels).toEqual({});
+        expect(html).not.toContain(email);
+    }
     expect(mocks.request.mock.calls.filter(([request]) => request.operation === "vps-hosts")).toEqual(
         [null, "stored-continuation"].map(storedAfter => [{ ...options,
             input: { includeLiveData: false, includeProviderInventory: false, storedAfter },
@@ -323,6 +357,8 @@ it("never renders the VPS view, where the slot decommission controls live, for a
     // Only the view's reads start, and each is cancelled; no slot decommission request is ever sent.
     expect(mocks.request.mock.calls.map(([request]) => request.operation).sort()).toEqual(["hosting-regions", "vps-hosts"]);
     for (const [request] of mocks.request.mock.calls) expect(request.signal.aborted).toBe(true);
+    expect(mocks.account).not.toHaveBeenCalled();
+    expect(mocks.accounts).not.toHaveBeenCalled();
 });
 
 it("consumes early read failures and preserves the ordinary error UI after authentication", async () => {
