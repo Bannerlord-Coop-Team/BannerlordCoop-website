@@ -1,5 +1,5 @@
 import { GENERAL_HELP_TICKET } from "./discord-support.ts";
-import { DEFAULT_MANAGED_SERVER_CONFIGURATION as defaults, parseManagedServerConfiguration, type ManagedServerConfiguration, type ManagedConfigurationMessages } from "./managed-server-configuration.ts";
+import { CATALOG_MOD_OPTION_DEFAULTS, DEFAULT_MANAGED_SERVER_CONFIGURATION as defaults, parseManagedServerConfiguration, type ManagedServerConfiguration, type ManagedConfigurationMessages } from "./managed-server-configuration.ts";
 
 export type ConfigurationImportMessages = {
   invalidImport: string;
@@ -51,6 +51,8 @@ export type ConfigurationImport = { managedConfig: ManagedServerConfiguration }
   | { configPart: 'server'; settings: ServerSettings }
   | { configPart: 'mod'; settings: ModSettings };
 
+const modOptionDefaults = { ...defaults.modConfig.modOptions, ...CATALOG_MOD_OPTION_DEFAULTS };
+
 /** Validate the selected patch without substituting defaults for omitted settings. */
 export function parseConfigurationImport(value: unknown, messages: ConfigurationImportMessages = defaultImportMessages): ConfigurationImport {
   const input = object(value, messages);
@@ -71,7 +73,7 @@ export function parseConfigurationImport(value: unknown, messages: Configuration
   for (const part of ['voice', 'difficulty', 'modOptions'] as const) {
     if (settings[part] !== undefined) {
       const block = object(settings[part], messages);
-      requireKeys(block, defaults.modConfig[part], messages);
+      requireKeys(block, part === 'modOptions' ? modOptionDefaults : defaults.modConfig[part], messages);
       count += Object.keys(block).length;
     }
   }
@@ -104,7 +106,7 @@ const ignoredModRootKeys = ['network'];
 const WAR_SAILS_KEY = 'warSails';
 const ignoredModKeys = ['showPlayerNameplates', 'playerWoundedBattleEntry', WAR_SAILS_KEY];
 const importableModOptions: Readonly<Record<string, unknown>> = Object.freeze(Object.fromEntries(
-  Object.entries(defaults.modConfig.modOptions).filter(([key]) => key !== WAR_SAILS_KEY),
+  Object.entries(modOptionDefaults).filter(([key]) => !ignoredModKeys.includes(key)),
 ));
 
 // Whether a website backup names War Sails, which its import ignores.

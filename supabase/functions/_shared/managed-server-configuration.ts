@@ -42,7 +42,7 @@ export interface ManagedVoiceConfiguration {
   sceneMaximumDistance: number;
 }
 
-export interface ManagedModOptionsConfiguration {
+export interface ManagedModOptionsConfiguration extends CatalogModOptions {
   fastForwardEnabled: boolean;
   autoPauseEnabled: boolean;
   clientsCanUseCheats: boolean;
@@ -162,6 +162,48 @@ const defaultConfigurationMessages: ManagedConfigurationMessages = {
   choice: 'Managed server configuration choice is invalid',
 };
 
+// The ControlPlane catalog can add options to a schema-v1 response. Keep them
+// optional for older releases and retain their values for edits and exports.
+const INT32_MIN = -2_147_483_648;
+const INT32_MAX = 2_147_483_647;
+const catalogModOptions = {
+  allowClientTimeControls: [true, requireBoolean],
+  postBattleAiAmnestySeconds: [0, requireInt32],
+  spawnRateWanderers: [1, requireInt32],
+  playerWoundedBattleEntry: [true, requireBoolean],
+  showPlayerNameplates: [true, requireBoolean],
+  kingdomDecisionVoteTimeoutSeconds: [60, requireInt32],
+  clansAfterKingdomDestruction: ['Vanilla', (value, messages) => requireEnum(value, ['Vanilla', 'KeepClans'], messages)],
+  preferredBattleHosts: [[], requirePreferredBattleHosts],
+  pvpBlockLeave: [false, requireBoolean],
+  pvpResponseTimerSeconds: [0, (value, messages) => requireInteger(value, 0, INT32_MAX, messages)],
+  maxClansPerKingdom: [0, requireInt32],
+  maxClansPerKingdomCountsMercenaries: [false, requireBoolean],
+} satisfies Record<string, [unknown, (value: unknown, messages: ManagedConfigurationMessages) => unknown]>;
+type CatalogModOptions = { [Key in keyof typeof catalogModOptions]?: ReturnType<(typeof catalogModOptions)[Key][1]> };
+
+export const CATALOG_MOD_OPTION_DEFAULTS = Object.freeze(Object.fromEntries(
+  Object.entries(catalogModOptions).map(([key, [fallback]]) => [key, fallback]),
+));
+const catalogModOptionKeys = Object.keys(catalogModOptions);
+
+function parseCatalogModOptions(value: Record<string, unknown>, messages: ManagedConfigurationMessages): CatalogModOptions {
+  return Object.fromEntries(Object.entries(catalogModOptions)
+    .filter(([key]) => Object.hasOwn(value, key))
+    .map(([key, [, parse]]) => [key, parse(value[key], messages)]));
+}
+
+function requireInt32(value: unknown, messages: ManagedConfigurationMessages): number {
+  return requireInteger(value, INT32_MIN, INT32_MAX, messages);
+}
+
+function requirePreferredBattleHosts(value: unknown, messages: ManagedConfigurationMessages): string[] {
+  if (!Array.isArray(value) || value.length > 32 || value.some((entry) => typeof entry !== 'string' || !/^[0-9]{17}$/u.test(entry))) {
+    throw new Error(messages.choice);
+  }
+  return [...value];
+}
+
 // Validates and freezes configuration using caller-provided diagnostics without request dependencies.
 export function parseManagedServerConfiguration(
   value: unknown,
@@ -222,7 +264,7 @@ export function parseManagedServerConfiguration(
     enablePlayerExecutions: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.enablePlayerExecutions,
     battleSize: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.battleSize,
     warSails: DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions.warSails,
-  }, messages);
+  }, messages, catalogModOptionKeys);
   return deepFreeze({
     schemaVersion: 1,
     serverConfig: {
@@ -308,6 +350,7 @@ export function parseManagedServerConfiguration(
         ),
         enablePlayerExecutions: requireBoolean(modOptions.enablePlayerExecutions, messages),
         warSails: requireBoolean(modOptions.warSails, messages),
+        ...parseCatalogModOptions(modOptions, messages),
       },
     },
   });
@@ -339,9 +382,10 @@ function requireCompatibleRecord(
   requiredKeys: readonly string[],
   optionalDefaults: Readonly<Record<string, unknown>>,
   messages: ManagedConfigurationMessages,
+  optionalKeys: readonly string[] = [],
 ): Record<string, unknown> {
   if (!isPlainRecord(value)) throw new Error(messages.shape);
-  const allowed = new Set([...requiredKeys, ...Object.keys(optionalDefaults)]);
+  const allowed = new Set([...requiredKeys, ...Object.keys(optionalDefaults), ...optionalKeys]);
   const actual = Object.keys(value);
   if (actual.some((key) => !allowed.has(key)) || requiredKeys.some((key) => !Object.hasOwn(value, key))) {
     throw new Error(messages.shape);
