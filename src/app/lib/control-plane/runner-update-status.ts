@@ -20,6 +20,7 @@ const updateStates: Record<UpdateState, StateDetails> = {
             runner_isolated_rolled_back: "The rollback was verified and the prior runner revision is active.",
             runner_isolated_applied_recovered: "Recovery verified the applied runner revision and completed the update.",
             runner_update_not_applied: "The attempt ended before the runner was switched.",
+            runner_update_native_owner_template_incompatible: "The last attempt was refused by the native owner template check before switching the runner revision.",
         },
     },
 };

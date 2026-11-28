@@ -169,6 +169,7 @@ describe("compact VPS host inventory", () => {
 
     it.each([
         ["failed", "runner_isolated_rolled_back", "settled"],
+        ["failed", "runner_update_native_owner_template_incompatible", "settled"],
         ["failed", "runner_isolated_applied_recovery_incomplete", "failed"],
         ["settled", null, "unknown"],
     ] as const)("shows wire state %s with %s as %s in expanded runner details", async (wireState, errorCode, label) => {
