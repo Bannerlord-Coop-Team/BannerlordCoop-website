@@ -3,7 +3,7 @@ import test from "node:test";
 import { serverLogDownloadHeaders, MAXIMUM_SERVER_LOG_BYTES } from "../_shared/server-log-contract.ts";
 import { createMyServersHandler } from "../_shared/my-servers.ts";
 import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../_shared/managed-server-configuration.ts";
-import { parseOwnerFileMutation, parseOwnerFileDownload, parseOwnerFileResult, OWNER_FILE_FAILURE_REASONS, OWNER_FILE_REJECTION_REASONS } from "../_shared/server-file-contract.ts";
+import { parseOwnerFileMutation, parseOwnerFileDownload, parseOwnerFileResult, parseOwnerFileStatus, OWNER_FILE_FAILURE_REASONS, OWNER_FILE_REJECTION_REASONS } from "../_shared/server-file-contract.ts";
 const requestId = "aaaaaaaa-1111-4111-8111-111111111111";
 const input = { action: "import-config", serverId: requestId, expectedUpdatedAt: "2026-09-13T00:00:00.000Z", managedConfig: DEFAULT_MANAGED_SERVER_CONFIGURATION };
 const result = { kind: "configuration", outcome: "updated", updatedAt: "2026-09-13T00:00:01.000Z" };
@@ -54,22 +54,43 @@ function request(body: unknown, auth = true, id = true) { return new Request("ht
 function handler(fetchImplementation: typeof fetch) { return createMyServersHandler({ allowedOrigins: ["https://website.test"], controlPlaneUrl: "https://cp.test", waitUntil: () => {}, fetchImplementation }); }
 
 test("save metadata and mod configuration reads accept the expanded live configuration", async () => {
-    const managedConfig = structuredClone(DEFAULT_MANAGED_SERVER_CONFIGURATION);
-    managedConfig.modConfig.voice.sceneMaximumDistance = 75;
-    managedConfig.modConfig.modOptions.coopClansEnabled = false;
-    const files = { serverId: requestId, updatedAt: input.expectedUpdatedAt, operationState: "running",
-        observedGameState: "running", activeSave: { saveId: requestId, displayName: "Default New Game" }, managedConfig };
-    const response = await handler(async (_url, init) => {
-        const upstream = JSON.parse(String(init?.body));
-        return Response.json({ version: 1, requestId: upstream.requestId, ok: true, result: files });
-    })(new Request(`https://edge.test/my-servers?resource=files&serverId=${requestId}`, { headers: { authorization: `Bearer ${token}` } }));
-    assert.equal(response.status, 200);
-    assert.deepEqual((await response.json()).result, files);
+    const legacyConfig = structuredClone(DEFAULT_MANAGED_SERVER_CONFIGURATION);
+    legacyConfig.modConfig.voice.sceneMaximumDistance = 75;
+    legacyConfig.modConfig.modOptions.coopClansEnabled = false;
+    const managedConfig = { ...legacyConfig, modConfig: { ...legacyConfig.modConfig, modOptions: {
+        ...legacyConfig.modConfig.modOptions, allowClientTimeControls: true, postBattleAiAmnestySeconds: 0,
+        wandererLimit: 1_001, playerBattleAiJoinWindowHours: 8_761, looterPartySizeMultiplier: 101,
+        spawnRateWanderers: 1, playerWoundedBattleEntry: true, showPlayerNameplates: true,
+        kingdomDecisionVoteTimeoutSeconds: 60, clansAfterKingdomDestruction: "Vanilla",
+        preferredBattleHosts: ["00000000000000000"], pvpBlockLeave: false, pvpResponseTimerSeconds: 10,
+        maxClansPerKingdom: 0, maxClansPerKingdomCountsMercenaries: false,
+    } } };
+    for (const config of [legacyConfig, managedConfig]) {
+        for (const state of ["stopped", "running"]) {
+            const files = { serverId: requestId, updatedAt: input.expectedUpdatedAt, operationState: state,
+                observedGameState: state, activeSave: { saveId: requestId, displayName: "Default New Game" }, managedConfig: config };
+            const response = await handler(async (_url, init) => {
+                const upstream = JSON.parse(String(init?.body));
+                assert.equal(upstream.operation, "server-files");
+                return Response.json({ version: 1, requestId: upstream.requestId, ok: true, result: files });
+            })(new Request(`https://edge.test/my-servers?resource=files&serverId=${requestId}`, { headers: { authorization: `Bearer ${token}` } }));
+            const body = await response.json();
+            assert.equal(response.status, 200, JSON.stringify(body.error));
+            assert.deepEqual(body.result, files);
+            assert.deepEqual(parseOwnerFileStatus(body.result), files);
+        }
+    }
     const mod = { configPart: "mod", revision: "a".repeat(64), settings: managedConfig.modConfig };
     const config = await handler(async () => Response.json({ requestId, ok: true, result: mod }))(
         new Request(`https://edge.test/my-servers?resource=config&serverId=${requestId}&configPart=mod`, { headers: { authorization: `Bearer ${token}` } }));
     assert.equal(config.status, 200);
     assert.deepEqual((await config.json()).result, mod);
+    const invalid = { ...mod, settings: { ...mod.settings, modOptions: {
+        ...mod.settings.modOptions, preferredBattleHosts: ["invalid"],
+    } } };
+    const invalidConfig = await handler(async () => Response.json({ requestId, ok: true, result: invalid }))(
+        new Request(`https://edge.test/my-servers?resource=config&serverId=${requestId}&configPart=mod`, { headers: { authorization: `Bearer ${token}` } }));
+    assert.equal(invalidConfig.status, 502);
 });
 
 test("configuration transfer preserves verified bearer, exact input and durable request ID", async () => {

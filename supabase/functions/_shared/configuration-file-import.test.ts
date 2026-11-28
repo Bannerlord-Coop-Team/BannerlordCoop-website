@@ -78,10 +78,12 @@ test("injects direct import and configuration validation without changing rules"
     assert.throws(() => parseConfigurationImport({ configPart: "server", settings: { autosaveMinutes: -1 } }, messages), { message: "integer" });
 });
 
-test("imports the native battle size and still reports other unmanaged mod options", () => {
-    const parsed = readConfigurationFile('{"modOptions":{"battleSize":"600","showPlayerNameplates":true}}', "mod");
+test("imports supported native mod options and reports ignored options", () => {
+    const parsed = readConfigurationFile('{"modOptions":{"battleSize":"600","pvpResponseTimerSeconds":"20","showPlayerNameplates":true}}', "mod");
     assert.deepEqual(parsed.ignoredSettings, ["showPlayerNameplates"]);
-    assert.equal(applyConfigurationImport(defaults, parsed.input).modConfig.modOptions.battleSize, 600);
+    const modOptions = applyConfigurationImport(defaults, parsed.input).modConfig.modOptions;
+    assert.equal(modOptions.battleSize, 600);
+    assert.equal(modOptions.pvpResponseTimerSeconds, 20);
     assert.throws(() => readConfigurationFile('{"modOptions":{"battleSize":12001}}', "mod", messages), { message: messages.unsupportedValues });
 });
 
