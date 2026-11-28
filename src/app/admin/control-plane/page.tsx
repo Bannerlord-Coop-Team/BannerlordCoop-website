@@ -64,7 +64,7 @@ import type {
     ServerDashboardResult,
 } from "@/app/lib/control-plane/types";
 import { getSupabaseServerReadSession, getSupabaseServerViewer } from "@/app/lib/supabase/server";
-import { getWebsiteAccount, listWebsiteAccounts } from "@/app/lib/supabase/users";
+import { getWebsiteAccount, listWebsiteAccounts, readWebsiteOwnerLabels } from "@/app/lib/supabase/users";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 import {
     Activity,
@@ -193,21 +193,6 @@ export default async function ControlPlaneAdminPage({ searchParams }: PageProps)
     );
 }
 
-async function readVpsOwnerLabels(inventory: HostingAdminVpsInventory): Promise<Record<string, string>> {
-    const accountIds = [...new Set(inventory.hosts.flatMap(host => host.occupiedSlots ?? [])
-        .map(slotOwnerAccountId).filter(id => id !== null))];
-    const labels: Record<string, string> = {};
-    const batchSize = 8;
-    for (let offset = 0; offset < accountIds.length; offset += batchSize) {
-        await Promise.all(accountIds.slice(offset, offset + batchSize).map(async id => {
-            const account = await getWebsiteAccount(id).catch(() => null);
-            const label = account?.email || account?.discordUserId;
-            if (label) labels[id] = label;
-        }));
-    }
-    return labels;
-}
-
 async function ControlPlaneViewContent({
     read,
     view,
@@ -327,7 +312,9 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             ]);
             // Host labels match the stored placements; an unreadable catalog leaves the hosts listed without regions
             // and the Add capacity dialog's manual entry explains why it is unavailable.
-            const ownerLabels = await readVpsOwnerLabels(inventory);
+            const accountIds = [...new Set(inventory.hosts.flatMap(host => host.occupiedSlots ?? [])
+                .map(slotOwnerAccountId).filter(id => id !== null))];
+            const ownerLabels = await readWebsiteOwnerLabels(accountIds).catch(() => ({}));
             return { inventory, hostingRegions, ownerLabels } satisfies VpsViewData;
         }
         case "servers":

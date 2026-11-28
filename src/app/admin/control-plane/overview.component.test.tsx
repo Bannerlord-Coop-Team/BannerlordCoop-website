@@ -1,8 +1,14 @@
 import { renderToReadableStream } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
-const mocks = vi.hoisted(() => ({ session: vi.fn(), auth: vi.fn(), request: vi.fn(), accounts: vi.fn(), account: vi.fn(), tables: vi.fn(), vps: vi.fn(), observations: vi.fn() }));
+const mocks = vi.hoisted(() => ({ session: vi.fn(), auth: vi.fn(), request: vi.fn(), accounts: vi.fn(), account: vi.fn(), ownerLabels: vi.fn(), tables: vi.fn(), vps: vi.fn(), observations: vi.fn() }));
 vi.mock("@/app/lib/supabase/server", () => ({ getSupabaseServerReadSession: mocks.session, getSupabaseServerViewer: mocks.auth }));
-vi.mock("@/app/lib/supabase/users", () => ({ listWebsiteAccounts: mocks.accounts, getWebsiteAccount: mocks.account }));
+vi.mock("@/app/lib/supabase/users", async importOriginal => ({
+    ...await importOriginal<typeof import("@/app/lib/supabase/users")>(),
+    listWebsiteAccounts: mocks.accounts, getWebsiteAccount: mocks.account,
+}));
+vi.mock("@/app/lib/supabase/admin", () => ({
+    getSupabaseAdminClient: () => ({ rpc: mocks.ownerLabels }),
+}));
 vi.mock("@/app/lib/control-plane/server-read", () => ({ readControlPlaneAdmin: mocks.request }));
 vi.mock("@/app/lib/control-plane/release-observations", () => ({ recordReleaseFirstObservations: mocks.observations }));
 vi.mock("@/app/components/admin/VpsView", async importOriginal => {
@@ -30,6 +36,7 @@ vi.mock("@/app/components/admin/ControlPlaneReadTables", async importOriginal =>
     };
 });
 import ControlPlaneAdminPage from "./page";
+import { readWebsiteOwnerLabels } from "@/app/lib/supabase/users";
 import { ControlPlaneAdminError } from "@/app/lib/control-plane/client";
 import type { HostingAdminVpsHost } from "@/app/lib/control-plane/types";
 import { hostingRegionCatalogPayload } from "../../../../supabase/functions/_shared/hosting-regions";
@@ -317,11 +324,10 @@ it.each([true, false])("labels only owners in the paged VPS inventory: occupied=
     mocks.accounts.mockResolvedValue({ users: [{
         accountId: otherAccountId, email: otherEmail, label: otherEmail, discordUserId: null,
     }], truncated: false });
-    mocks.account.mockImplementation(async accountId => {
-        if (accountId === ownerAccountId) return { accountId, email, label: email, discordUserId: ownerDiscordId };
-        if (accountId === linkedAccountId) return { accountId, email: null, label: accountId, discordUserId: linkedDiscordId };
-        throw new Error("Unexpected owner lookup");
-    });
+    mocks.ownerLabels.mockResolvedValue({ error: null, data: [
+        { account_id: ownerAccountId, label: email },
+        { account_id: linkedAccountId, label: linkedDiscordId },
+    ] });
     const stream = await renderToReadableStream(await ControlPlaneAdminPage({ searchParams: Promise.resolve({ view: "vps" }) }));
     await stream.allReady;
     const html = await new Response(stream).text();
@@ -333,7 +339,10 @@ it.each([true, false])("labels only owners in the paged VPS inventory: occupied=
     expect(JSON.stringify(clientProps)).not.toContain(otherEmail);
     expect(html).not.toContain(otherEmail);
     expect(mocks.accounts).not.toHaveBeenCalled();
-    expect(mocks.account.mock.calls).toEqual(occupied ? [[ownerAccountId], [linkedAccountId]] : []);
+    expect(mocks.account).not.toHaveBeenCalled();
+    expect(mocks.ownerLabels.mock.calls).toEqual(occupied
+        ? [["admin_vps_owner_labels", { p_account_ids: [ownerAccountId, linkedAccountId] }]]
+        : []);
     if (occupied) {
         expect(clientProps.ownerLabels).toEqual({ [ownerAccountId]: email, [linkedAccountId]: linkedDiscordId });
         expect(html).toContain(`${email} (Campaign)`);
@@ -350,6 +359,18 @@ it.each([true, false])("labels only owners in the paged VPS inventory: occupied=
         }]));
 });
 
+it("looks up all occupied account IDs in bounded batches", async () => {
+    const ids = Array.from({ length: 1001 }, (_, index) => `aaaaaaaa-aaaa-4aaa-8aaa-${String(index).padStart(12, "0")}`);
+    mocks.ownerLabels
+        .mockResolvedValueOnce({ error: null, data: [{ account_id: ids[0], label: null }] })
+        .mockResolvedValueOnce({ error: null, data: [{ account_id: ids[1000], label: "111111111111111111" }] });
+    await expect(readWebsiteOwnerLabels(ids)).resolves.toEqual({ [ids[1000]]: "111111111111111111" });
+    expect(mocks.ownerLabels.mock.calls).toEqual([
+        ["admin_vps_owner_labels", { p_account_ids: ids.slice(0, 1000) }],
+        ["admin_vps_owner_labels", { p_account_ids: ids.slice(1000) }],
+    ]);
+});
+
 it("never renders the VPS view, where the slot decommission controls live, for a member", async () => {
     mocks.request.mockRejectedValue(new Error("Oracle did not confirm authority"));
     mocks.auth.mockResolvedValue({ user: { id: "admin", app_metadata: { role: "Member" } }, accessToken: "test-admin-token" });
@@ -359,6 +380,7 @@ it("never renders the VPS view, where the slot decommission controls live, for a
     for (const [request] of mocks.request.mock.calls) expect(request.signal.aborted).toBe(true);
     expect(mocks.account).not.toHaveBeenCalled();
     expect(mocks.accounts).not.toHaveBeenCalled();
+    expect(mocks.ownerLabels).not.toHaveBeenCalled();
 });
 
 it("consumes early read failures and preserves the ordinary error UI after authentication", async () => {

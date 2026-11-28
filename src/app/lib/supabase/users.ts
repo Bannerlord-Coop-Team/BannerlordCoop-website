@@ -45,6 +45,24 @@ export async function listWebsiteAccounts() {
         truncated,
     };
 }
+const VPS_OWNER_LABEL_BATCH_SIZE = 1000;
+
+/** Resolve only the accounts present in the authorized VPS inventory. */
+export async function readWebsiteOwnerLabels(accountIds: readonly string[]): Promise<Record<string, string>> {
+    if (accountIds.length === 0) return {};
+    const client = getSupabaseAdminClient();
+    const labels: Record<string, string> = {};
+    for (let offset = 0; offset < accountIds.length; offset += VPS_OWNER_LABEL_BATCH_SIZE) {
+        const { data, error } = await client.rpc("admin_vps_owner_labels", {
+            p_account_ids: accountIds.slice(offset, offset + VPS_OWNER_LABEL_BATCH_SIZE),
+        });
+        if (error) throw error;
+        const rows = data as Array<{ account_id: string; label: string | null }>;
+        for (const { account_id, label } of rows) if (label) labels[account_id] = label;
+    }
+    return labels;
+}
+
 export type WebsiteAccountSummary = { accountId: string; label: string; email: string | null; discordUserId: string | null };
 
 /** Resolves one displayed owner without enumerating the Auth directory. */
