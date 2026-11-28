@@ -45,6 +45,22 @@ test('injected messages preserve accepted values and recursive freezing', () => 
   assert.equal(Object.isFrozen(input), false);
 });
 
+test('catalog mod options match the ControlPlane Int32 and Single bounds', () => {
+  const input = configuration();
+  const options = input.modConfig.modOptions;
+  options.wandererLimit = -2_147_483_648;
+  options.playerBattleAiJoinWindowHours = 2_147_483_647;
+  options.playerKingdomClanTierRequired = 7;
+  options.smithingStaminaRecoveryMultiplier = -3.4028234663852886e38;
+  options.maximumLootersMultiplier = 3.4028234663852886e38;
+  assert.deepEqual(parseManagedServerConfiguration(input).modConfig.modOptions, options);
+  options.wandererLimit -= 1;
+  assert.throws(() => parseManagedServerConfiguration(input, messages), { message: messages.integer });
+  options.wandererLimit += 1;
+  options.maximumLootersMultiplier = 3.5e38;
+  assert.throws(() => parseManagedServerConfiguration(input, messages), { message: messages.number });
+});
+
 test('battle size defaults when omitted and accepts only whole sizes the game applies', () => {
   const omitted = configuration() as { modConfig: { modOptions: Partial<typeof DEFAULT_MANAGED_SERVER_CONFIGURATION.modConfig.modOptions> } };
   delete omitted.modConfig.modOptions.battleSize;

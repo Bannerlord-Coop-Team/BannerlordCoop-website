@@ -1,12 +1,14 @@
 import { createTranslator } from "@/app/lib/localization/translator";
 import { campaignResetStatusMessage } from "@/app/lib/hosting/campaign-reset-messages";
+import { getMyServerFiles } from "@/app/lib/hosting/server-files";
+import { createMyServersHandler } from "../../../../supabase/functions/_shared/my-servers";
 import { CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION } from "../../../../supabase/functions/_shared/server-campaign-contract";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ManagedServerCampaigns } from "./ManagedServerCampaigns";
 import { TestLocalization, serverTestMessages } from "./ManagedServerLocalization.test-utils";
-import { DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../../../../supabase/functions/_shared/managed-server-configuration";
+import { CATALOG_MOD_OPTION_DEFAULTS, DEFAULT_MANAGED_SERVER_CONFIGURATION } from "../../../../supabase/functions/_shared/managed-server-configuration";
 import type { OwnerFileStatus } from "../../../../supabase/functions/_shared/server-file-contract";
 const runnerUpdateMessage = campaignResetStatusMessage({ serverId: "server", jobId: "job", state: "failed", errorCode: "agent_capability_unavailable", instruction: CAMPAIGN_RESET_RUNNER_UPDATE_INSTRUCTION }, createTranslator("en", serverTestMessages["managed-server"]).t);
 
@@ -42,7 +44,7 @@ beforeEach(() => {
     mocks.resetStatus.mockResolvedValue({ ok: true, status: { serverId, jobId: freshId, state: "queued", errorCode: null, instruction: null }, message: "Preparing your fresh campaign. This takes about a minute…" });
     container = document.createElement("div"); document.body.append(container); root = createRoot(container);
 });
-afterEach(async () => { if (root) await act(async () => root.unmount()); container?.remove(); vi.clearAllTimers(); vi.restoreAllMocks(); vi.useRealTimers(); });
+afterEach(async () => { if (root) await act(async () => root.unmount()); container?.remove(); vi.clearAllTimers(); vi.restoreAllMocks(); vi.unstubAllEnvs(); vi.useRealTimers(); });
 async function render(status: OwnerFileStatus | null = stopped, canDelete = false) {
     await act(async () => root.render(<TestLocalization><ManagedServerCampaigns userId="owner" serverId={serverId} status={status} canDelete={canDelete} /></TestLocalization>));
     await act(async () => vi.advanceTimersByTimeAsync(0));
@@ -50,14 +52,29 @@ async function render(status: OwnerFileStatus | null = stopped, canDelete = fals
 function button(label: string) { const found = [...container.querySelectorAll("button")].find((el) => el.textContent === label); if (!found) throw Error(`Missing button ${label}`); return found; }
 function dialog() { return container.querySelector("dialog")!; }
 
-it("lists campaigns with the selection marked and only offers switching while the server is stopped", async () => {
+it("lists campaigns with the selection marked and enables changes after reading expanded stopped status", async () => {
     await render({ ...stopped, operationState: "running", observedGameState: "running" });
     expect(mocks.list).toHaveBeenCalledWith(serverId, "owner");
     expect(container.textContent).toContain("Default New Game"); expect(container.textContent).toContain("Selected");
     expect(container.textContent).toContain("Imported Campaign"); expect(container.textContent).toContain("Stop the server to switch campaigns");
     expect(button("Use this campaign").disabled).toBe(true); expect(button("New campaign").disabled).toBe(true);
-    await act(async () => root.render(<TestLocalization><ManagedServerCampaigns userId="owner" serverId={serverId} status={stopped} /></TestLocalization>));
-    await act(async () => vi.advanceTimersByTimeAsync(0));
+    const config = stopped.managedConfig;
+    const files = { ...stopped, managedConfig: { ...config, modConfig: { ...config.modConfig, modOptions: {
+        ...config.modConfig.modOptions, ...CATALOG_MOD_OPTION_DEFAULTS, wandererLimit: 1_001,
+    } } } };
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://project.supabase.co");
+    vi.stubEnv("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "synthetic-publishable-key-long-enough");
+    const edge = createMyServersHandler({
+        allowedOrigins: ["https://bannerlordcoop.com"], controlPlaneUrl: "https://control-plane.example.test", waitUntil: () => {},
+        fetchImplementation: async (_url, init) => {
+            const { requestId, operation, input: parameters } = JSON.parse(String(init?.body));
+            expect({ operation, parameters }).toEqual({ operation: "server-files", parameters: { serverId } });
+            return Response.json({ version: 1, requestId, ok: true, result: files });
+        },
+    });
+    // Omit jsdom's AbortSignal when bridging to Node Request.
+    vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => edge(new Request(input, { ...init, signal: undefined })));
+    await render(await getMyServerFiles("synthetic-access-token-with-enough-characters", serverId));
     expect(button("Use this campaign").disabled).toBe(false); expect(button("New campaign").disabled).toBe(false);
 });
 

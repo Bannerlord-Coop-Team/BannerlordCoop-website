@@ -59,6 +59,7 @@ test("save metadata and mod configuration reads accept the expanded live configu
     legacyConfig.modConfig.modOptions.coopClansEnabled = false;
     const managedConfig = { ...legacyConfig, modConfig: { ...legacyConfig.modConfig, modOptions: {
         ...legacyConfig.modConfig.modOptions, allowClientTimeControls: true, postBattleAiAmnestySeconds: 0,
+        wandererLimit: 1_001, playerBattleAiJoinWindowHours: 8_761, looterPartySizeMultiplier: 101,
         spawnRateWanderers: 1, playerWoundedBattleEntry: true, showPlayerNameplates: true,
         kingdomDecisionVoteTimeoutSeconds: 60, clansAfterKingdomDestruction: "Vanilla",
         preferredBattleHosts: ["00000000000000000"], pvpBlockLeave: false, pvpResponseTimerSeconds: 10,

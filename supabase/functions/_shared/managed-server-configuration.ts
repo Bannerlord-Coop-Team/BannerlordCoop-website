@@ -162,10 +162,11 @@ const defaultConfigurationMessages: ManagedConfigurationMessages = {
   choice: 'Managed server configuration choice is invalid',
 };
 
-// The ControlPlane catalog can add options to a schema-v1 response. Keep them
-// optional for older releases and retain their values for edits and exports.
+// Match the CLR numeric types in ControlPlane's managed-config-catalog.ts
+// at df0ebe4f3. The catalog adds optional keys to schema-v1 responses.
 const INT32_MIN = -2_147_483_648;
 const INT32_MAX = 2_147_483_647;
+const SINGLE_MAX = 3.4028234663852886e38;
 const catalogModOptions = {
   allowClientTimeControls: [true, requireBoolean],
   postBattleAiAmnestySeconds: [0, requireInt32],
@@ -195,6 +196,10 @@ function parseCatalogModOptions(value: Record<string, unknown>, messages: Manage
 
 function requireInt32(value: unknown, messages: ManagedConfigurationMessages): number {
   return requireInteger(value, INT32_MIN, INT32_MAX, messages);
+}
+
+function requireSingle(value: unknown, messages: ManagedConfigurationMessages): number {
+  return requireNumber(value, -SINGLE_MAX, SINGLE_MAX, messages);
 }
 
 function requirePreferredBattleHosts(value: unknown, messages: ManagedConfigurationMessages): string[] {
@@ -315,31 +320,19 @@ export function parseManagedServerConfiguration(
         blockAiWarDeclarationsOnOfflinePlayers: requireBoolean(
           modOptions.blockAiWarDeclarationsOnOfflinePlayers, messages,
         ),
-        playerBattleAiJoinWindowHours: requireInteger(
-          modOptions.playerBattleAiJoinWindowHours,
-          0,
-          8_760, messages,
-        ),
+        playerBattleAiJoinWindowHours: requireInt32(modOptions.playerBattleAiJoinWindowHours, messages),
         speedLimitWhilePlayersInBattle: requireBoolean(modOptions.speedLimitWhilePlayersInBattle, messages),
         ensureUnaffiliatedWanderers: requireBoolean(modOptions.ensureUnaffiliatedWanderers, messages),
-        wandererLimit: requireInteger(modOptions.wandererLimit, 0, 1_000, messages),
+        wandererLimit: requireInt32(modOptions.wandererLimit, messages),
         wandererLimitScalesWithPlayers: requireBoolean(modOptions.wandererLimitScalesWithPlayers, messages),
-        playerKingdomClanTierRequired: requireInteger(
-          modOptions.playerKingdomClanTierRequired,
-          0,
-          6, messages,
-        ),
+        playerKingdomClanTierRequired: requireInt32(modOptions.playerKingdomClanTierRequired, messages),
         coopClansEnabled: requireBoolean(modOptions.coopClansEnabled, messages),
         smithingStaminaRecoveryOutsideSettlements: requireBoolean(
           modOptions.smithingStaminaRecoveryOutsideSettlements, messages,
         ),
-        smithingStaminaRecoveryMultiplier: requireNumber(
-          modOptions.smithingStaminaRecoveryMultiplier,
-          0,
-          100, messages,
-        ),
-        maximumLootersMultiplier: requireNumber(modOptions.maximumLootersMultiplier, 0, 100, messages),
-        looterPartySizeMultiplier: requireNumber(modOptions.looterPartySizeMultiplier, 0, 100, messages),
+        smithingStaminaRecoveryMultiplier: requireSingle(modOptions.smithingStaminaRecoveryMultiplier, messages),
+        maximumLootersMultiplier: requireSingle(modOptions.maximumLootersMultiplier, messages),
+        looterPartySizeMultiplier: requireSingle(modOptions.looterPartySizeMultiplier, messages),
         lordDefectionRetries: requireEnum(
           modOptions.lordDefectionRetries,
           MANAGED_LORD_DEFECTION_RETRY_MODES, messages,
