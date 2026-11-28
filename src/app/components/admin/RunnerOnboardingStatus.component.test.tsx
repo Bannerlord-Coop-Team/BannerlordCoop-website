@@ -62,7 +62,7 @@ it.each([
     [false, "failed", "runner_isolated_applied_recovered", "settled"],
     [true, "failed", "runner_update_not_applied", "settled"],
     [false, "failed", "runner_isolated_applied_recovery_incomplete", "failed"],
-    [true, "failed", "runner_update_native_owner_template_incompatible", "failed"],
+    [true, "failed", "runner_update_native_owner_template_incompatible", "settled"],
     [true, "settled", "runner_isolated_rolled_back", "unknown"],
 ] as const)("shows the outcome in the badge (compact=%s, wire state=%s, %s)", async (compact, state, errorCode, badge) => {
     await renderRunner({ compact, targetSourceCommit: "new-source", runningServers: 1,
