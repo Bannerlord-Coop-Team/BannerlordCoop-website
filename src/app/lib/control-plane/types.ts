@@ -417,6 +417,7 @@ export type HostingRegionCatalogRead =
 export type VpsViewData = {
     inventory: HostingAdminVpsInventory;
     hostingRegions: HostingRegionCatalogRead;
+    ownerLabels?: Readonly<Record<string, string>>;
 };
 
 /** The Relocate view's data: servers, the slots they occupy, the catalog that places hosts in regions, and active jobs. */

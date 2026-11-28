@@ -36,6 +36,7 @@ import {
     createServerProviderOptions,
     createServerRegionOptions,
     formatAccountOwner,
+    slotOwnerAccountId,
     installableBuilds,
     MAINTENANCE_TIME_ZONE,
     maintenanceSlotOptions,
@@ -63,7 +64,7 @@ import type {
     ServerDashboardResult,
 } from "@/app/lib/control-plane/types";
 import { getSupabaseServerReadSession, getSupabaseServerViewer } from "@/app/lib/supabase/server";
-import { getWebsiteAccount, listWebsiteAccounts } from "@/app/lib/supabase/users";
+import { getWebsiteAccount, listWebsiteAccounts, readWebsiteOwnerLabels } from "@/app/lib/supabase/users";
 import type { WebsiteAccountSummary } from "@/app/lib/supabase/users";
 import {
     Activity,
@@ -311,7 +312,10 @@ async function loadView(token: string, view: View, query: string, serverId: stri
             ]);
             // Host labels match the stored placements; an unreadable catalog leaves the hosts listed without regions
             // and the Add capacity dialog's manual entry explains why it is unavailable.
-            return { inventory, hostingRegions } satisfies VpsViewData;
+            const accountIds = [...new Set(inventory.hosts.flatMap(host => host.occupiedSlots ?? [])
+                .map(slotOwnerAccountId).filter(id => id !== null))];
+            const ownerLabels = await readWebsiteOwnerLabels(accountIds).catch(() => ({}));
+            return { inventory, hostingRegions, ownerLabels } satisfies VpsViewData;
         }
         case "servers":
             return readBoundedHostingPage((cursor) => readControlPlaneAdmin<HostingPage<ManagedServer>>({

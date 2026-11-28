@@ -186,11 +186,12 @@ describe("compact VPS host inventory", () => {
     it("keeps summaries compact and reveals only one host detail panel at a time", async () => {
         await act(async () => root.render(<VpsHostInventory
             hosts={[host("host-a", resources(70, 30), 0, true), host("host-b", resources(80, 20), 1)]}
+            ownerLabels={{ [ACCOUNT_ID]: "slot-owner@example.test" }}
             runnerTargetSourceCommit="target-source"
         />));
 
         expect(container.textContent).toContain("host-a");
-        expect(container.textContent).toContain(`${ACCOUNT_ID} (testserver)`);
+        expect(container.textContent).toContain("slot-owner@example.test (testserver)");
         const capacity = container.querySelector('dl[aria-label="3 total slots, 1 running, 2 free"]');
         expect(capacity?.querySelectorAll("dt")).toHaveLength(3);
         expect(capacity?.textContent).toBe("Slots3Running1Free2");
@@ -208,13 +209,13 @@ describe("compact VPS host inventory", () => {
         expect(container.querySelector('form[aria-label="Decommission slots of host-a"]')?.getAttribute("data-refresh")).toBe("router");
         expect(container.querySelector('[role="region"][aria-label="Details for host-a"] form[aria-label="Decommission slots of host-a"]')).not.toBeNull();
         expect(container.textContent).toContain("Slot 1 · UDP 4200");
-        expect(container.textContent).toContain(ACCOUNT_ID);
+        expect(container.textContent).toContain("slot-owner@example.test");
         expect(container.textContent).toContain("Player / Server");
         expect(container.textContent).toContain("Target target-sourc");
         expect(container.textContent).toContain("Verifying Capabilities");
         const slotTable = container.querySelector('[role="table"][aria-label="Occupied slots for host-a"]');
         expect(slotTable).not.toBeNull();
-        expect(slotTable?.textContent?.indexOf(ACCOUNT_ID)).toBeLessThan(slotTable?.textContent?.indexOf("testserver") ?? 0);
+        expect(slotTable?.textContent?.indexOf("slot-owner@example.test")).toBeLessThan(slotTable?.textContent?.indexOf("testserver") ?? 0);
 
         const secondToggle = container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-b"]')!;
         await act(async () => secondToggle.click());
@@ -279,17 +280,15 @@ describe("compact VPS host inventory", () => {
         expect(container.textContent).not.toContain("UDP 4200");
     });
 
-    it("uses the bound account ID for a legacy numeric owner", async () => {
+    it("falls back to the legacy Discord ID when the account label is unavailable", async () => {
         await act(async () => root.render(<VpsHostInventory
             hosts={[host("host-legacy", resources(60, 40), 0)]}
             runnerTargetSourceCommit="target-source"
         />));
 
-        expect(container.textContent).toContain(`${ACCOUNT_ID} (testserver)`);
-        expect(container.textContent).not.toContain("763278507085922325");
+        expect(container.textContent).toContain("763278507085922325 (testserver)");
         await act(async () => container.querySelector<HTMLButtonElement>('button[aria-label="Expand details for host-legacy"]')!.click());
-        expect(container.querySelector('[aria-label="Occupied slots for host-legacy"]')?.textContent).toContain(ACCOUNT_ID);
-        expect(container.textContent).not.toContain("763278507085922325");
+        expect(container.querySelector('[aria-label="Occupied slots for host-legacy"]')?.textContent).toContain("763278507085922325");
     });
 });
 

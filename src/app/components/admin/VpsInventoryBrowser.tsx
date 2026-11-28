@@ -18,6 +18,7 @@ import { useId, useMemo, useState } from "react";
 
 type VpsInventoryBrowserProps = {
     hosts: HostingAdminVpsHost[];
+    ownerLabels?: Readonly<Record<string, string>>;
     liveDataPending?: boolean;
     billingPending?: boolean;
     billingUnavailable?: boolean;
@@ -33,6 +34,7 @@ export function VpsInventoryBrowser(props: VpsInventoryBrowserProps) {
 
 function FilteredVpsInventory({
     hosts,
+    ownerLabels,
     liveDataPending = false,
     billingPending = false,
     billingUnavailable = false,
@@ -80,6 +82,7 @@ function FilteredVpsInventory({
             ) : (
                 <VpsHostInventory
                     hosts={pagination.items}
+                    ownerLabels={ownerLabels}
                     liveDataPending={liveDataPending}
                     billingPending={billingPending}
                     billingUnavailable={billingUnavailable}

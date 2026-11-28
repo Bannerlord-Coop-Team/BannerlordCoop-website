@@ -157,7 +157,6 @@ test("the VPS view presents slot occupants and resources with their owning host"
     assert.match(vpsSource, /<HostResourcesCard name="Oracle control plane" resources=\{controlPlaneHost\}/u);
     assert.match(vpsSource, /<VpsInventoryBrowser/u);
     assert.match(browserSource, /<VpsHostInventory/u);
-    assert.match(inventorySource, /vpsSlotOwnerId\(slot\)/u);
 
     assert.match(inventorySource, /view=server&serverId=\$\{encodeURIComponent\(slot\.serverId\)\}/u);
     assert.match(inventorySource, /usedPercent >= 90 \? "critical" : usedPercent >= 80 \? "warning"/u);
